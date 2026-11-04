@@ -1805,3 +1805,9 @@
   - **`NUI2-P2-SPEC-SOURCE-WORDING`**（P3）：Real 實況 SPEC 來源字串沿用 TWII 卡既有名稱「本地加權指數歷史快取（來源 Yahoo，每日更新）」，字面含「歷史」「每日更新」，與「不自行寫日頻／不讓人誤以為有歷史序列」略有張力。SPEC 與卡逐字一致是客戶 (19) 要求，故**不改**；若要消除須改 TWII 卡來源命名（不在 P2 範圍，**需客戶裁示**）。
   - **`NUI2-P2-REAL-NAV-MARGIN-NARROW`**（P3，觀察）：Real 手機實況（stale／missing）導覽餘裕僅 168.9px，離 160px 門檻 9px；SPEC 來源字串變長不影響餘裕（SPEC 在 OneBrain 之後），但任何手機首屏上方增高仍會逼近門檻（FAKE unavailable 為 162.5px）。
   - **`NUI2-P2-SKIP-NO-CONTENT-GUARD`**（P3，觀察）：`render_sections(skip=...)` 目前只有 market 傳 `{"onebrain"}`；skip 的守衛屬實作細節型（順序／不重複渲染測試），未來 market 新增 L1 section 時若濫用 skip 隱藏內容，**無內容層守衛**（P3 evidence baseline 只管 VM，不管渲染）；登記觀察，不動工。
+
+- **DEC-134 手機抽屜導覽殘留清單登記（2026-11-04；docs-only；append；P3，供施工批更換，不是現在改）**：
+  - **`NUI2-DRAWER-NAV-RESIDUAL-BOTTOMNAV`**（P3）：下列位置仍寫「手機固定底部四格」，已由 DEC-134 取代（歷史原文保留）。施工批須**更換為抽屜的對等判準**，**不得直接刪守衛**（見抽屜契約 Gate 2／5）。
+    - 文件：Wireframes L11／W-1／§0.4；`FINAL_UI_CONTRACT_FREEZE` §16；Architecture Gate §3；Audit Checklist L202／L296；P2 線框 L171；`SUPERSEDE_MAP` S36；本檔 `NUI2-NAV-SAFE-AREA`／nav-margin 判準列；`PROJECT_STATE`／`HANDOFF` 歷史補記。
+    - 程式／測試：`src/ui2/shell/css.py` L61~95；`src/ui2/shell/app.py` L104~105；`tests/test_ui2_contract_teeth_pending.py::test_mobile_nav_stays_four_cells_in_css`；`tests/test_ui2_batch3*` 的 `nav_margin_*`；`tests/test_ui2_p2_primary_slot*` 的 `p2_nav_margin_160`；`tests/ui2_viewport/measure_viewport.py` 的 53px／`nav_margin`／`p2_nav_margin_160`。
+  - **登記建議**：DEC-134 sha256 釘值測試待後續（本 PR 為 docs-only，不加測試）。

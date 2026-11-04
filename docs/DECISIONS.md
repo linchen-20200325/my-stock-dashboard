@@ -6960,6 +6960,8 @@ MIGRATE：內容仍需要，但位置應改到「資料健康度」或 backend E
 
 ### DEC-129｜客戶追加裁示（併入 DEC-128 同批；優先於 (13) 衝突處）：桌機左側 Navigation Rail 加入 compact Account Area（登入／Authentication State）；強制移除不再適用的 Active Rules（含 guards／tests／renderer 假設）；Active interpretation 11 點（客戶 2026-11-03 (14)）
 
+> 📌 **手機底部導覽規則（「手機仍固定四格底部導覽」）由 DEC-134 取代；桌機 Account Area、四頁 IA 不變（原文保留）**（2026-11-04 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-134）；其餘條文仍有效）。
+
 > 2026-11-03 補登。**編號選擇（依 repo 慣例說明）**：repo 慣例是「每一則客戶指示訊息一個 DEC」（DEC-122／123／125／126／127 各自獨立），(14) 是 (13) 之後的**獨立追加訊息**且自述「優先於前一份提示語中任何衝突內容」，故另立 DEC-129，而非改寫 DEC-128（DEC-128 原文不動，僅在條頭加 📌）。**來源類別 D：客戶 2026-11-03 追加裁示 (14)，經總管轉交；下方 fence 逐字收錄，未改一字**（實作組未見客戶原訊息本身）。
 - **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：產品／UX／治理（導覽結構、Active Rule 清理、tests／guards 清理）。
 - **狀態**：**客戶指示生效**；落地＝與 DEC-128 同批（docs＋測試清理）；UI 程式尚未改（後續 UI correction 批，`docs/BACKLOG.md` §5.1.26）。
@@ -7603,3 +7605,6 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **未授權**：沒有核准抽屜像素尺寸、真 Google OAuth 接線、正式 auth state、資料來源、VM schema 或投資語意；必須先提供詳細文字線框與獨立 Gate。
 - **正式設計附件**：docs/vnext/NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md。舊 DEC 原文 append-only 不刪，既有測試與 CSS 的底部四格規則需在施工批明確更換，不得默默降測試。
 - **證據限制**：使用者截圖可見 Streamlit Manage app 覆蓋底部，但尚未在本端真機／Cloud 重現；此為已確認的使用者體驗需求，不聲稱平台浮層一定可由 CSS 控制。
+- **不取代**：DEC-129 桌機 Account Area、DEC-127 順序、DEC-130 誠實規則（ui2_dev／query／FAKE account 不得當登入證據）、四頁 IA。
+- **決策者**：**客戶**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：產品／UX（New UI2 手機導航位置與登入入口）。
+- **狀態**：**裁示已記錄、線框待驗收、不授權實作**。

@@ -2,8 +2,7 @@
 
 > ## ⛔ 讀我先：這是**現行唯一有效**的 New UI2 presentation contract
 >
-> 📌 **2026-11-04 較新客戶導航裁示（DEC-134）**：手機由「固定底部四格為唯一導航」改為「☰ 可收合左側抽屜四頁導航＋Google 登入入口」（正式細節待線框 Gate），桌機固定左 rail 不變。此較新裁示取代本檔與歷史 Wireframes 內**手機固定底部四格的定位／呈現規則**；四頁資訊架構仍然只有四頁。詳見 [NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md](NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md)。原文歷史保留、不因旧文仍在而恢復底部四格。
-
+> 📌 **2026-11-04 較新客戶導航裁示（DEC-134）**：手機由「固定底部四格為唯一導航」改為「☰ 可收合左側抽屜四頁導航＋Google 登入入口」（正式細節待線框 Gate），桌機固定左 rail 不變。此較新裁示取代本檔與歷史 Wireframes 內**手機固定底部四格的定位／呈現規則**；四頁資訊架構仍然只有四頁。詳見 [NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md](NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md)。原文歷史保留、不因舊文仍在而恢復底部四格。
 >
 > **現行四頁逐區塊施工附件（乾淨、無舊 expander 施工句）**：[`NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`](NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md)。施工時讀**本 Active Contract＋該附件**；2026-11-02 舊 Wireframes 只作歷史／不衝突細節的查核，**不可直接當新 UI2 的施工腳本**。附件不是新的客戶 Decision，所有 Pending／Gate 仍有效。
 >
@@ -46,7 +45,7 @@
 
 ### §2.5 桌機左側 Navigation Rail 與 compact Account Area（客戶 (14) §1；DEC-129）
 
-- **桌機（1440）結構**：Product／Logo → Login／Auth Status（compact Account Area）→ 📊 市場 → 🎯 標的 → 💼 持股 → 👤 我的。**手機仍固定底部四格**，登入主要由 👤 我的承接（Wireframes §0.4 手機部分、DEC-127 導覽餘裕不變）。
+- **桌機（1440）結構**：Product／Logo → Login／Auth Status（compact Account Area）→ 📊 市場 → 🎯 標的 → 💼 持股 → 👤 我的。~~**手機仍固定底部四格**，登入主要由 👤 我的承接~~ 📌 已由 DEC-134 取代（手機＝☰ 左側抽屜；登入入口於抽屜，細節待線框 Gate；原文保留）（Wireframes §0.4 手機部分、DEC-127 導覽餘裕不變）。
 - **未登入**：「登入」＋「⬜ 尚未登入」（客戶明示採用該字面）；**已登入**：「✅ 已登入」＋必要使用者識別＋登出入口。可選一行 Sheet／Portfolio selection compact status——**僅限已有正式 contract**，⛔ 新語意。
 - **Account Area 不算第五頁、不增第五個主導航；⛔ 顯示 secret／credential；⛔ 從 URL／query parameter 猜登入狀態。**
 - **Authentication State 必須來自正式 auth contract。⚠ 目前 repo 沒有 New UI2 用的正式 auth contract**：Preview 殼的 `ui2_account` selectbox（signed_out／signed_in／unavailable）只是**開發面 FAKE 場景**，**不是 auth contract**，不得當登入狀態來源；真實 auth 架構（OAuth 本體）屬 Opus 5.5＋High Gate（`NUI2-AUTH-CONTRACT-GATE`），本文件**不設計它**。
