@@ -1689,8 +1689,8 @@
 
 | 測試 | 內容 | 批 |
 |---|---|---|
-| `test_T_new_1_human_pages_have_no_full_evidence_expander`（📊🎯💼） | AppTest：非 Preview 的 expander 標籤 ∌ {為什麼、指標明細、原始資料、工程診斷、raw、debug、provenance、L2、L3} | P3 |
-| `test_T_new_1b_human_vm_sections_are_not_l2_l3` | 三個投資頁 `SectionVM.level ∉ {L2,L3}` | P3 |
+| `test_T_new_1_human_pages_have_no_full_evidence_expander`（📊🎯💼；📌 P3 ✅ 已畢業，xfail 已移除） | AppTest：非 Preview 的 expander 標籤 ∌ {為什麼、指標明細、原始資料、工程診斷、raw、debug、provenance、L2、L3} | P3 |
+| ~~`test_T_new_1b_human_vm_sections_are_not_l2_l3`~~ → 📌 `test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it`（P3 畢業，DEC-131；舊斷言為規格錯誤，原文保留於測試檔 docstring） | ~~三個投資頁 `SectionVM.level ∉ {L2,L3}`~~ → 渲染層無 evidence expander＋VM 仍保有 L2／L3 | P3 ✅ |
 | `test_T_new_2_human_text_has_no_engineering_tokens`（📊💼👤） | 可見文字 ∌ PORT／Gate／Stage／Aggregator／路徑 C／nonce／traceback／Exception／`src.`／`.py` | P1 |
 | `test_T_new_3_me_page_has_layered_data_health_section` | 👤 VM 有「資料健康度」區塊 | P6 |
 | `test_T_new_5_preview_controls_are_dev_surface_only` | 預設道 0 個 Preview 控制 expander | P1 |
@@ -1726,7 +1726,7 @@
 |---|---|---|---|---|---|---|
 | **NUI2-PLAN1007-CAPMAP-UNCOVERED** | P3 | #1007 計畫自述「只列 Active Contract／執行附件明列的區塊」，FINAL_UI_CAPABILITY_MAP 的 MIGRATE／退場項（如 M13–M16／M18、T04／T07／T16／T19–T20／T22／T24–T30、H11／H13／H16、E04／E12／E14–E17）**不在計畫內，且不等於已退場**。計畫的 M／T／H／E 號是 REAL_FEED_MAPPING §4 列號，與 CapMap 號衝突（例：CapMap E11＝System Information、舊 mapping E11＝Decision Digest） | open | P2～P6 各批施工前 | 每批接線前逐項對照 CapMap 與 REAL_FEED_MAPPING，並在 PR 列出「本批未涵蓋的 CapMap 項」；不得因計畫沒寫就當作取消（同 `NUI2-EXEC-SPEC-UNCOVERED-DETAILS` 精神） | 0 |
 | **NUI2-PLAN1007-METADATA-NO-L3** | P3 | `data_cache/metadata.json` 只有 L1 reader，**無 L3 wrapper**（計畫 §5 資料新鮮度列已註「接線需先建 L3」）。P6 資料健康度若要顯示新鮮度，須先有 L3 唯讀入口；L5／UI2 不得直讀 L1（EX-PASSTHRU-1 不涵蓋此情形）。`market_twii_view_service` 內部讀 `metadata.json` 屬 L3 內部實作，不等於已有通用 reader | open（接線前提；未驗證有無其他 caller） | P6 | P6 施工前由總管判定 L3 入口形態（新增 thin L3＝新 service，須獨立 QA；同 SG-12 精神）；不在 presentation 批夾帶 | 0 |
-| **NUI2-PLAN1007-P3-T1B-TENSION** | P3 | 本批查證出的張力（單組，未經第二組）：P3 批次表要求「VM `sections` 一字不動」（T-new-4），但 `tests/test_ui2_contract_teeth_pending.py::test_T_new_1b_human_vm_sections_are_not_l2_l3`（strict xfail）斷言三個投資頁 `context.sections` 內**無 `level∈{L2,L3}`**。兩者字面不可同時滿足：要轉綠必須改 VM `level` 值（VM 內容變更）或把這些區塊移出 `context.sections`（搬去 Evidence projection，與 P6 相依），或修改該測試斷言（不得以弱化守衛達成）。T-new-1（expander 標籤＋結構判準）則不受影響，UI 移除即可轉綠 | open | P3 | P3 施工前由總管判定處置路徑（不得 xfail／skip 隱藏、不得弱化守衛、不得靜默改 VM）；若須動 VM schema／`level` 語意→先過 Gate | 0 |
+| **NUI2-PLAN1007-P3-T1B-TENSION** | P3 | 本批查證出的張力（單組，未經第二組）：P3 批次表要求「VM `sections` 一字不動」（T-new-4），但 `tests/test_ui2_contract_teeth_pending.py::test_T_new_1b_human_vm_sections_are_not_l2_l3`（strict xfail）斷言三個投資頁 `context.sections` 內**無 `level∈{L2,L3}`**。兩者字面不可同時滿足：要轉綠必須改 VM `level` 值（VM 內容變更）或把這些區塊移出 `context.sections`（搬去 Evidence projection，與 P6 相依），或修改該測試斷言（不得以弱化守衛達成）。T-new-1（expander 標籤＋結構判準）則不受影響，UI 移除即可轉綠 | **closed（DEC-131）**（📌 2026-11-03 客戶 (17) A2：舊 T_new_1b 是測試規格錯誤，已改驗「渲染層無 evidence expander＋VM 完整保留」；VM 一字未動；有意識的更新，不是漏刪；決策者 客戶） | P3 | 已處置（見 DEC-131 §二） | 0 |
 | `NUI2-TWII-TWO-PATHS`（**既有，不重登**） | P3 | BACKLOG 已有獨立條目（本檔 §5.1.x 表內，另在 REAL_FEED_MAPPING 登記）。任務原假設「BACKLOG 無獨立條目」**與實況不符**（本批 grep 查證）；僅補交叉參照：#1007 計畫 §4 末句與 §2 台股歷史主圖列均指向它，接線前須擇一（readiness `taiex` vs `twii_ohlcv.parquet`） | open（原樣） | `NUI2-PORT-READINESS-L3` | 同原條目 | — |
 | `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`（**既有，不重登**） | P3 | Active Contract §3.1 vs Wireframes §2.1 風險／行動順序不一致，已登記（見上方 EXEC-SPEC 補記表）；#1007 計畫未處理它。P2 施工前須判定（見下方候選 B 的前置） | open（原樣） | P2 | P2 施工前由總管判定 | — |
 
@@ -1747,3 +1747,35 @@
 **Ready／Blocked／Need Decision 摘要（沿 #1007 計畫分類）**：Ready（純 presentation）＝A、B、C 殼；Blocked（SG／新契約）＝利差（SG-02）、PMI（SG-03）、候選因子（SG-04／13）、曝險分母（SG-05）、Risk Cap（SG-06）、System Action（SG-07）、Forward EPS（SG-08）、OneBrain／Digest（SG-09）、位階 as_of（SG-10）、OAuth（SG-11）、五桶 thin L3（SG-12）、新公式／門檻（SG-14）；Need Decision＝`NUI2-PLAN1007-P3-T1B-TENSION`、`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`、`NUI2-TWII-TWO-PATHS`／`NUI2-VIX-TWO-PATHS`（擇一入口）。
 
 **限制（如實）**：本節由 docs 組單組撰寫，未經第二組獨立驗證；「Ready」是文件層級判斷，未跑 runtime；T-new-1b 張力為讀測試碼所得，未實際以 P3 實作驗證；候選的 Model×Effort 為建議，依 DEC-084 仍須在施工時 Model×Effort Check。
+
+#### 📌 P3 完成補記（New UI2 UI Correction P3；客戶 2026-11-03 (17)／DEC-131；2026-11-03；append-only；實作組單組、待獨立 QA）
+
+- **做了什麼**：(0) 修 T_new_1b 規格錯誤（A2）：以 `tests/test_ui2_p3_evidence_preservation.py`（baseline `tests/fixtures/ui2_p3_evidence_baseline.json`；FAKE 六場景×四頁〔👤 三帳戶〕＋Real 固定 snapshot 九態×四頁）驗 VM evidence 完整保留，並以 AppTest（FAKE 全場景×兩模式×Real 八態）＋viewport 判定器新檢查 `p3_no_evidence_expander`（DOM `stExpander`）驗渲染層；(1) `src/ui2/views/_page.py::render_sections`：L2／L3 預設不渲染，`SHOWN_FOLDS` 白名單（🎯 選股條件；👤 Decision Digest／Rule Registry）以預設收合 expander 保留；(2) `T_new_1`×3 移除 xfail 轉綠、T_new_1b 以新名畢業（`GRADUATED_TEETH`）；strict xfail **10 → 4**（T_new_3／6／7／8）；(3) L0 位階完整說明過渡期限制已記入 Active Contract §11、本檔、PROJECT_STATE、HANDOFF。
+- **移除的 Human UI expander**：📊 為什麼／指標明細（16 項）／原始資料表；🎯 完整 6 欄表／跨季趨勢、查一檔的基本面／估值／研究解釋；💼 明細／原始明細；👤 Audit：Data Freshness／Audit：System Information。**保留**：🎯 選股條件（收合）、👤 Audit：Decision Digest／Audit：Rule Registry（唯讀）（預設收合）。
+- **evidence 保留設計**：VM／canonical／scenarios 0 行變更（`git diff` 僅 views、tests、docs）；(A) baseline 比對（section id／level／title／mode、欄位 label／語意軸／state／有無 detail／來源／資料日／判定字樣；新增 OK、減少或改變即紅）；(B) 具名承重守衛（L0 `*_EXPLAIN` 逐字仍在 VM、Risk Cap 為判定軸「⬜ 無法判定」、Missing／Stale／Unavailable／Not Evaluated 各場景仍在）；(C) Digest：builder／schema 的 repo 內 import 傳遞閉包不含 `src.ui2`／`src.services.ui2`／`shared.ui2_contract`／`app_ui2`，builder 簽名不收 PageVM，UI2 不 import builder。
+- **mutation（皆實測轉紅後還原／以測試內 teeth 表達）**：L2 渲染放回（`is_shown_fold` 恆真）→ T_new_1／render 守衛紅；VM sections 刪空／刪 L2L3／拿掉 detail／拿掉 freshness／刪 lookup sections／刪 context_rows／Risk Cap 換 Missing 共 8 種 → baseline 比對非空；SHOWN_FOLDS 清空（稽核入口與選股條件被當 evidence 隱藏）→ 紅；expander 預設展開 → 紅；Digest 閉包檢查器對 UI2 import 有牙。
+- **新 ID**：`NUI2-P3-FRESH-SYSINFO-HIDDEN`、`NUI2-P3-FULL-TABLE-HIDDEN`、`NUI2-P3-LOOKUP-SECTIONS-HIDDEN`、`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`、`NUI2-P3-REAL-STATES-APPTEST-ONLY`（見下表）。
+- `NUI2-P1-L0-EXPLAIN-WITHHELD` 📌 **P3 補記（過渡期限制）**：P3 起 📊 的「為什麼」expander 整個不渲染（不只位階說明列）；使用者看到的原因＝L1 `REGIME_SEE_WHY` 一句；完整說明（`regime_arbiter.*_EXPLAIN` 逐字）仍在 VM `why` section `位階說明` 列，由 P6 資料健康度承接，~~此期間可由 VM／Digest 取得~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄。
+
+| ID | 優先 | 說明 | 狀態 | 依賴 | 處置 |
+|---|---|---|---|---|---|
+| **NUI2-P3-FRESH-SYSINFO-HIDDEN** | P2 | 👤 `Audit：Data Freshness`／`Audit：System Information` 兩個 L2 區塊 P3 起不渲染（Active Contract §3.4：它們屬資料健康度 Level 1／2，非「Decision Digest Viewer／Rule Registry」稽核入口；客戶 (17) 只點名保留 Audit／Digest Viewer／Rule Registry）。內容現為「尚未提供」占位，無資訊損失；VM 保留。**實作組讀法，可由總管／客戶推翻**（只需把 `("p4_me","fresh")`／`("p4_me","sysinfo")` 加入 `SHOWN_FOLDS` 與測試 `EXPECTED_SHOWN_FOLDS`） | open | P6 | P6 承接 |
+| **NUI2-P3-FULL-TABLE-HIDDEN** | P2 | 🎯 `完整 6 欄表／跨季趨勢`（L3）P3 起不渲染（Active Contract §3.2 列為 evidence 摺疊；「查看全部候選／CSV／查看此檔」使用者功能**目前 UI 不存在**，屬 P2）。VM 保留；跨季趨勢是否保留為使用者「完整分析」仍是撰寫組暫定 Pending | open | P2 | P2 新增使用者功能入口時另行分類 |
+| **NUI2-P3-LOOKUP-SECTIONS-HIDDEN** | P3 | 🎯 查一檔的 `基本面／估值／研究解釋`（L2，目前皆「尚未提供」占位）不渲染；T_new_1 既有結構判準本就把 lookup sections 算入 evidence。P2 以精簡 chart-first 卡承接 | open | P2 | — |
+| **NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY** | P3 | (C) 守衛是 AST 靜態 import 傳遞閉包（含函式內 import；不含動態 import／getattr 轉發／PEP 562 barrel 轉發）。「OneBrain 未來可從 headless Digest 取得完整 evidence」**未驗證 Digest 內容是否涵蓋 UI evidence 全部欄位**（只證明 Digest 輸入不依賴 UI2 渲染）；未改 Digest schema、未新增 runtime | open（未驗） | OneBrain 批 | 後續批以 Digest 實際輸出對照 §8 清單 |
+| **NUI2-P3-REAL-STATES-APPTEST-ONLY** | P3 | Real 固定 snapshot（unavailable／stale／missing／contract_error 等）的 P3 驗證是 AppTest 渲染層＋VM baseline；**真瀏覽器**只跑活 Real feed（量測日 snapshot，11 態）與 FAKE 70 態，未對固定 snapshot 逐張截圖（P1 的 `real_states/` 56 態未在 P3 重跑） | open（限制） | — | 需要時重跑 |
+
+**測試改動（P3）**：`tests/test_ui2_contract_teeth_pending.py`（T_new_1 去 xfail 並改結構判準為「expander ⊆ 白名單且不含 evidence 字樣／L2L3 標題」，**比舊版更嚴**；T_new_1b 換新驗收）、`tests/test_ui2_active_contract_docs.py`（`GRADUATED_TEETH`＋2、xfail 計數斷言 `n >= 6` → `n == 4`〔剩餘待後續批的 teeth 數，非降守衛〕、DEC-131 fence sha256 與關鍵句）、`tests/ui2_viewport/measure_viewport.py`（新增 `p3_no_evidence_expander` 與 `expanders` 量測，舊量測 dict 向下相容）。`PENDING_UI_CORRECTION_TESTS` 三項（`_why_regime`／`test_regime_unloaded_…`／`check_cross_page_regime`）複查：皆 VM 層、VM 位置未動 → 仍成立，維持登記至 P6。其餘 `test_ui2_real_feed`／`batch3`／`regime_spec` 測試經全量跑為綠、確認是 VM／presentation 測試，三軸／G2／G2F／G4／G9／no-write／白名單／跨頁一致性／禁用字樣守衛**未動**。
+
+**驗收證據**：`docs/vnext/newui2_p3/`（`fake/` 14 張、`real/` 10 張、`tall/` 16 張整頁高視窗截圖、`v156/` 兩份 JSON；`fake/viewport_measurements.json`＝70 態全綠、`real/`＝11 態全綠；Streamlit 1.59.2 與 /tmp/v156（1.56.0）各一輪皆全綠）。**限制**：Chromium headless 單一瀏覽器；Safari／Firefox／真機／Cloud 未驗；目視過約 11 張手機＋4 張桌機（其餘僅判定器）。
+
+#### 📌 P3 QA 修正補記（2026-11-04；兩組獨立 QA 無 P0／P1；append-only；實作組單組、待複驗）
+
+- **已修**：(1) baseline 指紋擴大鎖定（加記 `sha1(detail)`／`sha1(value_text)`／`sha1(status_text)`，納入 `first_screen`／`cards`；**是擴大不是縮小**；mutation：detail 改 "x"、value_text 改 "x"、title 改名皆轉紅）；(2) RuleID／治理參照現況鎖定（VM **尚無 RuleID 欄位**；鎖 `why` detail 含 DEC-074／075 與 `RULE_ID_ALLOWLIST` 六 id 且不依賴 UI2）；(3) 文件過度宣稱 Digest 已更正（DEC-131／Active Contract §11／本檔／PROJECT_STATE §62／HANDOFF／Audit §23 第 4 項）；(4) baseline 檔 sha256 釘於 `tests/test_ui2_active_contract_docs.py::_P3_BASELINE_SHA256`；(5) `_evaluate_p3` 缺 `expanders` 鍵判紅、允許標題為判定器自有常數＋純合成單元測試；既有 `test_ui2_batch3.py` 的合成「好」量測 dict 因此加 `expanders=[]`（資料補齊，非降守衛）。
+- **`--regen` 流程**：`python -m tests.test_ui2_p3_evidence_preservation --regen` → `sha256sum tests/fixtures/ui2_p3_evidence_baseline.json` → 更新 `_P3_BASELINE_SHA256` → PR 描述說明 evidence 為何變（不得縮小）。
+
+| ID | 優先 | 說明 | 狀態 | 依賴 | 處置 |
+|---|---|---|---|---|---|
+| **NUI2-P3-CONDITIONS-TITLE-PAREN** | P3 | 🎯 選股條件 expander 標題含「（收合）」字樣（VM 標題文案 `選股條件（收合）`；Human UI 直接顯示）。Streamlit expander 本身已有展開箭頭，「（收合）」是冗字；P3 為不改 VM 而保留 | open | P2 | P2 動 🎯 時連同 VM 文案與 baseline／白名單測試一起改（須走 `--regen` 流程） |
+| **NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND** | P3 | Digest 獨立性守衛是 AST 靜態 import 閉包，**偵測不到動態 import（`importlib`／`__import__`）與 PEP 562 barrel `__getattr__` 轉發**（已於 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 自述；此處補交叉參照）。另實測 Digest builder 不含位階完整說明／指標明細／lookup 基本面·估值，OneBrain 批須先核對缺欄 | open（限制） | OneBrain 批 | 見 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` |
+

@@ -116,6 +116,11 @@ THRESHOLDS: list[dict[str, str]] = [
      "rule": "（P1）頂部標示（FAKE 示意資料／Real-data Preview）為單行：banner 高度 ≤ 1 行行高 + 上下 padding 12px"
              "（行高由頁內 `getComputedStyle(.ui2-banner).lineHeight` 現場量）。",
      "source": "客戶 2026-11-03 (16) P1：Real banner『縮為單行』；手機窄螢幕折行 → 判紅"},
+    {"id": "p3_no_evidence_expander",
+     "rule": "（P3）四頁產品畫面（排除 `?ui2_dev=1` 開發面與導覽）實際渲染的 expander（DOM `stExpander`）標題，只准是 "
+             "`src.ui2.views._page.SHOWN_FOLDS` 白名單內的使用者功能／稽核入口（🎯 選股條件；👤 Decision Digest／Rule Registry），"
+             "且全部預設收合；📊／💼 必為 0 個。L2／L3 evidence expander（為什麼／指標明細／原始資料表／完整表／明細…）不得出現。",
+     "source": "客戶 2026-11-03 (17) A2 第 1 項；Active Presentation Contract §3／§8"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -198,6 +203,7 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
     _evaluate_p1(m, out)
+    _evaluate_p3(m, out)
     return out
 
 
@@ -213,6 +219,37 @@ def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
     if bb:
         if bb["height"] > bb["lineHeight"] + 12.5:
             out["p1_banner_single_line"].append(f"banner 高 {bb['height']:.0f}px > 1 行（行高 {bb['lineHeight']:.0f}+12）：折行")
+
+
+#: 判定器自己的允許標題常數（獨立於被測的 `src.ui2.views._page.SHOWN_FOLDS`，避免 mutation 時判定器跟著被改；
+#: 與 pytest 的 `EXPECTED_SHOWN_FOLDS` 對照一致性由 tests/test_ui2_p3_evidence_preservation.py 的單元測試守）。
+P3_ALLOWED_EXPANDER_TITLES: dict[str, frozenset[str]] = {
+    "p4_market": frozenset(),
+    "p4_hold": frozenset(),
+    "p4_target": frozenset({"選股條件（收合）"}),
+    "p4_me": frozenset({"Audit：Decision Digest", "Audit：Rule Registry（唯讀）"}),
+}
+
+
+def _evaluate_p3(m: dict, out: dict[str, list[str]]) -> None:
+    """P3：產品畫面不得渲染 L2／L3 evidence expander。
+    真瀏覽器量測 dict（帶 `page` 鍵）**必須**有 `expanders` 鍵——缺＝判紅（不得因量測漏掉而放行）；
+    不帶 `page` 的純合成／舊版 dict（既有單元測試用）略過。"""
+    page = m.get("page")
+    if page is None:
+        return
+    ex = m.get("expanders")
+    if ex is None:
+        out["p3_no_evidence_expander"].append(f"{page} 量測缺 `expanders` 鍵（真瀏覽器 lane 必須量 expander）")
+        return
+    allowed = P3_ALLOWED_EXPANDER_TITLES.get(page, frozenset())
+    for e in ex:
+        # Streamlit 的展開箭頭是圖示字型 ligature（innerText 帶 `keyboard_arrow_right ` 前綴）→ 剝掉再比
+        title = re.sub(r"^(?:keyboard_arrow_\w+|expand_\w+|arrow_\w+)\s+", "", e["title"])
+        if title not in allowed:
+            out["p3_no_evidence_expander"].append(f"{page} 渲染了不在白名單內的 expander：{title!r}")
+        if e.get("open"):
+            out["p3_no_evidence_expander"].append(f"{page} expander {title!r} 預設不是收合")
 
 
 def evaluate_stress(m: dict) -> dict[str, list[str]]:
@@ -395,12 +432,17 @@ _JS = r"""
   const clone = bcEl.cloneNode(true);
   clone.querySelectorAll('.st-key-ui2_dev_surface, .st-key-ui2_nav, style, script').forEach(e => e.remove());
   const productText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  // P3：產品畫面實際渲染的 expander（DOM stExpander；排除開發面與導覽）
+  const expanders = [...document.querySelectorAll('[data-testid="stExpander"]')]
+    .filter(e => !e.closest('.st-key-ui2_dev_surface') && !e.closest('.st-key-ui2_nav'))
+    .map(e => { const d = e.querySelector('details'); const sm = e.querySelector('summary');
+      return {title: sm ? sm.innerText.replace(/\s+/g,' ').trim() : '', open: d ? d.open : null}; });
   const bn = document.querySelector('.ui2-banner');
   const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
-    product_text: productText, banner_box: bannerBox,
+    product_text: productText, banner_box: bannerBox, expanders: expanders,
     dev_surface_present: !!document.querySelector('.st-key-ui2_dev_surface'),
     banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
@@ -497,7 +539,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
                    if k in ("top", "bottom", "left", "right", "width", "height", "position", "labels", "checked_index")},
            "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
            "last_content_bottom": round(m["last_content"]["bottom"], 1),
-           "card_heights": m["card_heights"],
+           "card_heights": m["card_heights"], "expanders": m.get("expanders"),
            "batch3": {"risk": rd(m["risk"]) if m.get("risk") else None,
                       "mode_box": rd(m["mode_box"]) if m.get("mode_box") else None,
                       "mode_content": m.get("mode_content"), "font_sizes": m.get("font_sizes"),

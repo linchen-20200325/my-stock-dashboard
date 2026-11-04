@@ -3,10 +3,11 @@
 標示（FAKE 示意資料／Real-data Preview 單行 banner）由殼在導覽**之前**統一渲染（頁面頂部），本檔不重複渲染。
 開發專用的 Preview 控制只在 `?ui2_dev=1` 由殼畫出，本檔不涉及。
 
-**呈現政策（Active Contract §8）**：`PageVM.context.sections` 是 Human UI 全量（**不是** Decision Context）；
-本檔只決定「哪些區塊在畫面上怎麼畫」，不改 VM 內容。目前（P1）仍依 `SectionVM.level` 畫 L1 並摺疊 L2／L3；
-**L2／L3 摺疊區塊的移除屬 UI correction P3**（ACTIVE 規格：四個主要投資頁不承載完整 L2／L3 diagnostics），
-不得依本檔現況當作規格。
+**呈現政策（Active Contract §8；P3，客戶 2026-11-03 (17) A2）**：`PageVM.context.sections` 是 VM 全量（**不是** Decision
+Context，也不是畫面清單）；本檔只決定「哪些區塊在畫面上怎麼畫」，**不改 VM 內容**——L1 直接畫；L2／L3 **預設不渲染**
+（四個主要投資頁不承載完整 L2／L3 evidence expander；evidence 仍完整留在 VM／canonical／Digest 輸入），
+只有 `SHOWN_FOLDS` 白名單內的「使用者功能／已核准稽核入口」才以預設收合的 expander 呈現。新增 L2／L3 區塊
+**預設隱藏**（fail closed：不會因為新增 evidence 而意外長出 expander）。
 Batch 3：標題／本文拆成可重用片段，供 📊 市場（今日結論＋今日主要風險）、🎯 標的（雙模式）、
 👤 我的（帳戶 skeleton）三頁各自組版；所有頁仍只吃 PageVM（⛔ 取數／判態／聚合動作）。
 """
@@ -45,18 +46,36 @@ def _label_repeats_title(sec, f) -> bool:
     return len(sec.fields) == 1 and bool(f.label.strip()) and f.label.strip() in sec.title
 
 
+#: 允許以「預設收合 expander」呈現的 L2／L3 區塊（page_id, section_id）。分兩類（純 presentation 分類，不改 VM）：
+#:   * 使用者功能（DEC-121 Q2=B／DEC-130 (b)）：🎯 精選的「選股條件」（精簡、人類可讀）；
+#:   * 已核准的次層稽核入口（Active Contract §3.4／DEC-130 (b)）：👤 的 Decision Digest Viewer、Rule Registry（預設收合）。
+#: 其餘 L2／L3（為什麼／指標明細／原始資料表／完整 6 欄表／明細／原始明細／查一檔的基本面·估值·研究解釋／
+#: 👤 的 Data Freshness·System Information〔→ P6 資料健康度〕）＝evidence：**VM 完整保留、Human UI 不渲染**。
+SHOWN_FOLDS: frozenset[tuple[str, str]] = frozenset({
+    ("p4_target", "conditions"),
+    ("p4_me", "digest"),
+    ("p4_me", "registry"),
+})
+
+
+def is_shown_fold(page_id: str, section_id: str) -> bool:
+    return (page_id, section_id) in SHOWN_FOLDS
+
+
 def render_sections(vm: PageVM, *, mode: str | None = None, extra=()) -> None:
-    """（P1 現況）L1 區塊直接畫、L2／L3 摺疊——摺疊區塊的移除屬 P3，見檔頭。`mode` 給定時只畫該模式
-    （或與模式無關）的區塊（⛔ 同時完整展開）。"""
+    """L1 區塊直接畫；L2／L3 只畫 `SHOWN_FOLDS` 白名單內者（預設收合），其餘 evidence 不渲染（VM 不動，見檔頭）。
+    `mode` 給定時只畫該模式（或與模式無關）的區塊（⛔ 同時完整展開）。"""
     for sec in (*vm.context.sections, *extra):
         if mode is not None and sec.mode not in (None, mode):
             continue
-        rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
         if sec.level == "L1":
+            rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
             _md(f'<div class="ui2-section-title">{escape(sec.title)}</div>' + rows)
-        else:
+        elif is_shown_fold(vm.page_id, sec.section_id):
+            rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
             with st.expander(sec.title, expanded=False):   # Streamlit 自帶展開箭頭；不再加文字「▸」（雙箭頭）
                 _md(rows)
+        # 其餘 L2／L3＝evidence：不渲染（P3）；資料仍在 PageVM.context.sections／lookup.sections
 
 
 def render_page(vm: PageVM) -> None:

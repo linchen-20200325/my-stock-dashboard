@@ -261,3 +261,15 @@
 12. [ ] （P1 QA 修正）Capability 欄位原因句不含「資料未備／資料未取得／尚無資料」、Missing 欄位不含「尚未開放／尚未提供」（`test_capability_and_missing_copy_never_cross_axes`）；同頁無「需按更新」vs「目前不提供更新」矛盾句。
 13. [ ] （P1 QA 修正）畫面無例外型別名（`\w+(Error|Exception)`）；FAKE 來源／資料日為「FAKE 示意資料／FAKE 示意」（FAKE 前綴保留）；無「冷啟動」「占位」「FAKE·scenario」「FAKE-ASOF」；expander 標題無文字「▸」；Real 台股來源 chip 換行不貼邊。
 14. [ ] （P1 QA 修正）`BREADTH_PROXY_SCORING_ENABLED` 前提測試綠；`html.shown()` 對未知治理參照句 print 警告。
+
+## §23 UI Correction P3 驗收項（Human UI 不渲染 L2／L3 evidence expander；T_new_1b 規格修正；2026-11-03；append-only；實作組單組，**待總管／獨立 QA／客戶勾選——本節未自勾**）
+
+1. [ ] 📊／💼 渲染 0 個 expander；🎯 只有「選股條件（收合）」；👤 只有 Audit：Decision Digest／Rule Registry（唯讀），皆預設收合（AppTest 全場景＋真瀏覽器 DOM `p3_no_evidence_expander`）。
+2. [ ] `PageVM`／`context.sections`／lookup sections evidence 完整保留（baseline 比對綠；mutation 轉紅）；`git diff` 顯示 `src/services`、`shared` 0 變更。
+3. [ ] T_new_1 與 T_new_1b（新驗收）無 xfail 且綠；剩 4 個 strict xfail（T_new_3／6／7／8）；舊 T_new_1b 規格錯誤與修正依據已記 DEC-131／BACKLOG。
+4. [ ] Digest 輸入不依賴 UI2（靜態 import 閉包守衛綠）；**Decision Digest 是否涵蓋 UI evidence 未驗**（實測 builder 不含位階完整說明／指標明細／lookup 基本面·估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`、`NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND`）；完整 evidence 保留於 VM；未來 OneBrain 批須先核對 Digest 缺欄。
+5. [ ] L0 位階完整說明過渡期限制已記錄（Active Contract §11、BACKLOG、PROJECT_STATE、HANDOFF）；VM `位階說明` 逐字保留。
+6. [ ] 第一屏要素順序（DEC-127）、導覽餘裕、W-2、Risk Cap「⬜ 無法判定」未退化（viewport 判定器 70＋11 態；1.59.2／1.56.0）。
+7. [ ] 客戶判斷項：👤 Data Freshness／System Information 隱藏、🎯 完整表隱藏（`NUI2-P3-FRESH-SYSINFO-HIDDEN`／`-FULL-TABLE-HIDDEN`）是否同意。
+8. [ ] 未宣稱 Safari／真機／Cloud 已驗；未宣稱獨立 QA 完成；固定 snapshot 僅 AppTest 驗證（`NUI2-P3-REAL-STATES-APPTEST-ONLY`）。
+9. [ ] （P3 QA 修正）baseline 指紋含 detail／value_text／status_text 雜湊；detail／value_text 被偷換的 mutation 轉紅；baseline 檔 sha256 已釘；RuleID 現況鎖定（VM 尚無 RuleID 欄位）；`_evaluate_p3` 缺鍵判紅。

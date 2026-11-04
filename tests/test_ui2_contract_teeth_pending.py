@@ -7,6 +7,13 @@
      * UI 一修好（XPASS）→ strict 使本測試**轉紅**，逼修的人**移除 xfail 標記**，之後它就是永久防復活守衛。
      * ⛔ 這裡只放「新 contract」的斷言；**不得**把任何現有資料／語意安全測試改成 xfail／skip。
 reason 內的 P# 對應 docs/BACKLOG.md §5.1.26 批次表。
+
+📌 P3（2026-11-03；客戶 (17) A2；DEC-131）：`T_new_1` 已於 UI 真正修好後移除 xfail（畢業，見 `GRADUATED_TEETH`）；
+舊 `T_new_1b`（「三個投資頁 `PageVM.context.sections` 不得有 L2／L3」）是**測試規格錯誤**（與 Active Contract §8 矛盾：
+它把「Human UI 不渲染」錯寫成「VM 不得含」，照做就得刪 evidence），已由 `test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it`
+取代（驗收對象改為：渲染層無 evidence expander ＋ VM 仍完整保留）；完整的 evidence-preservation 守衛在
+`tests/test_ui2_p3_evidence_preservation.py`。舊斷言原文：
+`[s.section_id for s in vm.context.sections if s.level in ("L2", "L3")] == []`（保留於此供追溯，不得復活）。
 """
 from __future__ import annotations
 
@@ -56,7 +63,8 @@ def _xfail130(p: str):
 
 # ══════════════════════════════════════════════════════════════════ A. 現在就綠
 def test_removed_human_sections_keep_their_data_in_the_vm_for_now():
-    """「從 UI 移除 ≠ 刪資料」：📊 的 why／detail／raw sections 目前仍在 VM（P3 只改 render policy，不得刪）。"""
+    """「從 UI 移除 ≠ 刪資料」：📊 的 why／detail／raw sections 仍在 VM（P3 只改 render policy，不得刪；
+    完整比對見 test_ui2_p3_evidence_preservation.py）。"""
     vm = get_preview_page_vm("p4_market", "loaded")
     ids = {s.section_id for s in vm.context.sections}
     assert {"why", "detail", "raw"} <= ids, ids
@@ -100,27 +108,44 @@ def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():
 
 
 # ══════════════════════════════════════════════════════════════════ B. 待 UI 批（strict xfail）
-@_xfail("P3")
 @pytest.mark.parametrize("page", ["p4_market", "p4_target", "p4_hold"])     # 👤 的 Audit 為稽核面（PROVISIONAL (b)），不在此列
 def test_T_new_1_human_pages_have_no_full_evidence_expander(page):
+    """P3 起轉綠（永久守衛）：三個投資頁不渲染 L2／L3 evidence expander。
+    允許的 expander 只有 `SHOWN_FOLDS` 白名單內的使用者功能（🎯 選股條件）；其餘 expander 標題不得含 evidence 字樣、
+    也不得等於 VM 的任何 L2／L3 區塊標題（結構判準）。"""
+    from src.ui2.views._page import SHOWN_FOLDS
     at = _at()
     at.radio(key="ui2_page").set_value(page).run(timeout=60)
-    labels = [e.label for e in at.expander]
-    bad = [lb for lb in labels if any(w in lb for w in _BANNED_EXPANDER_WORDS)]
-    # P1 把標題上外顯的「（L2）／（L3）」層級字樣拿掉了 → 光看字樣會漏抓；另以 VM 的 L2／L3 區塊標題對照（結構判準）。
-    sections = list(get_preview_page_vm(page, "loaded").context.sections)
+    labels = [e.label.removeprefix("▸ ") for e in at.expander]
+    vm = get_preview_page_vm(page, "loaded")
+    sections = list(vm.context.sections)
     if page == "p4_target":
-        sections += list(get_preview_page_vm(page, "loaded").context.target.lookup.sections)
-    l23 = {s_.title for s_ in sections if s_.level in ("L2", "L3")}
-    bad += [lb for lb in labels if lb.removeprefix("▸ ") in l23]
+        sections += list(vm.context.target.lookup.sections)
+    shown = {s_.title for s_ in sections if (page, s_.section_id) in SHOWN_FOLDS}
+    l23 = {s_.title for s_ in sections if s_.level in ("L2", "L3")} - shown
+    bad = [lb for lb in labels if lb not in shown]
+    bad += [lb for lb in labels if any(w in lb for w in _BANNED_EXPANDER_WORDS)]
+    bad += [lb for lb in labels if lb in l23]
     assert bad == [], bad
 
 
-@_xfail("P3")
 @pytest.mark.parametrize("page", ["p4_market", "p4_target", "p4_hold"])
-def test_T_new_1b_human_vm_sections_are_not_l2_l3(page):
+def test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it(page):
+    """取代舊 T_new_1b（規格錯誤，見檔頭）。正確驗收對象：(a) 渲染層不出現 L2／L3 evidence expander（T_new_1）；
+    (b) `PageVM.context.sections`（及 🎯 lookup sections）**仍保有** L2／L3 evidence——Active Contract §8：UI VM 全量、evidence 完整保留。
+    逐欄 baseline 比對與 mutation 在 tests/test_ui2_p3_evidence_preservation.py。"""
     vm = get_preview_page_vm(page, "loaded")
-    assert [s.section_id for s in vm.context.sections if s.level in ("L2", "L3")] == []
+    l23 = [s_.section_id for s_ in vm.context.sections if s_.level in ("L2", "L3")]
+    assert l23, f"{page} 的 VM 不得被刪掉 L2／L3 evidence（舊 T_new_1b 的反面）"
+    if page == "p4_target":
+        assert [s_.section_id for s_ in vm.context.target.lookup.sections if s_.level in ("L2", "L3")]
+    at = _at()
+    at.radio(key="ui2_page").set_value(page).run(timeout=60)
+    from src.ui2.views._page import SHOWN_FOLDS
+    rendered = {e.label.removeprefix("▸ ") for e in at.expander}
+    titles = {s_.title: s_.section_id for s_ in vm.context.sections if s_.level in ("L2", "L3")}
+    leaked = [sid for t, sid in titles.items() if t in rendered and (page, sid) not in SHOWN_FOLDS]
+    assert leaked == [], leaked
 
 
 @pytest.mark.parametrize("page", ["p4_market", "p4_target", "p4_hold", "p4_me"])   # P1 起轉綠（四頁預設道）；完整詞彙清單×場景×Real 見 test_ui2_p1_human_text.py

@@ -248,6 +248,7 @@ PENDING_UI_CORRECTION_TESTS: tuple[tuple[str, str], ...] = (
     ("tests/test_ui2_real_feed.py", "_why_regime"),
     ("tests/test_ui2_real_feed.py", "test_regime_unloaded_is_not_evaluated_with_the_l0_explanation"),
     ("tests/test_ui2_real_feed.py", "check_cross_page_regime"),
+    # 📌 P3（2026-11-03）複查：以上三項是 VM 層（`why` section 位置）測試；P3 只改渲染、VM 位置不變 → 仍成立，維持登記至 P6 搬位階說明。
     # ✅ P1（2026-11-03）已處理並自本登記移除：T10 `measure_viewport._select_box`、T13 依賴 Preview 控制 selectbox 的 6 個 AppTest
     # （test_full_rendered_page_has_no_global_update_time／_market_dom_order／_at_target／test_cta_order_in_real_page_default_lane／
     # test_me_page_switches_account_in_the_real_app／test_every_page_switches_and_renders_in_every_scenario）——
@@ -301,6 +302,9 @@ GRADUATED_TEETH: dict[str, str] = {
     "test_T_new_2_human_text_has_no_engineering_tokens": "P1",
     "test_T_new_5_preview_controls_are_dev_surface_only": "P1",
     "test_T_new_9_ui2_dev_shows_preview_controls_and_never_changes_account_area": "P1",
+    "test_T_new_1_human_pages_have_no_full_evidence_expander": "P3",
+    # 取代舊 T_new_1b（規格錯誤，DEC-131／客戶 (17) A2）：驗收對象＝渲染層無 evidence expander ＋ VM 仍完整保留
+    "test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it": "P3",
 }
 
 
@@ -348,7 +352,7 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
                 ok = True
         assert ok, f"{fn.name} 沒有 strict xfail"
         n += 1
-    assert n >= 6      # P1 後仍待後續批的 teeth：T_new_1/1b（P3）、3（P6）、6（P2）、7（P7）、8（P6）；2／5／9 已隨 P1 畢業（GRADUATED_TEETH）
+    assert n == 4      # P3 後仍待後續批的 teeth：3（P6）、6（P2）、7（P7）、8（P6）；2／5／9（P1）、1／1b（P3）已畢業（GRADUATED_TEETH）
     # (c) 此檔內除 test_T_new_* 外，不得有任何 xfail／skip（現綠 teeth 不得被偷偷隱藏）
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and not x.name.startswith("test_T_new_")]:
         for d in fn.decorator_list:
@@ -413,6 +417,7 @@ _FENCE_SHA256 = {
     "### DEC-128｜": "ed26051734a3dc1df2aee6321ac218cda0b2439872006bf2f94090eff6272a87",
     "### DEC-129｜": "210c1c2d55e2f37f7a5e0fcb809f3c43539609b72ede829bcc195ea707fdcf79",
     "### DEC-130｜": "dc28ea44aab00f12d3a0eb4977c517550385a60616ae8dd5c7a51b9e7398899c",   # 客戶 (15) 覆核 PROVISIONAL (a)(b)(c)
+    "### DEC-131｜": "4f7f8ee15add8b9dc54c57ddae11fba6320dbed1c917a27c1e8e5abddc692de9",   # 客戶 (17) 選 A 開始 P3（A2）
 }
 
 
@@ -640,3 +645,44 @@ def test_active_contract_dev_surface_clauses_and_ui2_dev_is_not_login_evidence()
     for must in ("選股條件只顯示精簡、人類可讀版本", "完整 rule detail／engineering detail 不上主頁",
                  "全部候選／CSV 為次層操作", "不得讓這些功能把 🎯 主頁做成資料牆"):
         assert must in s, must
+
+
+# ---------------------------------------------------------------- (xi) DEC-131（客戶 (17)：P3／A2／T_new_1b 規格錯誤）
+def _dec131() -> str:
+    d = _read("docs/DECISIONS.md")
+    return d[d.index("### DEC-131｜"):]
+
+
+def test_dec131_records_a2_t_new_1b_error_and_transition_limit():
+    d = _dec131()
+    f = d[d.index("```\n") + 4:d.index("\n```", d.index("```\n") + 4)]
+    for must in ("採用方案 A2", "完整 VM / Evidence 保留，只禁止 Human UI 渲染 L2/L3 evidence expander",
+                 "修正測試不代表放寬驗收", "OneBrain 未來仍可從正式 headless Digest 取得完整 evidence"):
+        assert must in f, must
+    for must in ("T_new_1b 規格錯誤", "錯誤依據", "修正依據", "影響", "test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it",
+                 "SHOWN_FOLDS", "過渡期使用者看不到完整說明", "REGIME_SEE_WHY", "P6 資料健康度承接",
+                 "NUI2-P3-FRESH-SYSINFO-HIDDEN"):
+        assert must in d, must
+
+
+def test_p3_closure_is_recorded_in_backlog_and_active_contract():
+    b = _read("docs/BACKLOG.md")
+    assert "NUI2-PLAN1007-P3-T1B-TENSION" in b and "closed（DEC-131）" in b
+    assert "#### 📌 P3 完成補記" in b
+    c = _read(ACTIVE_REL)
+    assert "T_new_1b 驗收對象" in c and "過渡期限制（P3）" in c
+
+
+# ---------------------------------------------------------------- (xii) P3 evidence baseline 檔 sha256 釘住（防無聲洗白）
+#: `tests/fixtures/ui2_p3_evidence_baseline.json` 的 sha256。⚠ 重新產生 baseline 的流程（有意識的 evidence 變更才可做）：
+#: ① `python -m tests.test_ui2_p3_evidence_preservation --regen` ② `sha256sum tests/fixtures/ui2_p3_evidence_baseline.json`
+#: ③ 把新值填到下面 ④ PR 描述與 BACKLOG 說明為何 evidence 變了（不得是縮小）。
+_P3_BASELINE_SHA256 = "a8ab54b0d31f78db976ed75cd8a7909562033ce28ce38f9e37f532a200e8ad53"
+
+
+def test_p3_evidence_baseline_file_is_pinned_by_sha256():
+    import hashlib
+    got = hashlib.sha256((ROOT / "tests" / "fixtures" / "ui2_p3_evidence_baseline.json").read_bytes()).hexdigest()
+    assert got == _P3_BASELINE_SHA256, (
+        "evidence baseline 被改動。若是有意識的 evidence 變更：照本檔註解的四步驟重新產生並更新釘值；"
+        "若不是，請還原——不得為了讓 evidence-preservation 測試通過而改 baseline。")
