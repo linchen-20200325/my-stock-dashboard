@@ -7604,3 +7604,12 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **新 UX 候選（未核准施工）**：主要比較圖可自選標的與期間、整併重複大小圖；不得將示意數值、估值目標、OneBrain 結論、Risk Cap 或 action 當真實資料。先完成 UI 對照／資料契約／去重設計再過 Gate。
 - **施工邊界**：不改 canonical、資料來源、正式公式、RuleIDs、Risk Cap、System Action、OAuth、Digest；保持 P6 與 DEC-134 已有派工分離。正式文字規格：docs/vnext/NEWUI2_VISUAL_REFERENCE_AND_PAGE_EXPANSION_2026-11-04.md。
 - **附圖證據**：使用者在當前對話提供之參考圖片；本文僅記錄由其判讀出的佈局，**未把圖片本身上傳 GitHub**，故非 pixel-perfect 圖像 SSOT。
+
+
+### DEC-136｜UI 視覺主模板與 OneBrain 完整資料雙軌驗收重申（客戶 2026-11-04）
+
+- **客戶原文**：「UI設計我想以這為模板為主，但內容部份以完整的給Onebrian，我們說好了 UI簡化，但Onebrian需要吃全部資料給出建議」。確認追述：「沒錯，這也是我們之前討論過的」。
+- **裁示效力**：重申既有 DEC-128／129 的 Presentation Compression ≠ Information Loss 和雙投影，並將客戶上傳的四面板圖片確立為 UI 主要視覺模板方向。Human UI 用精簡卡片／圖表呈現，OneBrain 經完整正式 Decision Digest 取得全部已核准、有效、可追溯的決策相關證據與反證；**不是**讀 UI ViewModel／卡片／可見 Top N。
+- **執行護欄**：缺值／資料時間／source／limitation 須保存；VM 保存不等於 Digest coverage 已完成，啟用前須逐欄驗證。OneBrain 應產出有依據的分析與建議，但不能自造事實、重寫 Risk Cap／System Action 或代替唯一動作權威，也不授權啟用 OneBrain runtime／新 API／交易動作。
+- **分軌驗收**：Visual Fidelity 和 Complete Evidence／Digest Coverage 必須分別查核；UI 隱藏不許縮減資料，Digest 補齊不許在 UI 恢復 raw evidence wall。詳細實作驗收附件見 `docs/vnext/NEWUI2_VISUAL_REFERENCE_AND_PAGE_EXPANSION_2026-11-04.md` §7。
+- **證據範圍**：圖片本體為對話附件，不是 GitHub 已存圖片；示意數值不能當正式來源。DEC-128～135 歷史保持 append-only。
