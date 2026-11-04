@@ -12,7 +12,7 @@ from shared.ui2_contract.models import (
     AccountVM, CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
     JudgementState, LookupResultVM, SearchBoxVM,
 )
-from shared.ui2_contract.text import TEXT_ASOF_MISSING, is_dev_only_text, is_known_l0_explain
+from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_NOT_PROVIDED, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
 #: 資料語意五態＋判定結果 → chip 色調。Missing／Not evaluated／無法判定＝灰（Neutral）；Stale＝琥珀；
@@ -320,3 +320,47 @@ def account_actions_html(account: AccountVM) -> str:
             f'data-ui2-account="{escape(account.account_state)}">'
             f'<span class="ui2-q">帳戶管理（示意狀態：{escape(_ACCOUNT_STATE_LABEL.get(account.account_state, account.account_state))}）</span>'
             f'<div class="ui2-account__btns">{btns}</div>{note}</div>')
+
+
+# ════════════════════════════════════════════════════════════════════
+# P2（客戶 2026-11-04 (19)／DEC-133）：📊 台股 Primary 誠實空槽＋一行 SPEC
+# ════════════════════════════════════════════════════════════════════
+#: 空槽標題（客戶 DEC-117 Q4 原詞「🇹🇼 台股趨勢」；「Primary」是內部詞，不上畫面）。
+PRIMARY_SLOT_TITLE = "🇹🇼 台股趨勢"
+#: 空槽原因句（既有字樣家族「此項目尚未開放」，同 `real_canonical._R_PORT`；不新造字樣）。
+PRIMARY_SLOT_REASON = "此項目尚未開放"
+#: SPEC 行誠實性標示（客戶 (19)）：SPEC 引用的是 TWII 卡的「最新收盤」來源／資料日，不是歷史序列。
+SPEC_REFERENCE_LABEL = "最新收盤參考"
+#: 缺值政策字樣（政策字樣，非資料值；與 §1 Fail Loud 同向）。
+SPEC_MISSING_POLICY = "缺值不補"
+SPEC_PREFIX = "SPEC"
+
+
+def spec_line_text(fresh: FreshnessInfo | None) -> str:
+    """一行 SPEC：`SPEC｜最新收盤參考｜<來源>｜資料日 <as_of>｜缺值不補`（客戶 (19) G-2=B：省略頻率欄）。
+
+    來源與資料日**只取 TWII 卡既有 freshness**（與卡逐字同值）：來源缺值→省略來源欄；as_of 缺→`TEXT_ASOF_MISSING`
+    （⛔ 補推估日期、⛔ 寫死來源、⛔ 手寫「日頻」）。as_of 原樣（ISO），不轉換格式。
+    """
+    fresh = fresh or FreshnessInfo()
+    parts = [SPEC_PREFIX, SPEC_REFERENCE_LABEL]
+    if fresh.source:
+        parts.append(fresh.source)
+    parts.append(f"資料日 {fresh.as_of}" if fresh.as_of else TEXT_ASOF_MISSING)
+    parts.append(SPEC_MISSING_POLICY)
+    return "｜".join(parts)
+
+
+def primary_slot_html(twii_card: CardVM | None) -> str:
+    """台股 Primary 主圖**誠實空槽**（無正式歷史序列→不畫圖）：標題＋Capability 字樣 `⬜ 尚未提供`＋原因句（灰底，⛔ 紅）＋
+    SPEC 行。依內容高度（客戶 (19) G-1=A，不預留 220px）。⛔ svg／polyline／canvas／img／假走勢／MA。
+
+    空槽是 **Capability**（`capability` 軸），與卡的 Data State 正交：卡 Unavailable／Missing 不會把槽改紅。
+    """
+    fresh = twii_card.field.freshness if twii_card is not None else None
+    chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
+    return ('<div class="ui2-primary-slot" data-ui2-l1="primary_slot" data-axis="capability" data-state="not_provided">'
+            f'<div class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>'
+            f'<div class="ui2-primary-slot__body">{chip}'
+            f'<span class="ui2-primary-slot__reason">{escape(PRIMARY_SLOT_REASON)}</span></div>'
+            f'<div class="ui2-primary-slot__spec" data-ui2-spec="1">{escape(spec_line_text(fresh))}</div></div>')

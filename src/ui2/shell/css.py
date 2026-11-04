@@ -129,6 +129,19 @@ CSS = """
   .ui2-m-l1 [data-ui2-q="q2"]{grid-row:4}
   .ui2-m-l1 [data-ui2-q="q3"]{grid-row:5}
 }
+/* P2：OneBrain Outlook（上移後）與台股 Primary 誠實空槽——依內容高度；灰底說明、⛔ 紅、⛔ 圖 */
+.ui2-m-onebrain .ui2-row{border-bottom:0;padding:2px 0 4px 0}
+@media (min-width:769px){
+  .ui2-m-onebrain{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 14px}      /* 桌機單行：標題＋⬜ 尚未提供＋原因 */
+  .ui2-m-onebrain .ui2-section-title{margin:12px 0 4px 0}
+  .ui2-m-onebrain .ui2-row{padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:0 10px}
+}
+.ui2-primary-slot{border:1px dashed rgba(128,128,128,.55);border-radius:10px;padding:2px 12px 8px 12px;margin:8px 0;
+  background:rgba(128,128,128,.10)}
+.ui2-primary-slot .ui2-section-title{margin:8px 0 4px 0}
+.ui2-primary-slot__body{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.ui2-primary-slot__reason{font-size:.8rem;opacity:.75}
+.ui2-primary-slot__spec{font-size:.75rem;opacity:.8;margin-top:4px;line-height:1.5;overflow-wrap:anywhere}
 /* 市場頁更新 CTA 列（頂部）：按鈕與原因同列（手機窄時才折行），省去原本獨立一行的原因高度 */
 .ui2-qrow--cta-top .ui2-ctawrap{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin:0}
 .ui2-qrow--cta-top .ui2-cta__reason{margin:0}

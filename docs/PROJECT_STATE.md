@@ -1063,3 +1063,12 @@
 - **裁定**：(1) 👤 Data Freshness／System Information 維持不在四頁一般 Human UI，由 P6 資料健康度承接，不得刪 VM／資料來源／provenance／Evidence；(2) 🎯 跨季趨勢與完整分析暫不恢復舊 L3 expander，保留為設計候選（精簡圖卡優先；資料來源／EPS 口徑／版型另行驗證；**仍 Pending，不是核准功能**）；(3) VM 保存≠Digest 已有，`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 維持 open，未證實前不得宣稱 OneBrain 可讀完整資料；(4) P2 採文字線框先行，本輪僅線框與資料欄位驗證。
 - **P2 線框**（待客戶驗收；QA 勘誤已套用）：OneBrain 上移至今日主要風險之後／Primary 槽之前；台股 Primary 誠實空槽＋一行 SPEC（來源／資料日取 TWII 卡 freshness，**省略頻率欄**）；歷史序列／MA 不接。**披露**：手機指標卡會被推到第一屏之下（QA 原型：560→798px；餘裕 166.5→162.5px，須 ≥160px），待客戶確認 G-3。待客戶確認 3 點：G-1 空槽高度、G-2 SPEC 欄位、G-3 手機指標卡下移。排序核對結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，不需客戶裁示。
 - **§27 檢查**：新 Decision＝DEC-132；新 Rule＝文件措辭規則；Backlog＝既有 ID 狀態更新；Audit §24 新節未自勾。
+
+## 64. New UI2 UI Correction P2（OneBrain 位置＋台股 Primary 空槽＋SPEC；客戶 2026-11-04 (19)／DEC-133；2026-11-04；append-only；施工組單組、待獨立 QA）
+
+- **範圍（僅兩項）**：(1) 🤖 OneBrain Outlook 移至核准位置（手機＝今日主要風險之後、Primary 空槽之前、指標卡之前；桌機單行）、內容不變；(2) 🇹🇼 台股趨勢 Primary 誠實空槽（`⬜ 尚未提供`、灰底、0 圖形、依內容高度）＋一行 SPEC `SPEC｜最新收盤參考｜<來源>｜資料日 <as_of>｜缺值不補`（省略頻率欄；與 TWII 卡 freshness 逐字一致）。
+- **客戶裁定**：G-1＝A、G-2＝B、G-3＝A；順序差異確認；Active Contract §3.1 最小文字勘誤已套用；SPEC 須標「最新收盤參考」（資料誠實性）。詳見 DEC-133。
+- **實作**：`src/ui2/views/market.py`／`_page.py`（`section_l1_html`、`render_sections(skip=)`）、`components/html.py`（`spec_line_text`／`primary_slot_html`）、`shell/css.py`；**VM／canonical／`shared`／`src/services`／`app.py`／資料層 0 diff**。
+- **測試**：新 `tests/test_ui2_p2_primary_slot.py`；`T_new_6` 畢業、strict xfail 4→3；viewport 判定器加 `p2_onebrain_primary_slot_order`／`p2_nav_margin_160`；每項新守衛附 mutation 實測轉紅後還原（見 BACKLOG 補記）。
+- **實測**：viewport FAKE 70／Real 11 全綠（Streamlit 1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 5 態（loaded／stale／missing／unavailable／contract_error，各 11 態）；手機導覽餘裕 stale／unavailable＝181.6／162.5px（≥160）；證據 `docs/vnext/newui2_p2/`。
+- **§27 檢查**：新 Decision＝DEC-133；新 Rule＝無；Backlog＝1 項結案＋限制記錄；Audit Checklist §25 新節（未自勾）。
