@@ -116,6 +116,11 @@ THRESHOLDS: list[dict[str, str]] = [
      "rule": "（P1）頂部標示（FAKE 示意資料／Real-data Preview）為單行：banner 高度 ≤ 1 行行高 + 上下 padding 12px"
              "（行高由頁內 `getComputedStyle(.ui2-banner).lineHeight` 現場量）。",
      "source": "客戶 2026-11-03 (16) P1：Real banner『縮為單行』；手機窄螢幕折行 → 判紅"},
+    {"id": "p3_no_evidence_expander",
+     "rule": "（P3）四頁產品畫面（排除 `?ui2_dev=1` 開發面與導覽）實際渲染的 expander（DOM `stExpander`）標題，只准是 "
+             "`src.ui2.views._page.SHOWN_FOLDS` 白名單內的使用者功能／稽核入口（🎯 選股條件；👤 Decision Digest／Rule Registry），"
+             "且全部預設收合；📊／💼 必為 0 個。L2／L3 evidence expander（為什麼／指標明細／原始資料表／完整表／明細…）不得出現。",
+     "source": "客戶 2026-11-03 (17) A2 第 1 項；Active Presentation Contract §3／§8"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -198,7 +203,39 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
     _evaluate_p1(m, out)
+    _evaluate_p3(m, out)
     return out
+
+
+def _p3_allowed_expander_titles() -> dict[str, set[str]]:
+    """page_id → 允許出現的 expander 標題（由 `SHOWN_FOLDS` 白名單＋FAKE／Real canonical 的區塊標題推得；不另列一份）。"""
+    from shared.ui2_contract.pages import PAGE_IDS
+    from src.services.ui2.preview_feed import get_preview_page_vm
+    from src.ui2.views._page import SHOWN_FOLDS
+    out: dict[str, set[str]] = {p: set() for p in PAGE_IDS}
+    for page in PAGE_IDS:
+        vm = get_preview_page_vm(page, "loaded")
+        secs = list(vm.context.sections)
+        if vm.context.target is not None:
+            secs += list(vm.context.target.lookup.sections)
+        out[page] = {s.title for s in secs if (page, s.section_id) in SHOWN_FOLDS}
+    return out
+
+
+def _evaluate_p3(m: dict, out: dict[str, list[str]]) -> None:
+    """P3：產品畫面不得渲染 L2／L3 evidence expander。舊版量測 dict 無 `expanders` 鍵 → 略過（向下相容）。"""
+    ex = m.get("expanders")
+    page = m.get("page")
+    if ex is None or page is None:
+        return
+    allowed = _p3_allowed_expander_titles().get(page, set())
+    for e in ex:
+        # Streamlit 的展開箭頭是圖示字型 ligature（innerText 帶 `keyboard_arrow_right ` 前綴）→ 剝掉再比
+        title = re.sub(r"^(?:keyboard_arrow_\w+|expand_\w+|arrow_\w+)\s+", "", e["title"])
+        if title not in allowed:
+            out["p3_no_evidence_expander"].append(f"{page} 渲染了不在白名單內的 expander：{title!r}")
+        if e.get("open"):
+            out["p3_no_evidence_expander"].append(f"{page} expander {title!r} 預設不是收合")
 
 
 def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
@@ -395,12 +432,17 @@ _JS = r"""
   const clone = bcEl.cloneNode(true);
   clone.querySelectorAll('.st-key-ui2_dev_surface, .st-key-ui2_nav, style, script').forEach(e => e.remove());
   const productText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  // P3：產品畫面實際渲染的 expander（DOM stExpander；排除開發面與導覽）
+  const expanders = [...document.querySelectorAll('[data-testid="stExpander"]')]
+    .filter(e => !e.closest('.st-key-ui2_dev_surface') && !e.closest('.st-key-ui2_nav'))
+    .map(e => { const d = e.querySelector('details'); const sm = e.querySelector('summary');
+      return {title: sm ? sm.innerText.replace(/\s+/g,' ').trim() : '', open: d ? d.open : null}; });
   const bn = document.querySelector('.ui2-banner');
   const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
-    product_text: productText, banner_box: bannerBox,
+    product_text: productText, banner_box: bannerBox, expanders: expanders,
     dev_surface_present: !!document.querySelector('.st-key-ui2_dev_surface'),
     banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
@@ -497,7 +539,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
                    if k in ("top", "bottom", "left", "right", "width", "height", "position", "labels", "checked_index")},
            "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
            "last_content_bottom": round(m["last_content"]["bottom"], 1),
-           "card_heights": m["card_heights"],
+           "card_heights": m["card_heights"], "expanders": m.get("expanders"),
            "batch3": {"risk": rd(m["risk"]) if m.get("risk") else None,
                       "mode_box": rd(m["mode_box"]) if m.get("mode_box") else None,
                       "mode_content": m.get("mode_content"), "font_sizes": m.get("font_sizes"),

@@ -895,3 +895,17 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | 候選與新 ID：`docs/BACKLOG.md` §5.1.26 末「#1007 記錄與下一批候選」；狀態 `docs/PROJECT_STATE.md` §61 末條；計畫 `docs/vnext/NEWUI2_UI_DATA_EVIDENCE_MAPPING_PLAN_2026-11-04.md`；施工附件 `docs/vnext/NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`；規格 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`；驗收 Audit Checklist §22（**未自勾**） |
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝無；新 Rule＝無；Backlog＝3 個新 ID（`NUI2-PLAN1007-CAPMAP-UNCOVERED`／`-METADATA-NO-L3`／`-P3-T1B-TENSION`）已寫入 BACKLOG；Audit Checklist 無新自勾項 |
 | 仍禁止（不變） | 同上方 P1 表「仍禁止」全部維持（⛔ 依舊 L2／L3 expander 施工；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance；⛔ 以 xfail／skip 隱藏舊測試；⛔ 降低守衛；⛔ 改 auth／Digest schema／Risk Cap／System Action／新 contract／公式／門檻／source；⛔ `ui2_dev`／URL 當登入證據；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy；⛔ 改 `.streamlit/config.toml`；⛔ 自行切換 Model／Effort；⛔ 一批超過 3 項）；另：⛔ 把 #1007 計畫當 Real Feed 授權；⛔ 替客戶選定候選 |
+
+- **Safe Handoff（2026-11-03 P3 完成；現行；實作組單組、待獨立 QA）**（決策者 客戶；本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位（C1） | 內容 |
+|---|---|
+| current Stage／exact safe stopping point | P3 已實作並 commit（待獨立 QA／push／PR／CI）；P2／P6／P7 未動 |
+| 已做 | DEC-131：A2；T_new_1b 規格錯誤修正；四頁 Human UI 不渲染 L2／L3 evidence expander（保留 🎯 選股條件、👤 Digest／Registry 稽核入口）；evidence-preservation baseline；strict xfail 10→4；L0 位階完整說明過渡期限制已記錄 |
+| **下一個唯一安全工作** | P3 PR 合併後，**待客戶從 P2（OneBrain 位置＋主圖槽＋SPEC 行）／P6（資料健康度；須先出文字線框）／P7（桌機 Account Area 殼；須先出文字線框）選一批**；客戶未選定不動工、不替客戶選。每批 ≤3 項、獨立 QA |
+| 過渡期限制 | 📊 位階完整說明 Human UI 不渲染（只見 `REGIME_SEE_WHY`）；完整說明留 VM／Digest，P6 承接（`NUI2-P1-L0-EXPLAIN-WITHHELD`） |
+| 待客戶判斷（非阻塞） | `NUI2-P3-FRESH-SYSINFO-HIDDEN`、`NUI2-P3-FULL-TABLE-HIDDEN`；撰寫組暫定四項維持 Pending |
+| known limitations | Digest 內容是否涵蓋全部 UI evidence 未驗；固定 snapshot 僅 AppTest；Chromium 單瀏覽器；Safari／真機／Cloud 未驗 |
+| 正式文件索引 | `docs/DECISIONS.md` DEC-131；`docs/BACKLOG.md` §5.1.26「P3 完成補記」；`docs/PROJECT_STATE.md` §62；Audit Checklist §23（**未自勾**）；證據 `docs/vnext/newui2_p3/` |
+| 仍禁止（不變） | 同上方「仍禁止」全部維持；另 ⛔ 刪 VM sections／canonical；⛔ 以 skip／xfail 隱藏；⛔ 改 Digest schema／Risk Cap／System Action／OAuth／資料層 |
+

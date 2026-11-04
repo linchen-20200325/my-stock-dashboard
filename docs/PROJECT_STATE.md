@@ -1045,3 +1045,13 @@
 - **QA 修正後 viewport 重量（重跑，證據已更新於 `docs/vnext/newui2_p1/`）**：1.59.2＝FAKE 70/70、Real 11/11、預設／開發道 16 態、Real 固定 snapshot 56 態；1.56.0（`/tmp/v156`）＝FAKE 70/70、Real 11/11、dev 道 16 態；皆全綠。逐張目視（QA 修正後）：手機 FAKE `market_loaded`／`target_stale_lookup`／`hold_loaded`／`me_loaded_unavailable`、手機 Real `market_real`、Real snapshot 手機 `market_unavailable`（共 6 張手機）；桌機 FAKE `market_loaded`／`target_loaded`、桌機 Real `me_real`（3 張）。其餘未逐張目視。
 - **QA 修正後全量驗證（實作組實測，單組）**：`python -m pytest tests -q -p no:cacheprovider -m "not slow"`（序列）＝**37056 passed、0 failed、46 skipped、186 deselected、10 xfailed**（21 分 00 秒）；slow 真瀏覽器 `test_ui2_batch2.py` 1 passed（結果見本次回報）。
 - **#1007 記錄與下一批候選（2026-11-04；docs-only；append；docs 組單組、待總管複驗）**：PR #1007（ChatGPT 撰寫，docs-only 1 檔 `NEWUI2_UI_DATA_EVIDENCE_MAPPING_PLAN_2026-11-04.md`）經總管獨立 QA（無 P0；1 個 P1 事實錯誤＝台股歷史主圖／MA 描述；9 項 P2）以 12 項最小文字勘誤（`c4b31a63`）修正，CI 綠，squash merge `6cb588d7`；**不是新客戶 Decision、不是 Real Feed 授權**；勘誤時發現舊 mapping 的 H3 是「目前曝險」非「建議持股水位」（新列編號寫「—」）。未驗限制：QA 未執行 service runtime 驗證、未窮舉 caller。QA 未處理項已登記（BACKLOG §5.1.26 末：`NUI2-PLAN1007-CAPMAP-UNCOVERED`、`NUI2-PLAN1007-METADATA-NO-L3`、`NUI2-PLAN1007-P3-T1B-TENSION`；`NUI2-TWII-TWO-PATHS` 與 `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 在 BACKLOG 已有條目，僅交叉參照）。新增「下一批候選（供客戶選擇；非授權）」A＝P3／B＝P2①②／C＝P7 殼；**不替客戶選定**。§27 檢查：新 Decision＝無；新 Rule＝無；Backlog＝3 個新 ID；未改 `src/`、`shared/`、`tests/`、`app.py`；Audit Checklist 無新自勾。
+
+## 62. New UI2 UI Correction P3（Human UI 不渲染 L2／L3 evidence expander；T_new_1b 規格錯誤修正；客戶 2026-11-03 (17)／DEC-131；2026-11-03；append-only；實作組單組、待獨立 QA）
+
+- **範圍（僅三項）**：(0) 修 T_new_1b 測試規格錯誤（A2）；(1) 四頁 Human UI 移除 L2／L3 evidence expander（保留 🎯 選股條件、👤 Decision Digest／Rule Registry 稽核入口）；(2) 更新測試與 strict xfail；(3) L0 位階完整說明過渡期限制記錄。不動資料層／公式／Action Authority／Risk Cap／System Action／Digest schema／OAuth；P2／P6／P7 未動。
+- **實作**：`src/ui2/views/_page.py` render policy（L2／L3 預設不渲染、`SHOWN_FOLDS` 白名單 fail closed）；VM／canonical／scenarios 0 行變更。詳見 DEC-131、BACKLOG §5.1.26「P3 完成補記」。
+- **L0 位階完整說明過渡期限制**：完整說明（`regime_arbiter.*_EXPLAIN`）留在 VM／Digest 可取得處；Human UI 過渡期只見 L1 `REGIME_SEE_WHY`；由 P6 資料健康度承接。
+- **測試**：新 `tests/test_ui2_p3_evidence_preservation.py`（baseline 指紋＋渲染層＋Digest import 閉包＋teeth）；`T_new_1`／`T_new_1b`（新驗收）畢業；strict xfail **10 → 4**。
+- **實測（實作組單組）**：viewport FAKE 70／Real 11 態全綠（1.59.2 與 1.56.0 各一輪）；證據 `docs/vnext/newui2_p3/`。全量序列 `python -m pytest tests -q -p no:cacheprovider -m "not slow"`＝**37210 passed、0 failed、46 skipped、186 deselected、4 xfailed**（21 分 24 秒）；slow 真瀏覽器 `test_ui2_batch2.py` 1 passed。
+- **§27 檢查**：新 Decision＝DEC-131（客戶 (17) 逐字）；新 Rule＝無；Audit finding／Limitation／Backlog＝5 個新 ID 已寫 BACKLOG；Audit Checklist §23 新節（未自勾）。
+

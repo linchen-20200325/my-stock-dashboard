@@ -7331,3 +7331,84 @@ AppTest `query_params` 支援：本批實測 Streamlit 1.59.2 的 `AppTest.query
 #### 七、揭露與效力邊界（⛔ 不是實作授權）
 
 單組撰寫、未經第二組獨立驗證（`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` 仍待）。不授權：auth／OAuth 架構本體、Decision Digest schema、Risk Cap、System Action、新資料 contract／source／公式／threshold、production default、刪 Old UI／Legacy New UI；資料健康度的**實作**（版型）仍須先出文字線框草稿（`CLAUDE.md` §-1.5.D v3 §03-2 ①；BACKLOG P6）。T_new_8 的 DOM 標記名（`data-ui2-col`）是撰寫組暫擬，P6 定案時同步改測試。
+
+
+### DEC-131｜客戶正式裁示 (17)：選 A，開始 New UI2 P3——A2「完整 VM／Evidence 保留、只禁止 Human UI 渲染 L2／L3 evidence expander」；T_new_1b 為測試規格錯誤、改驗證正確對象；P3 僅三項（客戶 2026-11-03）
+
+> 2026-11-03 補登。**編號**：DEC-130 為上一號；repo 慣例是「每一則客戶指示訊息一個 DEC」，(17) 是 (16)（P1）之後的**獨立正式裁示**，故另立 DEC-131；DEC-128／129／130 原文不動。**來源類別 D：客戶 2026-11-03 正式裁示 (17)，經總管轉交；下方 fence 逐字收錄，未改一字**（實作組未見客戶原訊息本身；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：New UI2 UI Correction P3（`src/ui2/views`、測試、docs）；0 行資料層／公式／Action Authority／Risk Cap／System Action／Decision Digest schema／OAuth 變更。
+- **狀態**：**客戶指示生效**；P3 已實作（見 `docs/BACKLOG.md` §5.1.26「P3 完成補記」）。
+- **客戶原文（逐字，fence 內未改一字；具約束力；sha256 釘住於 `tests/test_ui2_active_contract_docs.py`）**：
+
+```
+正式裁示：選 A，開始 New UI2 P3。
+
+先重新執行 GitHub Verification Gate（main、Open/Draft PR、diff、CI、branches、Active Contract、BACKLOG）。基準已知 #1008 合併後 main "d73c43e8"，以重新取得的實況為準。
+
+1. 先修正測試契約矛盾
+
+採用方案 A2：
+
+完整 VM / Evidence 保留，只禁止 Human UI 渲染 L2/L3 evidence expander。
+
+"T_new_1b" 目前要求 VM sections 沒有 L2/L3，與 Active Contract §8 相衝突。
+
+請依 DEC-128～130 修正測試，讓它驗證：
+
+- 三個投資主頁不得渲染 L2/L3 evidence expander。
+- "PageVM"、"PageContext.sections"、lookup sections 仍完整保存原始 evidence。
+- canonical、source、as_of、provenance、RuleIDs、Missing、Risk Cap evidence 不得遺失。
+- OneBrain 未來仍可從正式 headless Digest 取得完整 evidence，不依賴 UI 可見區塊。
+
+修正測試不代表放寬驗收，而是改成正確的驗收對象。必要時新增反向測試防止 evidence 遺失。
+
+2. P3 僅施工三項
+
+1. 四頁 Human UI 不再顯示過時的 L2/L3 evidence expander；保留 👤 我的已核准的次層稽核入口。
+2. 更新對應測試與 strict xfail；真正修好才移除 xfail，不得 skip 隱藏失敗。
+3. L0 市場位階完整說明繼續保留於既有正式資料／VM；待 P6 資料健康度承接前，明確記錄過渡期限制。
+
+不得修改資料層、公式、Action Authority、Risk Cap、System Action、Decision Digest schema 或 OAuth。
+
+3. 驗收及落盤
+
+- 手機 390px、桌機 1440px 實際截圖。
+- FAKE／Real／Missing／Stale／Unavailable／Not Evaluated 回歸。
+- P3 對應 tests 轉綠，且 evidence preservation tests 通過。
+- 獨立 QA、CI、Visual Fidelity Gate。
+- 將 T_new_1b 原本的規格錯誤、修正依據與影響記入正式 GitHub 文件。
+- BACKLOG、PROJECT_STATE、HANDOFF 同步。
+- 通過既有 Auto-Ship Gate 後合併 PR。
+
+P1 已完成，不重做。P2、P6、P7 不在本批實作範圍。
+
+Model：Claude Sonnet 5.5  Effort：Medium
+Silent Autonomous Cruise；只有真正需要客戶裁示或整批完成才回報。
+```
+
+#### 一、A2 裁示與效力
+
+採方案 **A2**：完整 VM／Evidence 保留，只禁止 Human UI 渲染 L2／L3 evidence expander。與 Active Contract §8（UI VM＝全量、「從 UI 移除 ≠ 刪資料」）同向；`PageVM`／`PageContext.sections`／lookup sections 一字不動。
+
+#### 二、T_new_1b 規格錯誤（客戶要求記入正式文件）
+
+- **舊規格（錯）**：`tests/test_ui2_contract_teeth_pending.py::test_T_new_1b_human_vm_sections_are_not_l2_l3`（strict xfail）斷言三個投資頁 `[s.section_id for s in vm.context.sections if s.level in ("L2","L3")] == []`。
+- **錯誤依據**：把「Human UI 不渲染 L2／L3」誤寫成「VM 不得含 L2／L3」。要讓它轉綠只能刪／改寫 VM sections（＝刪 evidence，違反 Active Contract §1／§8、DEC-129 §四「從 UI 移除 ≠ 刪資料」）或改 `level` 語意（VM schema 變更，須 Gate）。BACKLOG `NUI2-PLAN1007-P3-T1B-TENSION` 即此張力。
+- **修正依據**：Active Contract §8 清單（adapter／canonical／deterministic result／provenance／source／as_of／freshness／Missing·Stale·Unavailable／RuleIDs／Risk Cap evidence／Decision Context／未來 Digest input 皆不得刪）＋客戶 (17) A2。
+- **修正內容（不是放寬）**：舊斷言由兩個正確驗收對象取代，缺一不可——(A) 渲染層：三個投資頁不渲染 L2／L3 evidence expander（`T_new_1`，並以 AppTest 全場景×Real＋真瀏覽器 DOM 判定器 `p3_no_evidence_expander` 覆蓋）；(B) VM 層：`test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it` 與 `tests/test_ui2_p3_evidence_preservation.py`（FAKE 六場景×四頁〔👤 三帳戶〕＋Real 固定 snapshot 九態×四頁的 evidence 指紋 baseline；section 被刪空／拿掉 detail／拿掉 freshness／刪 lookup sections／Risk Cap 換語意皆 mutation 轉紅）；(C) Digest 輸入不依賴 UI2（import 傳遞閉包守衛）。舊斷言原文保留於測試檔 docstring，不得復活。
+- **影響**：strict xfail 由 10 降為 4（餘 T_new_3／6／7／8）；`GRADUATED_TEETH` 新增 `T_new_1`、`T_new_1b`（新名）；P1 的 VM 層測試不受影響。
+
+#### 三、P3 實作的內部自決（CLAUDE.md v3 §03-1；不新增客戶裁示）
+
+1. 渲染政策在 `src/ui2/views/_page.py`：L1 照畫；L2／L3 **預設不渲染**（fail closed），僅 `SHOWN_FOLDS` 白名單（🎯 `conditions`「選股條件」；👤 `digest`／`registry` 稽核入口）以預設收合 expander 呈現。不改 `SectionVM`／canonical。
+2. 隱藏項（VM 仍有）：📊 為什麼／指標明細／原始資料表；🎯 完整 6 欄表／跨季趨勢（Active Contract §3.2：evidence）、查一檔的基本面／估值／研究解釋（P2 以精簡卡承接）；💼 明細／原始明細；👤 Data Freshness／System Information（Contract §3.4 → P6 資料健康度，非核准稽核入口）。「查看全部候選／CSV／查看此檔」**目前 UI 尚未存在**（P2 範圍），本批不新增。
+3. 以上第 2 點的 👤 Fresh／Sysinfo 隱藏、🎯 完整表隱藏是**總管可推翻的讀法**（見 BACKLOG `NUI2-P3-FRESH-SYSINFO-HIDDEN`／`NUI2-P3-FULL-TABLE-HIDDEN`）。
+
+#### 四、L0 位階完整說明過渡期限制（客戶 (17) §2 第 3 項）
+
+`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `位階說明` 列保留；Human UI 因 P3 不渲染 L2，**過渡期使用者看不到完整說明**：L1 保留 `REGIME_SEE_WHY` 一句簡短原因，完整說明由 P6 資料健康度承接；此期間仍可由 VM／Digest 取得。
+
+#### 五、揭露與效力邊界
+
+單組實作、待獨立 QA。不授權：資料層／公式／Action Authority／Risk Cap／System Action／Digest schema／OAuth 變更；P2／P6／P7 不在本批。四項撰寫組暫定判讀維持 Pending。

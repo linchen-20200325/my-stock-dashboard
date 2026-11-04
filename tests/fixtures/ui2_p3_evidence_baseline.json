@@ -1,0 +1,7229 @@
+{
+ "fake/p4_hold/cold/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_hold/loaded/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_hold/missing/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_hold/not_evaluated/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_hold/stale/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_hold/unavailable/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "fake/p4_market/cold/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_market/loaded/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_market/missing/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_market/not_evaluated/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_market/stale/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_market/unavailable/None": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "fake/p4_me/cold/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/cold/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/cold/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/loaded/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/loaded/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/loaded/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/missing/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/missing/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/missing/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/not_evaluated/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/not_evaluated/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/not_evaluated/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/stale/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/stale/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/stale/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/unavailable/signed_in": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/unavailable/signed_out": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_me/unavailable/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "fake/p4_target/cold/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    null,
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "fake/p4_target/loaded/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "ok",
+    false,
+    true,
+    "FAKE 示意資料",
+    "FAKE 示意",
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "fake/p4_target/missing/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "missing",
+    false,
+    false,
+    "FAKE 示意資料",
+    "FAKE 示意",
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "fake/p4_target/not_evaluated/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "judgement",
+    "undeterminable",
+    false,
+    false,
+    "FAKE 示意資料",
+    "FAKE 示意",
+    "⬜ 未評估／資料不足"
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "fake/p4_target/stale/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "stale",
+    false,
+    true,
+    "FAKE 示意資料",
+    "FAKE 示意",
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "fake/p4_target/unavailable/None": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "unavailable",
+    true,
+    false,
+    "FAKE 示意資料",
+    "FAKE 示意",
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_hold/contract_error": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/loaded": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/missing": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/stale": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/stale_unknown": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/unavailable": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/unevaluated": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/unloaded": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_hold/upstream_error": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ],
+   [
+    "目前曝險",
+    "data",
+    "missing",
+    true,
+    false,
+    null,
+    null,
+    null
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain 持股摘要",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain 持股摘要"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始明細"
+   },
+   "why": {
+    "fields": [
+     [
+      "基本面／風險／籌碼／證據",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "明細"
+   }
+  }
+ },
+ "real/p4_market/contract_error": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "unavailable",
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/loaded": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "ok",
+      true,
+      true,
+      "規則分支 id：bull:score（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/missing": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "not_evaluated",
+      true,
+      false,
+      "規則分支 id：unloaded（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/stale": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "not_evaluated",
+      true,
+      false,
+      "規則分支 id：unloaded（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/stale_unknown": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "not_evaluated",
+      true,
+      false,
+      "規則分支 id：unloaded（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/unavailable": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "unavailable",
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/unevaluated": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "judgement",
+      "undeterminable",
+      true,
+      false,
+      "規則分支 id：unevaluated:breadth_unavailable（非資料來源）",
+      null,
+      "⬜ 未評估／資料不足"
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/unloaded": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "not_evaluated",
+      true,
+      false,
+      "規則分支 id：unloaded（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_market/upstream_error": {
+  "context_rows": [
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "detail": {
+    "fields": [
+     [
+      "指標明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "指標明細（16 項）"
+   },
+   "onebrain": {
+    "fields": [
+     [
+      "OneBrain Outlook",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "🤖 OneBrain Outlook"
+   },
+   "raw": {
+    "fields": [
+     [
+      "原始資料表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": null,
+    "title": "原始資料表"
+   },
+   "why": {
+    "fields": [
+     [
+      "位階說明",
+      "data",
+      "not_evaluated",
+      true,
+      false,
+      "規則分支 id：unloaded（非資料來源）",
+      null,
+      null
+     ],
+     [
+      "位階理由／反證／資料新鮮度／來源",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "為什麼"
+   }
+  }
+ },
+ "real/p4_me/contract_error": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/loaded": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/missing": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/stale": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/stale_unknown": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/unavailable": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/unevaluated": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/unloaded": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_me/upstream_error": {
+  "context_rows": [],
+  "lookup_sections": {},
+  "sections": {
+   "digest": {
+    "fields": [
+     [
+      "Decision Digest",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Decision Digest"
+   },
+   "fresh": {
+    "fields": [
+     [
+      "Data Freshness",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Data Freshness"
+   },
+   "registry": {
+    "fields": [
+     [
+      "Rule Registry",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：Rule Registry（唯讀）"
+   },
+   "settings": {
+    "fields": [
+     [
+      "Strategy",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Notifications",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ],
+     [
+      "Display preference",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "一般設定"
+   },
+   "sysinfo": {
+    "fields": [
+     [
+      "System Information",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": null,
+    "title": "Audit：System Information"
+   }
+  }
+ },
+ "real/p4_target/contract_error": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "unavailable",
+    true,
+    false,
+    null,
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/loaded": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "ok",
+    true,
+    true,
+    "規則分支 id：bull:score（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/missing": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    "規則分支 id：unloaded（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/stale": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    "規則分支 id：unloaded（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/stale_unknown": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    "規則分支 id：unloaded（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/unavailable": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "unavailable",
+    true,
+    false,
+    null,
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/unevaluated": {
+  "context_rows": [
+   [
+    "市場位階",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    "規則分支 id：unevaluated:breadth_unavailable（非資料來源）",
+    null,
+    "⬜ 未評估／資料不足"
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/unloaded": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    "規則分支 id：unloaded（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_target/upstream_error": {
+  "context_rows": [
+   [
+    "市場位階",
+    "data",
+    "not_evaluated",
+    true,
+    false,
+    "規則分支 id：unloaded（非資料來源）",
+    null,
+    null
+   ],
+   [
+    "Risk Cap",
+    "judgement",
+    "undeterminable",
+    true,
+    false,
+    null,
+    null,
+    "⬜ 無法判定"
+   ]
+  ],
+  "lookup_sections": {
+   "lk_fundamental": {
+    "fields": [
+     [
+      "基本面明細",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "基本面"
+   },
+   "lk_research": {
+    "fields": [
+     [
+      "研究解釋",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "🤖 研究解釋"
+   },
+   "lk_valuation": {
+    "fields": [
+     [
+      "估值（EPS basis／PE 口徑）",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "lookup",
+    "title": "估值"
+   }
+  },
+  "sections": {
+   "conditions": {
+    "fields": [
+     [
+      "選股條件",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L2",
+    "mode": "curated",
+    "title": "選股條件（收合）"
+   },
+   "full": {
+    "fields": [
+     [
+      "完整表",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null
+     ]
+    ],
+    "level": "L3",
+    "mode": "curated",
+    "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ }
+}
