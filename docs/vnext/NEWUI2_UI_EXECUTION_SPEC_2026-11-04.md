@@ -13,13 +13,13 @@
 3. **Chart-first 但不是 Chart Wall**：有正式資料與可解釋語意才畫圖；不混單位、不用誤導雙軸、不新造市場判斷。主要圖表附近放一行短 SPEC（標的／區間／頻率／單位／base／資料日／source／缺值，僅按該圖所需）；未知值顯示未提供，不手寫最新日。
 4. **四頁不放整包 evidence**：不放「▸ 為什麼（L2）」、「▸ 指標明細（L3）」、「▸ 原始表／工程診斷（L3）」、raw JSON、traceback、PORT／Stage／Gate／Aggregator 等工程內文、全系統 Missing 清單。能留在 UI 的是少量可判讀 evidence／必要數字／一行 source-as_of-freshness；內部資料仍完整保存。
 5. **資料健康度集中於「👤 我的」**：詳細來源／缺值／日期／freshness 與開發診斷集中，允許該專屬區內分層收合（僅 Level 3 預設收合為客戶裁示；Level 1／2 預設狀態仍 Pending）；不新增第五導航頁。
-6. **桌機左側帳號、手機四格**：桌機 Logo／產品名稱→compact Login＋Auth Status→市場／標的／持股／我的；手機固定底部四項，登入由「我的」承接。狀態只能由正式 auth contract 提供，沒有時誠實標示未接線，不把 FAKE scenario／query string 當登入。
+6. **桌機左側帳號、手機四格**：桌機 Logo／產品名稱→compact Login＋Auth Status→市場／標的／持股／我的；~~手機固定底部四項，登入由「我的」承接~~ 📌 已由 DEC-134 取代（手機＝☰ 左側抽屜）。狀態只能由正式 auth contract 提供，沒有時誠實標示未接線，不把 FAKE scenario／query string 當登入。
 
 ## 1. 橫跨四頁的版面／互動契約
 
 | 區域 | 手機 390px | 桌機 1440px | 必驗 |
 |---|---|---|---|
-| 導覽 | 底部四格市場／標的／持股／我的，safe-area 不遮 CTA | 左側 compact rail，四主頁；Logo 下登入按鈕＋狀態 | 不出現第五格；auth 不是從 URL 推論 |
+| 導覽 | ~~底部四格市場／標的／持股／我的，safe-area 不遮 CTA~~ 📌 已由 DEC-134 取代（手機＝☰ 左側抽屜） | 左側 compact rail，四主頁；Logo 下登入按鈕＋狀態 | 不出現第五格；auth 不是從 URL 推論 |
 | 第一屏 | 狀態、正式行動／無法判定、主 CTA、資料可信度能看見或立即辨識 | 結論及狀態與主要圖上緣優先，不能被工程資訊推下 | 390／1440 截圖；不只依 DOM |
 | 圖表 | 易讀高度、標軸／圖例、單行短 SPEC 可掃讀 | 主圖與輔圖分開，同單位比較 | 缺值不補 0、不偽造圖、來源與 as_of 真實 |
 | 訊號／缺值 | 文字＋狀態，不以顏色單獨承載 | 同左 | OK／Missing／Stale／Unavailable／Not Evaluated，Capability 獨立 |

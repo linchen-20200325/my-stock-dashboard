@@ -6960,6 +6960,8 @@ MIGRATE：內容仍需要，但位置應改到「資料健康度」或 backend E
 
 ### DEC-129｜客戶追加裁示（併入 DEC-128 同批；優先於 (13) 衝突處）：桌機左側 Navigation Rail 加入 compact Account Area（登入／Authentication State）；強制移除不再適用的 Active Rules（含 guards／tests／renderer 假設）；Active interpretation 11 點（客戶 2026-11-03 (14)）
 
+> 📌 **手機底部導覽規則（「手機仍固定四格底部導覽」）由 DEC-134 取代；桌機 Account Area、四頁 IA 不變（原文保留）**（2026-11-04 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-134）；其餘條文仍有效）。
+
 > 2026-11-03 補登。**編號選擇（依 repo 慣例說明）**：repo 慣例是「每一則客戶指示訊息一個 DEC」（DEC-122／123／125／126／127 各自獨立），(14) 是 (13) 之後的**獨立追加訊息**且自述「優先於前一份提示語中任何衝突內容」，故另立 DEC-129，而非改寫 DEC-128（DEC-128 原文不動，僅在條頭加 📌）。**來源類別 D：客戶 2026-11-03 追加裁示 (14)，經總管轉交；下方 fence 逐字收錄，未改一字**（實作組未見客戶原訊息本身）。
 - **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：產品／UX／治理（導覽結構、Active Rule 清理、tests／guards 清理）。
 - **狀態**：**客戶指示生效**；落地＝與 DEC-128 同批（docs＋測試清理）；UI 程式尚未改（後續 UI correction 批，`docs/BACKLOG.md` §5.1.26）。
@@ -7594,3 +7596,15 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **不做**：不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema；不改 Risk Cap／System Action／Digest／OAuth；第一屏順序、主 CTA、既有卡片、手機四格導航、桌機布局不動。
 - **驗收門檻**：手機導覽餘裕維持 ≥160px（未達停止、不擅自改設計）；P3 evidence preservation、白名單、P1 工程字樣、DEC-124 三軸（空槽是 Capability）、G2／G2F／G4／G9、no-write 守衛不得退化；T_new_6 真正修好後移除 xfail（strict xfail 4→3）。實作形態與實測見 BACKLOG §5.1.26「P2 完成補記」。
 - **不是**：Real Feed／OneBrain／Digest 授權；**不是**歷史序列接線授權（`NUI2-TWII-TWO-PATHS` 仍待擇一）；**不是** P6／P7 授權（下一批須由客戶從 P6／P7 選）。
+
+
+### DEC-134｜手機導航改為可展開左側抽屜、保留 Google 登入入口（客戶 2026-11-04）
+
+- **客戶原始需求**：「左邊是現在的右邊是以前的，但是下方的會被manage app擋住了 所以我想維持左邊仍然有選項以及登入按鈕」；在 ChatGPT 比較三案、推薦「手機 ☰ 左側抽屜選單＋登入，桌機維持左側固定導航」後，客戶原文答覆：「好」。
+- **客戶同意的範圍**：選 B 可收合左側抽屜（四主頁及 Google 帳號入口），而非舊式常駐側欄或雙導航。先前「手機只有底部固定四格」的**導航位置與顯示方式**在 New UI2 中由本較新指示取代；四個主頁與桌機 rail 保留。
+- **未授權**：沒有核准抽屜像素尺寸、真 Google OAuth 接線、正式 auth state、資料來源、VM schema 或投資語意；必須先提供詳細文字線框與獨立 Gate。
+- **正式設計附件**：docs/vnext/NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md。舊 DEC 原文 append-only 不刪，既有測試與 CSS 的底部四格規則需在施工批明確更換，不得默默降測試。
+- **證據限制**：使用者截圖可見 Streamlit Manage app 覆蓋底部，但尚未在本端真機／Cloud 重現；此為已確認的使用者體驗需求，不聲稱平台浮層一定可由 CSS 控制。
+- **不取代**：DEC-129 桌機 Account Area、DEC-127 順序、DEC-130 誠實規則（ui2_dev／query／FAKE account 不得當登入證據）、四頁 IA。
+- **決策者**：**客戶**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：產品／UX（New UI2 手機導航位置與登入入口）。
+- **狀態**：**裁示已記錄、線框待驗收、不授權實作**。
