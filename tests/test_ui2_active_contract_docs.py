@@ -303,6 +303,7 @@ GRADUATED_TEETH: dict[str, str] = {
     "test_T_new_5_preview_controls_are_dev_surface_only": "P1",
     "test_T_new_9_ui2_dev_shows_preview_controls_and_never_changes_account_area": "P1",
     "test_T_new_1_human_pages_have_no_full_evidence_expander": "P3",
+    "test_T_new_6_main_chart_has_short_spec_line": "P2",      # DEC-133：台股 Primary 空槽＋SPEC 行落地後畢業
     # 取代舊 T_new_1b（規格錯誤，DEC-131／客戶 (17) A2）：驗收對象＝渲染層無 evidence expander ＋ VM 仍完整保留
     "test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it": "P3",
 }
@@ -352,7 +353,7 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
                 ok = True
         assert ok, f"{fn.name} 沒有 strict xfail"
         n += 1
-    assert n == 4      # P3 後仍待後續批的 teeth：3（P6）、6（P2）、7（P7）、8（P6）；2／5／9（P1）、1／1b（P3）已畢業（GRADUATED_TEETH）
+    assert n == 3      # P2 後仍待後續批的 teeth：3（P6）、7（P7）、8（P6）；2／5／9（P1）、1／1b（P3）、6（P2）已畢業（GRADUATED_TEETH）
     # (c) 此檔內除 test_T_new_* 外，不得有任何 xfail／skip（現綠 teeth 不得被偷偷隱藏）
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and not x.name.startswith("test_T_new_")]:
         for d in fn.decorator_list:
@@ -419,6 +420,7 @@ _FENCE_SHA256 = {
     "### DEC-130｜": "dc28ea44aab00f12d3a0eb4977c517550385a60616ae8dd5c7a51b9e7398899c",   # 客戶 (15) 覆核 PROVISIONAL (a)(b)(c)
     "### DEC-131｜": "4f7f8ee15add8b9dc54c57ddae11fba6320dbed1c917a27c1e8e5abddc692de9",   # 客戶 (17) 選 A 開始 P3（A2）
     "### DEC-132｜": "088c01425621fa7d46163813e304a23be872cb630aa863dfc6f89e3b4208c086",   # 客戶 (18) 覆核 #1009 兩灰區＋P2 文字線框先行
+    "### DEC-133｜": "57e4269edbfd33b251a5a92673c539c045658c3b718adb6b99b1c0607779bbda",   # 客戶 (19) P2 線框有條件通過、開始 P2 施工
 }
 
 
@@ -771,3 +773,61 @@ def test_audit_checklist_section_24_is_not_self_checked_and_wireframe_discloses_
     assert "G-3" in w and "≥160px" in w and "第一屏不增不減」不實" in w
     # G-2：頻率欄預設省略，「日頻」須明示同意（自相矛盾已修）
     assert "推薦 B**" in w and "沉默不等於同意" in w
+
+
+# ---------------------------------------------------------------- (xiv) DEC-133（客戶 (19)：P2 線框有條件通過、P2 施工、最新收盤參考誠實性）
+def _dec133() -> str:
+    d = _read("docs/DECISIONS.md")
+    return d[d.index("### DEC-133｜"):]
+
+
+def test_dec133_fence_has_customer_text_and_records_rulings():
+    d = _dec133()
+    a = d.index("```\n") + 4
+    f = d[a:d.index("\n```", a)]
+    for must in ("G-1＝A：空槽依內容高度，不預留 220px 灰框", "G-2＝B：SPEC 省略頻率，僅使用已存在且可驗證的來源／資料日／缺值政策",
+                 "不自行寫「日頻」", "G-3＝A：接受手機指標卡移至第一屏下方",
+                 "今日主要風險 → OneBrain Outlook → 台股 Primary 空槽 → 核心指標卡",
+                 "必須明確標示為「最新收盤參考」", "不得讓使用者誤以為主圖已有正式歷史序列",
+                 "不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema",
+                 "導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計",
+                 "T_new_6 真正修好後轉綠，移除對應 xfail"):
+        assert must in f, must
+    rest = d[d.index("\n```", a) + 4:]
+    for must in ("G-1＝A", "G-2＝B", "G-3＝A", "最小文字勘誤", "最新收盤參考", "Real Feed／OneBrain／Digest 授權", "歷史序列接線授權"):
+        assert must in rest, must
+
+
+def test_dec133_is_wired_into_backlog_state_handoff_checklist_and_contract():
+    b = _read("docs/BACKLOG.md")
+    assert "P2 完成補記" in b and "DEC-133" in b
+    row = next(l for l in b.splitlines() if l.startswith("| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER**"))
+    assert "客戶已確認（DEC-133" in row and "~~open~~" in row                      # 原刪除線保留、新增客戶確認
+    assert "## 64. New UI2 UI Correction P2" in _read("docs/PROJECT_STATE.md")
+    h = _read("docs/HANDOFF.md")
+    tail = h[h.rindex("Safe Handoff（2026-11-04 DEC-133"):]
+    assert "待客戶從 P6" in tail and "P7" in tail and "客戶未選定不動工" in tail and "設計候選" in tail
+    assert h.rindex("Safe Handoff（2026-11-04 DEC-133") > h.rindex("Safe Handoff（2026-11-04 DEC-132")   # 最末
+    c = _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
+    sec = c[c.index("## §25 UI Correction P2"):]
+    assert "[ ]" in sec and not re.search(r"\[[xX]\]", sec), "§25 不得自勾"
+    ac = _read(ACTIVE_REL)
+    assert "最小文字勘誤" in ac and "DEC-133" in ac and "~~市場目前狀態（五態；⛔ 偏多／中性／偏空）／Risk Cap" in ac   # 原文刪除線保留
+    w = _read(P2_WIREFRAME_REL)
+    assert "已施工" in w[:600] and "DEC-133" in w[:600] and "~~**狀態：待客戶驗收。本文件不授權實作。**~~" in w[:900]
+    # 舊 DEC 原文不改：DEC-132 fence 的 sha256 仍釘（見 _FENCE_SHA256）；此處只確認 DEC-132 區段仍在
+    assert "### DEC-132｜" in _read("docs/DECISIONS.md")
+
+
+def test_p2_text_is_honest_about_latest_close_reference():
+    """DEC-133 §三：本批新增文件不得宣稱主圖已有歷史資料／OneBrain 可讀完整資料（反向守衛）。"""
+    for sec in (_dec133(), _read("docs/BACKLOG.md").split("#### 📌 P2 完成補記")[-1]):
+        for bad in ("主圖已有歷史資料已", "OneBrain 可讀完整資料已", "evidence 已在 Digest", "Digest 已涵蓋"):
+            assert bad not in sec, bad
+        assert "最新收盤參考" in sec
+
+
+def test_strict_xfail_count_is_three_after_p2():
+    src = _read(TEETH_REL)
+    assert src.count("@_xfail(") + src.count("@_xfail130(") == 3        # T_new_3／7／8
+

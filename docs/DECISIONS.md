@@ -7517,3 +7517,80 @@ Model：Claude Sonnet 5.5  Effort：Medium
 #### 五、揭露與效力邊界
 
 docs 組單組撰寫、待總管複驗。**不授權**：任何 `src/`／`shared/`／`app*.py`／既有 tests 的變更；P2 程式施工（待客戶驗收線框）；P6／P7；OneBrain／Digest runtime；Digest schema／Risk Cap／System Action／OAuth／資料層／公式／門檻／來源；新增 Human UI expander；把「設計候選」當核准功能。舊 DEC（DEC-081／117／118／122／127～131）**一字不改**。
+
+### DEC-133｜客戶正式裁示 (19)：P2 線框有條件通過（G-1＝A、G-2＝B、G-3＝A），開始 P2 程式施工——僅兩項（OneBrain Outlook 移至核准位置、台股 Primary 空槽＋短 SPEC）；SPEC 須標示「最新收盤參考」（客戶 2026-11-04）
+
+> 2026-11-04 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-133" docs PROJECT_RULES.md` 0 命中，DEC-132 為上一號）。repo 慣例「每一則客戶指示訊息一個 DEC」，(19) 是 (18) 之後的**獨立正式裁示**，故另立 DEC-133；DEC-128～132 原文不動（append-only）。**來源類別 D：客戶 2026-11-04 正式裁示 (19)，經總管轉交；下方 fence 逐字收錄，未改一字**（施工組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：📊 市場頁 presentation 兩項（`src/ui2/views/market.py`／`_page.py`、`src/ui2/components/html.py`、`src/ui2/shell/css.py`）＋測試／判定器／治理文件；**0 行 `shared`／`src/services`／`app.py`／`src/data`／`src/compute`／`src/ui`／`src/ui_v2` 變更**。
+- **狀態**：**客戶裁示生效**；P2 線框有條件通過、**授權 P2 程式施工（僅兩項）**。
+- **客戶原文（逐字，fence 內未改一字；具約束力；sha256 釘住於 `tests/test_ui2_active_contract_docs.py`）**：
+
+```
+正式裁示：P2 線框有條件通過，開始 P2 程式施工。
+
+G-1＝A：空槽依內容高度，不預留 220px 灰框。
+
+G-2＝B：SPEC 省略頻率，僅使用已存在且可驗證的來源／資料日／缺值政策。不自行寫「日頻」。來源缺值省略來源欄，日期沿用既有 ISO 格式。
+
+G-3＝A：接受手機指標卡移至第一屏下方，維持已核准草稿順序：
+今日主要風險 → OneBrain Outlook → 台股 Primary 空槽 → 核心指標卡。
+
+同時確認順序差異的判斷：
+
+- 手機：是否需要行動 → 下一步 → 今日主要風險。
+- 桌機：三個狀態 tile（含今日主要風險）→ 是否需要行動 → 下一步。
+- 以 Wireframes §2.1／§2.2、DEC-122、DEC-127 的正式客戶裁示為準。
+- 將 Active Contract §3.1 的扁平轉述歧義作最小文字勘誤，不改原本已核准的視覺順序。
+
+新增資料誠實性要求：
+
+台股 Primary 主圖目前只有空槽，尚無正式歷史圖表資料。SPEC 引用的 TWII 最新收盤 source/as_of 必須明確標示為「最新收盤參考」，不得讓使用者誤以為主圖已有正式歷史序列。
+
+不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema。
+
+P2 僅施工兩項：
+
+1. OneBrain Outlook 移至核准位置，內容不變。
+2. 台股 Primary 空槽及短 SPEC，依內容高度呈現。
+
+施工驗收：
+
+- 手機 390px、桌機 1440px 真實截圖。
+- FAKE／Real／Missing／Stale／Unavailable 場景。
+- 手機首屏必要項不變。
+- 導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計。
+- 圖槽不得出現假線圖。
+- SPEC 來源與資料日必須與正式 TWII 卡一致。
+- T_new_6 真正修好後轉綠，移除對應 xfail。
+- P3 VM／Evidence preservation、Risk Cap、System Action、Digest、Auth 等守衛不得退化。
+- 獨立 QA、CI 全綠後依既有 Auto-Ship Gate 合併。
+- BACKLOG、PROJECT_STATE、HANDOFF、DECISIONS 依治理規則同步。
+
+全程靜默處理，只有真正阻塞或整批完成才回報。
+Model：Claude Sonnet 5.5  Effort：Medium
+```
+
+#### 一、三個灰區裁定（落盤）
+
+- **G-1＝A**：Primary 空槽**依內容高度**（標題＋一行說明＋SPEC 行），**不預留 220px 灰框**（真圖接線批再採約 220px，DEC-119）。
+- **G-2＝B**：SPEC **省略頻率欄**，只用「已存在且可驗證」的來源／資料日／缺值政策；**不自行寫「日頻」**；來源缺值＝**省略來源欄**；資料日沿用既有 ISO 格式原樣。
+- **G-3＝A**：接受手機指標卡移至第一屏下方；維持已核准草稿順序「今日主要風險 → OneBrain Outlook → 台股 Primary 空槽 → 核心指標卡」（手機四必要項與今日結論不變）。
+
+#### 二、順序差異確認（客戶確認；原「單組判斷、待客戶確認」升為客戶確認）
+
+- 手機：是否需要行動 → 下一步 → 今日主要風險。桌機：三個狀態 tile（含今日主要風險）→ 是否需要行動 → 下一步。以 Wireframes §2.1／§2.2、DEC-122、DEC-127 的正式客戶裁示為準。
+- Active Contract §3.1 的扁平轉述歧義已做**最小文字勘誤**（原文刪除線＋📌 保留；見該檔 §3.1），**不改已核准視覺順序**；BACKLOG `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 標**客戶已確認（DEC-133）**。
+
+#### 三、資料誠實性要求（客戶 (19) 新增；本 DEC 新增 Rule 的唯一來源）
+
+- 台股 Primary 主圖目前**只有空槽、尚無正式歷史圖表資料**。SPEC 引用的 TWII 最新收盤 source／as_of **必須明確標示為「最新收盤參考」**，不得讓使用者誤以為主圖已有正式歷史序列。
+- **落地**：SPEC 行格式 `SPEC｜最新收盤參考｜<來源>｜資料日 <as_of>｜缺值不補`（來源缺值→省略該欄；as_of 缺→既有字樣 `⬜ 資料日未提供`；⛔ 補日期／寫死來源／手寫頻率）；來源與資料日**逐字取自正式 TWII 卡 `freshness`**（`tests/test_ui2_p2_primary_slot.py` 鎖定，FAKE 六場景＋Real 固定 snapshot 九態）。
+- **文件措辭規則（承 DEC-132 §三，不變）**：不得寫「主圖已有歷史資料」「OneBrain 可讀完整資料」；只能寫「SPEC 引用 TWII 最新收盤的來源／資料日（最新收盤參考）；歷史序列／MA 未接」。
+
+#### 四、施工範圍與不做（客戶 (19) 逐字範圍）
+
+- **做（僅兩項）**：(1) OneBrain Outlook 移至核准位置、內容不變（手機＝今日主要風險之後、Primary 空槽之前、指標卡之前；桌機＝是否需要行動／下一步之後、單行）；(2) 台股 Primary 空槽（`🇹🇼 台股趨勢`、`⬜ 尚未提供`、「此項目尚未開放」、灰底、0 個 svg／polyline／canvas／img）＋一行 SPEC。
+- **不做**：不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema；不改 Risk Cap／System Action／Digest／OAuth；第一屏順序、主 CTA、既有卡片、手機四格導航、桌機布局不動。
+- **驗收門檻**：手機導覽餘裕維持 ≥160px（未達停止、不擅自改設計）；P3 evidence preservation、白名單、P1 工程字樣、DEC-124 三軸（空槽是 Capability）、G2／G2F／G4／G9、no-write 守衛不得退化；T_new_6 真正修好後移除 xfail（strict xfail 4→3）。實作形態與實測見 BACKLOG §5.1.26「P2 完成補記」。
+- **不是**：Real Feed／OneBrain／Digest 授權；**不是**歷史序列接線授權（`NUI2-TWII-TWO-PATHS` 仍待擇一）；**不是** P6／P7 授權（下一批須由客戶從 P6／P7 選）。

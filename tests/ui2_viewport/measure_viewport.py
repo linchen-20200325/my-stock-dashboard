@@ -121,6 +121,15 @@ THRESHOLDS: list[dict[str, str]] = [
              "`src.ui2.views._page.SHOWN_FOLDS` 白名單內的使用者功能／稽核入口（🎯 選股條件；👤 Decision Digest／Rule Registry），"
              "且全部預設收合；📊／💼 必為 0 個。L2／L3 evidence expander（為什麼／指標明細／原始資料表／完整表／明細…）不得出現。",
      "source": "客戶 2026-11-03 (17) A2 第 1 項；Active Presentation Contract §3／§8"},
+    {"id": "p2_onebrain_primary_slot_order",
+     "rule": "（P2）📊 市場：DOM 與座標上依序為 今日主要風險 → 🤖 OneBrain Outlook → 🇹🇼 台股趨勢空槽 → 核心指標卡（手機與桌機皆然；"
+             "桌機另要求 OneBrain 在 是否需要行動／下一步 之後）。手機指標卡必須在 Primary 空槽**之後**。"
+             "空槽 0 個 svg／polyline／canvas／img（⛔ 假走勢）、含 `⬜ 尚未提供`、SPEC 行含『最新收盤參考』且不含『日頻』。",
+     "source": "客戶 2026-11-04 (19) P2（G-1=A／G-2=B／G-3=A）；Wireframes §2.1／§2.2；P2 文字線框 C 節"},
+    {"id": "p2_nav_margin_160",
+     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部導覽上緣 ≥ 160px；"
+             "不達須停手回報，不得縮字、刪資訊或改設計。",
+     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -203,8 +212,61 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
     _evaluate_p1(m, out)
+    _evaluate_p2(m, out)
     _evaluate_p3(m, out)
     return out
+
+
+P2_NAV_MARGIN_MIN_PX = 160
+P2_NAV_MARGIN_SCENARIOS = ("stale", "unavailable")
+
+
+def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
+    """P2：OneBrain／Primary 空槽順序與誠實性、手機導覽餘裕 ≥160px。僅 📊 市場頁；缺 `p2` 鍵的舊 dict／其他頁略過；
+    真瀏覽器 market 量測缺 `p2` 鍵＝判紅。"""
+    if m.get("page") != "p4_market":
+        return
+    k, k2 = "p2_onebrain_primary_slot_order", "p2_nav_margin_160"
+    p2 = m.get("p2")
+    if p2 is None:
+        out[k].append("p4_market 量測缺 `p2` 鍵（真瀏覽器 lane 必須量 OneBrain／空槽）")
+        return
+    mobile = m["viewport"]["w"] <= MOBILE_MAX_W
+    ob, slot, grid, risk = p2.get("onebrain"), p2.get("slot"), p2.get("grid"), m.get("risk")
+    els = {e["q"]: e for e in m["elements"]}
+    if not ob:
+        out[k].append("缺 🤖 OneBrain Outlook 區塊")
+    if not slot:
+        out[k].append("缺 🇹🇼 台股趨勢空槽")
+    if not grid:
+        out[k].append("缺核心指標卡 grid")
+    if ob and risk and ob["top"] < risk["bottom"] - 0.5:
+        out[k].append(f"OneBrain top {ob['top']:.0f} 早於今日主要風險底緣 {risk['bottom']:.0f}")
+    if ob and not mobile:
+        for q in ("q2", "q3"):
+            if q in els and ob["top"] < els[q]["bottom"] - 0.5:
+                out[k].append(f"桌機：OneBrain top {ob['top']:.0f} 早於 {q} 底緣 {els[q]['bottom']:.0f}")
+    if ob and slot and slot["top"] < ob["bottom"] - 0.5:
+        out[k].append(f"空槽 top {slot['top']:.0f} 早於 OneBrain 底緣 {ob['bottom']:.0f}")
+    if slot and grid and grid["top"] < slot["bottom"] - 0.5:
+        out[k].append(f"指標卡 top {grid['top']:.0f} 早於空槽底緣 {slot['bottom']:.0f}（{'手機' if mobile else '桌機'}指標卡必須在空槽之後）")
+    if slot:
+        if p2.get("slot_graphics", 0):
+            out[k].append(f"空槽含 {p2['slot_graphics']} 個 svg／polyline／canvas／img（⛔ 假走勢）")
+        t = p2.get("slot_text") or ""
+        if "⬜ 尚未提供" not in t:
+            out[k].append("空槽缺 `⬜ 尚未提供`")
+        spec = p2.get("spec_text") or ""
+        if not spec.startswith("SPEC｜") or "最新收盤參考" not in spec:
+            out[k].append(f"SPEC 行缺或未標『最新收盤參考』：{spec!r}")
+        if "日頻" in spec or "日頻" in t:
+            out[k].append("SPEC 出現『日頻』（G-2=B：省略頻率欄）")
+        if p2.get("slot_danger", 0):
+            out[k].append("空槽出現紅色（danger）chip：Capability 空槽不得用紅")
+    nb, ntop = m.get("first_block_after_l1_top"), m["nav"]["top"]
+    if mobile and m.get("scenario") in P2_NAV_MARGIN_SCENARIOS and nb is not None and ntop is not None:
+        if ntop - nb < P2_NAV_MARGIN_MIN_PX - 0.05:
+            out[k2].append(f"手機 {m.get('scenario')}：導覽餘裕 {ntop - nb:.1f}px < {P2_NAV_MARGIN_MIN_PX}px")
 
 
 def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
@@ -437,12 +499,21 @@ _JS = r"""
     .filter(e => !e.closest('.st-key-ui2_dev_surface') && !e.closest('.st-key-ui2_nav'))
     .map(e => { const d = e.querySelector('details'); const sm = e.querySelector('summary');
       return {title: sm ? sm.innerText.replace(/\s+/g,' ').trim() : '', open: d ? d.open : null}; });
+  // P2：OneBrain／台股 Primary 空槽／指標卡 grid 座標與空槽內容
+  const obEl = document.querySelector('[data-ui2-l1="onebrain"]');
+  const slotEl = document.querySelector('[data-ui2-l1="primary_slot"]');
+  const gridEl = document.querySelector('.ui2-grid');
+  const p2 = {onebrain: obEl ? R(obEl) : null, slot: slotEl ? R(slotEl) : null, grid: gridEl ? R(gridEl) : null,
+    slot_graphics: slotEl ? slotEl.querySelectorAll('svg,polyline,canvas,img,[data-testid="stVegaLiteChart"]').length : 0,
+    slot_text: slotEl ? slotEl.innerText.replace(/\s+/g,' ').trim() : null,
+    spec_text: slotEl && slotEl.querySelector('[data-ui2-spec]') ? slotEl.querySelector('[data-ui2-spec]').innerText.replace(/\s+/g,' ').trim() : null,
+    slot_danger: slotEl ? slotEl.querySelectorAll('.ui2-chip--danger').length : 0};
   const bn = document.querySelector('.ui2-banner');
   const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
-    product_text: productText, banner_box: bannerBox, expanders: expanders,
+    product_text: productText, banner_box: bannerBox, expanders: expanders, p2: p2,
     dev_surface_present: !!document.querySelector('.st-key-ui2_dev_surface'),
     banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
@@ -540,6 +611,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
            "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
            "last_content_bottom": round(m["last_content"]["bottom"], 1),
            "card_heights": m["card_heights"], "expanders": m.get("expanders"),
+           "p2": ({k: (rd(v) if isinstance(v, dict) else v) for k, v in m["p2"].items()} if m.get("p2") else None),
            "batch3": {"risk": rd(m["risk"]) if m.get("risk") else None,
                       "mode_box": rd(m["mode_box"]) if m.get("mode_box") else None,
                       "mode_content": m.get("mode_content"), "font_sizes": m.get("font_sizes"),

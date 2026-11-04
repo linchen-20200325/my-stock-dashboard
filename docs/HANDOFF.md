@@ -925,3 +925,18 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | `docs/DECISIONS.md` DEC-132；`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`；`docs/BACKLOG.md` §5.1.26「DEC-132 落盤與 P2…補記」；`docs/PROJECT_STATE.md` §63；Audit Checklist §24（**未自勾**） |
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-132；新 Rule＝文件措辭規則（DEC-132 §三）；Backlog 既有 ID 更新；Audit §24 新節 |
 | 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 未經客戶驗收線框即實作 P2；⛔ 歷史序列／MA／假走勢線；⛔ 把設計候選當核准功能；⛔ 宣稱 OneBrain 可讀完整資料；⛔ 改 Risk Cap／System Action／Digest schema／OAuth |
+
+
+- **Safe Handoff（2026-11-04 DEC-133：P2 施工完成；現行；施工組單組、待獨立 QA）**（決策者 客戶；本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位（C1） | 內容 |
+|---|---|
+| current Stage／exact safe stopping point | P2 已實作並 commit（待獨立 QA／push／PR／CI）；P6／P7 未動 |
+| 已做 | DEC-133：客戶 (19) 逐字落盤；OneBrain Outlook 移至核准位置；台股 Primary 空槽＋SPEC 行（`SPEC｜最新收盤參考｜<來源>｜資料日 <as_of>｜缺值不補`，省略頻率欄）；Active Contract §3.1 最小勘誤；T_new_6 畢業（strict xfail 4→3）；viewport 判定器新增順序與導覽餘裕 ≥160px 檢查 |
+| **下一個唯一安全工作** | P2 PR 合併後，**待客戶從 P6（資料健康度；須先出文字線框）／P7（桌機 Account Area 殼；須先出文字線框）選一批**；客戶未選定不動工、不替客戶選。每批 ≤3 項、獨立 QA |
+| Pending／設計候選清單（同步） | 撰寫組暫定三項**仍 Pending**：資料健康度 Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔ 來源不可用` 顏色；「🎯 跨季趨勢使用者功能」＝**設計候選**（非核准功能）；歷史序列／MA／`NUI2-TWII-TWO-PATHS` 待擇一（接線批，須客戶授權、STOP→Opus 5.5＋High／Gate）；👤 Data Freshness／System Information 由 P6 承接 |
+| known limitations／blockers | 手機 stale／unavailable 導覽餘裕僅 162.5px（門檻 160px）：**任何會增高手機首屏上方的新元素須先停手回報**；手機指標卡在第一屏下方（G-3 已接受）；SPEC 只引用 TWII 最新收盤來源／資料日，**不代表歷史序列已接**；OneBrain 仍 `⬜ 尚未提供`（Digest 涵蓋未驗，`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 維持 open）；Chromium 單瀏覽器，Safari／真機／Cloud 未驗 |
+| required Model×Effort for resume | P6／P7 純 presentation＝Sonnet 5.5＋Medium；接真資料、改 VM schema／`level` 語意、auth 狀態、Risk Cap／System Action、資料健康度新增欄位＝STOP → Opus 5.5＋High／Gate |
+| 正式文件索引 | `docs/DECISIONS.md` DEC-133；`docs/BACKLOG.md` §5.1.26「P2 完成補記」；`docs/PROJECT_STATE.md` §64；Audit Checklist §25（**未自勾**）；線框 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`（已通過）；證據 `docs/vnext/newui2_p2/` |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-133；新 Rule＝無；Backlog＝既有 ID 結案＋限制記錄；Audit §25 新節 |
+| 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 歷史序列／MA／假走勢線；⛔ 空槽顯示非 `⬜ 尚未提供` 的數值；⛔ SPEC 寫「日頻」或未標「最新收盤參考」；⛔ 把設計候選當核准功能；⛔ 宣稱主圖已有歷史資料或 OneBrain 可讀完整資料；⛔ 改 Risk Cap／System Action／Digest schema／OAuth；⛔ 以 skip／xfail 隱藏守衛 |

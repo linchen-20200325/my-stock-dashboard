@@ -62,15 +62,23 @@ def is_shown_fold(page_id: str, section_id: str) -> bool:
     return (page_id, section_id) in SHOWN_FOLDS
 
 
-def render_sections(vm: PageVM, *, mode: str | None = None, extra=()) -> None:
+def section_l1_html(sec) -> str:
+    """一個 L1 區塊的 HTML（標題＋各欄位列）。供 `render_sections` 與需要自行安排位置的頁（📊 的 OneBrain）共用，內容一致。"""
+    rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
+    return f'<div class="ui2-section-title">{escape(sec.title)}</div>' + rows
+
+
+def render_sections(vm: PageVM, *, mode: str | None = None, extra=(), skip: frozenset[str] | set[str] = frozenset()) -> None:
     """L1 區塊直接畫；L2／L3 只畫 `SHOWN_FOLDS` 白名單內者（預設收合），其餘 evidence 不渲染（VM 不動，見檔頭）。
-    `mode` 給定時只畫該模式（或與模式無關）的區塊（⛔ 同時完整展開）。"""
+    `mode` 給定時只畫該模式（或與模式無關）的區塊（⛔ 同時完整展開）。
+    `skip`：呼叫端已自行安排位置畫過的 section_id（P2：📊 的 `onebrain` 上移）；只影響「在哪畫」，不影響 VM。"""
     for sec in (*vm.context.sections, *extra):
+        if sec.section_id in skip:
+            continue
         if mode is not None and sec.mode not in (None, mode):
             continue
         if sec.level == "L1":
-            rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
-            _md(f'<div class="ui2-section-title">{escape(sec.title)}</div>' + rows)
+            _md(section_l1_html(sec))
         elif is_shown_fold(vm.page_id, sec.section_id):
             rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
             with st.expander(sec.title, expanded=False):   # Streamlit 自帶展開箭頭；不再加文字「▸」（雙箭頭）

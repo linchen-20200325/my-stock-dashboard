@@ -285,3 +285,17 @@
 7. [ ] （施工後）手機 stale／unavailable 導覽餘裕 ≥160px；不達則已停手回報。
 8. [ ] 本節所有項目維持未自勾（docs 測試守衛：§24 區段內不得出現已勾選記號）。
 9. [ ] 未宣稱 P2 已實作、未宣稱歷史序列／MA 已接、未宣稱獨立 QA 完成。
+
+## §25 UI Correction P2 驗收項（OneBrain 位置＋台股 Primary 空槽＋SPEC；客戶 2026-11-04 (19)／DEC-133；2026-11-04；append-only；施工組單組，**待總管／獨立 QA／客戶勾選——本節未自勾**）
+
+1. [ ] DEC-133 fence 與客戶 (19) 原文逐字一致（sha256 釘於 `tests/test_ui2_active_contract_docs.py`）；DEC-128～132 與其他舊 DEC 原文未改。
+2. [ ] OneBrain Outlook 位置：手機＝今日主要風險之後、Primary 空槽之前、指標卡之前；桌機＝是否需要行動／下一步之後、單行；內容（標題、`⬜ 尚未提供`、原因句）不變（`test_onebrain_content_is_unchanged_only_its_position_moves`）。
+3. 台股 Primary 空槽：標題「🇹🇼 台股趨勢」、`⬜ 尚未提供`、「此項目尚未開放」、灰底非紅、依內容高度（無 min-height／220px）、0 個 svg／polyline／canvas／img；空槽是 Capability，不隨 TWII 卡 Data State 變色。
+4. SPEC：`SPEC｜最新收盤參考｜<來源>｜資料日 <as_of>｜缺值不補`；含「最新收盤參考」、不含「日頻」；來源／資料日與 TWII 卡 freshness 逐字一致（FAKE 六場景＋Real 固定 snapshot）；缺資料日不顯示任何日期、來源缺值省略來源欄。
+5. T_new_6 無 xfail 且綠（`GRADUATED_TEETH`）；strict xfail 3（T_new_3／7／8）；docs 測試 `n == 3`。
+6. 第一屏要素順序（DEC-127）、Risk Cap「⬜ 無法判定」、主 CTA、手機四格導航、桌機三 tile 未動；手機 stale／unavailable 導覽餘裕 ≥160px（`p2_nav_margin_160`；實測 162.5px）。
+7. P3 evidence baseline／白名單／P1 工程字樣／DEC-124 三軸／G2／G2F／G4／G9／no-write 守衛全綠、未放寬；`market.render` 仍呼叫 `render_sections`。
+8. `git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute src/services shared` 為空；`src/ui2` 只動 `views`／`components`／`shell/css.py`。
+9. viewport：FAKE 70＋Real 11（1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 5 態（各 11 態）全綠（兩種口徑勿混：①**Real 固定 snapshot＝九態**〔loaded／unloaded／unevaluated／stale／stale_unknown／missing／upstream_error／unavailable／contract_error，`tests/test_ui2_p1_human_text.py::_snapshots`；AppTest 與渲染層測試用〕；②viewport 量測的「Real 11」＝**活 Real feed 的 11 個量測態**〔4 頁×2 viewport＋🎯 查一檔模式＋手機壓力態〕。本批 viewport 另以其中 5 個 snapshot〔loaded／stale／missing／unavailable／contract_error〕各跑 11 態＝55 態）；截圖目視（手機 ≥8、桌機 ≥4；`docs/vnext/newui2_p2/`）：OneBrain 位置、空槽無走勢線、灰底非紅、SPEC 可換行、不橫向捲動。
+10. 未宣稱歷史序列／MA 已接、主圖已有歷史資料、獨立 QA 完成；未宣稱 Safari／真機／Cloud 已驗。
+11. 客戶判斷項：無新增（G-1／G-2／G-3 已由客戶 (19) 裁定）；下一批 P6／P7 由客戶選。

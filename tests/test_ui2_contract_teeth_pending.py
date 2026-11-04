@@ -8,6 +8,8 @@
      * ⛔ 這裡只放「新 contract」的斷言；**不得**把任何現有資料／語意安全測試改成 xfail／skip。
 reason 內的 P# 對應 docs/BACKLOG.md §5.1.26 批次表。
 
+📌 P2（2026-11-04；客戶 (19)；DEC-133）：`T_new_6` 已於 UI 真正修好（台股 Primary 空槽＋SPEC 行）後移除 xfail（畢業，見 `GRADUATED_TEETH`）。
+
 📌 P3（2026-11-03；客戶 (17) A2；DEC-131）：`T_new_1` 已於 UI 真正修好後移除 xfail（畢業，見 `GRADUATED_TEETH`）；
 舊 `T_new_1b`（「三個投資頁 `PageVM.context.sections` 不得有 L2／L3」）是**測試規格錯誤**（與 Active Contract §8 矛盾：
 它把「Human UI 不渲染」錯寫成「VM 不得含」，照做就得刪 evidence），已由 `test_T_new_1b_vm_keeps_evidence_while_human_ui_hides_it`
@@ -178,8 +180,9 @@ def test_T_new_5_preview_controls_are_dev_surface_only():
         assert len(a.selectbox) == 0, v
 
 
-@_xfail("P2")
 def test_T_new_6_main_chart_has_short_spec_line():
+    """（P2 畢業，DEC-133）原斷言不放寬：預設頁（📊 FAKE 冷啟動）任一 markdown 含 `SPEC｜`。
+    加強版（位置／來源資料日與 TWII 卡逐字一致／最新收盤參考／無假圖）見 tests/test_ui2_p2_primary_slot.py。"""
     at = _at()
     assert "SPEC｜" in _blob(at)
 
