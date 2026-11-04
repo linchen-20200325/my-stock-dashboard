@@ -7594,3 +7594,13 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **不做**：不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema；不改 Risk Cap／System Action／Digest／OAuth；第一屏順序、主 CTA、既有卡片、手機四格導航、桌機布局不動。
 - **驗收門檻**：手機導覽餘裕維持 ≥160px（未達停止、不擅自改設計）；P3 evidence preservation、白名單、P1 工程字樣、DEC-124 三軸（空槽是 Capability）、G2／G2F／G4／G9、no-write 守衛不得退化；T_new_6 真正修好後移除 xfail（strict xfail 4→3）。實作形態與實測見 BACKLOG §5.1.26「P2 完成補記」。
 - **不是**：Real Feed／OneBrain／Digest 授權；**不是**歷史序列接線授權（`NUI2-TWII-TWO-PATHS` 仍待擇一）；**不是** P6／P7 授權（下一批須由客戶從 P6／P7 選）。
+
+
+### DEC-135｜New UI2 四頁視覺參考與頁數彈性（客戶 2026-11-04）
+
+- **客戶原文（視覺方向）**：「聽你的建議，另外我覺得附檔目前這儀表版設計很棒，能盡量朝這方向執行嗎？」客戶提供四個畫面設計參考（市場、標的、持股、設定）。
+- **客戶原文（新增頁面）**：「如果四個頁面不夠，可以多加頁面」。
+- **核准方向**：採附圖的視覺資訊層級作為 New UI2 後續設計參考，既有四頁是核心、非永久硬上限；當使用者任務確有獨立需求，可考慮額外主頁或次層頁面。這一較新客戶指示在頁數上限方面取代舊「不得新增第五頁」的限制；不代表已選定新頁數、頁名、導航位置或可直接施工。
+- **新 UX 候選（未核准施工）**：主要比較圖可自選標的與期間、整併重複大小圖；不得將示意數值、估值目標、OneBrain 結論、Risk Cap 或 action 當真實資料。先完成 UI 對照／資料契約／去重設計再過 Gate。
+- **施工邊界**：不改 canonical、資料來源、正式公式、RuleIDs、Risk Cap、System Action、OAuth、Digest；保持 P6 與 DEC-134 已有派工分離。正式文字規格：docs/vnext/NEWUI2_VISUAL_REFERENCE_AND_PAGE_EXPANSION_2026-11-04.md。
+- **附圖證據**：使用者在當前對話提供之參考圖片；本文僅記錄由其判讀出的佈局，**未把圖片本身上傳 GitHub**，故非 pixel-perfect 圖像 SSOT。
