@@ -7594,3 +7594,12 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **不做**：不接歷史資料、不畫假走勢、不新增 MA、不修改 canonical 或 VM schema；不改 Risk Cap／System Action／Digest／OAuth；第一屏順序、主 CTA、既有卡片、手機四格導航、桌機布局不動。
 - **驗收門檻**：手機導覽餘裕維持 ≥160px（未達停止、不擅自改設計）；P3 evidence preservation、白名單、P1 工程字樣、DEC-124 三軸（空槽是 Capability）、G2／G2F／G4／G9、no-write 守衛不得退化；T_new_6 真正修好後移除 xfail（strict xfail 4→3）。實作形態與實測見 BACKLOG §5.1.26「P2 完成補記」。
 - **不是**：Real Feed／OneBrain／Digest 授權；**不是**歷史序列接線授權（`NUI2-TWII-TWO-PATHS` 仍待擇一）；**不是** P6／P7 授權（下一批須由客戶從 P6／P7 選）。
+
+
+### DEC-134｜手機導航改為可展開左側抽屜、保留 Google 登入入口（客戶 2026-11-04）
+
+- **客戶原始需求**：「左邊是現在的右邊是以前的，但是下方的會被manage app擋住了 所以我想維持左邊仍然有選項以及登入按鈕」；在 ChatGPT 比較三案、推薦「手機 ☰ 左側抽屜選單＋登入，桌機維持左側固定導航」後，客戶原文答覆：「好」。
+- **客戶同意的範圍**：選 B 可收合左側抽屜（四主頁及 Google 帳號入口），而非舊式常駐側欄或雙導航。先前「手機只有底部固定四格」的**導航位置與顯示方式**在 New UI2 中由本較新指示取代；四個主頁與桌機 rail 保留。
+- **未授權**：沒有核准抽屜像素尺寸、真 Google OAuth 接線、正式 auth state、資料來源、VM schema 或投資語意；必須先提供詳細文字線框與獨立 Gate。
+- **正式設計附件**：docs/vnext/NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md。舊 DEC 原文 append-only 不刪，既有測試與 CSS 的底部四格規則需在施工批明確更換，不得默默降測試。
+- **證據限制**：使用者截圖可見 Streamlit Manage app 覆蓋底部，但尚未在本端真機／Cloud 重現；此為已確認的使用者體驗需求，不聲稱平台浮層一定可由 CSS 控制。
