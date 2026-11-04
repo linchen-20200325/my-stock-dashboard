@@ -903,9 +903,10 @@ DEC-086 規則已於 main，本表已落地。
 | current Stage／exact safe stopping point | P3 已實作並 commit（待獨立 QA／push／PR／CI）；P2／P6／P7 未動 |
 | 已做 | DEC-131：A2；T_new_1b 規格錯誤修正；四頁 Human UI 不渲染 L2／L3 evidence expander（保留 🎯 選股條件、👤 Digest／Registry 稽核入口）；evidence-preservation baseline；strict xfail 10→4；L0 位階完整說明過渡期限制已記錄 |
 | **下一個唯一安全工作** | P3 PR 合併後，**待客戶從 P2（OneBrain 位置＋主圖槽＋SPEC 行）／P6（資料健康度；須先出文字線框）／P7（桌機 Account Area 殼；須先出文字線框）選一批**；客戶未選定不動工、不替客戶選。每批 ≤3 項、獨立 QA |
-| 過渡期限制 | 📊 位階完整說明 Human UI 不渲染（只見 `REGIME_SEE_WHY`）；完整說明留 VM／Digest，P6 承接（`NUI2-P1-L0-EXPLAIN-WITHHELD`） |
+| 過渡期限制 | 📊 位階完整說明 Human UI 不渲染（只見 `REGIME_SEE_WHY`）；~~完整說明留 VM／Digest~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄，P6 承接（`NUI2-P1-L0-EXPLAIN-WITHHELD`） |
 | 待客戶判斷（非阻塞） | `NUI2-P3-FRESH-SYSINFO-HIDDEN`、`NUI2-P3-FULL-TABLE-HIDDEN`；撰寫組暫定四項維持 Pending |
 | known limitations | Digest 內容是否涵蓋全部 UI evidence 未驗；固定 snapshot 僅 AppTest；Chromium 單瀏覽器；Safari／真機／Cloud 未驗 |
 | 正式文件索引 | `docs/DECISIONS.md` DEC-131；`docs/BACKLOG.md` §5.1.26「P3 完成補記」；`docs/PROJECT_STATE.md` §62；Audit Checklist §23（**未自勾**）；證據 `docs/vnext/newui2_p3/` |
 | 仍禁止（不變） | 同上方「仍禁止」全部維持；另 ⛔ 刪 VM sections／canonical；⛔ 以 skip／xfail 隱藏；⛔ 改 Digest schema／Risk Cap／System Action／OAuth／資料層 |
+- **P3 QA 修正補記（2026-11-04；append；上方 P3 Safe Handoff 表的「下一個唯一安全工作」不變）**：內文雜湊指紋＋baseline sha256 釘值（重產流程見 BACKLOG）、RuleID 現況鎖定、Digest 過度宣稱已更正（過渡期＝保留於 VM；Digest 涵蓋未驗）、`_evaluate_p3` 缺鍵判紅。新 ID：`NUI2-P3-CONDITIONS-TITLE-PAREN`、`NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND`。
 

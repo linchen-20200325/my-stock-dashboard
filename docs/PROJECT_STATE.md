@@ -1050,8 +1050,9 @@
 
 - **範圍（僅三項）**：(0) 修 T_new_1b 測試規格錯誤（A2）；(1) 四頁 Human UI 移除 L2／L3 evidence expander（保留 🎯 選股條件、👤 Decision Digest／Rule Registry 稽核入口）；(2) 更新測試與 strict xfail；(3) L0 位階完整說明過渡期限制記錄。不動資料層／公式／Action Authority／Risk Cap／System Action／Digest schema／OAuth；P2／P6／P7 未動。
 - **實作**：`src/ui2/views/_page.py` render policy（L2／L3 預設不渲染、`SHOWN_FOLDS` 白名單 fail closed）；VM／canonical／scenarios 0 行變更。詳見 DEC-131、BACKLOG §5.1.26「P3 完成補記」。
-- **L0 位階完整說明過渡期限制**：完整說明（`regime_arbiter.*_EXPLAIN`）留在 VM／Digest 可取得處；Human UI 過渡期只見 L1 `REGIME_SEE_WHY`；由 P6 資料健康度承接。
+- **L0 位階完整說明過渡期限制**：~~完整說明（`regime_arbiter.*_EXPLAIN`）留在 VM／Digest 可取得處~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄；Human UI 過渡期只見 L1 `REGIME_SEE_WHY`；由 P6 資料健康度承接。
 - **測試**：新 `tests/test_ui2_p3_evidence_preservation.py`（baseline 指紋＋渲染層＋Digest import 閉包＋teeth）；`T_new_1`／`T_new_1b`（新驗收）畢業；strict xfail **10 → 4**。
 - **實測（實作組單組）**：viewport FAKE 70／Real 11 態全綠（1.59.2 與 1.56.0 各一輪）；證據 `docs/vnext/newui2_p3/`。全量序列 `python -m pytest tests -q -p no:cacheprovider -m "not slow"`＝**37210 passed、0 failed、46 skipped、186 deselected、4 xfailed**（21 分 24 秒）；slow 真瀏覽器 `test_ui2_batch2.py` 1 passed。
 - **§27 檢查**：新 Decision＝DEC-131（客戶 (17) 逐字）；新 Rule＝無；Audit finding／Limitation／Backlog＝5 個新 ID 已寫 BACKLOG；Audit Checklist §23 新節（未自勾）。
+- **P3 QA 修正（2026-11-04；實作組單組、待複驗）**：兩組獨立 QA 無 P0／P1。已修：baseline 指紋擴大鎖定（內文雜湊）＋baseline sha256 釘值、RuleID 現況鎖定（VM 尚無 RuleID 欄位）、Digest 過度宣稱更正、`_evaluate_p3` 缺鍵判紅＋單元測試；登記 `NUI2-P3-CONDITIONS-TITLE-PAREN`、`NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND`。細節見 BACKLOG「P3 QA 修正補記」、DEC-131 §六。全量 not slow＝37219 passed、0 failed、46 skipped、186 deselected、4 xfailed；slow 1 passed；viewport 1.59.2／1.56.0 各 FAKE 70＋Real 11 全綠。§27：新 Decision＝無；新 Rule＝無；Backlog＝2 新 ID；Audit §23 加第 9 項（未自勾）。
 

@@ -720,7 +720,8 @@ def _m_market(desktop: bool = False) -> dict:
         els = [_el("q4", 60, 98), _el("concl", 100, 150), _el("q1", 150, 210), _el("ctx", 210, 260),
                _el("q2", 260, 320), _el("q3", 320, 380)]
         risk = {"top": 455.0, "bottom": 520.0, "left": 14.0, "right": 376.0, "inside_l1": True, "text": "r"}
-    m.update(page="p4_market", scenario="loaded", elements=els, risk=risk, first_block_after_l1_top=530.0,
+    m.update(page="p4_market", scenario="loaded", expanders=[],     # P3：真瀏覽器量測 dict 必須帶 expanders 鍵
+             elements=els, risk=risk, first_block_after_l1_top=530.0,
              risk_line_height=24.0, scroll_end_bottom=764.0, risk_bottom_at_scroll_end=300.0)
     return m
 
@@ -728,7 +729,7 @@ def _m_market(desktop: bool = False) -> dict:
 def _m_target() -> dict:
     m = _good_mobile()
     els = [_el("q4", 140, 190), _el("q1", 200, 260), _el("ctx", 262, 290), _el("q2", 292, 340), _el("q3", 342, 390)]
-    m.update(page="p4_target", scenario="loaded", elements=els,
+    m.update(page="p4_target", scenario="loaded", elements=els, expanders=[],
              mode_box={"top": 90.0, "bottom": 130.0, "labels": ["市場精選", "即時查一檔"], "checked_count": 1,
                        "checked_index": 0},
              mode_content={"curated": True, "lookup": False}, font_sizes={"q1": 16.0, "ctx": 12.5},
@@ -741,7 +742,7 @@ def _m_me() -> dict:
     for e in m["elements"]:
         if e["q"] == "q4":
             e["text"] = "④ 主 CTA 切換 Sheet"
-    m.update(page="p4_me", scenario="loaded", account={"top": 460.0, "bottom": 520.0, "state": "signed_in"})
+    m.update(page="p4_me", scenario="loaded", expanders=[], account={"top": 460.0, "bottom": 520.0, "state": "signed_in"})
     return m
 
 

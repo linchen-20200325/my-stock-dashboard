@@ -671,3 +671,18 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
     assert "#### 📌 P3 完成補記" in b
     c = _read(ACTIVE_REL)
     assert "T_new_1b 驗收對象" in c and "過渡期限制（P3）" in c
+
+
+# ---------------------------------------------------------------- (xii) P3 evidence baseline 檔 sha256 釘住（防無聲洗白）
+#: `tests/fixtures/ui2_p3_evidence_baseline.json` 的 sha256。⚠ 重新產生 baseline 的流程（有意識的 evidence 變更才可做）：
+#: ① `python -m tests.test_ui2_p3_evidence_preservation --regen` ② `sha256sum tests/fixtures/ui2_p3_evidence_baseline.json`
+#: ③ 把新值填到下面 ④ PR 描述與 BACKLOG 說明為何 evidence 變了（不得是縮小）。
+_P3_BASELINE_SHA256 = "a8ab54b0d31f78db976ed75cd8a7909562033ce28ce38f9e37f532a200e8ad53"
+
+
+def test_p3_evidence_baseline_file_is_pinned_by_sha256():
+    import hashlib
+    got = hashlib.sha256((ROOT / "tests" / "fixtures" / "ui2_p3_evidence_baseline.json").read_bytes()).hexdigest()
+    assert got == _P3_BASELINE_SHA256, (
+        "evidence baseline 被改動。若是有意識的 evidence 變更：照本檔註解的四步驟重新產生並更新釘值；"
+        "若不是，請還原——不得為了讓 evidence-preservation 測試通過而改 baseline。")

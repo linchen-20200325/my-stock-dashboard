@@ -207,37 +207,6 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     return out
 
 
-def _p3_allowed_expander_titles() -> dict[str, set[str]]:
-    """page_id → 允許出現的 expander 標題（由 `SHOWN_FOLDS` 白名單＋FAKE／Real canonical 的區塊標題推得；不另列一份）。"""
-    from shared.ui2_contract.pages import PAGE_IDS
-    from src.services.ui2.preview_feed import get_preview_page_vm
-    from src.ui2.views._page import SHOWN_FOLDS
-    out: dict[str, set[str]] = {p: set() for p in PAGE_IDS}
-    for page in PAGE_IDS:
-        vm = get_preview_page_vm(page, "loaded")
-        secs = list(vm.context.sections)
-        if vm.context.target is not None:
-            secs += list(vm.context.target.lookup.sections)
-        out[page] = {s.title for s in secs if (page, s.section_id) in SHOWN_FOLDS}
-    return out
-
-
-def _evaluate_p3(m: dict, out: dict[str, list[str]]) -> None:
-    """P3：產品畫面不得渲染 L2／L3 evidence expander。舊版量測 dict 無 `expanders` 鍵 → 略過（向下相容）。"""
-    ex = m.get("expanders")
-    page = m.get("page")
-    if ex is None or page is None:
-        return
-    allowed = _p3_allowed_expander_titles().get(page, set())
-    for e in ex:
-        # Streamlit 的展開箭頭是圖示字型 ligature（innerText 帶 `keyboard_arrow_right ` 前綴）→ 剝掉再比
-        title = re.sub(r"^(?:keyboard_arrow_\w+|expand_\w+|arrow_\w+)\s+", "", e["title"])
-        if title not in allowed:
-            out["p3_no_evidence_expander"].append(f"{page} 渲染了不在白名單內的 expander：{title!r}")
-        if e.get("open"):
-            out["p3_no_evidence_expander"].append(f"{page} expander {title!r} 預設不是收合")
-
-
 def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
     """P1 兩條判定（可單獨測試）：產品畫面可見文字乾淨、頂部標示單行。舊版量測 dict 無對應鍵 → 略過（向下相容）。"""
     pt = m.get("product_text")                      # 舊版量測 dict 無此鍵 → 略過（向下相容）
@@ -250,6 +219,37 @@ def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
     if bb:
         if bb["height"] > bb["lineHeight"] + 12.5:
             out["p1_banner_single_line"].append(f"banner 高 {bb['height']:.0f}px > 1 行（行高 {bb['lineHeight']:.0f}+12）：折行")
+
+
+#: 判定器自己的允許標題常數（獨立於被測的 `src.ui2.views._page.SHOWN_FOLDS`，避免 mutation 時判定器跟著被改；
+#: 與 pytest 的 `EXPECTED_SHOWN_FOLDS` 對照一致性由 tests/test_ui2_p3_evidence_preservation.py 的單元測試守）。
+P3_ALLOWED_EXPANDER_TITLES: dict[str, frozenset[str]] = {
+    "p4_market": frozenset(),
+    "p4_hold": frozenset(),
+    "p4_target": frozenset({"選股條件（收合）"}),
+    "p4_me": frozenset({"Audit：Decision Digest", "Audit：Rule Registry（唯讀）"}),
+}
+
+
+def _evaluate_p3(m: dict, out: dict[str, list[str]]) -> None:
+    """P3：產品畫面不得渲染 L2／L3 evidence expander。
+    真瀏覽器量測 dict（帶 `page` 鍵）**必須**有 `expanders` 鍵——缺＝判紅（不得因量測漏掉而放行）；
+    不帶 `page` 的純合成／舊版 dict（既有單元測試用）略過。"""
+    page = m.get("page")
+    if page is None:
+        return
+    ex = m.get("expanders")
+    if ex is None:
+        out["p3_no_evidence_expander"].append(f"{page} 量測缺 `expanders` 鍵（真瀏覽器 lane 必須量 expander）")
+        return
+    allowed = P3_ALLOWED_EXPANDER_TITLES.get(page, frozenset())
+    for e in ex:
+        # Streamlit 的展開箭頭是圖示字型 ligature（innerText 帶 `keyboard_arrow_right ` 前綴）→ 剝掉再比
+        title = re.sub(r"^(?:keyboard_arrow_\w+|expand_\w+|arrow_\w+)\s+", "", e["title"])
+        if title not in allowed:
+            out["p3_no_evidence_expander"].append(f"{page} 渲染了不在白名單內的 expander：{title!r}")
+        if e.get("open"):
+            out["p3_no_evidence_expander"].append(f"{page} expander {title!r} 預設不是收合")
 
 
 def evaluate_stress(m: dict) -> dict[str, list[str]]:

@@ -1755,7 +1755,7 @@
 - **evidence 保留設計**：VM／canonical／scenarios 0 行變更（`git diff` 僅 views、tests、docs）；(A) baseline 比對（section id／level／title／mode、欄位 label／語意軸／state／有無 detail／來源／資料日／判定字樣；新增 OK、減少或改變即紅）；(B) 具名承重守衛（L0 `*_EXPLAIN` 逐字仍在 VM、Risk Cap 為判定軸「⬜ 無法判定」、Missing／Stale／Unavailable／Not Evaluated 各場景仍在）；(C) Digest：builder／schema 的 repo 內 import 傳遞閉包不含 `src.ui2`／`src.services.ui2`／`shared.ui2_contract`／`app_ui2`，builder 簽名不收 PageVM，UI2 不 import builder。
 - **mutation（皆實測轉紅後還原／以測試內 teeth 表達）**：L2 渲染放回（`is_shown_fold` 恆真）→ T_new_1／render 守衛紅；VM sections 刪空／刪 L2L3／拿掉 detail／拿掉 freshness／刪 lookup sections／刪 context_rows／Risk Cap 換 Missing 共 8 種 → baseline 比對非空；SHOWN_FOLDS 清空（稽核入口與選股條件被當 evidence 隱藏）→ 紅；expander 預設展開 → 紅；Digest 閉包檢查器對 UI2 import 有牙。
 - **新 ID**：`NUI2-P3-FRESH-SYSINFO-HIDDEN`、`NUI2-P3-FULL-TABLE-HIDDEN`、`NUI2-P3-LOOKUP-SECTIONS-HIDDEN`、`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`、`NUI2-P3-REAL-STATES-APPTEST-ONLY`（見下表）。
-- `NUI2-P1-L0-EXPLAIN-WITHHELD` 📌 **P3 補記（過渡期限制）**：P3 起 📊 的「為什麼」expander 整個不渲染（不只位階說明列）；使用者看到的原因＝L1 `REGIME_SEE_WHY` 一句；完整說明（`regime_arbiter.*_EXPLAIN` 逐字）仍在 VM `why` section `位階說明` 列，由 P6 資料健康度承接，此期間可由 VM／Digest 取得。
+- `NUI2-P1-L0-EXPLAIN-WITHHELD` 📌 **P3 補記（過渡期限制）**：P3 起 📊 的「為什麼」expander 整個不渲染（不只位階說明列）；使用者看到的原因＝L1 `REGIME_SEE_WHY` 一句；完整說明（`regime_arbiter.*_EXPLAIN` 逐字）仍在 VM `why` section `位階說明` 列，由 P6 資料健康度承接，~~此期間可由 VM／Digest 取得~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄。
 
 | ID | 優先 | 說明 | 狀態 | 依賴 | 處置 |
 |---|---|---|---|---|---|
@@ -1768,3 +1768,14 @@
 **測試改動（P3）**：`tests/test_ui2_contract_teeth_pending.py`（T_new_1 去 xfail 並改結構判準為「expander ⊆ 白名單且不含 evidence 字樣／L2L3 標題」，**比舊版更嚴**；T_new_1b 換新驗收）、`tests/test_ui2_active_contract_docs.py`（`GRADUATED_TEETH`＋2、xfail 計數斷言 `n >= 6` → `n == 4`〔剩餘待後續批的 teeth 數，非降守衛〕、DEC-131 fence sha256 與關鍵句）、`tests/ui2_viewport/measure_viewport.py`（新增 `p3_no_evidence_expander` 與 `expanders` 量測，舊量測 dict 向下相容）。`PENDING_UI_CORRECTION_TESTS` 三項（`_why_regime`／`test_regime_unloaded_…`／`check_cross_page_regime`）複查：皆 VM 層、VM 位置未動 → 仍成立，維持登記至 P6。其餘 `test_ui2_real_feed`／`batch3`／`regime_spec` 測試經全量跑為綠、確認是 VM／presentation 測試，三軸／G2／G2F／G4／G9／no-write／白名單／跨頁一致性／禁用字樣守衛**未動**。
 
 **驗收證據**：`docs/vnext/newui2_p3/`（`fake/` 14 張、`real/` 10 張、`tall/` 16 張整頁高視窗截圖、`v156/` 兩份 JSON；`fake/viewport_measurements.json`＝70 態全綠、`real/`＝11 態全綠；Streamlit 1.59.2 與 /tmp/v156（1.56.0）各一輪皆全綠）。**限制**：Chromium headless 單一瀏覽器；Safari／Firefox／真機／Cloud 未驗；目視過約 11 張手機＋4 張桌機（其餘僅判定器）。
+
+#### 📌 P3 QA 修正補記（2026-11-04；兩組獨立 QA 無 P0／P1；append-only；實作組單組、待複驗）
+
+- **已修**：(1) baseline 指紋擴大鎖定（加記 `sha1(detail)`／`sha1(value_text)`／`sha1(status_text)`，納入 `first_screen`／`cards`；**是擴大不是縮小**；mutation：detail 改 "x"、value_text 改 "x"、title 改名皆轉紅）；(2) RuleID／治理參照現況鎖定（VM **尚無 RuleID 欄位**；鎖 `why` detail 含 DEC-074／075 與 `RULE_ID_ALLOWLIST` 六 id 且不依賴 UI2）；(3) 文件過度宣稱 Digest 已更正（DEC-131／Active Contract §11／本檔／PROJECT_STATE §62／HANDOFF／Audit §23 第 4 項）；(4) baseline 檔 sha256 釘於 `tests/test_ui2_active_contract_docs.py::_P3_BASELINE_SHA256`；(5) `_evaluate_p3` 缺 `expanders` 鍵判紅、允許標題為判定器自有常數＋純合成單元測試；既有 `test_ui2_batch3.py` 的合成「好」量測 dict 因此加 `expanders=[]`（資料補齊，非降守衛）。
+- **`--regen` 流程**：`python -m tests.test_ui2_p3_evidence_preservation --regen` → `sha256sum tests/fixtures/ui2_p3_evidence_baseline.json` → 更新 `_P3_BASELINE_SHA256` → PR 描述說明 evidence 為何變（不得縮小）。
+
+| ID | 優先 | 說明 | 狀態 | 依賴 | 處置 |
+|---|---|---|---|---|---|
+| **NUI2-P3-CONDITIONS-TITLE-PAREN** | P3 | 🎯 選股條件 expander 標題含「（收合）」字樣（VM 標題文案 `選股條件（收合）`；Human UI 直接顯示）。Streamlit expander 本身已有展開箭頭，「（收合）」是冗字；P3 為不改 VM 而保留 | open | P2 | P2 動 🎯 時連同 VM 文案與 baseline／白名單測試一起改（須走 `--regen` 流程） |
+| **NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND** | P3 | Digest 獨立性守衛是 AST 靜態 import 閉包，**偵測不到動態 import（`importlib`／`__import__`）與 PEP 562 barrel `__getattr__` 轉發**（已於 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 自述；此處補交叉參照）。另實測 Digest builder 不含位階完整說明／指標明細／lookup 基本面·估值，OneBrain 批須先核對缺欄 | open（限制） | OneBrain 批 | 見 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` |
+

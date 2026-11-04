@@ -7407,8 +7407,16 @@ Silent Autonomous Cruise；只有真正需要客戶裁示或整批完成才回�
 
 #### 四、L0 位階完整說明過渡期限制（客戶 (17) §2 第 3 項）
 
-`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `位階說明` 列保留；Human UI 因 P3 不渲染 L2，**過渡期使用者看不到完整說明**：L1 保留 `REGIME_SEE_WHY` 一句簡短原因，完整說明由 P6 資料健康度承接；此期間仍可由 VM／Digest 取得。
+`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `位階說明` 列保留；Human UI 因 P3 不渲染 L2，**過渡期使用者看不到完整說明**：L1 保留 `REGIME_SEE_WHY` 一句簡短原因，完整說明由 P6 資料健康度承接；~~此期間仍可由 VM／Digest 取得~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄。
 
 #### 五、揭露與效力邊界
 
 單組實作、待獨立 QA。不授權：資料層／公式／Action Authority／Risk Cap／System Action／Digest schema／OAuth 變更；P2／P6／P7 不在本批。四項撰寫組暫定判讀維持 Pending。
+
+#### 六、QA 修正補記（2026-11-04；兩組獨立 QA 無 P0／P1；fence 未動）
+
+- **指紋擴大鎖定（不是縮小）**：baseline 指紋原只記 `bool(detail)`／`bool(value_text)`，evidence 內文被偷換測不到；現加記 `sha1(detail)`／`sha1(value_text)`／`sha1(status_text)`，並納入 `first_screen`／`cards`；section title／欄位 label 以明文逐字鎖定。重新產生 baseline 後其 sha256 釘於 `tests/test_ui2_active_contract_docs.py::_P3_BASELINE_SHA256`（防無聲洗白；重產流程見該檔註解與 BACKLOG）。
+- **RuleID 現況鎖定**：VM **尚無獨立 RuleID 欄位**；實際承載治理參照者是 `why` section 位階說明 detail（L0 `*_EXPLAIN` 逐字，含 DEC-074／DEC-075）。已加具名測試鎖定該參照仍在 VM，並鎖 `RULE_ID_ALLOWLIST` 六個 id（`risk_cap`、`cut`、`take_profit_force`、`take_profit_partial`、`pause_add`、`add`）仍存在且 `shared/decision_digest_rules.py` 不依賴 UI2。這是**現況鎖定**；日後 VM 新增 RuleID 欄位須納入。
+- **Digest 宣稱更正**：§四「此期間仍可由 VM／Digest 取得」過度宣稱，已以刪除線＋📌 更正（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；是否涵蓋未驗）。
+- viewport 判定器：真瀏覽器量測 dict 缺 `expanders` 鍵改判紅；允許標題改為判定器自有常數（與 pytest `EXPECTED_SHOWN_FOLDS` 的一致性由單元測試守）。
+

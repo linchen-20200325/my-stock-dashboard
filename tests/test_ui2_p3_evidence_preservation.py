@@ -13,13 +13,18 @@
 baseline（`tests/fixtures/ui2_p3_evidence_baseline.json`）＝P3 當下 FAKE 六場景×四頁（👤 三帳戶）＋ Real 固定 snapshot 九態×四頁
 的 evidence 指紋（section id／level／title、每欄 label／語意軸／state／是否有 detail／來源／資料日／判定字樣）。
 比對規則：**baseline 內每個 section／欄位都必須仍在、指紋不變**；新增 section／欄位 OK。
+📌 QA 修正（擴大鎖定，不是縮小）：指紋原先只記 `bool(detail)`／`bool(value_text)`，evidence **內文被偷換**（detail 改成 "x"）測不到。
+現改為同時記 `sha1(detail)`、`sha1(value_text)`、`sha1(status_text)`（全欄位），並把 `first_screen`（現況／行動／下一步／今日結論）與 `cards`
+也納入；section title／欄位 label 本就以明文逐字鎖定（比雜湊更嚴）。因此**任何文案調整都會讓 baseline 紅**——這是刻意的：改了 evidence 就得
+有意識地重新產生 baseline（見下）。baseline 檔本身的 sha256 另釘在 `tests/test_ui2_active_contract_docs.py`（防無聲洗白）。
 ⚠ 日後要改 evidence（例如 P2 把某欄由「尚未提供」改成真資料）＝有意識的變更：重新產生 baseline
-（`python -m tests.test_ui2_p3_evidence_preservation --regen`）並在 PR 描述說明；**不得為了讓測試通過而縮小 evidence**。
+（`python -m tests.test_ui2_p3_evidence_preservation --regen`），**再**把新檔的 sha256 更新到 `tests/test_ui2_active_contract_docs.py::_P3_BASELINE_SHA256`，並在 PR 描述說明；**不得為了讓測試通過而縮小 evidence**。
 """
 from __future__ import annotations
 
 import ast
 import dataclasses
+import hashlib
 import inspect
 import json
 import re
@@ -50,11 +55,16 @@ OLD_T_NEW_1B_ASSERTION = '[s.section_id for s in vm.context.sections if s.level 
 
 
 # ══════════════════════════════════════════════════════════════════ 指紋
+def _h(x: str | None) -> str | None:
+    return None if x is None else hashlib.sha1(x.encode("utf-8")).hexdigest()
+
+
 def _ff(f: FieldVM) -> list:
     return [f.label, f.layer, f.state.value if f.state is not None else None,
             bool(f.detail), bool(f.value_text),
             f.freshness.source, f.freshness.as_of,
-            f.status_text if f.layer == "judgement" else None]      # 判定字樣（Risk Cap「⬜ 無法判定」）逐字鎖
+            f.status_text if f.layer == "judgement" else None,      # 判定字樣（Risk Cap「⬜ 無法判定」）逐字鎖
+            _h(f.detail), _h(f.value_text), _h(f.status_text)]      # 內文雜湊（QA 修正：擴大鎖定）
 
 
 def _sec(s) -> dict:
@@ -66,7 +76,10 @@ def fingerprint(vm: PageVM) -> dict:
     lookup = {} if ctx.target is None else {s.section_id: _sec(s) for s in ctx.target.lookup.sections}
     return {"sections": {s.section_id: _sec(s) for s in ctx.sections},
             "lookup_sections": lookup,
-            "context_rows": [_ff(f) for f in ctx.first_screen.context_rows]}
+            "context_rows": [_ff(f) for f in ctx.first_screen.context_rows],
+            "first_screen": [_ff(f) for f in (ctx.first_screen.current_state, ctx.first_screen.action_needed,
+                                              ctx.first_screen.next_step, ctx.first_screen.conclusion) if f is not None],
+            "cards": [[c.card_id, c.title, *_ff(c.field)] for c in ctx.cards]}
 
 
 def _snapshots():
@@ -107,11 +120,12 @@ def compare(base: dict, cur: dict) -> list[str]:
             for i, (bf, cf) in enumerate(zip(b["fields"], c["fields"])):
                 if bf != cf:
                     bad.append(f"{kind}/{sid}[{i}] {bf[0]}: {bf} → {cf}")
-    if len(cur["context_rows"]) < len(base["context_rows"]):
-        bad.append("context_rows: 列數減少")
-    for i, (bf, cf) in enumerate(zip(base["context_rows"], cur["context_rows"])):
-        if bf != cf:
-            bad.append(f"context_rows[{i}] {bf[0]}: {bf} → {cf}")
+    for kind in ("context_rows", "first_screen", "cards"):
+        if len(cur[kind]) < len(base[kind]):
+            bad.append(f"{kind}: 列數減少")
+        for i, (bf, cf) in enumerate(zip(base[kind], cur[kind])):
+            if bf != cf:
+                bad.append(f"{kind}[{i}] {bf[0]}: {bf} → {cf}")
     return bad
 
 
@@ -172,6 +186,31 @@ def _mut_no_freshness(vm):
         for s in c.sections)))
 
 
+def _mut_detail_x(vm):
+    """內文被偷換：detail 全改成 "x"（仍有 detail，bool 指紋看不出）。"""
+    c = vm.context
+    return dataclasses.replace(vm, context=dataclasses.replace(c, sections=tuple(
+        dataclasses.replace(s, fields=tuple(dataclasses.replace(f, detail="x" if f.detail else None) for f in s.fields))
+        for s in c.sections)))
+
+
+def _mut_value_x(vm):
+    """value_text 被偷換成 "x"（卡片與第一屏現況）。"""
+    c = vm.context
+    cards = tuple(dataclasses.replace(k, field=dataclasses.replace(k.field, value_text="x")
+                                      if k.field.value_text else k.field) for k in c.cards)
+    fs = c.first_screen
+    cs = dataclasses.replace(fs.current_state, value_text="x") if fs.current_state.value_text else fs.current_state
+    return dataclasses.replace(vm, context=dataclasses.replace(
+        c, cards=cards, first_screen=dataclasses.replace(fs, current_state=cs)))
+
+
+def _mut_title_swapped(vm):
+    c = vm.context
+    return dataclasses.replace(vm, context=dataclasses.replace(c, sections=tuple(
+        dataclasses.replace(s, title=s.title + "（改）") for s in c.sections)))
+
+
 def _mut_no_lookup_sections(vm):
     t = vm.context.target
     t2 = dataclasses.replace(t, lookup=dataclasses.replace(t.lookup, sections=()))
@@ -200,6 +239,11 @@ def _mut_riskcap_weakened(vm):
     (_mut_drop_l23, P4_MARKET, "fake/p4_market/loaded/None"),
     (_mut_drop_l23, P4_HOLD, "real/p4_hold/loaded"),
     (_mut_no_detail, P4_MARKET, "real/p4_market/unloaded"),
+    (_mut_detail_x, P4_MARKET, "real/p4_market/unloaded"),
+    (_mut_detail_x, P4_MARKET, "fake/p4_market/unavailable/None"),
+    (_mut_value_x, P4_MARKET, "fake/p4_market/loaded/None"),
+    (_mut_value_x, P4_MARKET, "real/p4_market/loaded"),
+    (_mut_title_swapped, P4_HOLD, "fake/p4_hold/loaded/None"),
     (_mut_no_freshness, P4_MARKET, "real/p4_market/loaded"),
     (_mut_no_lookup_sections, P4_TARGET, "fake/p4_target/loaded/None"),
     (_mut_no_context_rows, P4_HOLD, "fake/p4_hold/loaded/None"),
@@ -246,6 +290,26 @@ def test_specific_evidence_is_still_there():
     for s in get_preview_page_vm(P4_MARKET, "loaded").context.sections:
         for f in s.fields:
             assert hasattr(f.freshness, "source") and hasattr(f.freshness, "as_of")
+
+
+# ══════════════════════════════════════════════════════════════════ RuleID／治理參照（現況鎖定）
+def test_governance_references_and_rule_id_allowlist_are_locked_as_is():
+    """⚠ 現況鎖定：VM **目前沒有獨立的 RuleID 欄位**（grep `rule_?id` 於 src/services/ui2、shared/ui2_contract、src/ui2 皆 0 命中）。
+    實際承載治理參照的是 `why` section 的「位階說明」`detail`（L0 `regime_arbiter.*_EXPLAIN` 逐字，含 DEC-074／DEC-075 參照）。
+    本測試鎖：(1) 這些參照仍在 VM（P3 不渲染不等於刪）；(2) Digest 的 `RULE_ID_ALLOWLIST` 6 個 id 仍存在，且該模組不依賴 UI2。
+    日後 VM 若新增 RuleID 欄位，須把它納入本測試與 baseline。"""
+    for name, expect in (("unloaded", RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN), ("unevaluated", RA.UNEVALUATED_BREADTH_EXPLAIN)):
+        vm = get_real_page_vm(P4_MARKET, _snapshots()[name])
+        why = next(s for s in vm.context.sections if s.section_id == "why")
+        d = next(f.detail for f in why.fields if f.label == "位階說明")
+        assert expect in d and "DEC-074" in d and "DEC-075" in d, name   # L0 逐字常數為 detail 的前綴（後接 Preview 連接句）
+    from shared import decision_digest_rules as R
+    assert set(R.RULE_ID_ALLOWLIST) == {"risk_cap", "cut", "take_profit_force", "take_profit_partial", "pause_add", "add"}
+    assert not [m for m in _imports_of(ROOT / "shared" / "decision_digest_rules.py") if m.startswith(_UI2_PREFIXES)]
+    # mutation：治理參照被洗掉 → baseline 比對紅（detail 雜湊）
+    base = _load_baseline()["real/p4_market/unloaded"]
+    vm = get_real_page_vm(P4_MARKET, _snapshots()["unloaded"])
+    assert compare(base, fingerprint(_mut_detail_x(vm))) != []
 
 
 # ══════════════════════════════════════════════════════════════════ (A) 渲染層
@@ -365,6 +429,39 @@ def test_render_policy_guard_has_teeth(monkeypatch):
         orig = _page.st.expander
         m.setattr(_page.st, "expander", lambda title, expanded=False, **k: orig(title, expanded=True, **k))
         assert any("預設展開" in b for b in render_violations(_go(_app(), P4_ME), P4_ME))
+
+
+# ══════════════════════════════════════════════════════════════════ viewport 判定器單元測試（純合成資料）
+def _p3_eval(**kw) -> list[str]:
+    from tests.ui2_viewport import measure_viewport as MV
+    out = {"p3_no_evidence_expander": []}
+    MV._evaluate_p3(kw, out)
+    return out["p3_no_evidence_expander"]
+
+
+def test_viewport_p3_checker_unit():
+    ok = lambda t, open_=False: {"title": "keyboard_arrow_right " + t, "open": open_}      # noqa: E731
+    assert _p3_eval(page="p4_market", expanders=[]) == []
+    assert _p3_eval(page="p4_target", expanders=[ok("選股條件（收合）")]) == []
+    assert _p3_eval(page="p4_me", expanders=[ok("Audit：Decision Digest"), ok("Audit：Rule Registry（唯讀）")]) == []
+    assert _p3_eval(page="p4_market", expanders=[ok("為什麼")]) != []                    # 白名單外
+    assert _p3_eval(page="p4_hold", expanders=[ok("明細")]) != []
+    assert _p3_eval(page="p4_target", expanders=[ok("選股條件（收合）", True)]) != []     # 預設展開
+    assert _p3_eval(page="p4_me", expanders=[ok("Audit：Data Freshness")]) != []        # 👤 Data Freshness 判紅
+    assert _p3_eval(page="p4_me", expanders=[ok("Audit：System Information")]) != []
+    assert _p3_eval(page="p4_market") != []                                              # 缺 expanders 鍵＝紅
+    assert _p3_eval() == []                                                              # 無 page 的合成／舊版 dict 略過
+
+
+def test_viewport_checker_allowed_titles_match_the_pytest_whitelist_and_the_view():
+    from tests.ui2_viewport import measure_viewport as MV
+    derived: dict[str, set[str]] = {p: set() for p in PAGE_IDS}
+    for page in PAGE_IDS:
+        vm = get_preview_page_vm(page, "loaded")
+        secs = list(vm.context.sections) + (list(vm.context.target.lookup.sections) if vm.context.target else [])
+        derived[page] = {s.title for s in secs if (page, s.section_id) in EXPECTED_SHOWN_FOLDS}
+    assert {p: set(v) for p, v in MV.P3_ALLOWED_EXPANDER_TITLES.items()} == derived
+    assert _page.SHOWN_FOLDS == EXPECTED_SHOWN_FOLDS
 
 
 # ══════════════════════════════════════════════════════════════════ (C) Digest 輸入不依賴 UI2

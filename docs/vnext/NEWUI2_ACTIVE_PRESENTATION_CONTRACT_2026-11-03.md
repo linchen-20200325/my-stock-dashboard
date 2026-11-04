@@ -267,7 +267,7 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 
 - **~~PROVISIONAL (a)(b)(c)~~ 📌 已升為正式 Active**（客戶 2026-11-03 (15)，`docs/DECISIONS.md` DEC-130）：(a) 資料健康度 Level 1 符號為別名，**有條件同意**＝Data State 五態與 Capability 軸分離、`⬜ 尚未接線` 不是 Data State、同列拆欄（§5.1）；(b) 稽核面保留在 👤 並預設收合／🎯 選股條件與查看全部候選・CSV・查看此檔保留但維持 Presentation Compression（§3.2／§3.4）；(c) Preview 控制去 `?ui2_dev=1` 開發面且不得當登入證據（§6）。**現行殘留的 (a)(b)(c) PROVISIONAL＝0。**
 - **撰寫組暫定（非 (a)(b)(c)；客戶 (15) 未涵蓋；未經客戶覆核）**：Level 1／2 預設展開或收合；「Level 3 只准遮罩後診斷代碼」嚴於客戶原文；`⛔ 來源不可用` 的顏色（沿 Unavailable 紅）；🎯 跨季趨勢／完整分析是否保留為使用者功能。DEC-128 §四 (d) Re-open 模板仍可用於推翻。
-- **過渡期限制（P3）**：L0 市場位階**完整說明**（`regime_arbiter.*_EXPLAIN` 逐字常數；VM `位階說明` 列）仍完整保留在 VM／canonical，但 P3 起 Human UI 不再渲染 L2，**過渡期使用者看不到完整說明**——L1 只保留 `REGIME_SEE_WHY` 一句簡短原因；完整說明由 P6 資料健康度承接；此期間仍可由 VM／Digest 取得（BACKLOG `NUI2-P1-L0-EXPLAIN-WITHHELD`）。
+- **過渡期限制（P3）**：L0 市場位階**完整說明**（`regime_arbiter.*_EXPLAIN` 逐字常數；VM `位階說明` 列）仍完整保留在 VM／canonical，但 P3 起 Human UI 不再渲染 L2，**過渡期使用者看不到完整說明**——L1 只保留 `REGIME_SEE_WHY` 一句簡短原因；完整說明由 P6 資料健康度承接；~~此期間仍可由 VM／Digest 取得~~ 📌 QA 更正（2026-11-04；過度宣稱已更正，有意識的更正，不是漏刪；決策者 AI 總管〔QA 修正〕）：**保留於 VM**（`regime_arbiter.*_EXPLAIN` 逐字常數與 VM `why` 等 sections）；**Decision Digest 是否涵蓋未驗**（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`），未來 OneBrain 批須先核對 Digest 缺欄（BACKLOG `NUI2-P1-L0-EXPLAIN-WITHHELD`）。
 - **INFERENCE**：題號鷹架可見文字應移除；工程字樣擴及四頁全部 Human UI（PC §18 擴大）。
 - **未驗**：FAKE 非 loaded 場景截圖；Safari／Firefox／iOS／真機；Cloud 上 Deploy 按鈕；AppTest query_params 在 Streamlit 1.56 floor 的支援（1.59.2 已實測可設定；DEC-130）；本文件由單組撰寫（獨立 QA 見 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §20，**未自勾**）。
 
