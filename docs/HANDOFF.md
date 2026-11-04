@@ -910,3 +910,18 @@ DEC-086 規則已於 main，本表已落地。
 | 仍禁止（不變） | 同上方「仍禁止」全部維持；另 ⛔ 刪 VM sections／canonical；⛔ 以 skip／xfail 隱藏；⛔ 改 Digest schema／Risk Cap／System Action／OAuth／資料層 |
 - **P3 QA 修正補記（2026-11-04；append；上方 P3 Safe Handoff 表的「下一個唯一安全工作」不變）**：內文雜湊指紋＋baseline sha256 釘值（重產流程見 BACKLOG）、RuleID 現況鎖定、Digest 過度宣稱已更正（過渡期＝保留於 VM；Digest 涵蓋未驗）、`_evaluate_p3` 缺鍵判紅。新 ID：`NUI2-P3-CONDITIONS-TITLE-PAREN`、`NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND`。
 
+
+- **Safe Handoff（2026-11-04 DEC-132：兩灰區裁定落盤＋P2 文字線框交付；現行；docs 組單組、待總管複驗）**（決策者 客戶；本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 分支 `ccr-a0b4e085-ijdaio`，基準 `origin/main` `cac19304`（#1009 P3 已合併）；本批 docs-only commit 未 push、未開 PR（push／PR 由總管）；以當下 `git fetch` 為準 |
+| current Stage／exact safe stopping point | DEC-132 已落盤；P2 文字線框 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md` 已交付，**待客戶驗收**；P2 程式**未動**；P6／P7 未動 |
+| 待客戶裁示 | 驗收 P2 線框（含一併確認排序結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，單組判斷）；**3 點**：G-1 空槽高度（推薦 A 內容高度）、G-2 SPEC 欄位（推薦 B 省略頻率欄；手寫「日頻」須明示同意）、G-3 手機指標卡下移（推薦 A 接受；施工須手機 stale／unavailable 導覽餘裕 ≥160px，不達停手回報） |
+| **下一個唯一安全工作** | **客戶驗收 P2 文字線框。驗收通過前不得實作**；通過後才由總管派 P2 施工（Sonnet 5.5＋Medium，範圍僅 ①OneBrain 位置 ②台股 Primary 誠實空槽＋SPEC；驗收依線框 §F） |
+| Pending／設計候選清單（同步） | 撰寫組暫定三項**仍 Pending**：資料健康度 Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔ 來源不可用` 顏色。「🎯 跨季趨勢使用者功能」＝**設計候選**（客戶 (18)：暫不恢復舊 L3 expander；資料來源／EPS 口徑／版型另行驗證）——**不是核准功能**。👤 Data Freshness／System Information＝客戶裁示維持隱藏，由 P6 承接 |
+| known limitations／blockers | Digest evidence coverage 缺口維持登記（`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`；**VM 保存≠Digest 已有**，不得宣稱 OneBrain 可讀完整資料）；線框無 px 實測；單組撰寫；`get_twii_trend_view(n)` 序列與 MA 本批不接（`NUI2-TWII-TWO-PATHS` 待擇一） |
+| required Model×Effort for resume | P2 施工＝Sonnet 5.5＋Medium；若需歷史序列／MA／改 VM schema／空槽顯示非 `⬜ 尚未提供` 的數值＝STOP → Opus 5.5＋High／Gate |
+| 正式文件索引 | `docs/DECISIONS.md` DEC-132；`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`；`docs/BACKLOG.md` §5.1.26「DEC-132 落盤與 P2…補記」；`docs/PROJECT_STATE.md` §63；Audit Checklist §24（**未自勾**） |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-132；新 Rule＝文件措辭規則（DEC-132 §三）；Backlog 既有 ID 更新；Audit §24 新節 |
+| 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 未經客戶驗收線框即實作 P2；⛔ 歷史序列／MA／假走勢線；⛔ 把設計候選當核准功能；⛔ 宣稱 OneBrain 可讀完整資料；⛔ 改 Risk Cap／System Action／Digest schema／OAuth |

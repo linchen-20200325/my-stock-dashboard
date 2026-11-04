@@ -273,3 +273,15 @@
 7. [ ] 客戶判斷項：👤 Data Freshness／System Information 隱藏、🎯 完整表隱藏（`NUI2-P3-FRESH-SYSINFO-HIDDEN`／`-FULL-TABLE-HIDDEN`）是否同意。
 8. [ ] 未宣稱 Safari／真機／Cloud 已驗；未宣稱獨立 QA 完成；固定 snapshot 僅 AppTest 驗證（`NUI2-P3-REAL-STATES-APPTEST-ONLY`）。
 9. [ ] （P3 QA 修正）baseline 指紋含 detail／value_text／status_text 雜湊；detail／value_text 被偷換的 mutation 轉紅；baseline 檔 sha256 已釘；RuleID 現況鎖定（VM 尚無 RuleID 欄位）；`_evaluate_p3` 缺鍵判紅。
+
+## §24 DEC-132（客戶 (18)）驗收項（兩灰區裁定落盤＋P2 文字線框；2026-11-04；docs-only；append-only；實作組單組，**待總管／獨立 QA／客戶勾選——本節未自勾**）
+
+1. [ ] DEC-132 fence 與客戶 (18) 原文逐字一致（sha256 釘於 `tests/test_ui2_active_contract_docs.py`）；DEC-128～131 與其他舊 DEC 原文未改。
+2. [ ] `NUI2-P3-FRESH-SYSINFO-HIDDEN`＝客戶裁示（維持隱藏、P6 承接）；VM／資料來源／provenance／Evidence 未刪（`git diff` 無 `src/`、`shared/`）。
+3. [ ] `NUI2-P3-FULL-TABLE-HIDDEN` 與 Active Contract §11：🎯 跨季趨勢＝**設計候選／仍 Pending／非核准功能**；未恢復 L3 expander；未新增公式。
+4. [ ] Digest evidence coverage 缺口維持 open；全部文件無「OneBrain 可讀完整資料」宣稱。
+5. [ ] P2 線框文件含 A–G 七節與「待客戶驗收／不授權實作」宣告；`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 結論以客戶原文及已核准 Wireframes 為準，未自行變更頁面責任。
+6. [ ] 客戶判斷項：線框是否驗收（含排序結論一併確認）；G-1 空槽高度、G-2 SPEC 欄位（省略頻率欄）、G-3 手機指標卡下移。
+7. [ ] （施工後）手機 stale／unavailable 導覽餘裕 ≥160px；不達則已停手回報。
+8. [ ] 本節所有項目維持未自勾（docs 測試守衛：§24 區段內不得出現已勾選記號）。
+9. [ ] 未宣稱 P2 已實作、未宣稱歷史序列／MA 已接、未宣稱獨立 QA 完成。

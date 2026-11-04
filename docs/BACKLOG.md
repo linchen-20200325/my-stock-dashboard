@@ -1592,7 +1592,7 @@
 | ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
 |---|---|---|---|---|---|---|
 | **NUI2-EXEC-SPEC-UNCOVERED-DETAILS** | P3 | 附件**未複述**的已核准細節：W-9 命名、W-2、W-5、W-6、W-8、冷啟動灰色說明、今日結論／今日主要風險逐字約束（DEC-081／DEC-117 Q6）、👤 E13～E17 落點。附件不是完整規格；後續 UI 批不得因附件沒寫就當作取消 | open | P2～P6 | 各批施工前對照 Active Contract＋Wireframes 未被取代部分 | 0 |
-| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER** | P3 | Active Contract §3.1 與 Wireframes §2.1 在「今日主要風險／是否需要行動」順序上**既有不一致**（附件 §2 取 DEC-127 已核准手機首屏順序）；P1 未動順序 | open | P2 | P2 施工前由總管判定 | 0 |
+| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER** | P3 | Active Contract §3.1 與 Wireframes §2.1 在「今日主要風險／是否需要行動」順序上**既有不一致**（附件 §2 取 DEC-127 已核准手機首屏順序）；P1 未動順序 | ~~open~~ 📌 **已判定（單組判斷，待客戶驗收線框時一併確認）**（2026-11-04，docs 組單組、待總管複驗）：以 Wireframes §2.1／§2.2（客戶 Q3 核准）＋DEC-122 Q3=A＋DEC-127＋DEC-117 Q1／Q5 桌機為準；差異僅在手機，Active Contract §3.1 該格為桌機三 tile 排法的扁平轉述（表頭自述順序依 Wireframes）；**無兩處客戶原文矛盾，不需客戶裁示**；頁面責任不變；最小勘誤已提案、未套用（見 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md` §B） | P2 | ~~P2 施工前由總管判定~~ 📌 勘誤文字待總管於客戶驗收線框後套用 §3.1（內部文字勘誤） | 0 |
 | **NUI2-EXEC-SPEC-P7-ORDER-NOT-AUTHORITATIVE** | P3 | 附件 §8.3 對 P7 的排序為附件自創；**以 BACKLOG §5.1.26 批次表為準**（建議序 P1→P3→P6→P2→P4→P5；P7 依 `NUI2-AUTH-CONTRACT-GATE`） | open | — | 以 BACKLOG 為準 | 0 |
 
 - 撰寫組暫定四項（Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔` 顏色、🎯 跨季趨勢是否保留）**維持 Pending**，未升格。
@@ -1728,7 +1728,7 @@
 | **NUI2-PLAN1007-METADATA-NO-L3** | P3 | `data_cache/metadata.json` 只有 L1 reader，**無 L3 wrapper**（計畫 §5 資料新鮮度列已註「接線需先建 L3」）。P6 資料健康度若要顯示新鮮度，須先有 L3 唯讀入口；L5／UI2 不得直讀 L1（EX-PASSTHRU-1 不涵蓋此情形）。`market_twii_view_service` 內部讀 `metadata.json` 屬 L3 內部實作，不等於已有通用 reader | open（接線前提；未驗證有無其他 caller） | P6 | P6 施工前由總管判定 L3 入口形態（新增 thin L3＝新 service，須獨立 QA；同 SG-12 精神）；不在 presentation 批夾帶 | 0 |
 | **NUI2-PLAN1007-P3-T1B-TENSION** | P3 | 本批查證出的張力（單組，未經第二組）：P3 批次表要求「VM `sections` 一字不動」（T-new-4），但 `tests/test_ui2_contract_teeth_pending.py::test_T_new_1b_human_vm_sections_are_not_l2_l3`（strict xfail）斷言三個投資頁 `context.sections` 內**無 `level∈{L2,L3}`**。兩者字面不可同時滿足：要轉綠必須改 VM `level` 值（VM 內容變更）或把這些區塊移出 `context.sections`（搬去 Evidence projection，與 P6 相依），或修改該測試斷言（不得以弱化守衛達成）。T-new-1（expander 標籤＋結構判準）則不受影響，UI 移除即可轉綠 | **closed（DEC-131）**（📌 2026-11-03 客戶 (17) A2：舊 T_new_1b 是測試規格錯誤，已改驗「渲染層無 evidence expander＋VM 完整保留」；VM 一字未動；有意識的更新，不是漏刪；決策者 客戶） | P3 | 已處置（見 DEC-131 §二） | 0 |
 | `NUI2-TWII-TWO-PATHS`（**既有，不重登**） | P3 | BACKLOG 已有獨立條目（本檔 §5.1.x 表內，另在 REAL_FEED_MAPPING 登記）。任務原假設「BACKLOG 無獨立條目」**與實況不符**（本批 grep 查證）；僅補交叉參照：#1007 計畫 §4 末句與 §2 台股歷史主圖列均指向它，接線前須擇一（readiness `taiex` vs `twii_ohlcv.parquet`） | open（原樣） | `NUI2-PORT-READINESS-L3` | 同原條目 | — |
-| `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`（**既有，不重登**） | P3 | Active Contract §3.1 vs Wireframes §2.1 風險／行動順序不一致，已登記（見上方 EXEC-SPEC 補記表）；#1007 計畫未處理它。P2 施工前須判定（見下方候選 B 的前置） | open（原樣） | P2 | P2 施工前由總管判定 | — |
+| `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`（**既有，不重登**） | P3 | Active Contract §3.1 vs Wireframes §2.1 風險／行動順序不一致，已登記（見上方 EXEC-SPEC 補記表）；#1007 計畫未處理它。P2 施工前須判定（見下方候選 B 的前置） | ~~open（原樣）~~ 📌 **已判定（單組判斷，待客戶驗收線框時一併確認）**（2026-11-04）：見上列與線框 §B | P2 | ~~P2 施工前由總管判定~~ 勘誤待套用 | — |
 
 **3. 下一批候選（供客戶選擇；非授權）**
 
@@ -1759,8 +1759,8 @@
 
 | ID | 優先 | 說明 | 狀態 | 依賴 | 處置 |
 |---|---|---|---|---|---|
-| **NUI2-P3-FRESH-SYSINFO-HIDDEN** | P2 | 👤 `Audit：Data Freshness`／`Audit：System Information` 兩個 L2 區塊 P3 起不渲染（Active Contract §3.4：它們屬資料健康度 Level 1／2，非「Decision Digest Viewer／Rule Registry」稽核入口；客戶 (17) 只點名保留 Audit／Digest Viewer／Rule Registry）。內容現為「尚未提供」占位，無資訊損失；VM 保留。**實作組讀法，可由總管／客戶推翻**（只需把 `("p4_me","fresh")`／`("p4_me","sysinfo")` 加入 `SHOWN_FOLDS` 與測試 `EXPECTED_SHOWN_FOLDS`） | open | P6 | P6 承接 |
-| **NUI2-P3-FULL-TABLE-HIDDEN** | P2 | 🎯 `完整 6 欄表／跨季趨勢`（L3）P3 起不渲染（Active Contract §3.2 列為 evidence 摺疊；「查看全部候選／CSV／查看此檔」使用者功能**目前 UI 不存在**，屬 P2）。VM 保留；跨季趨勢是否保留為使用者「完整分析」仍是撰寫組暫定 Pending | open | P2 | P2 新增使用者功能入口時另行分類 |
+| **NUI2-P3-FRESH-SYSINFO-HIDDEN** | P2 | 👤 `Audit：Data Freshness`／`Audit：System Information` 兩個 L2 區塊 P3 起不渲染（Active Contract §3.4：它們屬資料健康度 Level 1／2，非「Decision Digest Viewer／Rule Registry」稽核入口；客戶 (17) 只點名保留 Audit／Digest Viewer／Rule Registry）。內容現為「尚未提供」占位，無資訊損失；VM 保留。~~**實作組讀法，可由總管／客戶推翻**~~（只需把 `("p4_me","fresh")`／`("p4_me","sysinfo")` 加入 `SHOWN_FOLDS` 與測試 `EXPECTED_SHOWN_FOLDS`）📌 **2026-11-04 已升為客戶裁示（DEC-132／客戶 (18) 一.1）**：維持不在四頁一般 Human UI，由 P6 資料健康度承接；不得刪 VM、資料來源、provenance 或其他 Evidence（有意識的更新，不是漏刪；決策者 **客戶**；原讀法文字刪除線保留） | open（客戶裁示：維持隱藏） | P6 | P6 承接 |
+| **NUI2-P3-FULL-TABLE-HIDDEN** | P2 | 🎯 `完整 6 欄表／跨季趨勢`（L3）P3 起不渲染（Active Contract §3.2 列為 evidence 摺疊；「查看全部候選／CSV／查看此檔」使用者功能**目前 UI 不存在**，屬 P2）。VM 保留；跨季趨勢是否保留為使用者「完整分析」仍是撰寫組暫定 Pending 📌 **2026-11-04 客戶 (18) 一.2／DEC-132**：**暫不恢復舊 L3 expander**；保留為後續使用者分析能力的**設計候選**（精簡圖卡優先；資料來源、EPS 口徑、版型另行驗證；不自行開工或新增公式）——**仍 Pending／設計候選，不是核准功能**；**不在 P2 範圍**（有意識的更新，不是漏刪；決策者 **客戶**；原文保留） | open（客戶裁示：暫不恢復；設計候選） | 另案驗證（資料來源／EPS 口徑／版型） | ~~P2 新增使用者功能入口時另行分類~~ 設計候選待驗證後由客戶決定，P2 不新增入口 |
 | **NUI2-P3-LOOKUP-SECTIONS-HIDDEN** | P3 | 🎯 查一檔的 `基本面／估值／研究解釋`（L2，目前皆「尚未提供」占位）不渲染；T_new_1 既有結構判準本就把 lookup sections 算入 evidence。P2 以精簡 chart-first 卡承接 | open | P2 | — |
 | **NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY** | P3 | (C) 守衛是 AST 靜態 import 傳遞閉包（含函式內 import；不含動態 import／getattr 轉發／PEP 562 barrel 轉發）。「OneBrain 未來可從 headless Digest 取得完整 evidence」**未驗證 Digest 內容是否涵蓋 UI evidence 全部欄位**（只證明 Digest 輸入不依賴 UI2 渲染）；未改 Digest schema、未新增 runtime | open（未驗） | OneBrain 批 | 後續批以 Digest 實際輸出對照 §8 清單 |
 | **NUI2-P3-REAL-STATES-APPTEST-ONLY** | P3 | Real 固定 snapshot（unavailable／stale／missing／contract_error 等）的 P3 驗證是 AppTest 渲染層＋VM baseline；**真瀏覽器**只跑活 Real feed（量測日 snapshot，11 態）與 FAKE 70 態，未對固定 snapshot 逐張截圖（P1 的 `real_states/` 56 態未在 P3 重跑） | open（限制） | — | 需要時重跑 |
@@ -1779,3 +1779,12 @@
 | **NUI2-P3-CONDITIONS-TITLE-PAREN** | P3 | 🎯 選股條件 expander 標題含「（收合）」字樣（VM 標題文案 `選股條件（收合）`；Human UI 直接顯示）。Streamlit expander 本身已有展開箭頭，「（收合）」是冗字；P3 為不改 VM 而保留 | open | P2 | P2 動 🎯 時連同 VM 文案與 baseline／白名單測試一起改（須走 `--regen` 流程） |
 | **NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND** | P3 | Digest 獨立性守衛是 AST 靜態 import 閉包，**偵測不到動態 import（`importlib`／`__import__`）與 PEP 562 barrel `__getattr__` 轉發**（已於 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 自述；此處補交叉參照）。另實測 Digest builder 不含位階完整說明／指標明細／lookup 基本面·估值，OneBrain 批須先核對缺欄 | open（限制） | OneBrain 批 | 見 `NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` |
 
+
+#### 📌 DEC-132 落盤與 P2「文字線框先行」交付補記（客戶 2026-11-04 (18)；2026-11-04；docs-only；append-only；docs 組單組、待總管複驗）
+
+- **兩項灰區裁定（客戶 (18) 一）**：(1) 👤 Data Freshness／System Information **維持不在四頁一般 Human UI**，未來由 P6 資料健康度承接，不得刪 VM／資料來源／provenance／Evidence → `NUI2-P3-FRESH-SYSINFO-HIDDEN` 由「可推翻讀法」升為**客戶裁示**；(2) 🎯 跨季趨勢與完整分析**暫不恢復舊 L3 expander**，保留為後續使用者分析能力的**設計候選**（精簡圖卡優先；資料來源、EPS 口徑、版型另行驗證；不自行開工或新增公式）→ `NUI2-P3-FULL-TABLE-HIDDEN` 同步；Active Contract §11 撰寫組暫定四項中「🎯 跨季趨勢使用者功能」改記為**設計候選（非核准功能）**，其餘三項（Level 1／2 預設、Level 3 遮罩、`⛔` 顏色）**維持 Pending**。
+- **Digest 缺口維持登記**（客戶 (18)「VM 保存不等於 Digest 已有」）：`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` **維持 open（未驗）**；未證實前任何文件不得宣稱 OneBrain 可讀完整資料。
+- **P2 採文字線框先行；本輪不授權實作**：交付 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`（A–G；**待客戶驗收**）。範圍僅 ①🤖 OneBrain Outlook 移到「今日主要風險之後、Primary 槽之前、指標卡之前」②台股 Primary 主圖**誠實空槽**（`⬜ 尚未提供`、灰底、無走勢線）＋一行 SPEC（欄位值只取 TWII 卡 `freshness`；來源為「本地加權指數歷史快取（來源 Yahoo，每日更新）」，**不是**範例的 TWSE）。歷史序列／MA 不接（`get_twii_trend_view(n)` 已能回序列但 UI2 `TWII_CARD_DAYS=1`；MA 來源在 session 未 PORT）。
+- **`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 已判定**：以 Wireframes §2.1／§2.2＋DEC-122 Q3=A＋DEC-127＋DEC-117 Q1／Q5 桌機為準；差異僅手機（Active Contract §3.1 為桌機三 tile 的扁平轉述）；**不需客戶裁示**；勘誤僅提案、未套用。
+- **待客戶確認（3 點）**：G-1 空槽高度（推薦 A 依內容高度）、G-2 SPEC 欄位（推薦 **B 省略頻率欄**；手寫「日頻」須明示同意）、G-3 手機指標卡下移（QA 原型實測：cold 時卡片頂緣 560→798px 越過導覽上緣 791；stale／unavailable 餘裕 166.5→162.5px，施工須 ≥160px 否則停手回報；推薦 A 接受）。線框 §D／F-3「第一屏不增不減」已更正。排序結論為單組判斷，隨線框驗收一併確認（QA 2026-11-04 勘誤）。
+- **§27 檢查**：新 Decision＝DEC-132（客戶 (18) 逐字）；新 Rule＝文件措辭規則（不得寫「OneBrain 可讀完整資料」）已入 DEC-132 §三；Backlog＝無新 ID（既有 ID 狀態更新）；Limitation＝線框無 px 實測、單組；Audit Checklist §24 新節（未自勾）。

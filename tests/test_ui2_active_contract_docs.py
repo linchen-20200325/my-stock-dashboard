@@ -418,6 +418,7 @@ _FENCE_SHA256 = {
     "### DEC-129｜": "210c1c2d55e2f37f7a5e0fcb809f3c43539609b72ede829bcc195ea707fdcf79",
     "### DEC-130｜": "dc28ea44aab00f12d3a0eb4977c517550385a60616ae8dd5c7a51b9e7398899c",   # 客戶 (15) 覆核 PROVISIONAL (a)(b)(c)
     "### DEC-131｜": "4f7f8ee15add8b9dc54c57ddae11fba6320dbed1c917a27c1e8e5abddc692de9",   # 客戶 (17) 選 A 開始 P3（A2）
+    "### DEC-132｜": "088c01425621fa7d46163813e304a23be872cb630aa863dfc6f89e3b4208c086",   # 客戶 (18) 覆核 #1009 兩灰區＋P2 文字線框先行
 }
 
 
@@ -686,3 +687,87 @@ def test_p3_evidence_baseline_file_is_pinned_by_sha256():
     assert got == _P3_BASELINE_SHA256, (
         "evidence baseline 被改動。若是有意識的 evidence 變更：照本檔註解的四步驟重新產生並更新釘值；"
         "若不是，請還原——不得為了讓 evidence-preservation 測試通過而改 baseline。")
+
+
+# ---------------------------------------------------------------- (xiii) DEC-132（客戶 (18)：兩灰區裁定＋Digest 缺口維持＋P2 文字線框先行）
+P2_WIREFRAME_REL = "docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md"
+
+
+def _dec132() -> str:
+    d = _read("docs/DECISIONS.md")
+    return d[d.index("### DEC-132｜"):]
+
+
+def test_dec132_fence_has_customer_text_and_records_both_rulings():
+    d = _dec132()
+    a = d.index("```\n") + 4
+    f = d[a:d.index("\n```", a)]
+    for must in ("維持不在四頁一般 Human UI 顯示", "未來由 P6「資料健康度」承接", "不得刪 VM、資料來源、provenance 或其他 Evidence",
+                 "暫不恢復舊 L3 expander", "保留為後續使用者分析能力的設計候選", "不自行開工或新增公式",
+                 "VM 保存不等於 Digest 已有", "未證實之前不得宣稱 OneBrain 可讀完整資料",
+                 "本輪只授權提出線框與驗證資料欄位，不授權直接實作新版面", "TWII 最新收盤值不等於歷史圖表資料"):
+        assert must in f, must
+    # 落盤段（fence 之外）：兩項裁定、Digest 缺口維持、P2 不授權實作、文件措辭規則
+    rest = d[d.index("\n```", a) + 4:]
+    for must in ("裁定 1", "裁定 2", "仍 Pending／設計候選", "不是核准功能", "NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY",
+                 "維持 open", "P2 線框待客戶驗收", "不授權任何實作", "NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md"):
+        assert must in rest or must in d, must
+
+
+def test_fresh_sysinfo_is_recorded_as_customer_ruling_not_overridable_reading():
+    b = _read("docs/BACKLOG.md")
+    row = next(l for l in b.splitlines() if l.startswith("| **NUI2-P3-FRESH-SYSINFO-HIDDEN**"))
+    assert "DEC-132" in row and "客戶裁示" in row and "維持不在四頁一般 Human UI" in row
+    assert "~~**實作組讀法，可由總管／客戶推翻**~~" in row          # 原文刪除線保留，不刪
+    full = next(l for l in b.splitlines() if l.startswith("| **NUI2-P3-FULL-TABLE-HIDDEN**"))
+    assert "DEC-132" in full and "設計候選" in full and "不是核准功能" in full
+    c = _read(ACTIVE_REL)
+    assert "DEC-132" in c and "設計候選" in c and "不是核准功能" in c
+    assert "~~🎯 跨季趨勢／完整分析是否保留為使用者功能~~" in c      # 原文刪除線保留
+    # 舊 DEC 原文不改（DEC-131 §三 第 3 點仍在）
+    assert "是**總管可推翻的讀法**" in _read("docs/DECISIONS.md")
+
+
+def test_p2_text_wireframe_exists_declares_pending_acceptance_and_has_sections_a_to_g():
+    w = _read(P2_WIREFRAME_REL)
+    head = w[:1200]
+    assert "待客戶驗收" in head and "不授權實作" in head
+    for sec in ("## A. 現況首屏", "## B. ", "## C. P2 最小差異", "## D. 保留清單核對", "## E. 資料位置對照",
+                "## F. 驗收準則與施工邊界", "## G. 待客戶確認項"):
+        assert sec in w, sec
+    for must in ("以 Wireframes §2.1", "DEC-122 Q3=A", "DEC-127", "TWII 最新收盤值≠歷史圖表資料",
+                 "⛔ 不繪製假走勢線".replace("⛔ ", ""), "TWII_SOURCE_TEXT", "get_twii_trend_view(n)", "T_new_6"):
+        assert must in w, must
+
+
+def test_dec132_is_wired_into_backlog_state_handoff_and_checklist():
+    assert "DEC-132 落盤與 P2" in _read("docs/BACKLOG.md")
+    assert "## 63. DEC-132" in _read("docs/PROJECT_STATE.md")
+    h = _read("docs/HANDOFF.md")
+    tail = h[h.rindex("Safe Handoff（2026-11-04 DEC-132"):]
+    assert "客戶驗收 P2 文字線框" in tail and "驗收通過前不得實作" in tail and "設計候選" in tail
+    assert "## §24 DEC-132" in _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
+    b = _read("docs/BACKLOG.md")
+    row = next(l for l in b.splitlines() if l.startswith("| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER**"))
+    assert "已判定" in row and "~~open~~" in row
+    # Digest 缺口維持 open（不得被本批結案）
+    dg = next(l for l in b.splitlines() if l.startswith("| **NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY**"))
+    assert "open（未驗）" in dg
+
+
+def test_no_document_claims_onebrain_can_read_complete_data():
+    """DEC-132 §三 文件措辭規則：不得宣稱 OneBrain 可讀完整資料／evidence 已在 Digest（反向守衛，僅掃本批新增文件）。"""
+    for rel in (P2_WIREFRAME_REL,):
+        w = _read(rel)
+        for bad in ("OneBrain 可讀完整資料已", "evidence 已在 Digest", "Digest 已涵蓋"):
+            assert bad not in w, (rel, bad)
+
+
+def test_audit_checklist_section_24_is_not_self_checked_and_wireframe_discloses_g3():
+    c = _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
+    sec = c[c.index("## §24 DEC-132"):]
+    assert "[ ]" in sec and not re.search(r"\[[xX]\]", sec), "§24 不得自勾"
+    w = _read(P2_WIREFRAME_REL)
+    assert "G-3" in w and "≥160px" in w and "第一屏不增不減」不實" in w
+    # G-2：頻率欄預設省略，「日頻」須明示同意（自相矛盾已修）
+    assert "推薦 B**" in w and "沉默不等於同意" in w
