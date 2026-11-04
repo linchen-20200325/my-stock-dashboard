@@ -1811,3 +1811,16 @@
     - 文件：Wireframes L11／W-1／§0.4；`FINAL_UI_CONTRACT_FREEZE` §16；Architecture Gate §3；Audit Checklist L202／L296；P2 線框 L171；`SUPERSEDE_MAP` S36；本檔 `NUI2-NAV-SAFE-AREA`／nav-margin 判準列；`PROJECT_STATE`／`HANDOFF` 歷史補記。
     - 程式／測試：`src/ui2/shell/css.py` L61~95；`src/ui2/shell/app.py` L104~105；`tests/test_ui2_contract_teeth_pending.py::test_mobile_nav_stays_four_cells_in_css`；`tests/test_ui2_batch3*` 的 `nav_margin_*`；`tests/test_ui2_p2_primary_slot*` 的 `p2_nav_margin_160`；`tests/ui2_viewport/measure_viewport.py` 的 53px／`nav_margin`／`p2_nav_margin_160`。
   - **登記建議**：DEC-134 sha256 釘值測試待後續（本 PR 為 docs-only，不加測試）。
+
+#### P6 資料健康度＋手機抽屜 文字線框登記（2026-11-04；docs-only；append；單組撰寫＋一組獨立 QA；本輪不授權施工）
+
+- 已產出兩份文字線框（均已過獨立 QA 勘誤，**待 ChatGPT／客戶線框審查，尚未取得客戶核准**）：`docs/vnext/NEWUI2_P6_DATA_HEALTH_TEXT_WIREFRAME_2026-11-04.md`（資料欄位盤點 DG-01～DG-21）與 `docs/vnext/NEWUI2_MOBILE_DRAWER_TEXT_WIREFRAME_2026-11-04.md`。
+- **登記（P2；不授權施工）**：
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **NUI2-P6-VOCAB-VS-CAPABILITY-TEXT** | P2 | `tests/test_ui2_p1_human_text.py` `ENGINEERING_VOCAB` 禁「接線」「尚未接線」，與客戶指定 Level 1 Capability 欄文字衝突；實作 P6 時需**範圍性 allowlist**（僅限 Capability 欄，不得全域放寬、不得刪守衛，須附 mutation） | open | P6 線框獲客戶核准 | 施工批處理；不得預先改測試 | 0 |
+| **NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS** | P2 | 待客戶裁示：P6 線框 H-11（三處登入狀態字樣；與抽屜 J-6 同一題，一次回答兩份適用）、H-12（TWII 來源字串原樣呈現與否）；抽屜 J 表客戶可答項 J-2／3／4／6／8／9／10 | open（blocked-on-customer） | 客戶回答 | 等客戶；AI 推薦僅供參考、非裁示 | 0 |
+| **NUI2-AUTH-STATUS-TEXT-GUARD**（補註） | P2 | 既有項補註：H-11／J-6 若採「⬜ 尚未登入」，**須先擴字樣表**並過本守衛，才可施工；Real 模式今天顯示「⬜ 尚未提供」 | open | — | 先擴字樣表 | 0 |
+
+- 抽屜實作方案推薦 C（CSS-only，B 自訂 session 控制為備案）為**撰寫組推薦，非客戶裁示**；P7、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）未動。
