@@ -31,7 +31,7 @@ A＝原生 `st.sidebar`；B＝session 控制自訂抽屜；C＝CSS-only checkbox
 
 1. **純 CSS（C）不可能 Esc、也不可能焦點進出**（兩版實測）。B、A 同樣沒有。不可宣稱純 C 滿足客戶最低條件。
 2. **Popover 零 JS 可 Esc 與 light-dismiss**（`popovertarget` 等屬性兩版 sanitizer 皆保留；`<script>`／`onclick`／`autofocus` 被剝或不執行）。缺口：開啟後焦點不自動進抽屜；抽屜內 Esc 後焦點掉 BODY；`aria-expanded` 為靜態值會說謊（須移除或由 JS 更新）；點當前頁也會收合；快速連點被遮罩擋。
-3. **C+JS 達成 (1)–(5)**（Chromium）。限制：無 focus trap（Tab 會穿到遮罩後頁面）；`st.html` script **每次 rerun 重跑**，須全域旗標守衛（`window.__ui2drJS2`），**已做變異測試：移除旗標後監聽重複註冊，旗標有效**；JS 在主文件執行、無 iframe 隔離；JS 只依賴自家 class，不依賴 Streamlit 內部 testid。`components.v1.html` iframe 方案進 Tab 順序、焦點在 iframe 時漏接 Esc，不採。
+3. **C+JS 達成 (1)–(5)**（Chromium）。限制：無 focus trap（Tab 會穿到遮罩後頁面）；`st.html` script **每次 rerun 重跑**，須全域旗標守衛（`window.__ui2drJS2`），**變異測試（移除旗標後監聽數 6/1/2 → 36/31/32）撰寫組與複驗組各自獨立重現，旗標有效**；JS 在主文件執行、無 iframe 隔離；JS 只依賴自家 class，不依賴 Streamlit 內部 testid。`components.v1.html` iframe 方案進 Tab 順序、焦點在 iframe 時漏接 Esc，不採。
 4. **C 與 C+JS 點當前頁不收合；收合依賴 server 往返**（複驗人為延遲 1.5s，實測收合 1.7s）。Popover 路徑點當前頁會收合，與前者行為不一致，施工前需客戶／治理定義預期。
 5. **其他方案不採**：`st.popover`（浮動卡、切頁不關）、`@st.dialog`（1.56 可改左抽屜、1.59 版面疊壞）、原生 `<dialog commandfor>`（內容只能是原始 HTML，放不進 Streamlit radio）、`st.navigation`（變 URL 路由、改寫既有導覽測試；本輪未重測）。
 
@@ -46,18 +46,26 @@ A＝原生 `st.sidebar`；B＝session 控制自訂抽屜；C＝CSS-only checkbox
 
 → 線框須由「☰ 列 8px＋44px」改為「**☰ 列 52px／占既有 44px 頂部保留帶**」，並重寫 160 餘裕定義（以視窗底扣 53px 帶為基準）。
 
-## 5. 複驗組指出的原報告誇大／遺漏（三項）
+## 5. 複驗組對原報告的書面結論（誇大／遺漏）
 
-1. **開啟延遲只量首次（C≈0.17s、B≈0.26s）**，未量「切頁→收合」；複驗實測依 server 往返，延遲 1.5s 時收合 1.7s（Real feed 下 B 的 rerun 延遲仍未量）。
-2. **「切頁自動收合 ✓」未區分點當前頁**：C／C+JS 不收合，Popover 會收合，行為不一致。
-3. **Popover 被讀成接近完整**：未載明 `aria-expanded` 靜態會說謊、抽屜內 Esc 後焦點掉 BODY、快速連點被遮罩擋。
+1. 「Popover 切頁自動收合」未說明收合有兩個來源：click 當下 light-dismiss（即時，且點「當前頁」也會關）與 rerun 後 tag 輪替；兩者都有看到。
+2. 「C 切頁自動收合 ✓」未標明依賴 server 往返與 tag 輪替：server 人為延遲 1.5s 時抽屜約 1.7s 才收、期間仍是舊頁；且 C 與 C+JS 點「當前頁」因 radio 值沒變不 rerun，抽屜不關；Popover 不受影響（<0.2s）。
+3. 「關閉後焦點掉 BODY」只對切頁關閉成立；點遮罩關閉時焦點在 ☰ checkbox。
+4. Popover 在 click 當下 light-dismiss 後，快速連點第二下落在被遮罩蓋住的內容，3 連點只有第一次生效；C+JS 同操作最終停在最後點的頁（1.59 為「我的」、1.56 為「持股」，兩版不同，原因未追）。
+5. 複驗組認同推薦 C+JS，但指出 Popover 在「即時收合、點當前頁收合」優於 C checkbox，原報告比較表未列入。
+6. `aria-expanded` 靜態值會說謊：複驗組採信原報告、未獨立驗；估時／token 倍數是原報告估計，未驗。
 
-（上列三項為依複驗結果檔 `drawer_qa/res/*.json` 與撰寫組 REPORT 差異整理；若要逐字對應複驗組原文，以 `newui2_drawer_preimpl/writer_REPORT.md` 與 `qa_res/` 對照為準；三項分類為本檔整理者歸納。）
+### 複驗組另列的補充觀察
+- 變異測試（拔掉全域旗標後監聽數 6/1/2 → 36/31/32；30 次切頁 runs=31）由**複驗組獨立重現**，旗標有效。
+- 未測 667×375 橫向；844×390 走桌機 rail（既有斷點）。
+- 連點 ☰ 9 次、連按 Esc 無卡死。
+- 桌機 1440：☰／toggle／遮罩皆 `display:none`，rail 176px。
+- 無 iframe（iframes=0、`window===top`）。
 
 ## 6. 既有測試衝擊（撰寫組副本實測：`tests/test_ui2_*.py` 1263 過／37 失敗／3 xfailed）
 
 - **C 類（含 JS）**須在同 PR **改寫** 4 個 CSS 字串測試：`test_ui2_batch2.py::test_w1_mobile_nav_is_bottom_fixed_53px`、`::test_w1_desktop_nav_is_left_column`、`::test_w1_current_page_is_marked_beyond_color`，與 `test_ui2_batch3.py::test_nav_margin_content_bottom_reserve…`；`tests/ui2_viewport/measure_viewport.py` 的 `nav_fixed_four`／`first_screen_above_nav`／導覽點擊判定器須改（抽屜收合時 radio 不可見，對 drawer 變體逾時）。
-- **B 類**會觸發 G9 `check_not_a_producer`（`session_state.update()`），約 33 失敗（撰寫組副本實測）＋新 key `ui2_drawer_open` 須擴 `ALLOWED_UI2_WRITES`。
+- **B 類**會觸發 G9 `check_not_a_producer`（`session_state.update()`），約 33 失敗（僅撰寫組副本結果，單組、未重跑）＋新 key `ui2_drawer_open` 須擴 `ALLOWED_UI2_WRITES`。
 - **不得只刪守衛**；開關狀態 AppTest 驗不到（client 端），須 Playwright lane（skipped 不等於 passed）。
 - 目前**沒有任何守衛**禁止 `st.html(unsafe_allow_javascript=True)`、raw `<input>`／popover 屬性 → 新增攻擊／回歸面。
 
