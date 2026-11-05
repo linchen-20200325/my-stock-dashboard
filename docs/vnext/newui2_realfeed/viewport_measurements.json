@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "fb466d156e1003b0450053344934962007be07a4",
-  "source_hash": "1f0e03f86bfda03ca34b4066419c2c3ff52e99f61891b2651e63d09483650786",
-  "generated_at": "2026-11-05T11:17:06+00:00",
+  "git_sha": "1548cc5b2c12c4210cc402a3c72d7e85e56633b3",
+  "source_hash": "3c8c6ff82d3f39f115b2cd80f2378855315efa5fab815690ff95e7d18dbfccf7",
+  "generated_at": "2026-11-05T15:21:01+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.59.2",
@@ -124,6 +124,11 @@
     "id": "p2_nav_margin_160",
     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；不達須停手回報，不得縮字、刪資訊或改設計。",
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
+   },
+   {
+    "id": "w11_hold_layout",
+    "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；Primary 空槽桌機高度 ≥ 240px、手機收成一行（高 ≤ 64px 且標題與 `⬜ 尚未提供` 同列）、0 個圖形元素、無紅色；持股表可見欄名桌機＝八欄（代碼／名稱／持股比例／成本／現價／報酬／策略／System Action）、手機＝四欄（代碼／名稱／報酬／System Action）+ 展開提示；0 個資料列（⛔ 假列）；欄名不被裁切。",
+    "source": "客戶 2026-11-05 Q1~Q8（DEC-141）；Wireframes §4.2／W-6／W-11（客戶 Q3 核准）"
    },
    {
     "id": "no_title_overlap",
@@ -302,6 +307,7 @@
     "spec_text": "SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-04｜缺值不補",
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": {
      "top": 525.4,
@@ -570,6 +576,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": {
@@ -729,6 +736,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": {
@@ -779,8 +787,8 @@
     {
      "q": "q1",
      "text": "組合狀態 ⬜ 尚未提供 需登入並讀取 Sheet，目前尚未開放",
-     "top": 145.9,
-     "bottom": 200.8,
+     "top": 196.6,
+     "bottom": 251.5,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -789,8 +797,8 @@
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 200.8,
-     "bottom": 256.7,
+     "top": 251.5,
+     "bottom": 307.5,
      "left": 27.4,
      "right": 362.6,
      "height": 55.9,
@@ -799,8 +807,8 @@
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 256.7,
-     "bottom": 311.6,
+     "top": 307.5,
+     "bottom": 362.4,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -808,29 +816,19 @@
     },
     {
      "q": "q2",
-     "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 311.6,
-     "bottom": 366.5,
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "top": 362.4,
+     "bottom": 398.1,
      "left": 27.4,
      "right": 362.6,
-     "height": 54.9,
-     "width": 335.2
-    },
-    {
-     "q": "q3",
-     "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 366.5,
-     "bottom": 421.4,
-     "left": 27.4,
-     "right": 362.6,
-     "height": 54.9,
+     "height": 35.7,
      "width": 335.2
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 目前不提供更新；需登入後才能讀取持股",
-     "top": 421.4,
-     "bottom": 495.1,
+     "top": 398.1,
+     "bottom": 471.8,
      "left": 27.4,
      "right": 362.6,
      "height": 73.7,
@@ -884,28 +882,127 @@
     "top": 99.9,
     "bottom": 124.9,
     "banner_bottom": 87.9,
-    "qa_top": 140.9
+    "qa_top": 191.6
    },
-   "last_content_bottom": 385.9,
-   "card_heights": [
-    139
-   ],
+   "last_content_bottom": 386.4,
+   "card_heights": [],
    "expanders": [],
    "p2": {
-    "onebrain": null,
-    "slot": null,
-    "grid": {
-     "top": 520.1,
-     "bottom": 659.1,
+    "onebrain": {
+     "top": 617.6,
+     "bottom": 706.4,
      "left": 14.4,
      "right": 375.6,
-     "height": 139.0,
+     "height": 88.8,
      "width": 361.2
     },
+    "slot": null,
+    "grid": null,
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
     "slot_danger": 0
+   },
+   "h1": {
+    "vw": 390,
+    "status": {
+     "top": 132.859375,
+     "bottom": 175.640625,
+     "left": 14.390625,
+     "right": 375.609375,
+     "height": 42.78125,
+     "width": 361.21875,
+     "segs": [
+      {
+       "seg": "portfolio",
+       "text": "組合：⬜ 尚未提供",
+       "left": 14.390625,
+       "right": 129.25,
+       "clipped": false
+      },
+      {
+       "seg": "asof",
+       "text": "資料日 ⬜ 資料日未提供",
+       "left": 143.25,
+       "right": 288.015625,
+       "clipped": false
+      },
+      {
+       "seg": "judged",
+       "text": "判得出 ⬜ 尚未提供",
+       "left": 14.390625,
+       "right": 131.96875,
+       "clipped": false
+      }
+     ]
+    },
+    "onebrain": {
+     "top": 617.578125,
+     "bottom": 706.359375,
+     "left": 14.390625,
+     "right": 375.609375,
+     "height": 88.78125,
+     "width": 361.21875
+    },
+    "primary": {
+     "top": 722.359375,
+     "bottom": 771.953125,
+     "left": 14.390625,
+     "right": 375.609375,
+     "height": 49.59375,
+     "width": 361.21875,
+     "graphics": 0,
+     "danger": 0,
+     "text": "產業曝險／集中度 ⬜ 尚未提供",
+     "title_cy": 746.15625,
+     "chip_cy": 744.15625
+    },
+    "cap": {
+     "top": 504.796875,
+     "bottom": 601.578125,
+     "left": 14.390625,
+     "right": 375.609375,
+     "height": 96.78125,
+     "width": 361.21875,
+     "danger": 0,
+     "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
+    },
+    "table": {
+     "top": 787.953125,
+     "bottom": 983.421875,
+     "left": 14.390625,
+     "right": 375.609375,
+     "height": 195.46875,
+     "width": 361.21875,
+     "data_rows": 0,
+     "more_visible": true,
+     "th": [
+      {
+       "text": "代碼",
+       "left": 27.890625,
+       "right": 111.4375,
+       "clipped": false
+      },
+      {
+       "text": "名稱",
+       "left": 111.4375,
+       "right": 194.984375,
+       "clipped": false
+      },
+      {
+       "text": "報酬",
+       "left": 194.984375,
+       "right": 278.53125,
+       "clipped": false
+      },
+      {
+       "text": "System Action",
+       "left": 278.53125,
+       "right": 362.109375,
+       "clipped": false
+      }
+     ]
+    }
    },
    "batch3": {
     "risk": null,
@@ -917,10 +1014,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 520.1,
+    "first_block_after_l1_top": 515.8,
     "risk_line_height": null,
-    "scroll_end_bottom": 763.6,
-    "nav_margin_after_risk": 270.9
+    "scroll_end_bottom": 764.2,
+    "nav_margin_after_risk": 275.2
    },
    "failures": {},
    "pass": true
@@ -1061,6 +1158,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": null,
@@ -1242,6 +1340,7 @@
     "spec_text": "SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-04｜缺值不補",
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": {
      "top": 288.7,
@@ -1409,6 +1508,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": {
@@ -1568,6 +1668,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": {
@@ -1618,8 +1719,8 @@
     {
      "q": "q1",
      "text": "組合狀態 ⬜ 尚未提供 需登入並讀取 Sheet，目前尚未開放",
-     "top": 159.9,
-     "bottom": 218.8,
+     "top": 188.3,
+     "bottom": 247.2,
      "left": 978.7,
      "right": 1360,
      "height": 58.9,
@@ -1628,8 +1729,8 @@
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 159.9,
-     "bottom": 218.8,
+     "top": 188.3,
+     "bottom": 247.2,
      "left": 200,
      "right": 581.3,
      "height": 58.9,
@@ -1638,8 +1739,8 @@
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 159.9,
-     "bottom": 218.8,
+     "top": 188.3,
+     "bottom": 247.2,
      "left": 589.3,
      "right": 970.7,
      "height": 58.9,
@@ -1647,22 +1748,12 @@
     },
     {
      "q": "q2",
-     "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 226.8,
-     "bottom": 284.7,
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "top": 255.2,
+     "bottom": 293.9,
      "left": 200,
      "right": 1360,
-     "height": 57.9,
-     "width": 1160
-    },
-    {
-     "q": "q3",
-     "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 292.7,
-     "bottom": 350.6,
-     "left": 200,
-     "right": 1360,
-     "height": 57.9,
+     "height": 38.7,
      "width": 1160
     },
     {
@@ -1723,28 +1814,151 @@
     "top": 95.9,
     "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 159.9
+    "qa_top": 188.3
    },
-   "last_content_bottom": 490.5,
-   "card_heights": [
-    142
-   ],
+   "last_content_bottom": 490.6,
+   "card_heights": [],
    "expanders": [],
    "p2": {
-    "onebrain": null,
-    "slot": null,
-    "grid": {
-     "top": 358.6,
-     "bottom": 500.8,
+    "onebrain": {
+     "top": 301.9,
+     "bottom": 343.5,
      "left": 200,
-     "right": 1360,
-     "height": 142.1,
-     "width": 1160
+     "right": 1360.0,
+     "height": 41.6,
+     "width": 1160.0
     },
+    "slot": null,
+    "grid": null,
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
     "slot_danger": 0
+   },
+   "h1": {
+    "vw": 1440,
+    "status": {
+     "top": 159.90625,
+     "bottom": 180.296875,
+     "left": 200,
+     "right": 1360,
+     "height": 20.390625,
+     "width": 1160,
+     "segs": [
+      {
+       "seg": "portfolio",
+       "text": "組合：⬜ 尚未提供",
+       "left": 200,
+       "right": 314.859375,
+       "clipped": false
+      },
+      {
+       "seg": "asof",
+       "text": "資料日 ⬜ 資料日未提供",
+       "left": 328.859375,
+       "right": 473.625,
+       "clipped": false
+      },
+      {
+       "seg": "judged",
+       "text": "判得出 ⬜ 尚未提供",
+       "left": 487.625,
+       "right": 605.203125,
+       "clipped": false
+      }
+     ]
+    },
+    "onebrain": {
+     "top": 301.921875,
+     "bottom": 343.515625,
+     "left": 200,
+     "right": 1359.984375,
+     "height": 41.59375,
+     "width": 1159.984375
+    },
+    "primary": {
+     "top": 359.515625,
+     "bottom": 599.515625,
+     "left": 200,
+     "right": 965.328125,
+     "height": 240,
+     "width": 765.328125,
+     "graphics": 0,
+     "danger": 0,
+     "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
+     "title_cy": 383.3125,
+     "chip_cy": 411.46875
+    },
+    "cap": {
+     "top": 359.515625,
+     "bottom": 599.515625,
+     "left": 977.328125,
+     "right": 1359.984375,
+     "height": 240,
+     "width": 382.65625,
+     "danger": 0,
+     "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
+    },
+    "table": {
+     "top": 615.515625,
+     "bottom": 745.578125,
+     "left": 200,
+     "right": 1359.984375,
+     "height": 130.0625,
+     "width": 1159.984375,
+     "data_rows": 0,
+     "more_visible": false,
+     "th": [
+      {
+       "text": "代碼",
+       "left": 213.5,
+       "right": 355.109375,
+       "clipped": false
+      },
+      {
+       "text": "名稱",
+       "left": 355.109375,
+       "right": 496.71875,
+       "clipped": false
+      },
+      {
+       "text": "持股比例",
+       "left": 496.71875,
+       "right": 638.328125,
+       "clipped": false
+      },
+      {
+       "text": "成本",
+       "left": 638.328125,
+       "right": 779.9375,
+       "clipped": false
+      },
+      {
+       "text": "現價",
+       "left": 779.9375,
+       "right": 921.546875,
+       "clipped": false
+      },
+      {
+       "text": "報酬",
+       "left": 921.546875,
+       "right": 1063.15625,
+       "clipped": false
+      },
+      {
+       "text": "策略",
+       "left": 1063.15625,
+       "right": 1204.765625,
+       "clipped": false
+      },
+      {
+       "text": "System Action",
+       "left": 1204.765625,
+       "right": 1346.484375,
+       "clipped": false
+      }
+     ]
+    }
    },
    "batch3": {
     "risk": null,
@@ -1756,7 +1970,7 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 358.6,
+    "first_block_after_l1_top": 313.9,
     "risk_line_height": null,
     "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
@@ -1900,6 +2114,7 @@
     "spec_text": null,
     "slot_danger": 0
    },
+   "h1": null,
    "batch3": {
     "risk": null,
     "mode_box": null,

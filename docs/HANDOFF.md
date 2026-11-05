@@ -993,3 +993,8 @@ DEC-086 規則已於 main，本表已落地。
 - DEC-138：維持 **Dark-only**，不新增 Light；Light 若可達且 chip 對比不合格須停手。
 - **未完成（仍 open，不得關閉）**：W-11 Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日」行；A2 判 B 未動；P3 守衛缺口與未驗項目見 BACKLOG `NUI2-VISUAL-BATCH1`。
 - 下一個安全工作：💼 完整 W-11 與 🎯 精選的線框草稿（**須先出草稿並取得裁示**才可寫 UI code）。
+
+## 補註（2026-11-05｜💼 W-11 批 1 版面空槽，ui2/hold-w11-batch1）
+- 依 DEC-141（客戶 Q1~Q8）施工：組合狀態行＋今日需處理單行、Primary／建議持股水位空槽、持股表欄名＋原因。**presentation-only，未接任何資料**。
+- **W-11 未完成**：版面空槽已施工，待獨立 QA；正式資料接線（Auth／來源／Aggregator／Risk Cap）未做，也未授權。
+- 新守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`；`viewport_measurements*.json` 已依 source_hash 重生。Draft PR，不合併。

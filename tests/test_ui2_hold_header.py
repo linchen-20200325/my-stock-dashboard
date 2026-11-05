@@ -26,21 +26,25 @@ def _render(monkeypatch, vm, fn) -> list[str]:
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
-def test_hold_html_is_old_html_wrapped_not_changed(monkeypatch, scenario):
-    """舊版＝title 與 first_screen 兩個 markdown；新版＝同內容包進 `ui2-h-l1` 一個 markdown（內容逐字相同）。"""
+def test_hold_first_screen_is_old_minus_next_step_row(monkeypatch, scenario):
+    """DEC-141 Q6：第一屏＝舊版第一屏，只把「是否需要行動／下一步」兩列合為「今日需處理」單行（其餘列逐字相同）。"""
     vm = get_preview_page_vm(P4_HOLD, scenario)
-    old_title = _render(monkeypatch, vm, _page.render_title)
     new = _render(monkeypatch, vm, hold.render)
+    old_title = _render(monkeypatch, vm, _page.render_title)
     old_fs = H.first_screen_html(vm.context.first_screen)
     assert len(old_title) == 1
-    assert new[0] == '<div class="ui2-h-l1">' + old_title[0] + old_fs + "</div>"
+    assert new[0].startswith('<div class="ui2-h-l1">' + old_title[0] + H.hold_status_html(vm.context.first_screen))
+    for q in ("q1", "ctx", "q4"):                        # 其餘列逐字保留
+        for row in re.findall(rf'<div class="ui2-qrow[^"]*" data-ui2-q="{q}".*?</div>(?=<div class="ui2-qrow|</div>$)', old_fs, re.S):
+            assert row in new[0]
+    assert 'data-ui2-q="q3"' not in new[0] and new[0].count('data-ui2-q="q2"') == 1
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_anchors_and_cta_preserved(monkeypatch, scenario):
     vm = get_preview_page_vm(P4_HOLD, scenario)
     h = _render(monkeypatch, vm, hold.render)[0]
-    assert re.findall(r'data-ui2-q="(\w+)"', h) == ["q1", "ctx", "ctx", "q2", "q3", "q4"]
+    assert re.findall(r'data-ui2-q="(\w+)"', h) == ["q1", "ctx", "ctx", "q2", "q4"]
     assert 'data-ui2-page="p4_hold"' in h
     cta = vm.context.first_screen.primary_cta
     assert cta.enabled is False and f'aria-disabled="true"' in h and cta.label in h

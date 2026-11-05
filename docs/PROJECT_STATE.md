@@ -1118,3 +1118,6 @@
 - 獨立 QA 通過（0 FAIL），待合併（draft）；DEC-138 維持 Dark-only，不新增 Light 支援。
 - 局部修正、非整頁完成：W-11 Primary 圖／⑤ 建議持股區間／持股表未做（B 類，需草稿裁示）；限制保留於 BACKLOG／HANDOFF。
 - 下一個安全工作：💼 完整 W-11 與 🎯 精選線框草稿（須先出草稿裁示）。
+
+## 補註（2026-11-05｜💼 W-11 批 1 版面空槽）
+- draft PR `ui2/hold-w11-batch1`：純版面空槽（狀態行／需處理單行／Primary 與建議持股水位空槽／持股表欄名）。W-11 仍 open（待獨立 QA＋資料接線）。守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`。
