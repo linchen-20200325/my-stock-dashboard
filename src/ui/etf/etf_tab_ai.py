@@ -46,8 +46,7 @@ def render_etf_ai(gemini_fn=None):
 
     # ── 讀取資料（不再讀 etf_single_data，個股有自己的 AI）──────
     port_d     = st.session_state.get('etf_portfolio_data')
-    # 保留讀取:若未來重新接上回測資料源,此處無需再改。目前恆為 None。
-    backtest_d = st.session_state.get('etf_backtest_data')
+    # ETF 組合回測功能已退役，沒有正式 writer；不可從 session 拼回已刪除功能。
 
     if not port_d:
         st.info(
@@ -66,8 +65,6 @@ def render_etf_ai(gemini_fn=None):
         f'📊 將分析 <b>{len(port_d.get("rows", []))} 檔持股</b> '
         f'｜總現值 <b>{port_d.get("total_value", 0):,.0f} 元</b>'
         f'｜總經狀態 <b>{_macro_reg["light"]} {_regime_disp}</b>'
-        + (f'｜回測 CAGR <b>{backtest_d["cagr"]:.1f}%</b> / Sharpe <b>{backtest_d["sharpe"]:.2f}</b>'
-           if backtest_d else '')
         + '</div>', unsafe_allow_html=True)
 
     if st.button('🤖 生成 ETF 組合戰情研判報告', key='etf_ai_comp_btn',
@@ -77,7 +74,7 @@ def render_etf_ai(gemini_fn=None):
         else:
             # C1 v19.182:prompt 內的大盤狀態改傳中文顯示字串(未評估 → 「未評估」),
             # 不再傳可能被捏造成 'neutral' 的英文 code。
-            _generate_report(gemini_fn, port_d, backtest_d, _regime_disp,
+            _generate_report(gemini_fn, port_d, _regime_disp,
                              _fetch_news_for, mkt_info)
 
     # ── 顯示已生成報告 ────────────────────────────────────────
@@ -99,7 +96,7 @@ def render_etf_ai(gemini_fn=None):
     _render_free_qa(gemini_fn)
 
 
-def _generate_report(gemini_fn, port_d, backtest_d, regime_disp,
+def _generate_report(gemini_fn, port_d, regime_disp,
                      fetch_news_fn, mkt_info):
     """組裝 Markdown prompt 並呼叫 Gemini 生成結構化戰情報告。
 
@@ -158,13 +155,6 @@ def _generate_report(gemini_fn, port_d, backtest_d, regime_disp,
     # 「還沒按」而在報告裡叫人去跑一個不存在的功能 → 改成講清楚沒有這項輸入。
     _bt_str = ('（本系統目前沒有 ETF 組合歷史回測功能，此項無資料；'
                '請勿在報告中要求使用者去執行回測，也不要推估任何回測數字）')
-    if backtest_d:
-        _w_txt = ', '.join(f'{t}:{w*100:.0f}%' for t, w in backtest_d['weights'].items())
-        _bt_str = (
-            f'期間 {backtest_d["period"]}｜權重 {_w_txt}｜'
-            f'CAGR {backtest_d["cagr"]:.2f}%｜Sharpe {backtest_d["sharpe"]:.2f}｜'
-            f'MDD {backtest_d["mdd"]:.2f}%｜年化波動率 {backtest_d["vol"]:.2f}%'
-        )
 
     # ── 總經數據快照 ─────────────────────────────────────────
     # v19.170 P0-1:原本餵 DEPRECATED 的 MACRO_ALLOC(bull 固定股票 70%),
