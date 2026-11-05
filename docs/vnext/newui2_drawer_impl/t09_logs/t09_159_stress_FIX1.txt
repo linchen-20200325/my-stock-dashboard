@@ -1,0 +1,30 @@
+PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[1] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[2] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[3] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[4] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[5] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[6] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[7] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[8] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[9] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[10] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[11] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[12] T09-DIAG iteration 14 {'checked': False, 'inert': [], 'vis': 'hidden', 'page': 'p4_hold', 'active': 'INPUT.ui2-dr-toggle'} errs []
+playwright._impl._errors.Error: Locator.tap: Error: strict mode violation: locator(".ui2-dr-toggle") resolved to 2 elements:
+FAILED
+tests/test_zz_t09_scratch.py::test_t09_rep[13] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[14] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[15] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[16] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[17] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[18] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[19] PASSED
+E           playwright._impl._errors.Error: Locator.tap: Error: strict mode violation: locator(".ui2-dr-toggle") resolved to 2 elements:
+E               1) <input id="ui2dr" role="switch" type="checkbox" aria-label="主選單" class="ui2-dr-toggle"/> aka get_by_role("article").get_by_role("switch", name="主選單")
+E               2) <input id="ui2dr" role="switch" type="checkbox" aria-label="主選單" class="ui2-dr-toggle"/> aka get_by_role("switch", name="主選單").nth(1)
+E           
+E           Call log:
+E             - waiting for locator(".ui2-dr-toggle")
+FAILED tests/test_zz_t09_scratch.py::test_t09_rep[12] - playwright._impl._err...
+=================== 1 failed, 19 passed in 761.04s (0:12:41) ===================

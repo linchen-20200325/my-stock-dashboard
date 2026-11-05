@@ -147,11 +147,26 @@ class Ui:
         return self.state()["checked"]
 
     def open_tap(self):
+        self.wait_settled()
         self.pg.locator(".ui2-dr-toggle").tap() if self.pg.evaluate("() => 'ontouchstart' in window") else self.pg.locator(".ui2-dr-toggle").click()
         self.pg.wait_for_timeout(350)
 
-    def wait_closed(self):
-        self.pg.wait_for_function("() => !document.querySelector('.ui2-dr-toggle').checked", timeout=10000)
+    def wait_settled(self, page_id=None):
+        """rerun 落定：換頁後殼的標籤輪替 hack 會讓 ☰ 外層被 React 重建——重建期間 `.ui2-dr-toggle` 可能短暫 0 個或 2 個
+        （新舊並存），此時點它會 strict-mode 違規或點在即將被替換的元素上（開啟狀態隨之遺失）。頁面標題（內容）比導覽殼更早到
+        （script 由上而下串流），故只看標題不夠；殼的標籤輪替標記（外層標籤＝頁序）才是『殼已更新』的決定性訊號。
+        等待條件＝恰 1 個外層＋1 個 toggle、未勾選、（若指定）標題＝目標頁且外層標籤＝該頁的輪替標籤且有 checked radio。（T09 flake 根因，見 docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md）"""
+        tag = ("DIV", "SECTION", "ARTICLE", "ASIDE")[PAGE_IDS.index(page_id)] if page_id else None
+        self.pg.wait_for_function(
+            """(a) => { const ws = document.querySelectorAll('.ui2-dr-wrap'); if (ws.length !== 1) return false;
+              const ts = document.querySelectorAll('.ui2-dr-toggle'); if (ts.length !== 1 || ts[0].checked) return false;
+              if (!a.pid) return true;
+              const t = document.querySelector('.ui2-pagetitle'); const r = document.querySelector('.st-key-ui2_nav input[type=radio]:checked');
+              return !!t && t.dataset.ui2Page === a.pid && ws[0].tagName === a.tag && !!r; }""",
+            arg={"pid": page_id, "tag": tag}, timeout=20000)
+
+    def wait_closed(self, page_id=None):
+        self.wait_settled(page_id)
         self.pg.wait_for_timeout(350)
 
     def focus_toggle(self):
@@ -414,7 +429,7 @@ def test_t09_thirty_page_switches_leave_no_inert(mob):
     for i in range(30):
         mob.open_tap()
         mob.pg.locator(NAV_LABEL, has_text=PAGES[(i + 1) % 4]).click()
-        mob.wait_closed()
+        mob.wait_closed(PAGE_IDS[(i + 1) % 4])
     mob.pg.wait_for_timeout(800)
     s = mob.state()
     assert s["inert"] == 0 and not s["checked"] and not mob.errs
@@ -455,7 +470,7 @@ def test_t08_listeners_do_not_accumulate_across_reruns(mob):
     for i in range(10):
         mob.open_tap()
         mob.pg.locator(NAV_LABEL, has_text=PAGES[(i + 1) % 4]).click()
-        mob.wait_closed()
+        mob.wait_closed(PAGE_IDS[(i + 1) % 4])
     now = mob.pg.evaluate("() => ({...window.__lc})")
     assert now["kd"] == base["kd"] and now["ch"] == base["ch"] and now["mo"] == base["mo"], (base, now)
     # 行為：Esc 一次只關一次（不因重複監聽而多次 close）

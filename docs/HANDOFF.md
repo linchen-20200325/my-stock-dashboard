@@ -982,3 +982,5 @@ DEC-086 規則已於 main，本表已落地。
 | 未通過／限制 | L-1 `section.stMain` 焦點停靠、L-2、L-3、L-5、L-6、L-8；✕ 關閉鈕未加（S-14） |
 | 未驗（待真機／平台） | iOS Safari、Android 真機、Streamlit Cloud（含 Manage app）、CSP、VoiceOver、TalkBack、Firefox、WebKit、不支援 inert 瀏覽器 |
 | 仍禁止 | 把本批當客戶視覺驗收；改 JS 原文而不重過 Gate（雜湊會紅）；加第二處 `unsafe_allow_javascript`；讓抽屜讀 `ui2_account`／query；開 P6／P7／OAuth |
+
+- **Safe Handoff 補註（2026-11-05；只追加）**：T09 flake＝測試等待條件問題，已修並以壓力重跑驗證（`docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md`）；JS 呼叫改精確計數守衛（oauth_state `maybe_silent_reauth` 1＋drawer_js `render_drawer_script` 1＝src/ 內 2，相對核准清單增加 0；既有探針腳本 `tools/phase3_verify/appttest_floor156.py` 的 2 處字串引用明列）。PR #1019 仍 draft、不合併；`ui2-browser-gate` 仍待 user 設 required。

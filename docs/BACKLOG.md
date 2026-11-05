@@ -1860,3 +1860,5 @@
 - **`NUI2-DRAWER-CLOSED-A11Y-RESIDUAL`**：以 CSS `.st-key-ui2_nav *{visibility:inherit !important}` 修；T-13（CDP AXTree）鎖；Chromium only。
 - **`NUI2-DRAWER-NAV-RESIDUAL-BOTTOMNAV`**：本批已更換 D-1／D-7／D-9～D-12 判準；文件中其餘歷史「底部四格」原文保留。
 - **新增 open 項**：`NUI2-DRAWER-STMAIN-FOCUS-STOP`（P3，L-1：`section.stMain` 開啟時仍可拿一次 Tab 焦點；`overflow:clip` 無效；SR 影響未驗）｜`NUI2-DRAWER-QUICK-CLICK-L8`（P3，快速連點多頁 1.56／1.59 最終頁不同，未釘預期）｜`NUI2-DRAWER-DEVICE-UNVERIFIED`（P2，iOS Safari／Android／Cloud CSP／Manage app／VoiceOver／TalkBack／Firefox／WebKit／不支援 inert 瀏覽器皆未驗）｜`NUI2-DRAWER-CLOSE-BUTTON-S14`（P3，✕ 關閉鈕待線框定案；本批**未加**，測試守衛禁默默加入）。
+
+- **T09 flake 分析與 JS 呼叫精確計數守衛（2026-11-05；補註，只追加）**：① `test_t09_thirty_page_switches_leave_no_inert` 偶發紅的根因＝**測試等待條件過寬**（換頁後殼的標籤輪替重建與 rerun 競態；非產品 JS、無 inert 殘留），已改等待條件（`Ui.wait_settled`），12 負載壓力下修前 19～20／20 失敗、修後兩版本各 30／30 通過；證據 `docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md`。② 新增 open 項 **`NUI2-DRAWER-TAP-DURING-RERUN`**（P3）：使用者在 rerun 未落定時點 ☰，開啟狀態可能因舊外層被輪替 hack 替換而遺失（既有降級機制的固有特性，非 JS_V4 引入；未改產品碼）。③ `NUI2-DRAWER-NEW-JS-GATE` 守衛補強：JS 呼叫改以「檔案×所在函式×精確次數」白名單（`tests/test_ui2_drawer_js_guard.py::JS_CALL_ALLOWLIST`），關閉 QA 變異 M8（同檔再加第二呼叫原本仍綠）。
