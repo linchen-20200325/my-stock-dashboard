@@ -118,3 +118,25 @@ def stale_text(days: int | None) -> str:
     if days is None:
         return TEXT_STALE_UNKNOWN
     return TEXT_STALE_DAYS_FMT.format(n=int(days))
+
+
+# ════════════════════════════════════════════════════════════════════
+# 💼 持股 W-11 版面空槽（DEC-141；客戶 2026-11-05 Q1~Q8）——純 presentation 字樣，⛔ 資料值／來源／公式
+# ════════════════════════════════════════════════════════════════════
+HOLD_STATUS_PORTFOLIO_LABEL = "組合"
+HOLD_STATUS_ASOF_LABEL = "資料日"
+HOLD_STATUS_JUDGED_LABEL = "判得出"
+HOLD_ACTION_LABEL = "今日需處理"                       # Q6：單行；內容仍是 Capability 空槽（待系統動作整合）
+HOLD_PRIMARY_TITLE = "產業曝險／集中度"                  # Q2：Primary 主圖標題（Wireframes §4.2／W-11）
+HOLD_PRIMARY_REASON = "需登入並讀取持股後才會顯示，目前尚未開放"
+HOLD_PRIMARY_SPEC = "SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補"
+HOLD_CAP_TITLE = "建議持股水位（市場端）"                # Q5：卡標題逐字沿用（W-11／DEC-051）；僅空槽
+HOLD_CAP_REASON = "市場端建議區間尚未開放；這不是投資上限"
+HOLD_TABLE_TITLE = "持股清單"
+HOLD_TABLE_REASON = "需登入並讀取 Sheet 後才會列出，目前尚未開放"   # Q7：原因句；⛔ 寫成「0 檔」「沒有持股」
+#: Q7：桌機八欄（Wireframes §4.2／W-6 逐字）。第二個元素＝手機是否顯示（手機四欄；其餘四欄收進每列展開）。
+HOLD_TABLE_COLS: tuple[tuple[str, bool], ...] = (
+    ("代碼", True), ("名稱", True), ("持股比例", False), ("成本", False),
+    ("現價", False), ("報酬", True), ("策略", False), ("System Action", True),
+)
+HOLD_TABLE_EXPAND_HINT = "每列可展開：持股比例、成本、現價、策略"

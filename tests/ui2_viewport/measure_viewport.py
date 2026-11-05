@@ -44,6 +44,8 @@ NAV_MOBILE_H = 53
 MOBILE_MAX_W = 768
 #: 第一屏四問錨點（`src/ui2/components/html.py::first_screen_html` 的 `data-ui2-q`）。
 FIRST_SCREEN_QS = ("q1", "q2", "q3", "q4")
+#: 💼 持股（DEC-141 Q6）：「是否需要行動／下一步」合為「今日需處理」單行 → 沒有獨立 q3 錨點（其餘頁不變）。
+HOLD_FIRST_SCREEN_QS = ("q1", "q2", "q4")
 #: ☰ 觸控目標下限（統一施工規格 §5；通用準則，非客戶裁示）。
 TOGGLE_MIN_PX = 44
 NAV_LABELS = ("📊 市場", "🎯 標的", "💼 持股", "👤 我的")
@@ -138,6 +140,13 @@ THRESHOLDS: list[dict[str, str]] = [
              "（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；"
              "不達須停手回報，不得縮字、刪資訊或改設計。",
      "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"},
+    {"id": "w11_hold_layout",
+     "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
+             "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
+             "Primary 空槽桌機高度 ≥ 240px、手機收成一行（高 ≤ 64px 且標題與 `⬜ 尚未提供` 同列）、0 個圖形元素、無紅色；"
+             "持股表可見欄名桌機＝八欄（代碼／名稱／持股比例／成本／現價／報酬／策略／System Action）、手機＝四欄（代碼／名稱／報酬／System Action）+ 展開提示；"
+             "0 個資料列（⛔ 假列）；欄名不被裁切。",
+     "source": "客戶 2026-11-05 Q1~Q8（DEC-141）；Wireframes §4.2／W-6／W-11（客戶 Q3 核准）"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -155,7 +164,7 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     line = _nav_line(m)
     tg = (m.get("drawer") or {}).get("toggle")
     present = {e["q"] for e in m["elements"]}
-    for q in FIRST_SCREEN_QS:
+    for q in (HOLD_FIRST_SCREEN_QS if m.get("page") == "p4_hold" else FIRST_SCREEN_QS):
         if q not in present:
             out["first_screen_within_usable_height"].append(f"缺第一屏錨點 {q}")
     for e in m["elements"]:
@@ -237,6 +246,7 @@ def evaluate(m: dict) -> dict[str, list[str]]:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
     _evaluate_p1(m, out)
     _evaluate_p2(m, out)
+    _evaluate_h1(m, out)
     _evaluate_p3(m, out)
     return out
 
@@ -305,6 +315,79 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     if mobile and m.get("scenario") in P2_NAV_MARGIN_SCENARIOS and nb is not None and ntop is not None:
         if ntop - nb < P2_NAV_MARGIN_MIN_PX - 0.05:
             out[k2].append(f"手機 {m.get('scenario')}：導覽餘裕 {ntop - nb:.1f}px < {P2_NAV_MARGIN_MIN_PX}px")
+
+
+#: DEC-141 W-11 批 1 判定常數（判定器自己的字面值，獨立於被測的 `shared/ui2_contract/text.py`，避免 mutation 時判定器跟著被改）。
+H1_COLS_DESKTOP = ["代碼", "名稱", "持股比例", "成本", "現價", "報酬", "策略", "System Action"]
+H1_COLS_MOBILE = ["代碼", "名稱", "報酬", "System Action"]
+H1_PRIMARY_DESKTOP_MIN_PX = 240          # 桌機 Primary 預定高度（Q3；草稿 §2.1 估 220～260px）
+H1_PRIMARY_MOBILE_MAX_PX = 64            # 手機一行：padding 12 + chip 行高；容許 1 行，不容許 2 行（≥ 80）
+
+
+def _evaluate_h1(m: dict, out: dict[str, list[str]]) -> None:
+    """DEC-141：💼 W-11 批 1 版面判定（僅 p4_hold；舊／合成 dict 無 `page` 或非 hold → 略過；hold 缺 `h1` 鍵＝判紅）。"""
+    if m.get("page") != "p4_hold":
+        return
+    k = "w11_hold_layout"
+    h1 = m.get("h1")
+    if not h1:
+        out[k].append("p4_hold 量測缺 `h1` 鍵（真瀏覽器 lane 必須量狀態行／Primary／建議持股水位／持股表）")
+        return
+    mobile = m["viewport"]["w"] <= MOBILE_MAX_W
+    st, ob, pr, cap, tb = h1.get("status"), h1.get("onebrain"), h1.get("primary"), h1.get("cap"), h1.get("table")
+    if not st:
+        out[k].append("缺組合狀態行")
+    else:
+        segs = {s["seg"]: s for s in st["segs"]}
+        if set(segs) != {"portfolio", "asof", "judged"}:
+            out[k].append(f"狀態行段落 {sorted(segs)} ≠ portfolio／asof／judged")
+        a = segs.get("asof")
+        if a:
+            if "⬜ 資料日未提供" not in a["text"]:
+                out[k].append(f"資料日段不是 `⬜ 資料日未提供`：{a['text']!r}")
+            if a["clipped"] or a["right"] > h1["vw"] + 0.5:
+                out[k].append("資料日段被截斷或超出視窗右緣")
+        if re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", " ".join(s["text"] for s in st["segs"])):
+            out[k].append("狀態行出現日期（⛔ 今日／最舊一檔／抓取時間頂替）")
+    for name, box in (("Primary 空槽", pr), ("建議持股水位空槽", cap), ("持股表", tb)):
+        if not box:
+            out[k].append(f"缺 {name}")
+    if not (pr and cap and tb):
+        return
+    if pr["graphics"]:
+        out[k].append(f"Primary 空槽含 {pr['graphics']} 個 svg／polyline／canvas／img（⛔ 假圖）")
+    if pr["danger"] or cap["danger"]:
+        out[k].append("空槽出現紅色 chip：Capability 空槽不得用紅")
+    if "⬜ 尚未提供" not in pr["text"] or "⬜ 尚未提供" not in cap["text"]:
+        out[k].append("Primary／建議持股水位空槽缺 `⬜ 尚未提供`")
+    if tb["data_rows"]:
+        out[k].append(f"持股表出現 {tb['data_rows']} 個資料列（⛔ 假列／假成本／假報酬）")
+    want = H1_COLS_MOBILE if mobile else H1_COLS_DESKTOP
+    got = [c["text"] for c in tb["th"]]
+    if got != want:
+        out[k].append(f"{'手機' if mobile else '桌機'}可見欄名 {got} ≠ {want}")
+    if any(c["clipped"] for c in tb["th"]):
+        out[k].append("持股表欄名被裁切")
+    if mobile != tb["more_visible"]:
+        out[k].append(f"每列展開提示可見性 {tb['more_visible']}（應僅手機可見）")
+    if mobile:
+        if pr["height"] > H1_PRIMARY_MOBILE_MAX_PX + 0.5:
+            out[k].append(f"手機 Primary 空槽高 {pr['height']:.0f}px > {H1_PRIMARY_MOBILE_MAX_PX}px（未收成一行）")
+        if pr.get("title_cy") is None or pr.get("chip_cy") is None or abs(pr["title_cy"] - pr["chip_cy"]) > 8:
+            out[k].append("手機 Primary 標題與 `⬜ 尚未提供` 不同列")
+        seq = [("建議持股水位", cap)] + ([("OneBrain", ob)] if ob else []) + [("Primary", pr), ("持股表", tb)]
+        for (an, a_), (bn, b_) in zip(seq, seq[1:]):
+            if b_["top"] < a_["bottom"] - 0.5:
+                out[k].append(f"手機順序錯：{bn} top {b_['top']:.0f} 早於 {an} 底緣 {a_['bottom']:.0f}")
+    else:
+        if pr["height"] < H1_PRIMARY_DESKTOP_MIN_PX - 0.5:
+            out[k].append(f"桌機 Primary 空槽高 {pr['height']:.0f}px < 預定高度 {H1_PRIMARY_DESKTOP_MIN_PX}px")
+        if abs(pr["top"] - cap["top"]) > 2 or pr["right"] > cap["left"] + 0.5:
+            out[k].append("桌機 Primary 與建議持股水位未並排同列")
+        if ob and pr["top"] < ob["bottom"] - 0.5:
+            out[k].append("桌機 Primary 早於 OneBrain 底緣")
+        if tb["top"] < max(pr["bottom"], cap["bottom"]) - 0.5:
+            out[k].append("桌機持股表未在 Primary／建議持股水位之下")
 
 
 def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
@@ -552,12 +635,32 @@ _JS = r"""
     slot_text: slotEl ? slotEl.innerText.replace(/\s+/g,' ').trim() : null,
     spec_text: slotEl && slotEl.querySelector('[data-ui2-spec]') ? slotEl.querySelector('[data-ui2-spec]').innerText.replace(/\s+/g,' ').trim() : null,
     slot_danger: slotEl ? slotEl.querySelectorAll('.ui2-chip--danger').length : 0};
+  // DEC-141：💼 W-11 批 1 座標與內容（僅 p4_hold 有）
+  const hq = s => document.querySelector(s);
+  const hStat = hq('[data-ui2-l1="hold_status"]'), hPrim = hq('[data-ui2-l1="hold_primary_slot"]'),
+        hCap = hq('[data-ui2-l1="hold_cap_slot"]'), hTab = hq('[data-ui2-l1="hold_table"]'),
+        hOb = hq('.ui2-h-ob'), hMore = hq('.ui2-ht__more');
+  const vis = e => e && R(e).width > 1 && R(e).height > 1;
+  const ctr = e => e ? (R(e).top + R(e).bottom) / 2 : null;
+  const h1 = hStat || hPrim ? {
+    vw: window.innerWidth,
+    status: hStat ? {...R(hStat), segs: [...hStat.querySelectorAll('[data-seg]')].map(s => ({seg: s.dataset.seg,
+      text: s.innerText.replace(/\s+/g,' ').trim(), left: R(s).left, right: R(s).right, clipped: s.scrollWidth > s.clientWidth + 1}))} : null,
+    onebrain: hOb ? R(hOb) : null,
+    primary: hPrim ? {...R(hPrim), graphics: hPrim.querySelectorAll('svg,polyline,canvas,img,[data-testid="stVegaLiteChart"]').length,
+      danger: hPrim.querySelectorAll('.ui2-chip--danger').length, text: hPrim.innerText.replace(/\s+/g,' ').trim(),
+      title_cy: ctr(hPrim.querySelector('.ui2-section-title')), chip_cy: ctr(hPrim.querySelector('.ui2-chip'))} : null,
+    cap: hCap ? {...R(hCap), danger: hCap.querySelectorAll('.ui2-chip--danger').length, text: hCap.innerText.replace(/\s+/g,' ').trim()} : null,
+    table: hTab ? {...R(hTab), data_rows: hTab.querySelectorAll('tbody tr, td').length, more_visible: vis(hMore),
+      th: [...hTab.querySelectorAll('th')].filter(th => vis(th) && getComputedStyle(th).display !== 'none').map(th => ({
+        text: th.innerText.trim(), left: R(th).left, right: R(th).right, clipped: th.scrollWidth > th.clientWidth + 1}))} : null,
+  } : null;
   const bn = document.querySelector('.ui2-banner');
   const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
-    product_text: productText, banner_box: bannerBox, expanders: expanders, p2: p2,
+    product_text: productText, banner_box: bannerBox, expanders: expanders, p2: p2, h1: h1,
     dev_surface_present: !!document.querySelector('.st-key-ui2_dev_surface'),
     banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
@@ -709,6 +812,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
            "last_content_bottom": round(m["last_content"]["bottom"], 1),
            "card_heights": m["card_heights"], "expanders": m.get("expanders"),
            "p2": ({k: (rd(v) if isinstance(v, dict) else v) for k, v in m["p2"].items()} if m.get("p2") else None),
+           "h1": m.get("h1"),
            "batch3": {"risk": rd(m["risk"]) if m.get("risk") else None,
                       "mode_box": rd(m["mode_box"]) if m.get("mode_box") else None,
                       "mode_content": m.get("mode_content"), "font_sizes": m.get("font_sizes"),

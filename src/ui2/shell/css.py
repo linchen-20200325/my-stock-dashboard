@@ -169,6 +169,34 @@ CSS = """
   .ui2-h-l1 [data-ui2-q="q2"]{grid-row:2}
   .ui2-h-l1 [data-ui2-q="q3"]{grid-row:3}
 }
+/* 💼 持股 W-11 批 1（DEC-141）：狀態行／建議持股水位空槽／Primary 空槽／持股表欄名。⛔ 圖、⛔ 紅、⛔ 假列。
+   DOM＝手機順序（建議持股水位→OneBrain→Primary→持股表）；桌機 grid：OneBrain／〔Primary｜建議持股水位〕／持股表。 */
+.ui2-h-status{display:flex;flex-wrap:wrap;gap:2px 14px;margin:6px 0 0 0;font-size:.85rem;line-height:1.5}
+.ui2-h-status__seg{white-space:nowrap}
+.ui2-h-status__seg[data-seg="portfolio"]{white-space:normal;overflow-wrap:anywhere;min-width:0}
+.ui2-h-body{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.ui2-h-body>*{min-width:0;margin:0}
+.ui2-h-primary{display:flex;align-items:center;gap:4px 10px;padding:6px 12px}
+.ui2-h-primary .ui2-section-title{margin:0}
+.ui2-h-primary .ui2-primary-slot__reason,.ui2-h-primary .ui2-primary-slot__spec{display:none}
+.ui2-h-table{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:2px 12px 8px 12px}
+.ui2-ht{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.85rem}
+.ui2-ht th{text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid rgba(128,128,128,.4);overflow-wrap:anywhere}
+.ui2-ht__x{display:none}
+.ui2-ht__more{font-size:.75rem;opacity:.75;margin:4px 0 0 0}
+.ui2-ht__empty{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 0 0 0}
+@media (min-width:769px){
+  .ui2-h-status{margin:0 0 8px 0}
+  .ui2-h-body{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);grid-template-areas:"ob ob" "pr cap" "tb tb";gap:8px 12px}
+  .ui2-h-ob{grid-area:ob}
+  .ui2-h-primary{grid-area:pr;display:block;min-height:240px;padding:2px 12px 8px 12px}
+  .ui2-h-primary .ui2-section-title{margin:8px 0 4px 0}
+  .ui2-h-primary .ui2-primary-slot__reason,.ui2-h-primary .ui2-primary-slot__spec{display:revert}
+  .ui2-h-cap{grid-area:cap}
+  .ui2-h-table{grid-area:tb}
+  .ui2-ht__x{display:table-cell}
+  .ui2-ht__more{display:none}
+}
 /* P2：OneBrain Outlook（上移後）與台股 Primary 誠實空槽——依內容高度；灰底說明、⛔ 紅、⛔ 圖 */
 .ui2-m-onebrain .ui2-row{border-bottom:0;padding:2px 0 4px 0}
 @media (min-width:769px){

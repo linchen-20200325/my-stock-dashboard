@@ -12,6 +12,7 @@ from shared.ui2_contract.models import (
     AccountVM, CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
     JudgementState, LookupResultVM, SearchBoxVM,
 )
+from shared.ui2_contract import text as _T
 from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_NOT_PROVIDED, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
@@ -209,6 +210,89 @@ def hold_l1_html(title_html: str, fs: FirstScreenVM) -> str:
     Wireframes §4.2／W-11（客戶 Q3 核准）排成：header 列＝標題＋主 CTA、其下三 tile（Risk Cap／目前曝險／組合狀態）、
     再其下今日需處理／下一步各一列。⛔ 不增刪任何欄位／元件／字樣，DOM 內容與 `data-ui2-q` 錨點全保留。"""
     return '<div class="ui2-h-l1">' + title_html + first_screen_html(fs) + "</div>"
+
+
+# ════════════════════════════════════════════════════════════════════
+# 💼 持股 W-11 批 1（DEC-141；客戶 2026-11-05 Q1~Q8）：僅版面／欄位結構／空槽——⛔ 資料接線、計算、新來源
+# ════════════════════════════════════════════════════════════════════
+def _hold_slot_chip() -> str:
+    return chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
+
+
+def hold_status_html(fs: FirstScreenVM) -> str:
+    """組合狀態行（Wireframes §4.1 ①／§4.2 header 列）：`組合：<既有欄位> · 資料日 <> · 判得出 <>`。
+
+    * 組合名稱／檔數＝**只取** VM 既有 `current_state` 欄位（有值顯示值、無值顯示其狀態字樣）；⛔ 另行取數／推算。
+    * 資料日（Q4）＝固定 `⬜ 資料日未提供`：未授權新增組合層日期定義或來源，⛔ 最舊一檔／今日／抓取時間頂替。
+    * 判得出 M／N（Q4/draft）＝固定 `⬜ 尚未提供`：⛔ 計算、⛔ 寫成可信度／機率。
+    """
+    cs = fs.current_state
+    name = cs.value_text if cs.value_text is not None else (cs.status_text or TEXT_NOT_PROVIDED)
+    return ('<div class="ui2-h-status" data-ui2-l1="hold_status">'
+            f'<span class="ui2-h-status__seg" data-seg="portfolio">{escape(_T.HOLD_STATUS_PORTFOLIO_LABEL)}：{escape(name)}</span>'
+            f'<span class="ui2-h-status__seg" data-seg="asof">{escape(_T.HOLD_STATUS_ASOF_LABEL)} {escape(TEXT_ASOF_MISSING)}</span>'
+            f'<span class="ui2-h-status__seg" data-seg="judged">{escape(_T.HOLD_STATUS_JUDGED_LABEL)} {escape(TEXT_NOT_PROVIDED)}</span>'
+            "</div>")
+
+
+def hold_action_row_html(field: FieldVM | None) -> str:
+    """今日需處理**單行**（Q6）：取代「是否需要行動／下一步」兩列的**畫面**（VM 兩欄位原樣保留，只是不再各占一列）。
+    內容＝VM 既有動作欄的 Capability 空槽字樣（Aggregator 前 `⬜ 尚未提供（待系統動作整合）`）；
+    ⛔ 計算動作、⛔ 「今日無需調整」、⛔ 把缺動作當全部續抱。保留錨點 `data-ui2-q="q2"`。"""
+    if field is None:
+        axis, state, chip = "capability", "not_provided", _hold_slot_chip()
+    else:
+        axis, state, chip = field.layer, _state_attr(field), status_chip_html(field)
+    return (f'<div class="ui2-qrow" data-ui2-q="q2" data-ui2-qname="是否需要行動" data-axis="{axis}" '
+            f'data-state="{state}"><span class="ui2-row__label">{escape(_T.HOLD_ACTION_LABEL)}</span> {chip}</div>')
+
+
+def hold_first_screen_html(fs: FirstScreenVM) -> str:
+    """💼 第一屏：現在狀態／context（Risk Cap・目前曝險）／**今日需處理單行**／主 CTA。與 `first_screen_html` 相比只少「下一步」一列（合併，Q6）。"""
+    rows = [qa_row_html("現在狀態", fs.current_state, qid="q1")]
+    rows += [qa_row_html(None, r, qid="ctx") for r in fs.context_rows]
+    rows.append(hold_action_row_html(fs.action_needed))
+    tail = ('<div class="ui2-qrow ui2-qrow--cta" data-ui2-q="q4" data-ui2-qname="主 CTA">'
+            + cta_html(fs.primary_cta) + "</div>")
+    return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
+
+
+def hold_l1_v2_html(title_html: str, fs: FirstScreenVM) -> str:
+    """標題 → 組合狀態行 → 第一屏（`hold_l1_html` 的 W-11 批 1 版；容器 class 不變，桌機規則沿用）。"""
+    return '<div class="ui2-h-l1">' + title_html + hold_status_html(fs) + hold_first_screen_html(fs) + "</div>"
+
+
+def hold_table_html() -> str:
+    """持股表（Q7）：桌機八欄表頭＋手機四欄（其餘四欄收進每列展開，CSS 控制）＋原因句；⛔ 假列／假成本／假報酬／「0 檔」。"""
+    ths = "".join(
+        '<th scope="col"' + ("" if mobile else ' class="ui2-ht__x"') + f">{escape(name)}</th>"
+        for name, mobile in _T.HOLD_TABLE_COLS)
+    return ('<div class="ui2-h-table" data-ui2-l1="hold_table" data-axis="capability" data-state="not_provided">'
+            f'<div class="ui2-section-title">{escape(_T.HOLD_TABLE_TITLE)}</div>'
+            f'<table class="ui2-ht" data-ui2-cols="{len(_T.HOLD_TABLE_COLS)}"><thead><tr>{ths}</tr></thead></table>'
+            f'<div class="ui2-ht__more">{escape(_T.HOLD_TABLE_EXPAND_HINT)}</div>'
+            f'<div class="ui2-ht__empty">{_hold_slot_chip()}'
+            f'<span class="ui2-primary-slot__reason">{escape(_T.HOLD_TABLE_REASON)}</span></div></div>')
+
+
+def hold_body_html(onebrain_html: str = "") -> str:
+    """第一屏之後（DOM＝手機順序：建議持股水位 → OneBrain → Primary 空槽 → 持股表；桌機由 CSS grid 排成
+    OneBrain／〔Primary｜建議持股水位〕／持股表，Q1=A：Primary 與建議持股水位在上、持股表在下）。
+
+    * Primary（Q2/Q3）：產業曝險／集中度；桌機維持預定高度、手機收成一行（標題＋`⬜ 尚未提供`）；⛔ 圖形元素、假橫條、0。
+    * 建議持股水位（Q5）：僅空槽；⛔ 讀 Risk Cap、⛔ 區間數字、⛔ 暗示已有上限。
+    """
+    cap = ('<div class="ui2-primary-slot ui2-h-cap" data-ui2-l1="hold_cap_slot" data-axis="capability" data-state="not_provided">'
+           f'<div class="ui2-section-title">{escape(_T.HOLD_CAP_TITLE)}</div>'
+           f'<div class="ui2-primary-slot__body">{_hold_slot_chip()}'
+           f'<span class="ui2-primary-slot__reason">{escape(_T.HOLD_CAP_REASON)}</span></div></div>')
+    ob = f'<div class="ui2-m-onebrain ui2-h-ob" data-ui2-l1="onebrain">{onebrain_html}</div>' if onebrain_html else ""
+    primary = ('<div class="ui2-primary-slot ui2-h-primary" data-ui2-l1="hold_primary_slot" data-axis="capability" data-state="not_provided">'
+               f'<div class="ui2-section-title">{escape(_T.HOLD_PRIMARY_TITLE)}</div>'
+               f'<div class="ui2-primary-slot__body">{_hold_slot_chip()}'
+               f'<span class="ui2-primary-slot__reason">{escape(_T.HOLD_PRIMARY_REASON)}</span></div>'
+               f'<div class="ui2-primary-slot__spec" data-ui2-spec="1">{escape(_T.HOLD_PRIMARY_SPEC)}</div></div>')
+    return '<div class="ui2-h-body">' + cap + ob + primary + hold_table_html() + "</div>"
 
 
 # ════════════════════════════════════════════════════════════════════
