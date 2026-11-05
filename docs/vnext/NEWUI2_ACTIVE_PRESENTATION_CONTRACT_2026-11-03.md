@@ -1,5 +1,7 @@
 # New UI2 Active Presentation Contract（現行唯一有效的 presentation contract；2026-11-03）
 
+> 📌 **2026-11-06 客戶最新方向，取代本文件舊導航／頁數／資料健康度布局文字（僅此四個呈現議題）**：正式 UI2 設計目標改為**五頁**（📊市場、🎯標的、💼持股、👤我的、🗂資料）、**頂部五頁導覽與 Active Sheet 切換／右上帳號**、手機橫滑，移除桌機 rail 與手機 ☰ drawer；完整健康度改在🗂資料，👤我的保留設定及資料頁入口。原「四頁唯一定案」「桌機左 rail」「手機 drawer」「健康度在我的」均**SUPERSEDED — 不得作新方案施工選型**。其餘已凍結的投資語意、暗色系、缺值／資料狀態五態、單一動作權威、W-11 順序、Evidence 完整性保持有效。本修改僅是**文件上對客戶新方向的標示**；更新 New UI2 正式導航契約、路由/測試/JS_V4、Sheet/OAuth 及手機可用性須先通過視覺與安全 Gate。詳見本 PR #1030 五頁規劃與 OneBrain 六領域設計；不得把 PR Draft 當已完成 UI 施工。
+>
 > ## ⛔ 讀我先：這是**現行唯一有效**的 New UI2 presentation contract
 >
 > 📌 **2026-11-04 較新客戶導航裁示（DEC-134）**：手機由「固定底部四格為唯一導航」改為「☰ 可收合左側抽屜四頁導航＋Google 登入入口」（正式細節待線框 Gate），桌機固定左 rail 不變。此較新裁示取代本檔與歷史 Wireframes 內**手機固定底部四格的定位／呈現規則**；四頁資訊架構仍然只有四頁。詳見 [NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md](NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md)。原文歷史保留、不因舊文仍在而恢復底部四格。
