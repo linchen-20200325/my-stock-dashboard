@@ -1862,3 +1862,10 @@
 - **新增 open 項**：`NUI2-DRAWER-STMAIN-FOCUS-STOP`（P3，L-1：`section.stMain` 開啟時仍可拿一次 Tab 焦點；`overflow:clip` 無效；SR 影響未驗）｜`NUI2-DRAWER-QUICK-CLICK-L8`（P3，快速連點多頁 1.56／1.59 最終頁不同，未釘預期）｜`NUI2-DRAWER-DEVICE-UNVERIFIED`（P2，iOS Safari／Android／Cloud CSP／Manage app／VoiceOver／TalkBack／Firefox／WebKit／不支援 inert 瀏覽器皆未驗）｜`NUI2-DRAWER-CLOSE-BUTTON-S14`（P3，✕ 關閉鈕待線框定案；本批**未加**，測試守衛禁默默加入）。
 
 - **T09 flake 分析與 JS 呼叫精確計數守衛（2026-11-05；補註，只追加）**：① `test_t09_thirty_page_switches_leave_no_inert` 偶發紅的根因＝**測試等待條件過寬**（換頁後殼的標籤輪替重建與 rerun 競態；非產品 JS、無 inert 殘留），已改等待條件（`Ui.wait_settled`），12 負載壓力下修前 19～20／20 失敗、修後兩版本各 30／30 通過；證據 `docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md`。② 新增 open 項 **`NUI2-DRAWER-TAP-DURING-RERUN`**（P3）：使用者在 rerun 未落定時點 ☰，開啟狀態可能因舊外層被輪替 hack 替換而遺失（既有降級機制的固有特性，非 JS_V4 引入；未改產品碼）。③ `NUI2-DRAWER-NEW-JS-GATE` 守衛補強：JS 呼叫改以「檔案×所在函式×精確次數」白名單（`tests/test_ui2_drawer_js_guard.py::JS_CALL_ALLOWLIST`），關閉 QA 變異 M8（同檔再加第二呼叫原本仍綠）。
+
+
+### New UI2 統一視覺與施工藍圖（2026-11-05，ChatGPT 直接設計；PROPOSED）
+- **文件：** `docs/vnext/NEWUI2_UNIFIED_VISUAL_AND_BUILD_BLUEPRINT_2026-11-05.md`。四頁（市場／標的／持股／我的）、共用外觀、桌機／手機帳戶入口、資料 Evidence 不變量、驗收與分批施工順序集中一份。此文件依 DEC-135／136 與 2026-11-05 使用者「將藍圖設計完給專案 AI 寫程式」的任務建立，**不取代 Active Contract**。
+- **狀態：** docs-only 視覺提案，待使用者核准 V-01～V-06；已核准契約 A 類與未核准版型 B 類分開。**不得把文件合併視為全面版型／Auth／P6／OneBrain 施工授權。**
+- **依賴：** #1020 仍為視覺 Batch 1 draft、#1021 為分工文件 PR（以 GitHub 最新實況為準）；後續不重複已合併的範圍。主圖無正式歷史序列、真機／Cloud 與 Digest coverage 尚未確認。
+- **後續：** 先完成 #1020／#1021 的現有合併 Gate；接著視覺裁示，再由 Claude Code 每批 ≤3 項施工；OneBrain 與 Auth 真接線分開 Gate。
