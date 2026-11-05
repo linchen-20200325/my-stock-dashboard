@@ -2,6 +2,8 @@
 
 This is NOT a dead-code oracle: reflection, runtime plugin loading,
 dynamic imports, and session keys are outside its evidence scope.
+Prefix selection includes from-import symbol paths as syntactic candidates;
+it does not resolve whether a symbol is a submodule, attribute, or re-export.
 Never imports application modules or writes to the repository.
 """
 from __future__ import annotations
@@ -78,7 +80,13 @@ def main(argv=None) -> int:
     prefix = args.prefix
     result["imports"] = [
         record for record in result["imports"]
-        if record["imported"] == prefix or record["imported"].startswith(prefix + ".")
+        if any(
+            candidate == prefix or candidate.startswith(prefix + ".")
+            for candidate in (
+                record["imported"],
+                ".".join(x for x in (record["imported"], record.get("symbol", "")) if x),
+            )
+        )
     ]
     result["selected_count"] = len(result["imports"])
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
