@@ -1118,3 +1118,7 @@
 - 獨立 QA 通過（0 FAIL），待合併（draft）；DEC-138 維持 Dark-only，不新增 Light 支援。
 - 局部修正、非整頁完成：W-11 Primary 圖／⑤ 建議持股區間／持股表未做（B 類，需草稿裁示）；限制保留於 BACKLOG／HANDOFF。
 - 下一個安全工作：💼 完整 W-11 與 🎯 精選線框草稿（須先出草稿裁示）。
+
+## 補註（2026-11-05｜💼 持股 W-11 未完成部分草稿）
+- 新增 docs-only 草稿 `docs/vnext/NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md`（draft PR，待視覺核准）；為 #1022 V-04 的線框與資料契約補充。DEC 未新增、未施工、BACKLOG 既有 open 項未關閉。
+- 結論（單組、待驗）：💼 目前僅能誠實空槽（持股類 canonical 需登入，UI2 無 auth contract）；裁示問題見該檔 §4。

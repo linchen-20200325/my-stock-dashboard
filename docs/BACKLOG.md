@@ -1871,3 +1871,5 @@
      - **新增 P3（open）**：(a) 三 tile 與 CTA 位置的**幾何守衛缺口**（突變 3 欄改 2 欄仍綠）；(b) CTA 變可用時**重評視覺與 DOM 順序**（CDP AX 樹順序＝DOM 順序，與 main 相同）；(c) 真機／Cloud／iOS／Firefox／WebKit／Real feed 視覺截圖／彩色 emoji 字型**未驗**。
      - **仍 open（B 類，需草稿裁示）**：W-11 Primary 圖、⑤ 建議持股區間、持股表。**A2（👤 去重 CTA）判 B，未動。**
      - **未將任何既有 open 項改為 closed。**
+
+- **💼 持股 W-11 未完成部分線框＋資料契約草稿（2026-11-05；補註，只追加；docs-only DRAFT PR，待視覺核准）**：新檔 `docs/vnext/NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md`。補 DEC-138 要求的 💼 草稿（Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日·判得出」行／今日需處理單行），為 PR #1022 §7 V-04 的線框與資料契約補充（#1022 只有段落級，無線框）。含 3 方案 Decision Gate（推薦 A＝沿用已核准 W-11）與 Q1～Q7 裁示問題。**不授權施工；未關閉任何既有 open 項**（`NUI2-VISUAL-BATCH1` 的 W-11 Primary／⑤／持股表／資料日行／需處理單行仍 open）。查證結論（單組、待驗）：對應 canonical 計算存在（L3 holdings／dividend_station／allocation、L2 concentration），但皆以登入後持股為輸入、UI2 無 auth contract 且 feed 禁呼叫 → 目前僅能誠實空槽。

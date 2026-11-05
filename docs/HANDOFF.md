@@ -993,3 +993,8 @@ DEC-086 規則已於 main，本表已落地。
 - DEC-138：維持 **Dark-only**，不新增 Light；Light 若可達且 chip 對比不合格須停手。
 - **未完成（仍 open，不得關閉）**：W-11 Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日」行；A2 判 B 未動；P3 守衛缺口與未驗項目見 BACKLOG `NUI2-VISUAL-BATCH1`。
 - 下一個安全工作：💼 完整 W-11 與 🎯 精選的線框草稿（**須先出草稿並取得裁示**才可寫 UI code）。
+
+## 補註（2026-11-05｜💼 持股 W-11 未完成部分草稿）
+- docs-only draft PR：`docs/vnext/NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md`（線框＋資料契約＋Q1～Q7 待裁示）。**不授權施工**；與 #1022（V-04）互補、不重疊；未改 `src/`／`tests/`／JS。
+- 仍 open（未關閉）：W-11 Primary 圖／⑤ 建議持股區間／持股表／資料日行／需處理單行。核准前 ⛔ 寫 💼 UI code。
+- 單組產出、未經第二組驗證；手機高度為 FAKE 量測＋估計，施工批須重量。
