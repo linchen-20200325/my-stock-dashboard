@@ -1058,3 +1058,19 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 9. **桌機 Account Area 與導覽（客戶 (14)，DEC-129）**：桌機左側 Navigation Rail＝Product／Logo → Login／Auth Status（compact Account Area）→ 📊🎯💼👤；未登入「登入」＋「⬜ 尚未登入」，已登入「✅ 已登入」＋必要使用者識別＋登出入口；不算第五頁、不增第五個主導航、⛔ 顯示 secret／credential、⛔ 從 URL／query 猜登入狀態；Authentication State 必須來自正式 auth contract（`ui2_account` 帳戶場景只是開發面 FAKE）；**手機仍固定四格導航**。auth 架構本體屬 Opus 5.5＋High Gate。
 10. **舊 presentation 假設退出 Active，且 tests／guards 同步清除（客戶 (14) §2、§5）**：要求 L2／L3 必須顯示於四主頁、expander 必須存在、①～④ 題號可見、raw／完整 Missing 在主頁、與新導覽衝突的登入位置、「OneBrain 只能讀 UI slice」等敘述不得是有效規則。保護這些舊假設的測試斷言應移除／改寫為不強制舊行為，並以最新 contract assertion＋防復活 teeth（UI 未改前為 `xfail(strict=True)`）取代；⛔ 不得用 skip／xfail 隱藏資料／語意安全測試，⛔ 不放寬 DEC-124 三軸、G2／G2F／G4／G9、no-write、白名單不變量、禁用字樣。
 11. **與既有規則的關係（撰寫組讀法，單組、未經第二組驗證）**：取代 §24.2「第一屏三層答不出＝FAIL」之第三層判準（已就地刪除線＋📌）；§19.2 資料中心責任落點改 👤 資料健康度；§24.1、§25 位階不變（本 DEC 為最新客戶 DEC）；與第 13 節（投資語意）、第 23 節（Scope Guard）、第 27 節（永久收尾 Gate）、第 28 節、第 29 節同向。`CLAUDE.md` §-1.5.D v3 §03-2 ①（UI 結構變更草稿先行）不受影響：新版面仍須先出文字線框。
+
+
+## 第 31 節｜ChatGPT × Claude Code 最小重工責任分工（DEC-138；客戶 2026-11-05）
+
+> **適用與位階**：本節為客戶最新跨工具協作分工的入口索引，正式裁示見 `docs/DECISIONS.md` DEC-138。它不凌駕 `CLAUDE.md`／`PROCESS.md`，也不自行給予任何產品碼、Auth、資料、Risk Cap、OneBrain 或新 Layout 施工授權。
+
+| 工作 | 主責 | 必須保留的獨立性／授權 |
+|---|---|---|
+| UI／UX 設計、線框、規格、文字文件與 Decision 記錄 | ChatGPT | 新 Layout／欄位／動線仍需客戶核准；文件 PR 仍走 GitHub Gate／CI／QA |
+| GitHub 狀態、Diff、PR／CI／QA 複驗與文件 PR 治理 | ChatGPT | GitHub 實況優先，PR 不得繞過 required check；不同角色的 QA 不得以自述取代 |
+| 應用程式、CSS／JS、OAuth、資料介接、測試程式實作及除錯 | Claude Code | 依核准規格、Minimum Sufficient Effort、程式安全邊界與既有獨立 QA 派工 |
+| 高風險、權限、費用、不可逆操作及新視覺規格 | 使用者 | 必須取得明確裁示，不得由任何 AI 冒充核准 |
+
+- **避免 Token 浪費**：ChatGPT 已完成的文件、設計、研究，直接作為施工輸入；Claude Code 不再重做同一份設計研究，除非發現實際錯誤或上位治理要求獨立複驗。
+- **最小必要例外**：Claude Code 在程式 PR 內可同步維護測試、技術文件、BACKLOG／HANDOFF 等交接，不必為了分工另外拆 PR；ChatGPT 亦可直接辦理 GitHub 支援的文件變更，但須使用獨立 branch／PR、保存證據，不直接推 main。
+- **衝突與停止**：本節僅界定 ChatGPT 與 Claude Code 的跨工具工作分工；Claude Code 內部的總管／subagent 分工、獨立 QA、資料憲法仍依 `CLAUDE.md`／`PROCESS.md`。出現衝突時先停下相關工作，記錄差異，不以本節悄悄放寬上位規則。
