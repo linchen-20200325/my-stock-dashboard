@@ -624,20 +624,33 @@ def source_hash(repo: Path) -> str:
     return h.hexdigest()
 
 
+def _git_head(repo: Path) -> str | None:
+    """純 Python 讀 HEAD sha（不呼叫外部 git：test_zz_test_portability）；讀不到 → None（測試會判紅）。"""
+    try:
+        head = (repo / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+        if not head.startswith("ref:"):
+            return head
+        ref = head.split(None, 1)[1]
+        f = repo / ".git" / ref
+        if f.exists():
+            return f.read_text(encoding="utf-8").strip()
+        for line in (repo / ".git" / "packed-refs").read_text(encoding="utf-8").splitlines():
+            if line.endswith(" " + ref):
+                return line.split()[0]
+    except Exception:
+        pass
+    return None
+
+
 def evidence_meta(repo: Path, chromium_version: str | None) -> dict:
     import datetime
-    try:
-        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(repo), text=True).strip()
-        dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--", "src/ui2", "app_ui2.py",
-                                              "tests/ui2_viewport"], cwd=str(repo), text=True).strip())
-    except Exception:
-        sha, dirty = None, None
+    sha = _git_head(repo)
     try:
         from importlib.metadata import version
         pw = version("playwright")
     except Exception:
         pw = None
-    return {"git_sha": sha, "git_dirty_ui2": dirty, "source_hash": source_hash(repo),
+    return {"git_sha": sha, "source_hash": source_hash(repo),
             "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
             "playwright_version": pw, "chromium_version": chromium_version}
 
