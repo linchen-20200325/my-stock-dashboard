@@ -2,13 +2,13 @@
 
 > **狀態：DRAFT／待視覺核准。docs-only。不授權任何施工**（不動 `src/`、`tests/`、JS、證據檔；核准前 ⛔ 寫任何 💼 UI code）。
 > **用途**：DEC-138 要求「💼 完整 W-11 與 🎯 精選須先出線框草稿裁示」；本檔是 💼 這一半。客戶裁示後才登記新 DEC，之後才由 Claude Code 依核准版施工（DEC-139）。
-> **誠實標示（§-2 規則 6）**：本檔由 AI 單組產出，**未經第二組獨立驗證**。凡「全稱句」（「沒有」「只有」「無來源」）都是我 grep 後的觀察，列在 §7 作待驗事項，後續不得當既定前提。
+> **誠實標示（§-2 規則 6）**：初稿由 AI 單組產出；**v0.2 已經第二組獨立複驗並依其發現修正 5 點**（見 §7），但複驗不保證窮舉。凡「全稱句」（「沒有」「只有」「無來源」）都是我 grep 後的觀察，列在 §7 作待驗事項，後續不得當既定前提。
 
 ## 0. 與其他文件的關係（先看這段）
 
 | 對象 | 關係 |
 |---|---|
-| **PR #1022**（`docs/newui2-unified-blueprint-20261105`，ChatGPT 統一藍圖，open／draft／未核准） | **不重複、不取代、不矛盾**。#1022 §4「💼 持股」只有**段落級**描述（第一眼／第二眼／需核准三行），**沒有 💼 的文字線框**；§7 把 💼 列為 **V-04**（「W-11 完整主圖／八欄表／資料日行／需處理單行及手機轉列」）。**本檔就是 V-04 的線框與資料契約補充**：只做差異／補充，並以「#1022 §4」「#1022 §7 V-04」「#1022 §2」引用其章節，不複製其全站 skin（V-01）、帳戶入口（V-06）等。#1022 未合併，若其章節編號日後改動，以其最終版為準。|
+| **PR #1022**（`docs/newui2-unified-blueprint-20261105`，ChatGPT 統一藍圖，open／draft／未核准） | **不重複、不取代、不矛盾**。#1022 §4「💼 持股」只有**段落級**描述（首屏／第二眼／需核准三行），**沒有 💼 的文字線框**；§7 把 💼 列為 **V-04**（「W-11 完整主圖／八欄表／資料日行／需處理單行及手機轉列」）。**本檔就是 V-04 的線框與資料契約補充**：只做差異／補充，並以「#1022 §4」「#1022 §7 V-04」「#1022 §2」引用其章節，不複製其全站 skin（V-01）、帳戶入口（V-06）等。#1022 未合併，若其章節編號日後改動，以其最終版為準。⚠️ **合併順序**：本批與 #1022 都在 `docs/BACKLOG.md` 末尾 append（重疊區），後合併者需先 rebase 並保留雙方補註（append-only，不得覆蓋對方）。|
 | PR #1023／#1025（資料血緣／死碼唯讀盤點） | 檔案**無重疊**（它們只動 `docs/vnext/DATA_*.md`、`scripts/audit_*`、`tests/test_audit_*`）。本檔 §3 的「canonical 來源」是我自己 grep 現行 main 所得，**未引用**其結論；#1023 對「未接線≠死碼」的立場（`src/ui2/` 未接 Real 的圖槽為 NOT DEAD）與本檔一致。|
 | DEC-138／139／140 | DEC-138：W-11 的 Primary 圖／⑤ 建議持股區間／持股表**尚未完成，不得宣稱整頁完成**；本檔不宣稱完成。DEC-139：設計歸文件、程式歸 Claude Code；本檔不含程式。DEC-140：資料分層清理是 ChatGPT 的特例任務，與本檔無交集；若日後同檔衝突，Claude 既有工作優先。|
 | 既有有效規格 | `NEWUI2_WIREFRAMES_2026-11-02.md` §4.1／§4.2／W-5／W-6／W-11／§9（客戶 Q3，DEC-123）、`NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md` §4、`NEWUI2_VISUAL_REFERENCE_AND_PAGE_EXPANSION_2026-11-04.md`（DEC-135／136）、`NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（DEC-128／129）。**衝突時以這些與 Active Contract 為準**。本檔不覆蓋任何已核准 W 點、風險語意、公式、資料來源。|
@@ -122,13 +122,13 @@ DEC-138 同時要求其餘限制保留；**本檔不關閉 BACKLOG／HANDOFF 任
 
 | 區塊 | ViewModel 欄位（草稿） | 三軸／狀態 | 現有 canonical 來源（grep 結果） | UI2 能否取用 | 資料日／stale／missing 表現 |
 |---|---|---|---|---|---|
-| **status 行：組合名稱** | `portfolio_name: str`（FieldVM `value_text`） | Capability（NOT_PROVIDED 至 Auth／綁定契約具備）；之後 Field | `src/services/holdings_service.py::HoldingsResult.portfolio_name`（L3，需 Google 綁定與選定 `SELECTION_OK`） | **否**——需登入；UI2 無 auth contract（#1022 §3、DEC-137 J-6），feed 禁呼叫 `get_holdings` | `⬜ 尚未提供（登入與 Sheet 操作尚未開放）`；**不得**用 FAKE／query 假裝；也不得顯示 Sheet ID 全碼 |
+| **status 行：組合名稱** | `portfolio_name: str`（FieldVM `value_text`） | Capability（NOT_PROVIDED 至 Auth／綁定契約具備）；之後 Field | `src/services/holdings_service.py::HoldingsResult.portfolio_name`（L3，需 Google 綁定與選定 `SELECTION_OK`） | **否**——需登入；UI2 目前**尚無正式 auth contract、僅有占位**（#1022 §3「目前正式登入能力尚無 contract，維持 capability 占位」；`src/services/ui2/vm_common.py::account_from_canonical` 的文案「登入與 Sheet 操作尚未開放」），feed 禁呼叫 `get_holdings` | `⬜ 尚未提供（登入與 Sheet 操作尚未開放，同 `vm_common.account_from_canonical` 既有文案）`；**不得**用 FAKE／query 假裝；也不得顯示 Sheet ID 全碼 |
 | **status 行：N 檔** | `held_count: int \| None` | 同上 | `HoldingsResult.held`（`held=True` 的列）；空清單是有效結果≠故障 | 否（同上） | 未綁＝`⬜ 尚未提供`；已綁且空＝「0 檔」是有效值（灰），**不得**混為同一態 |
-| **status 行：資料日** | `portfolio_as_of: date \| None` | Field（Missing 預設） | **查無「組合層」資料日**：只有逐檔價格 as_of（`dividend_station_service._price_asof_fields`，列內 `_detail`）。「最舊／最新」哪個代表整組是**新資料定義** | **否，且需客戶／Stop Gate**（Q4） | 無定義時顯示 `⬜ 資料日未提供`（`TEXT_ASOF_MISSING`）；⛔ 用抓取時間或今日頂替 |
+| **status 行：資料日** | `portfolio_as_of: date \| None` | Field（Missing 預設） | **查無「組合層」資料日**：只有逐檔價格 as_of（`dividend_station_service._price_asof_fields`，列內 `_detail`）。「最舊／最新」哪個代表整組是**新資料定義** | **否，且需客戶確認**（Q4；legacy 已有 DEC-102 逐檔分組先例） | 確認前一律顯示 `⬜ 資料日未提供`（`TEXT_ASOF_MISSING`）；⛔ 用抓取時間或今日頂替 |
 | **status 行：判得出 M／N** | `judged: int`、`total_lights: int`、`unjudged_rows: int` | JudgementState／coverage；**⛔ 寫成可信度／機率**（§4.1） | 計算在 legacy **L4／L5**：`src/ui/render/station_cards.py::aggregate_judged`／`tally_states` 與 `src/ui/views/page_hold.py::load_station`；底層列來自 L3 `dividend_station_service.get_station_rows` | **否**——UI2 禁 import `src.ui.*`；L3 尚無等價純函式（需先下沉 L3，屬程式批） | 分母動態（ETF 8 盞／個股 3 盞），0／0＝「無可算」≠可信；N 檔未評估＝`⬜ 尚未評估` |
 | **今日需處理（單行）** | `act_add`、`act_swap`、`act_reduce`、`act_pause_add`、`stay_n`、`unassessed_n`（皆 `int \| None`） | Field + Capability；Aggregator 前＝NOT_PROVIDED | 動作 id：`src/compute/etf/dividend_station.py`（`ACTION_PAUSE_ADD="pause_add"`）；digest：`dividend_station_service.build_station_digest`；`shared/decision_digest_rules.py::RULE_ID_ALLOWLIST`。**跨頁彙整（W-5／W-10）的 Aggregator 尚未實作**（`vm_common.aggregator_pending_field`） | **否** | Aggregator 前：維持 `⬜ 尚未提供（待系統動作整合）`（現況）。「今日無需調整」只在計入組皆 0 **且** 0 檔未評估；⛔ 未評估混進「無需調整」；⛔ 缺動作＝全部續抱 |
 | **⑤ 建議持股水位（市場端）** | `range_text: str`、`posture: str`、`cap_name: str`、`risk_cap_disclosure`、`has_risk_cap: bool` | Field／Judgement（缺有效上限＝`無法判定`，字串逐字取 `risk_cap_gate`） | `allocation_service.get_allocation()` → `shared/allocation_decision.AllocationDecision`（`final_lo/hi`、`range_text` 由 L3 供給）；legacy 讀法見 `page_hold.build_position_cap_card` | **現有 feed 不可**：`get_allocation()` **寫入** `_alloc_decision_cache` 等 session key，違反 `real_feed.py` 唯讀規則。唯讀替代 `get_macro_regime(strict=True, require_valid_risk_cap=True)` 回傳含 `exposure_limit_pct`，但 `real_canonical` 目前明文**不收**該欄（Risk Cap 恆 ⬜）。→ **要不要開這條路屬 Risk Cap 語意決策，不是 UI 決策**（Q5） | 位階契約**無 as_of**（`real_canonical` 檔頭）→ `⬜ 資料日未提供`；⛔ 與 Portfolio Risk Cap 並排或互相引用；⛔ 卡面放 DEC 編號；標題固定「建議持股水位（市場端）」 |
-| **Primary 圖** | 取決於 Q2：A) `industry_weights: tuple[(industry, weight_pct)]` + `unclassified_n`；B) `perf_series`／`benchmark_series` | Field（Missing 預設） | A) `src/compute/risk/concentration.py::compute_industry_concentration`（L2 純函式；查不到產業別不歸桶）+ L3 `stock_grp_service.get_industry_category`（取產業別）；B) `src/compute/etf/etf_calc.py::compute_portfolio_vs_benchmark`（L2）；`portfolio_deep_service` 檔頭自陳**不做匯率換算**。兩者的輸入皆為持股列→**同樣需要登入後的持股** | **否**（輸入＝持股，無 auth） | **無來源→僅能誠實空槽**：`⬜ 資料未備`＋原因，維持高度（桌機）；⛔ 假走勢／假橫條／0 長度；⛔ 以「無持股」冒充「0%」。一行 SPEC：頻率／單位／source／as_of／缺值規則 |
+| **Primary 圖** | 取決於 Q2：A) `industry_weights: tuple[(industry, weight_pct)]` + `unclassified_n`；B) `perf_series`／`benchmark_series` | Field（Missing 預設） | A) `src/compute/risk/concentration.py::compute_industry_concentration`（L2 純函式；查不到產業別不歸桶）+ L3 `stock_grp_service.get_industry_category`（取產業別）；B) `src/compute/etf/etf_calc.py::compute_portfolio_vs_benchmark`（L2）；`portfolio_deep_service` 檔頭自陳**不做匯率換算**。兩者的輸入皆為持股列→**同樣需要登入後的持股** | **否**（輸入＝持股，無 auth） | **無可被 UI2 取用的來源→僅能誠實空槽**：`⬜ 資料未備`＋原因，維持高度（桌機）；⛔ 假走勢／假橫條／0 長度；⛔ 以「無持股」冒充「0%」。一行 SPEC：頻率／單位／source／as_of／缺值規則 |
 | **持股表** | 每列：`ticker`、`name`、`held`、`asset_kind`、`asset_class`、`lots: float\|None`、`avg_price: float\|None`、`weight_pct`、`cost`、`price`、`return_pct`、`strategy_class`、`system_action`；外幣列標幣別 | 逐格 FieldState；`lots`／`avg_price` 缺＝`None`（**觀察清單列本來就無**，不是 0） | `holdings_service.get_holdings()`（列形狀見其 docstring）→ `dividend_station_service.get_station_rows`／`compute_portfolio_totals`（含張→股→元換算，`SHARES_PER_LOT`）；策略分類 `src/data/portfolio/strategy_class_reader.py`；System Action 待 Aggregator | **否**（需登入；且 System Action 無來源） | 無列＝`⬜`＋原因（未綁／空／登入逾時三種指路句不同，沿用 legacy `HoldingsReadout` 分流）；外幣列 ⛔ 與 TWD 加總（DEC-101(1)）；報酬缺價＝`⬜`不填 0；`⬜ 未分類` 為策略欄既有字樣 |
 | **今日需處理清單** | 列：分支原名（加／換／減／暫停加碼…）＋標的＋「⚠ Risk Cap 無法判定」旗標 | 同需處理 | 同需處理；`dividend_station_service.flag_take_profit`、`build_switch_advice` | 否 | 同需處理 |
 | **OneBrain 持股摘要** | 保持現有槽 | Capability NOT_PROVIDED | 無（Stage G；`Digest` 完整 coverage 稽核獨立：`ONEBRAIN_FULL_EVIDENCE_COVERAGE_AUDIT_PLAN_2026-11-04.md`） | 否 | `⬜ 尚未提供`；⛔ 現行 Gemini 直呼路徑 |
@@ -136,8 +136,9 @@ DEC-138 同時要求其餘限制保留；**本檔不關閉 BACKLOG／HANDOFF 任
 
 ### 3.2 結論（單組、待驗）
 
-1. **現行 repo 有對應的 canonical 計算**（L3 `holdings_service`／`dividend_station_service`／`allocation_service`、L2 `concentration`／`etf_calc`），但**全部以「登入後的持股」為輸入**；UI2 目前**沒有** auth contract，Real feed 也明文禁止呼叫持股／帳戶／會寫 session 的函式。
-2. 因此在 Auth 契約與 feed 規則改變前，💼 的 Primary 圖、持股表、需處理、status 行 **「無 UI2 可取用來源→僅能誠實空槽」**；線框與 VM 欄位可以先定，**但施工只能是「版面＋空槽＋欄位契約」，不是接資料**。
+0. **補正（獨立複驗發現）**：repo 內**存在不經瀏覽器登入的持股讀取路徑**——`src/data/portfolio/gsheet_sa_reader.py`（L1，headless Service Account）的 `load_sa_credentials()`／`read_holdings(sheet_id, creds_dict)`／`read_watchlist(sheet_id, creds_dict)`；憑證與 Sheet 來自環境變數 `GCP_SERVICE_ACCOUNT_JSON`、`PORTFOLIO_SHEET_ID`、`STOCK_PORTFOLIO_SHEET_ID`；無 streamlit、不寫 session；使用者是 `scripts/push_holdings_daily.py` 與 `.github/workflows/push_holdings_daily.yml`（每日推播 cron）。**但 UI2 不可直接取用**：(a) 它是 L1，UI2 守衛 G2F（real feed 禁 `src.data`）與 G4（UI2 獨立性）都不允許；(b) 需要 secrets，Streamlit Cloud 不一定配置，且 SA 需被分享 Sheet；(c) 涉及個人持股隱私，且繞過尚未定案的 Auth Gate（誰的持股、誰能看）。故下面「無來源」一律讀作「**無可被 UI2 直接取用的來源**」，而非「repo 內完全沒有不登入的讀法」。是否開放此路徑或日後的 snapshot 檔作持股來源 → **Q8**。
+1. **現行 repo 有對應的 canonical 計算**（L3 `holdings_service`／`dividend_station_service`／`allocation_service`、L2 `concentration`／`etf_calc`），但**全部以「登入後的持股」為輸入**（SA 路徑見上方第 0 點，UI2 不可直接用）；UI2 目前**尚無正式 auth contract**，Real feed 也明文禁止呼叫持股／帳戶／會寫 session 的函式。
+2. 因此在 Auth 契約與 feed 規則改變前，💼 的 Primary 圖、持股表、需處理、status 行 **「無可被 UI2 直接取用的來源→僅能誠實空槽」**；線框與 VM 欄位可以先定，**但施工只能是「版面＋空槽＋欄位契約」，不是接資料**。
 3. 少數「與持股無關、只與市場有關」的候選是 ⑤（市場端），其唯讀取用方式需 Q5 裁示。
 4. 另有兩個**要先下沉才可取用**的點：判得出 M／N（目前在 legacy L4／L5）、跨頁 Aggregator（尚未實作）。兩者是程式批，不在本草稿。
 
@@ -148,10 +149,11 @@ DEC-138 同時要求其餘限制保留；**本檔不關閉 BACKLOG／HANDOFF 任
 | **Q1** | 版面用哪一案？（A 原案／B 表優先／C 手機順序變體） | **A** | 已是客戶 Q3 核准結構；B／C 需重核准且目前沒有資料可讓它們更好 |
 | **Q2** | Primary 圖要畫什麼？原線框寫「產業曝險／集中度圖」；#1022／Visual Reference 寫「績效／benchmark」。 | **產業曝險／集中度**（沿 W-11 已核准線框；績效／benchmark 另放 L1 之下的 `⬜ 資料未備` 行） | 兩者都需持股資料，但前者算式在 L2 已存在（`compute_industry_concentration`），後者受 `portfolio_deep_service` 自陳「不做匯率換算」限制；沿用已核准文字少一次重核准 |
 | **Q3** | 手機上，Primary 無資料時是否收斂成**一行**空槽（#1022 §2 對「小圖」允許，對 Primary 要求維持高度）？ | **手機收斂為一行、桌機維持高度** | 手機垂直空間貴；兩者都明確標 `⬜` 與原因，不假裝是圖 |
-| **Q4** | 「資料日」要代表什麼？目前**組合層沒有定義**，只有逐檔價格日。選項：以「最舊一檔價格日」（保守）／「最新」／僅顯示 `⬜ 資料日未提供`。 | **最舊一檔價格日**（保守，標示「最舊」），但這是新資料定義→需你拍板後才能寫 | 最舊日不會讓過期價格看起來新鮮；未拍板前一律 `⬜ 資料日未提供` |
+| **Q4** | 「資料日」要怎麼呈現？**legacy 已有客戶核准先例（DEC-102，XV-ASOF，2026-10-28）**：`src/ui/views/page_hold.py` 約 2177–2232 行（`_hold_asof_items`／`_price_asof_facts`、常數 `HOLD_ASOF_*`）逐檔取 `PAL.PriceAsOf`（`shared/price_asof_label.py`），以**字樣分組**：嚴格過半者為「多數字樣（N 檔）」，其餘以「例外字樣＋代號清單」另列；無過半則寫「各檔不一致，逐組列在下面」。程式**沒有**算出單一組合日期（觀察所得；我未在 DEC-102／線框文字中找到「刻意不採」的明句）。選項：①沿用 DEC-102「多數＋例外分組」／②「最舊一檔價格日」單一日期／③僅顯示 `⬜ 資料日未提供`。 | **①沿用 DEC-102 分組**（**需客戶確認**把它延伸到 UI2 💼 status 行）；**確認前一律顯示 `⬜ 資料日未提供`**。⚠️ 初稿曾推薦「最舊一檔」——**與已核准的 DEC-102 設計不同**，已撤回該推薦 | 分組已被客戶核准且逐檔真值可追溯；單一「最舊」日期是新資料定義，會把「多數是今天、一檔是上週」壓成一個日期而丟掉例外資訊（為何 DEC-102 不用單一日期是**我的推測**）；status 行篇幅有限，可能只放多數字樣＋「另有例外」指回下方，細節待線框確認 |
 | **Q5** | ⑤「建議持股水位（市場端）」要不要在 UI2 💼 先接上？現有唯讀路徑會碰 Risk Cap 欄位（`exposure_limit_pct`），而 UI2 現在是刻意不收。 | **先不接，維持空槽 `⬜`**；Risk Cap 數值 Gate（Q1=A 的後續）定案後再一起接 | 避免在 Risk Cap 未定案前，把「建議區間」讀成「已啟用上限」（W-11 §9 明文禁止） |
 | **Q6** | 「今日需處理」在 Aggregator 未完成前，是維持兩列 `⬜`（現況）還是先合成**一行 `⬜ 尚未提供`**？ | **合成一行**（只改版面，內容仍 `⬜`） | 對齊線框、省 ~40px；不增加任何動作邏輯 |
 | **Q7** | 持股表在沒有登入資料時，是顯示一張**空表頭＋原因**，還是維持現在一張占位卡？ | **空表頭（欄名可見）＋原因句** | 讓客戶一眼看到欄位結構，不會誤以為少了功能；不畫假列 |
+| **Q8** | 是否允許 UI2 💼 日後以 **Service Account 路徑**（`gsheet_sa_reader`）或**由 cron 產出的 snapshot 檔**當持股來源？（涉及隱私、secrets、Auth Gate 與「誰的持股」） | **先不開放，維持誠實空槽**；待 Auth contract 與隱私模型定案後再議 | 避免繞過登入把個人持股暴露給未驗證的瀏覽者；SA 路徑是單一使用者 cron 設計，非多使用者 Web 契約 |
 
 ## 5. 不在本批（B／C 類，需另行 Gate）
 
@@ -168,8 +170,9 @@ DEC-138 同時要求其餘限制保留；**本檔不關閉 BACKLOG／HANDOFF 任
 
 ## 7. 已知限制與待驗事項（誠實標示）
 
-1. **單組產出、未經第二組驗證。** 下列全稱觀察皆為我的 grep 結果，不得當既定前提：
-   - 「UI2 現無任何可取用的持股／Primary／持股表來源」——我只搜了 `src/data`、`src/services`、`shared/ui2_contract`、`src/services/ui2`、`src/ui/views/page_hold.py`、`src/compute/risk`，**未窮舉**其他目錄。
+0. **本草稿已經第二組獨立複驗，本版（v0.2）的 5 項修正（SA 讀取路徑、DEC-102 資料日先例、auth 引用、合併順序、用詞）皆來自該複驗。** 但**複驗不等於窮舉**：以下觀察仍須視為待驗。
+1. **初稿單組產出，修正版僅經一組複驗，未窮舉。** 下列全稱觀察皆為 grep 結果，不得當既定前提：
+   - 「UI2 現無任何**可直接取用**的持股／Primary／持股表來源」（複驗已發現漏列 `gsheet_sa_reader`，故此句也可能仍有遺漏）——我只搜了 `src/data`、`src/services`、`shared/ui2_contract`、`src/services/ui2`、`src/ui/views/page_hold.py`、`src/compute/risk`，**未窮舉**其他目錄。
    - 「組合層沒有資料日定義」——只在 `holdings_service`／`dividend_station_service`／`page_hold.py` 搜過。
    - 「Aggregator 未實作」依 `vm_common.py` 與 `real_canonical.py` 檔頭文字，未檢查全 repo 是否另有實作。
 2. 手機高度數字來自 **FAKE** 量測（`fb466d15`，早於 #1020）；「新增高度」皆為估計。

@@ -1873,3 +1873,5 @@
      - **未將任何既有 open 項改為 closed。**
 
 - **💼 持股 W-11 未完成部分線框＋資料契約草稿（2026-11-05；補註，只追加；docs-only DRAFT PR，待視覺核准）**：新檔 `docs/vnext/NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md`。補 DEC-138 要求的 💼 草稿（Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日·判得出」行／今日需處理單行），為 PR #1022 §7 V-04 的線框與資料契約補充（#1022 只有段落級，無線框）。含 3 方案 Decision Gate（推薦 A＝沿用已核准 W-11）與 Q1～Q7 裁示問題。**不授權施工；未關閉任何既有 open 項**（`NUI2-VISUAL-BATCH1` 的 W-11 Primary／⑤／持股表／資料日行／需處理單行仍 open）。查證結論（單組、待驗）：對應 canonical 計算存在（L3 holdings／dividend_station／allocation、L2 concentration），但皆以登入後持股為輸入、UI2 無 auth contract 且 feed 禁呼叫 → 目前僅能誠實空槽。
+
+- **💼 持股 W-11 草稿 v0.2 補註（2026-11-05；只追加）**：`NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md` 已經第二組獨立複驗並修正 5 點：補列 `gsheet_sa_reader`（headless SA，UI2 不可直接用，新增 Q8）、資料日 Q4 改推薦沿用 DEC-102 分組（需客戶確認；確認前 `⬜ 資料日未提供`）、auth 引用改 #1022 §3 與 `vm_common.account_from_canonical`、§0 補與 #1022 BACKLOG 末尾 append 重疊的合併順序、§7 揭露更新。仍 docs-only DRAFT，待視覺核准；未關閉任何既有 open 項。
