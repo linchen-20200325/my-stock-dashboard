@@ -27,3 +27,12 @@ C **研究候選不得啟用**：大盤 EPS×PE（缺正式 index forward EPS）
 2. Claude Code 分 1~3 項安全批次完成 approved presentation-only，保持 390/1440/a11y 和現有 W-11 手機順序；避免衝突 Work A 所有正在改動的資料契約。
 3. 獨立 lineage/Gate 稽核 producer→canonical→Domain→Digest→LLM→Page；按 A/B/C 層級逐個接線。未過 High Gate 不改 AI runtime/LLM tools/訊號門檻/新來源。
 4. 獨立 QA／CI／合併後同步正式治理文件，不能把此暫定設計文件視為已經 merge 或 production 已實作。
+
+## 7. 2026-11-06 最新 OneBrain 架構（取代舊「每頁一個獨立 AI」與泛泛總結文字）
+- 使用者提供基金專案的**架構參考**：唯一 Canonical Data → 可追溯 Evidence Registry 與確定性 Domain 計算 → UI ViewModel 與 Decision Digest **雙投影** → **同一 OneBrain 協調六個領域分析單元** → 全域整合/反證檢查 → 所有使用者可見的白話文分析。**只借架構，不搬基金 NAV、配息、同類基金、換檔等專用公式或資料**。
+- 台股六個領域分析單元：①市場趨勢（台股/國際/景氣）；②籌碼資金（外資/投信/融資/集保）；③財報品質（EPS/營收/OCF/FCF/財務體檢）；④產業前景（AI/CSP/訂單/產業供需，僅 approved research context）；⑤持股風險（直接/ETF 穿透/集中度/公司事件）；⑥資料稽核（完整性/新鮮度/缺失/矛盾）。這是**任務分域**，不是六個不連動 AI，也不是強制每次跑六次 LLM。
+- 四個主要分析分頁可有自己的 scoped OneBrain 入口；👤我的優先登入/設定/稽核；另設全域總結 OneBrain 交叉比對領域報告並回查 evidence IDs、正反證、資料日期和 coverage manifest；總結不能只對 AI 文字做二次潤稿。
+- 所有 OneBrain 報告均用**白話文**：一句話現況→短/中/長→支持與反證→無法確認之處→下一步追蹤；歷史研判和預測不得冒充已發生事實。**短/中/長不等於固定 3/6/9 個月**。
+- 只有已核准 adapters 取得外部資料，OneBrain 本體**無任意網路搜尋、新 API、資料寫入權限**。完整 headless evidence 不從 UI 卡片/Top-N 萃取；token 限制以分批、內部只讀回查、manifest + deterministic coverage gate 解決，不能 silent truncation。
+- 舊規則衝突：main 的四頁上限、👤我的內建完整資料健康度、桌機左 rail、手機抽屜 JS_V4 的**呈現布局**，將由使用者最近核准的五頁＋頂部導航/Sheet/右上帳號取代。真正刪除程式/JS_V4/guard 或改 auth，必須另行完成正式 DEC/Active Contract/路由/瀏覽器 QA；**歷史決策原文與安全守衛不得直接刪除**。
+- 新 UI2 **Dark-only**；基金截圖僅供導覽與 OneBrain 佈局參考，禁止將基金領域決策搬到股票專案。
