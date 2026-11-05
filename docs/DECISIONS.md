@@ -7660,3 +7660,13 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **衝突規則**：Claude Code 目前／後續已授權工作**優先**；ChatGPT 每批修改前重新確認 GitHub main、Open/Draft PR、head/diff、branches、CI 與預定檔案 owner。若同檔或同資料契約／同測試／同 workflow／同 SSOT 有重疊，ChatGPT **停止或縮小自己的批次**，不可覆蓋、推擠或重設 Claude 分支；不要求 Claude 為本次清理讓路。
 - **落地要求**：安全小批、獨立 branch／PR、必要 tests／CI／獨立 QA；無法取得完整工作樹或執行足夠驗證時僅能唯讀探勘／文件化，不得將未驗證刪碼合併或宣稱已完成。對不可逆資料、Risk Cap、來源／公式與 UI Layout 仍適用原有客戶 Gate。
 - **決策者**：使用者；**範圍**：本次資料架構與死碼清理特例；**日期**：2026-11-05。此 DEC 合併到 main 前僅存在於 PR 分支。
+
+### DEC-142｜New UI2 五頁頂部導航＋六領域 OneBrain 整合與規則清理（客戶 2026-11-06）
+
+- **客戶本對話明確確認**：「Sheet 的分頁選單可以改成上方嗎 左側的收縮板可以不用了」；「這張是參考圖」；「記得把新的規則寫進GitHub 中，移除不適用的規則，避免專案AI看錯，做錯」；「還有稍早談的都要喔」；提供基金專案唯一資料層/Evidence/Digest/分域 OneBrain＋全域整合的架構圖片，並確認「記得新增規則，移除不適用規則」。
+- **產品方向**：採台股 New UI2 五頁（市場、標的、持股、我的、資料）＋手機與桌機頂部導航、頂部 Active Sheet 選擇器、右上帳號入口，不再以左 rail 或手機抽屜作新版正式呈現方向。Dark-only、Mobile-first、登入安全不變；基金截圖僅作 UX／AI 架構參考，不得移植基金公式。
+- **OneBrain 方向**：單一核准資料層／Evidence Registry／確定性 Domain／UI ViewModel 與完整 Decision Digest 分離；**一套 OneBrain 協調六個台股研究單元**（市場、籌碼、財報、產業、持股、資料稽核），分頁 scoped 啟動，另以全域複查回查證據與反證，所有報告使用白話文。短／中／長（非固定 3/6/9）；AI 嚴格禁止自行取外部事實或寫入，Token 超限不能靜默漏料，依必要證據清單與確定性 coverage Gate 降級 partial。
+- **已討論的承接**：第一版財報體檢、法人／集保、國際市場、持股與 ETF 曝險能力保留；C 級只主動研究使用者提供的 2026/10 市場 PDF 有關大盤 EPS×PE、外資融資、國際利率與 AI 產業／FCF，其他 C 級候選此次不研究；正式介面用中性名稱。
+- **取代範圍**：舊四頁上限、👤我的內建完整資料健康度、桌機左 rail、手機 drawer 等**舊布局要求不再是新 UI2 的下一輪施工依據**，並於 PROJECT_RULES/Active Contract/Drawer Contract 標為 superseded；**不刪歷史裁示、正式程式/guards**。Single Action Authority、Risk Cap、資料狀態及缺值/來源有效性保留。
+- **施工限制**：這是已確認方向及設計規範，**不代表新 UI2 Layout/路由/Sheet OAuth/AI runtime/投資公式已獲准直接修改**；須先完成五頁視覺、資料契約、跨模組安全及測試 Gate，特別是 JS_V4 退場必須等價測試替代。PR #1030 為 Draft，合併與獨立 QA 前不能宣稱 main 已採用。
+- **決策者**：使用者；**日期**：2026-11-06；**來源**：本次對話客戶訊息（直接原文部分引文如上），詳細建議與未授權事項為 ChatGPT 設計解讀。
