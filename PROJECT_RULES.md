@@ -1074,3 +1074,10 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - **避免 Token 浪費**：ChatGPT 已完成的文件、設計、研究，直接作為施工輸入；Claude Code 不再重做同一份設計研究，除非發現實際錯誤或上位治理要求獨立複驗。
 - **最小必要例外**：Claude Code 在程式 PR 內可同步維護測試、技術文件、BACKLOG／HANDOFF 等交接，不必為了分工另外拆 PR；ChatGPT 亦可直接辦理 GitHub 支援的文件變更，但須使用獨立 branch／PR、保存證據，不直接推 main。
 - **衝突與停止**：本節僅界定 ChatGPT 與 Claude Code 的跨工具工作分工；Claude Code 內部的總管／subagent 分工、獨立 QA、資料憲法仍依 `CLAUDE.md`／`PROCESS.md`。出現衝突時先停下相關工作，記錄差異，不以本節悄悄放寬上位規則。
+
+
+### 31.1 本次特例：ChatGPT 直接重構資料分層／死碼（DEC-139；2026-11-05）
+
+- 客戶已特別核准將「資料分層剝離、死碼查證及安全移除」由 ChatGPT **直接負責（包含程式修改）**，是第 31 節一般 Claude Code 程式主責規則的狹義例外，不擴及其他程式需求。
+- **Claude Code 工作優先**：ChatGPT 每次動手前做 GitHub Verification Gate＋per-file/per-contract/per-test 衝突比對；若重疊，ChatGPT 必須停手／退讓／分批改範圍，不能以自己先開 PR 要求 Claude Code 改道。
+- 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-139。
