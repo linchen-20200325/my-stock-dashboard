@@ -234,3 +234,14 @@ JS 的 `(max-width: 768px)` 與 CSS 的 `@media (max-width:768px)` 是**兩處�
 ## 14. 本檔限制
 
 單組撰寫；未重跑研究組原型；§10 的「31 種變異全紅」「行為矩陣」皆為研究組單組結果，獨立 QA 前只是待驗事項；regex 白名單不是 parser；真機／SR／Cloud／CSP 未驗。
+
+
+## 15. 實作版本 JS_V4（2026-11-04，DEC-137；只追加，§1～§14 原文不動）
+
+- **V3→V4 diff（唯一改動）**：`keydown` 監聽內、`if (isOpen() && …)` 之前新增兩行——`const t = T();`（含註解）與
+  `if (e.key === 'Enter' && t && e.target === t) { t.click(); return; }`。理由：使用者要求 Enter／Space 都須明確驗證，V3 的 Enter 不開 ☰（R-11／L-7）；`click()` 走與 Space 相同的原生 checkbox 切換（click → change），不新增狀態路徑。
+- **白名單差異**：成員新增 `click`（寫入類 API 由 3 種變 4 種：`inert`／`checked=false`／`focus()`／`click()`，`click()` 只對 `.ui2-dr-toggle`）；字串字面值新增 `Enter`；其餘（全域、事件、selector、正則）不變。禁用清單不變。
+- **規範化 sha256（含 `<script>` 包裝）**：`c84d687fcaa246b7411ce1f1b927efcd230e9863fbaeb132b3fb10cb3702680a`（3350 字元）。JS_V3＝`24050f1b…606cd3`（保留為歷史）。守衛 `tests/test_ui2_drawer_js_guard.py` 釘 V4，並有測試證明「移除這兩行必須逐字回到 V3 雜湊」。
+- **模組**：`src/ui2/shell/drawer_js.py`（`DRAWER_JS_HTML` 模組層固定常數＋唯一 `st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)`）。守衛：AST 判準、白名單（regex，非 parser）、雜湊、New UI2 範圍只准此模組、`src/**` allowlist＝本模組＋EX-OAUTH-1（計數不增）、JS／CSS 斷點交叉比對、殼內 raw 互動 HTML 只准 ☰ toggle、抽屜不讀 `ui2_account`／`query_params`／`ui2_dev`。白名單另有測試要求「白名單成員＝實際使用成員」（防預留）。
+- **Enter 實測**：1.56.0／1.59.2 × Chromium，焦點在 ☰ 按 Enter 開啟並使焦點進當前頁 radio；再按 Enter 關閉；拿掉該分支（突變）Enter 不開——測試轉紅。
+- **本批仍為單組實作**：獨立 QA 由另一組做；未驗項見 PR 描述（iOS／Android／Cloud CSP／Manage app／VoiceOver／TalkBack／Firefox／WebKit／不支援 inert 瀏覽器）。

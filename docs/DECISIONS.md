@@ -7626,3 +7626,13 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **執行護欄**：缺值／資料時間／source／limitation 須保存；VM 保存不等於 Digest coverage 已完成，啟用前須逐欄驗證。OneBrain 應產出有依據的分析與建議，但不能自造事實、重寫 Risk Cap／System Action 或代替唯一動作權威，也不授權啟用 OneBrain runtime／新 API／交易動作。
 - **分軌驗收**：Visual Fidelity 和 Complete Evidence／Digest Coverage 必須分別查核；UI 隱藏不許縮減資料，Digest 補齊不許在 UI 恢復 raw evidence wall。詳細實作驗收附件見 `docs/vnext/NEWUI2_VISUAL_REFERENCE_AND_PAGE_EXPANSION_2026-11-04.md` §7。
 - **證據範圍**：圖片本體為對話附件，不是 GitHub 已存圖片；示意數值不能當正式來源。DEC-128～135 歷史保持 append-only。
+
+
+### DEC-137｜手機抽屜受控施工授權（使用者 2026-11-04）
+
+- **使用者原話（摘錄）**：「本輪由使用者授權恢復受控施工。優先完成 New UI2 手機抽屜導航」；手機左上角 ☰、預設收合不佔主畫面寬度、展開顯示四頁（📊 市場／🎯 標的／💼 持股／👤 我的）及 Google 登入入口、「點擊目前頁或其他頁都要收合」、支援 Esc／遮罩關閉／鍵盤操作／焦點進入與返回、「抽屜展開時背景不得被操作」、「關閉時抽屜內容不得殘留在可操作或無障礙導覽中」、☰ 佔既有 44px 頂部保留帶、首屏 ≥160px 守衛維持、「Google 登入正式接線前顯示 Capability『⬜ 尚未提供』，按鈕 disabled；不可用 FAKE 或 query 假裝登入」；桌機「保留既有固定左側導覽」「不額外建立第二個主導航」。「C+JS（JS_V3）為首選候選，不代表既有原文已免審核」；「☰ 的 Enter／Space 操作須明確驗證」；「不能讓背景 inert 誤傷抽屜或選單控制」；「任何 JS 原文修改，都重新執行安全 Gate 與獨立 QA」；「既有守衛只能改為等價或更嚴格，不得刪除降級」。
+- **採用的路線**：C+JS（CSS checkbox 抽屜＋一段固定常數 JS）。JS 由 JS_V3 **最小修補為 JS_V4**（只新增「焦點在 ☰ 時按 Enter → `click()`」兩行；白名單新增成員 `click`），其餘關閉態 a11y 殘留以零 JS CSS 修法處理。詳見 JS 安全設計 §15。
+- **J-6 採 B**：抽屜／rail 帳戶摘要固定占位，歸 **Capability 軸**（`⬜ 尚未提供`，`TEXT_NOT_PROVIDED`）；登入鈕 disabled；原因句「登入與 Sheet 操作尚未開放」；不讀 `ui2_account`／`ui2_dev`／query。**不撤銷 DEC-129**：其「⬜ 尚未登入」字面待正式 auth contract 具備後適用。
+- **範圍外（未動）**：P6 資料健康度、四頁視覺重排、OAuth／Sheet、OneBrain runtime、Digest schema、Risk Cap／System Action、投資公式、新資料來源、P7 Account Area；✕ 關閉鈕未加（S-14 待線框定案）。
+- **決策者**：**使用者**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：New UI2 手機導航施工。
+- **狀態**：施工 PR 為 draft；Visual Fidelity／獨立 QA／真機項未驗；`ui2-browser-gate` 需 user 在 GitHub 設為 required check 後才算強制。

@@ -1096,3 +1096,12 @@
 - **未授權**：抽屜／P6 施工、JS、workflow 變更；P7、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）未動；DEC-128..134 與 Active Contract 一字未動。
 - **未驗**：iOS／Android 真機、Streamlit Cloud／Manage app、CSP、VoiceOver／TalkBack、Firefox／WebKit、GitHub Actions runner 耗時；瀏覽器數字皆研究組單組 Chromium 結果，撰寫組未重跑。
 - **§27 檢查**：新 Decision＝無（DEC 落盤由 ChatGPT／客戶決定）；新 Rule＝無；Backlog＝新增 `NUI2-DRAWER-UNIFIED-BUILD-SPEC`、`NUI2-DRAWER-JS-SAFETY-DESIGN`、`NUI2-DRAWER-TEST-ACCEPTANCE-SPEC`、`NUI2-DRAWER-CI-BROWSER-LANE`、`NUI2-DRAWER-CLOSED-A11Y-RESIDUAL`，並對 `NUI2-DRAWER-NEW-JS-GATE`／`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS` 補註；Audit Checklist §27 新節（未自勾）。
+
+
+## 68. New UI2 手機抽屜施工（2026-11-04；DEC-137；實作組單組；獨立 QA 待做）
+
+- **已做**：手機 ☰＋左側抽屜（預設收合）、桌機 176px rail 不變；JS_V4（固定常數、雜湊釘住）；帳戶摘要固定占位（Capability「⬜ 尚未提供」、disabled 登入鈕）；L-4 CSS 修法；viewport 判定器／既有守衛等價或更嚴改寫；Playwright `ui2_browser` lane（1.56.0／1.59.2 各 52 passed、skipped 0）；CI `ui2-browser`＋`ui2-browser-gate`；證據 JSON 加 meta 並重生（1.59.2／1.56.0；FAKE 70 態、Real 11 態全過；stale 181.6／unavailable 162.5 逐位相同）。
+- **路徑比較**（見 PR 描述）：(a) JS_V3 原文照用＝Enter 不可用、不符使用者要求；(b) V3＋最小修補（Enter 兩行＋CSS L-4 修法）＝採用；(c) C-pop＝需重新裁示、不採。
+- **未通過／限制（不標 PASS）**：L-1 `stMain` 焦點停靠；L-2 新節點約 1 frame 未 inert；L-3 不支援 inert 的瀏覽器；L-5 body 層 portal／Manage app 浮層不被 inert；L-6 ☰ 在 DOM 末端；L-8；`ui2-browser-gate` 尚未被設為 required；真機／SR／Cloud CSP 未驗。
+- **未動**：P6、四頁視覺、OAuth／Sheet、OneBrain、Digest、Risk Cap／System Action、公式、資料來源、P7、`NUI2-AUTH-CONTRACT-GATE`；DEC-128..136 與 Active Contract 文字一字未動。
+- **§27 檢查**：新 Decision＝DEC-137；新 Rule＝無；Backlog＝補註＋4 個新 open 項；**Audit Checklist 未自勾**（待獨立 QA）：□ 獨立 QA 複驗 □ Visual Fidelity（截圖 `docs/vnext/newui2_drawer_impl/`，需客戶確認）□ required check 設定 □ 真機。

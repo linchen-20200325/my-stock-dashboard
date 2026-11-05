@@ -971,3 +971,14 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | `docs/vnext/NEWUI2_MOBILE_DRAWER_UNIFIED_BUILD_SPEC_2026-11-04.md`、`…JS_SAFETY_DESIGN_2026-11-04.md`、`…TEST_AND_ACCEPTANCE_SPEC_2026-11-04.md`；`docs/BACKLOG.md` 末「手機抽屜統一施工規格…登記」；`docs/PROJECT_STATE.md` §67；Audit Checklist §27（**未自勾**） |
 | 未驗 | iOS／Android 真機、Cloud Manage app、CSP、VoiceOver／TalkBack、Firefox／WebKit、Actions runner 耗時；瀏覽器數字為研究組單組 Chromium 結果 |
 | 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把候選 JS 當已核准或放進任何可執行檔；⛔ 把治理採用當客戶視覺驗收或 DEC；⛔ 宣稱已解決 Manage app 遮擋；⛔ 施工 PR 只刪守衛；⛔ 52px／8px ☰ 配置 |
+
+
+- **Safe Handoff（2026-11-04 手機抽屜施工批；現行；實作組單組、獨立 QA 待做）**（本表**取代**上方抽屜相關 Safe Handoff 的「下一個唯一安全工作」）
+
+| 欄位 | 內容 |
+|---|---|
+| **下一個唯一安全工作** | ① 獨立 QA 複驗本批 draft PR（JS 安全 Gate、守衛改寫等價性、變異）；② **user 在 GitHub 將 `ui2-browser-gate` 設為 required check**（Settings → Branches → Branch protection rules → main → Require status checks；未設定前 required **未生效**，總管停在 PR、不合併）；③ 客戶／使用者確認 390 收合／展開與 1440 截圖（`docs/vnext/newui2_drawer_impl/`）。之後才是四頁視覺施工（DEC-135／136）接手點 |
+| 已完成 | 抽屜殼、JS_V4（`src/ui2/shell/drawer_js.py`）、守衛、`ui2_browser` lane、CI jobs、證據重生（見 PROJECT_STATE §68） |
+| 未通過／限制 | L-1 `section.stMain` 焦點停靠、L-2、L-3、L-5、L-6、L-8；✕ 關閉鈕未加（S-14） |
+| 未驗（待真機／平台） | iOS Safari、Android 真機、Streamlit Cloud（含 Manage app）、CSP、VoiceOver、TalkBack、Firefox、WebKit、不支援 inert 瀏覽器 |
+| 仍禁止 | 把本批當客戶視覺驗收；改 JS 原文而不重過 Gate（雜湊會紅）；加第二處 `unsafe_allow_javascript`；讓抽屜讀 `ui2_account`／query；開 P6／P7／OAuth |

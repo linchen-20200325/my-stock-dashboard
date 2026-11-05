@@ -948,3 +948,35 @@ def test_exception_code_uses_class_name_without_dunder_access():
     assert RC.exception_code(_json.JSONDecodeError("m", "d", 0)) == "JSONDecodeError"
     assert RC.exception_code(RC.RealFeedContractError("x")) == RC.CONTRACT_ERROR == RC.RealFeedContractError.__name__
 
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEC-137：證據 JSON 防沉默通過（測試規格 §2.5）——meta.source_hash 必須等於現算的 src/ui2＋app_ui2＋measure_viewport 雜湊
+# ════════════════════════════════════════════════════════════════════
+_EVIDENCE_FILES = [("newui2_realfeed", "viewport_measurements.json"), ("newui2_realfeed", "viewport_measurements_streamlit156.json"),
+                   ("newui2_batch3b", "viewport_measurements.json"), ("newui2_batch3b", "viewport_measurements_streamlit156.json")]
+
+
+def check_evidence_fresh(meta: dict) -> list[str]:
+    bad = [f"meta 缺 {k}" for k in ("git_sha", "source_hash", "generated_at", "playwright_version", "chromium_version")
+           if not meta.get(k)]
+    if meta.get("source_hash") and meta["source_hash"] != MV.source_hash(ROOT):
+        bad.append("證據過期（source_hash 不符），請重跑 measure_viewport")
+    return bad
+
+
+@pytest.mark.parametrize("d,name", _EVIDENCE_FILES)
+def test_dec137_evidence_meta_is_fresh(d, name):
+    import json
+    meta = json.loads((ROOT / "docs" / "vnext" / d / name).read_text(encoding="utf-8"))["meta"]
+    assert check_evidence_fresh(meta) == []
+    want = "1.56." if "156" in name else "1.59."
+    assert meta["streamlit_version"].startswith(want)
+
+
+def test_dec137_evidence_freshness_guard_has_teeth():
+    import json
+    meta = json.loads((_EVID / "viewport_measurements.json").read_text(encoding="utf-8"))["meta"]
+    assert check_evidence_fresh(meta) == []
+    assert check_evidence_fresh({**meta, "source_hash": "0" * 64})
+    assert check_evidence_fresh({k: v for k, v in meta.items() if k != "source_hash"})
