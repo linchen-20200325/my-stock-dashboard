@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 import hashlib
 import pathlib
 import re
@@ -315,6 +316,152 @@ def test_src_global_javascript_count_does_not_grow():
     bad, hits = scan_tree(("src",), SRC_ALLOW)
     assert bad == []
     assert set(hits) == set(SRC_ALLOW), "allowlist 有過期項或新增 JS 檔"
+
+
+# ── 精確計數守衛（QA 變異 M8：同檔加第二個呼叫原本仍綠）：每個允許檔案 × 每種受控 JS 位置的「所在函式限定名＋精確次數」──
+#: 掃描根（現有範圍）：`src/**`、`shared/**`、`scripts/**`、`tools/**`、`app.py`、`app_ui2.py`、`mcp_server/**`。
+JS_SCAN_ROOTS = ("src", "shared", "scripts", "tools", "mcp_server", "app.py", "app_ui2.py")
+#: 白名單：{相對路徑: {(kind, 所在函式限定名): 精確次數}}。`<module>`＝模組層。次數或位置不符＝紅（含少於：呼叫被移走／刪除也要重過 Gate）。
+#: kind：`unsafe_js`＝帶 `unsafe_allow_javascript` 關鍵字的呼叫；`kw_ref`＝該字串出現在呼叫關鍵字以外（`**{'…':…}`、字典鍵、屬性）；
+#:      `components`＝`streamlit.components`／`st.components`／`components.v1|v2` 的 import 或屬性使用。
+JS_CALL_ALLOWLIST: dict[str, dict[tuple[str, str], int]] = {
+    "src/ui2/shell/drawer_js.py": {("unsafe_js", "render_drawer_script"): 1},               # 設計核准的唯一新位置（DEC-137）
+    "src/data/portfolio/oauth_state.py": {("unsafe_js", "maybe_silent_reauth"): 1},         # 既有 EX-OAUTH-1（base 已存在）
+    # 既有驗證探針腳本：把 `unsafe_allow_javascript=False` 寫在**字串**裡探測 kwarg 是否存在（不是呼叫、值為 False、非產品路徑）；精確 2 處字串
+    "tools/phase3_verify/appttest_floor156.py": {("kw_ref", "<module>"): 2},
+}
+
+
+def _qualnames(tree: ast.AST):
+    """yield (node, 所在函式／類別限定名)；模組層＝`<module>`。"""
+    out = []
+
+    def walk(node, stack):
+        for ch in ast.iter_child_nodes(node):
+            st = stack
+            if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                st = stack + [ch.name]
+            out.append((ch, ".".join(stack) or "<module>"))
+            walk(ch, st)
+    walk(tree, [])
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def count_js_calls(source: str) -> dict[tuple[str, str], int]:
+    tree = ast.parse(source)
+    doc_ids = set()
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body \
+                and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant):
+            doc_ids.add(id(n.body[0].value))
+    kw_ids = {id(k.value) for n in ast.walk(tree) if isinstance(n, ast.Call) for k in n.keywords
+              if k.arg == "unsafe_allow_javascript"}
+    counts: dict[tuple[str, str], int] = {}
+
+    def add(kind, q):
+        counts[(kind, q)] = counts.get((kind, q), 0) + 1
+    for node, q in _qualnames(tree):
+        if isinstance(node, ast.Call) and any(k.arg == "unsafe_allow_javascript" for k in node.keywords):
+            add("unsafe_js", q)
+        elif isinstance(node, ast.keyword) and node.arg is None and isinstance(node.value, ast.Dict):
+            if any(isinstance(k, ast.Constant) and k.value == "unsafe_allow_javascript" for k in node.value.keys):
+                add("kw_ref", q)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and "unsafe_allow_javascript" in node.value \
+                and id(node) not in doc_ids and id(node) not in kw_ids:
+            add("kw_ref", q)
+        elif isinstance(node, ast.Attribute) and node.attr == "unsafe_allow_javascript":
+            add("kw_ref", q)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            mods = [a.name for a in node.names] if isinstance(node, ast.Import) else \
+                [(node.module or "") + "." + a.name for a in node.names] + [node.module or ""]
+            if any(re.match(r"streamlit\.components(\.|$)", m) for m in mods):
+                add("components", q)
+        elif isinstance(node, ast.Attribute) and node.attr == "components" and isinstance(node.value, ast.Name) \
+                and node.value.id in {"st", "streamlit"}:
+            add("components", q)
+    return counts
+
+
+def check_js_call_counts(files: dict[str, str], allow=JS_CALL_ALLOWLIST) -> list[str]:
+    bad = []
+    for rel, src in sorted(files.items()):
+        got = count_js_calls(src)
+        want = allow.get(rel, {})
+        for k in sorted(set(got) | set(want)):
+            if got.get(k, 0) != want.get(k, 0):
+                bad.append(f"{rel}: {k[0]} 於 {k[1]} 次數 {got.get(k, 0)} ≠ 核准 {want.get(k, 0)}")
+    for rel in allow:
+        if rel not in files:
+            bad.append(f"{rel}: 核准檔不存在於掃描範圍")
+    return bad
+
+
+@functools.lru_cache(maxsize=1)
+def _js_scan_cached() -> tuple:
+    return tuple(_js_scan_read().items())
+
+
+def _js_scan_files() -> dict[str, str]:
+    return dict(_js_scan_cached())
+
+
+def _js_scan_read() -> dict[str, str]:
+    out = {}
+    for sc in JS_SCAN_ROOTS:
+        base = ROOT / sc
+        for p in (sorted(base.rglob("*.py")) if base.is_dir() else ([base] if base.exists() else [])):
+            if "__pycache__" not in p.parts:
+                out[p.relative_to(ROOT).as_posix()] = p.read_text(encoding="utf-8")
+    return out
+
+
+def test_js_call_counts_exact_per_file_and_function():
+    """JS 呼叫總數（src/）＝2（oauth_state 1＋drawer_js 1；base 為 1）；相對核准清單的增加＝0。逐檔×逐函式精確比對。"""
+    assert check_js_call_counts(_js_scan_files()) == []
+
+
+def test_js_call_allowlist_total_is_two():
+    assert sum(n for v in JS_CALL_ALLOWLIST.values() for (k, _), n in v.items() if k == "unsafe_js") == 2
+
+
+_OAUTH = "src/data/portfolio/oauth_state.py"
+_OA_CALL = "    st.html(_silent_redirect_script(_url), unsafe_allow_javascript=True)"
+
+
+def _with(rel, fn):
+    files = _js_scan_files()
+    new = fn(files.get(rel, ""))
+    assert new != files.get(rel)
+    files[rel] = new
+    return check_js_call_counts(files)
+
+
+@pytest.mark.parametrize("name,rel,fn", [
+    ("(a) oauth 同函式內再加第二次呼叫", _OAUTH, lambda s: s.replace(_OA_CALL, _OA_CALL + "\n" + _OA_CALL)),
+    ("(b) oauth 另一函式加一次", _OAUTH, lambda s: s + "\n\ndef _other():\n    st.html('<script></script>', unsafe_allow_javascript=True)\n"),
+    ("(c) oauth 的呼叫移到別的函式", _OAUTH, lambda s: s.replace(_OA_CALL, "    pass") + "\n\ndef _moved(_url):\n" + _OA_CALL + "\n"),
+    ("(d) 新檔加", "src/data/new_file.py", lambda s: "import streamlit as st\nst.html('x', unsafe_allow_javascript=True)\n"),
+    ("(e) 刪除 oauth 現有呼叫", _OAUTH, lambda s: s.replace(_OA_CALL, "    pass")),
+    ("drawer_js 同函式再加一次", "src/ui2/shell/drawer_js.py",
+     lambda s: s.replace("    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)",
+                         "    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)\n    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)")),
+    ("drawer_js 呼叫搬到模組層", "src/ui2/shell/drawer_js.py",
+     lambda s: s.replace("    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)", "    pass") + "\nst.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)\n"),
+    ("**kwargs 字典繞法", "src/data/new_file.py", lambda s: "import streamlit as st\nst.html('x', **{'unsafe_allow_javascript': True})\n"),
+    ("getattr 字串繞法", "src/data/new_file.py", lambda s: "k = 'unsafe_allow_javascript'\n"),
+    ("components.html import", "src/data/new_file.py", lambda s: "import streamlit.components.v1 as c\n"),
+    ("st.components 屬性", "src/data/new_file.py", lambda s: "import streamlit as st\nst.components.v1.html('x')\n"),
+    ("shared 目錄新檔", "shared/new_js.py", lambda s: "import streamlit as st\nst.html('x', unsafe_allow_javascript=True)\n"),
+    ("app.py 加", "app.py", lambda s: s + "\nst.html('x', unsafe_allow_javascript=True)\n"),
+])
+def test_js_call_count_guard_has_teeth(name, rel, fn):
+    assert _with(rel, fn), f"沒抓到：{name}"
+
+
+def test_js_call_count_guard_restored_is_green():
+    """(f) 變異只在記憶體副本，真檔未動：還原＝原樣掃描為綠。"""
+    assert check_js_call_counts(_js_scan_files()) == []
 
 
 @pytest.mark.parametrize("payload", [
