@@ -1105,3 +1105,16 @@
 - **未通過／限制（不標 PASS）**：L-1 `stMain` 焦點停靠；L-2 新節點約 1 frame 未 inert；L-3 不支援 inert 的瀏覽器；L-5 body 層 portal／Manage app 浮層不被 inert；L-6 ☰ 在 DOM 末端；L-8；`ui2-browser-gate` 尚未被設為 required；真機／SR／Cloud CSP 未驗。
 - **未動**：P6、四頁視覺、OAuth／Sheet、OneBrain、Digest、Risk Cap／System Action、公式、資料來源、P7、`NUI2-AUTH-CONTRACT-GATE`；DEC-128..136 與 Active Contract 文字一字未動。
 - **§27 檢查**：新 Decision＝DEC-137；新 Rule＝無；Backlog＝補註＋4 個新 open 項；**Audit Checklist 未自勾**（待獨立 QA）：□ 獨立 QA 複驗 □ Visual Fidelity（截圖 `docs/vnext/newui2_drawer_impl/`，需客戶確認）□ required check 設定 □ 真機。
+
+
+## 69. New UI2 視覺完善 Batch 1（2026-11-05；presentation-only；實作組單組；獨立 QA 待做）
+
+- **已做**：① chip 文字色對比（`src/ui2/shell/css.py`；對深色底與疊 tint 皆 ≥4.5:1；`tests/test_ui2_chip_contrast.py`，含負向突變）。② 💼 持股桌機首屏依 Wireframes §4.2／W-11 重排（`src/ui2/components/html.py::hold_l1_html`／`page_title_html`、`src/ui2/views/hold.py`、`css.py` `.ui2-h-l1`；`tests/test_ui2_hold_header.py`）。手機版面不變（`hold_loaded` 與「只換 chip 色」基準逐像素相同）。
+- **實測（FAKE；Chromium headless）**：measure_viewport 70/70（1.59.2）、70/70（1.56.0）；Real 11/11（兩版）；📊 手機 stale 181.6／unavailable 162.5（與 before 逐位相同，≥160 守衛未退化）；`UI2_BROWSER_LANE=required` `ui2_browser` lane 52 passed（1.56.0）／52 passed（1.59.2）；`tests/test_ui2_*`＋c3＋portability 1470 passed。證據 JSON（`newui2_batch3b`／`newui2_realfeed`）因 source_hash 重生，僅 `p4_hold` 結果改變。
+- **未動**：JS（`drawer_js.py`、JS_V4 hash、`tests/test_ui2_drawer_js_guard.py`）、資料來源、公式、Risk Cap、OneBrain、OAuth、A2／A3／B／C 類；DEC 未新增。
+- **未驗**：iOS／Android 真機、Streamlit Cloud／Manage app、Firefox／WebKit、Light theme、Real feed 視覺截圖、1.56／1.59 以外版本；非 pixel parity（無原圖）。
+
+## 補註（2026-11-05｜#1020 視覺完善 Batch 1）
+- 獨立 QA 通過（0 FAIL），待合併（draft）；DEC-138 維持 Dark-only，不新增 Light 支援。
+- 局部修正、非整頁完成：W-11 Primary 圖／⑤ 建議持股區間／持股表未做（B 類，需草稿裁示）；限制保留於 BACKLOG／HANDOFF。
+- 下一個安全工作：💼 完整 W-11 與 🎯 精選線框草稿（須先出草稿裁示）。

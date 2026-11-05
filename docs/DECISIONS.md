@@ -7636,3 +7636,9 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **範圍外（未動）**：P6 資料健康度、四頁視覺重排、OAuth／Sheet、OneBrain runtime、Digest schema、Risk Cap／System Action、投資公式、新資料來源、P7 Account Area；✕ 關閉鈕未加（S-14 待線框定案）。
 - **決策者**：**使用者**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：New UI2 手機導航施工。
 - **狀態**：施工 PR 為 draft；Visual Fidelity／獨立 QA／真機項未驗；`ui2-browser-gate` 需 user 在 GitHub 設為 required check 後才算強制。
+
+### DEC-138｜#1020 視覺完善 Batch 1：維持 Dark-only、不新增 Light 支援；W-11 未完成部分不得宣稱 UI 完成（客戶 2026-11-05）
+- **裁示**：(1) New UI2 **維持 Dark-only**；PR #1020（`ui2/visual-batch1`）**不新增 Light Theme 支援**。(2) 若日後 Light 變成使用者可達，且 chip 新三色（`#3fb950／#d29922／#ff7b72`）疊 tint 後對比不合格（獨立 QA 估約 2.1～2.2，未達 4.5:1），**須停手回報**，不得自行調色或硬上 Light。(3) 💼 持股頁 W-11 的 **Primary 圖、⑤ 建議持股區間、持股表** 尚未完成，**不得宣稱整頁 UI 完成**；其餘限制保留於 BACKLOG／HANDOFF，**不得自行關閉**。
+- **背景**：獨立 QA（限定範圍複驗）結論 0 個 FAIL、可合併；3 項輕微偏離與未驗項目已登記於 BACKLOG `NUI2-VISUAL-BATCH1`。
+- **決策者**：**客戶**（2026-11-05）。｜**效力日期**：2026-11-05 起。｜**範圍**：New UI2 視覺完善 Batch 1（#1020）。
+- **狀態**：PR 維持 draft；本裁示不核准任何 B／C 類項目；💼 完整 W-11 與 🎯 精選須先出線框草稿裁示。

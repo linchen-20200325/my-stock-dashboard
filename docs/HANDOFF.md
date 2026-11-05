@@ -984,3 +984,12 @@ DEC-086 規則已於 main，本表已落地。
 | 仍禁止 | 把本批當客戶視覺驗收；改 JS 原文而不重過 Gate（雜湊會紅）；加第二處 `unsafe_allow_javascript`；讓抽屜讀 `ui2_account`／query；開 P6／P7／OAuth |
 
 - **Safe Handoff 補註（2026-11-05；只追加）**：T09 flake＝測試等待條件問題，已修並以壓力重跑驗證（`docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md`）；JS 呼叫改精確計數守衛（oauth_state `maybe_silent_reauth` 1＋drawer_js `render_drawer_script` 1＝src/ 內 2，相對核准清單增加 0；既有探針腳本 `tools/phase3_verify/appttest_floor156.py` 的 2 處字串引用明列）。PR #1019 仍 draft、不合併；`ui2-browser-gate` 仍待 user 設 required。
+
+
+- **Safe Handoff 補註（2026-11-05；NUI2-VISUAL-BATCH1；只追加）**：draft PR `ui2/visual-batch1`（不合併）：chip 文字色對比修正＋💼 持股桌機首屏重排（W-11）；證據 `docs/vnext/newui2_visual_batch1/`。獨立 QA 待做（重點：手機 💼 版面像素不變、📊 手機 unavailable 導覽餘裕 162.5／stale 181.6 不退化、`git diff` 不含 `drawer_js.py`／`tests/test_ui2_drawer_js_guard.py`）。仍禁止：A2／A3／B／C 類、JS、資料來源、公式、Risk Cap、OneBrain、OAuth；把本批當客戶視覺驗收或 pixel parity。未驗：真機、Streamlit Cloud、iOS、Light theme、Real feed 視覺、1.56／1.59 以外版本。
+
+## 補註（2026-11-05｜#1020 視覺完善 Batch 1 獨立 QA）
+- 獨立 QA 通過（0 FAIL）、待合併（PR #1020 仍為 draft，合併由客戶決定）。局部修正、非整頁完成。
+- DEC-138：維持 **Dark-only**，不新增 Light；Light 若可達且 chip 對比不合格須停手。
+- **未完成（仍 open，不得關閉）**：W-11 Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日」行；A2 判 B 未動；P3 守衛缺口與未驗項目見 BACKLOG `NUI2-VISUAL-BATCH1`。
+- 下一個安全工作：💼 完整 W-11 與 🎯 精選的線框草稿（**須先出草稿並取得裁示**才可寫 UI code）。
