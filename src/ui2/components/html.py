@@ -198,6 +198,19 @@ def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
     return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
 
 
+def page_title_html(page_id: str, scenario_id: str, title: str) -> str:
+    """頁標題 div（與 `src/ui2/views/_page.py::render_title` 逐字相同；供需要把標題與第一屏放進同一個容器的頁使用）。"""
+    return (f'<div class="ui2-pagetitle" data-ui2-page="{escape(page_id)}" '
+            f'data-ui2-scenario="{escape(scenario_id)}">{escape(title)}</div>')
+
+
+def hold_l1_html(title_html: str, fs: FirstScreenVM) -> str:
+    """💼 持股頁：標題＋第一屏同一容器（`ui2-h-l1`）。手機＝與原本逐像素相同（堆疊）；桌機（≥769px）由 CSS 依
+    Wireframes §4.2／W-11（客戶 Q3 核准）排成：header 列＝標題＋主 CTA、其下三 tile（Risk Cap／目前曝險／組合狀態）、
+    再其下今日需處理／下一步各一列。⛔ 不增刪任何欄位／元件／字樣，DOM 內容與 `data-ui2-q` 錨點全保留。"""
+    return '<div class="ui2-h-l1">' + title_html + first_screen_html(fs) + "</div>"
+
+
 # ════════════════════════════════════════════════════════════════════
 # Batch 3：📊 今日結論／今日主要風險、🎯 雙模式＋搜尋＋查一檔、👤 帳戶 skeleton
 # ════════════════════════════════════════════════════════════════════

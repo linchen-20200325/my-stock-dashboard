@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.56.0",
-  "git_sha": "3c8875551f19d1ff079b0eeba51ed089d75b7f5a",
-  "source_hash": "38aece70c359fdc846ff5587103c802a3217aa8fcefdbe0382837aee208832b3",
-  "generated_at": "2026-11-05T00:46:03+00:00",
+  "git_sha": "fb466d156e1003b0450053344934962007be07a4",
+  "source_hash": "1f0e03f86bfda03ca34b4066419c2c3ff52e99f61891b2651e63d09483650786",
+  "generated_at": "2026-11-05T11:16:48+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "viewports": {
@@ -6724,62 +6724,62 @@
     {
      "q": "q1",
      "text": "組合狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
-     "top": 149.0,
-     "bottom": 203.9,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 203.9,
-     "bottom": 259.8,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 259.8,
-     "bottom": 314.7,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 314.7,
-     "bottom": 369.6,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 按 🚀 更新",
-     "top": 369.6,
-     "bottom": 404.6,
-     "left": 213,
-     "right": 1347,
-     "height": 35,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 330.7,
+     "left": 200,
+     "right": 1360,
+     "height": 38,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 404.6,
-     "bottom": 478.3,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -6826,12 +6826,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490.2,
+   "last_content_bottom": 490.6,
    "card_heights": [
     142
    ],
@@ -6840,8 +6840,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 503.3,
-     "bottom": 645.4,
+     "top": 338.7,
+     "bottom": 480.8,
      "left": 200,
      "right": 1360,
      "height": 142.1,
@@ -6862,9 +6862,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 503.3,
+    "first_block_after_l1_top": 338.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.0,
+    "scroll_end_bottom": 868.4,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -7578,62 +7578,62 @@
     {
      "q": "q1",
      "text": "組合狀態 FAKE 組合 · 12 檔",
-     "top": 149.0,
-     "bottom": 184.0,
-     "left": 213,
-     "right": 1347,
-     "height": 35,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 184.0,
-     "bottom": 239.9,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 239.9,
-     "bottom": 294.8,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 294.8,
-     "bottom": 349.7,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 349.7,
-     "bottom": 404.6,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 350.6,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 404.6,
-     "bottom": 478.3,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -7680,12 +7680,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490.6,
+   "last_content_bottom": 489.9,
    "card_heights": [
     100
    ],
@@ -7694,8 +7694,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 503.3,
-     "bottom": 603.8,
+     "top": 358.6,
+     "bottom": 459.1,
      "left": 200,
      "right": 1360,
      "height": 100.5,
@@ -7716,9 +7716,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 503.3,
+    "first_block_after_l1_top": 358.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.3,
+    "scroll_end_bottom": 867.6,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -8432,62 +8432,62 @@
     {
      "q": "q1",
      "text": "組合狀態 ⬜ 資料未備",
-     "top": 149.0,
-     "bottom": 184.7,
-     "left": 213,
-     "right": 1347,
-     "height": 35.7,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 184.7,
-     "bottom": 240.6,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 240.6,
-     "bottom": 295.5,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 295.5,
-     "bottom": 350.4,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 350.4,
-     "bottom": 405.3,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 350.6,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 405.3,
-     "bottom": 479.0,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -8534,12 +8534,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490.3,
+   "last_content_bottom": 489.9,
    "card_heights": [
     100
    ],
@@ -8548,8 +8548,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 504.0,
-     "bottom": 604.5,
+     "top": 358.6,
+     "bottom": 459.1,
      "left": 200,
      "right": 1360,
      "height": 100.5,
@@ -8570,9 +8570,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 504.0,
+    "first_block_after_l1_top": 358.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.0,
+    "scroll_end_bottom": 867.6,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -9286,62 +9286,62 @@
     {
      "q": "q1",
      "text": "組合狀態 FAKE 組合 · 12 檔⚠ 過期 3 天",
-     "top": 149.0,
-     "bottom": 184.7,
-     "left": 213,
-     "right": 1347,
-     "height": 35.7,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 184.7,
-     "bottom": 240.6,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 240.6,
-     "bottom": 295.5,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 295.5,
-     "bottom": 350.4,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 350.4,
-     "bottom": 405.3,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 350.6,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 405.3,
-     "bottom": 479.0,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -9388,12 +9388,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490,
+   "last_content_bottom": 490.6,
    "card_heights": [
     123
    ],
@@ -9402,8 +9402,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 504.0,
-     "bottom": 627.2,
+     "top": 358.6,
+     "bottom": 481.8,
      "left": 200,
      "right": 1360,
      "height": 123.2,
@@ -9424,9 +9424,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 504.0,
+    "first_block_after_l1_top": 358.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.8,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -10140,62 +10140,62 @@
     {
      "q": "q1",
      "text": "組合狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
-     "top": 149.0,
-     "bottom": 203.9,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 203.9,
-     "bottom": 259.8,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 259.8,
-     "bottom": 314.7,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 314.7,
-     "bottom": 369.6,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 369.6,
-     "bottom": 424.5,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 350.6,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 424.5,
-     "bottom": 498.2,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -10242,12 +10242,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490.5,
+   "last_content_bottom": 489.9,
    "card_heights": [
     100
    ],
@@ -10256,8 +10256,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 523.2,
-     "bottom": 623.7,
+     "top": 358.6,
+     "bottom": 459.1,
      "left": 200,
      "right": 1360,
      "height": 100.5,
@@ -10278,9 +10278,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 523.2,
+    "first_block_after_l1_top": 358.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.2,
+    "scroll_end_bottom": 867.6,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -10994,62 +10994,62 @@
     {
      "q": "q1",
      "text": "組合狀態 ⬜ 未評估／資料不足",
-     "top": 149.0,
-     "bottom": 185.7,
-     "left": 213,
-     "right": 1347,
-     "height": 36.7,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 978.7,
+     "right": 1360,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 185.7,
-     "bottom": 241.6,
-     "left": 213,
-     "right": 1347,
-     "height": 55.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 200,
+     "right": 581.3,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "ctx",
      "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
-     "top": 241.6,
-     "bottom": 296.5,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 159.9,
+     "bottom": 218.8,
+     "left": 589.3,
+     "right": 970.7,
+     "height": 58.9,
+     "width": 381.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 296.5,
-     "bottom": 351.4,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 226.8,
+     "bottom": 284.7,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 351.4,
-     "bottom": 406.3,
-     "left": 213,
-     "right": 1347,
-     "height": 54.9,
-     "width": 1134
+     "top": 292.7,
+     "bottom": 350.6,
+     "left": 200,
+     "right": 1360,
+     "height": 57.9,
+     "width": 1160
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 此功能尚未開放",
-     "top": 406.3,
-     "bottom": 480.0,
-     "left": 213,
-     "right": 1347,
-     "height": 73.7,
-     "width": 1134
+     "top": 95.9,
+     "bottom": 158.6,
+     "left": 1208.8,
+     "right": 1360,
+     "height": 62.7,
+     "width": 151.2
     }
    ],
    "nav": {
@@ -11096,12 +11096,12 @@
     "qa_clipped": false
    },
    "title": {
-    "top": 99.9,
-    "bottom": 128.0,
+    "top": 95.9,
+    "bottom": 159.9,
     "banner_bottom": 87.9,
-    "qa_top": 144.0
+    "qa_top": 159.9
    },
-   "last_content_bottom": 490,
+   "last_content_bottom": 490.6,
    "card_heights": [
     123
    ],
@@ -11110,8 +11110,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 505.0,
-     "bottom": 628.2,
+     "top": 358.6,
+     "bottom": 481.8,
      "left": 200,
      "right": 1360,
      "height": 123.2,
@@ -11132,9 +11132,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 505.0,
+    "first_block_after_l1_top": 358.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.8,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},

@@ -31,9 +31,11 @@ CSS = """
 .ui2-card__detail,.ui2-row__detail{font-size:.8rem;opacity:.75}
 .ui2-chip{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:1px 8px;
   font-size:.78rem;line-height:1.5;background:rgba(128,128,128,.08)}
-.ui2-chip--positive{color:#1a7f37;background:rgba(26,127,55,.12)}
-.ui2-chip--warning{color:#b7791f;background:rgba(183,121,31,.14)}
-.ui2-chip--danger{color:#c62828;background:rgba(198,40,40,.12);font-weight:600}
+/* 文字色對深色底 #0e1117（.streamlit/config.toml backgroundColor）與疊 tint 後皆 ≥4.5:1（Visual Fidelity Gate V8；
+   tests/test_ui2_chip_contrast.py 解析本檔強制）。tint 的 rgba 沿用原色相，不隨文字色改。 */
+.ui2-chip--positive{color:#3fb950;background:rgba(26,127,55,.12)}
+.ui2-chip--warning{color:#d29922;background:rgba(183,121,31,.14)}
+.ui2-chip--danger{color:#ff7b72;background:rgba(198,40,40,.12);font-weight:600}
 .ui2-chip--neutral{opacity:.85}
 /* 三語意軸的第二載體（樣式；字樣本身已互斥）：資料語意＝實線、判定結果＝雙線、capability＝虛線 */
 .ui2-chip--axis-data{border-style:solid}
@@ -149,6 +151,23 @@ CSS = """
   .ui2-m-l1>.ui2-risk{grid-column:3;grid-row:3;margin:0}
   .ui2-m-l1 [data-ui2-q="q2"]{grid-row:4}
   .ui2-m-l1 [data-ui2-q="q3"]{grid-row:5}
+}
+/* 💼 持股（Wireframes §4.2／W-11，客戶 Q3 核准）：標題＋第一屏同一容器 `.ui2-h-l1`。
+   手機：標題與第一屏間距補回原本兩個 Streamlit 元素容器之間的 16px（逐像素與舊版相同）。
+   桌機（≥769px）：header 列＝標題＋主 CTA（CTA 絕對定位於右上；標題預留高度）；其下三 tile＝Risk Cap／目前曝險／組合狀態；
+   今日需處理、下一步各一列。只重排既有元素，DOM 順序與 data-ui2-q 錨點不變；.ui2-qa 保持真實盒（量測以其頂緣為準，⛔ display:contents）。 */
+.ui2-h-l1>.ui2-qa{margin-top:16px}
+@media (min-width:769px){
+  .ui2-h-l1{position:relative}
+  .ui2-h-l1>.ui2-pagetitle{display:flex;align-items:center;min-height:4rem;box-sizing:border-box;margin:0}
+  .ui2-h-l1>.ui2-qa{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;border:0;padding:0;border-radius:0}
+  .ui2-h-l1 [data-ui2-q]{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px;grid-column:1/-1;min-width:0}
+  .ui2-h-l1 [data-ui2-q="q4"]{position:absolute;top:0;right:0;border:0;padding:0;text-align:right}
+  .ui2-h-l1 [data-ui2-q="ctx"]:nth-child(2){grid-column:1;grid-row:1}
+  .ui2-h-l1 [data-ui2-q="ctx"]:nth-child(3){grid-column:2;grid-row:1}
+  .ui2-h-l1 [data-ui2-q="q1"]{grid-column:3;grid-row:1}
+  .ui2-h-l1 [data-ui2-q="q2"]{grid-row:2}
+  .ui2-h-l1 [data-ui2-q="q3"]{grid-row:3}
 }
 /* P2：OneBrain Outlook（上移後）與台股 Primary 誠實空槽——依內容高度；灰底說明、⛔ 紅、⛔ 圖 */
 .ui2-m-onebrain .ui2-row{border-bottom:0;padding:2px 0 4px 0}
