@@ -7638,7 +7638,7 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **狀態**：施工 PR 為 draft；Visual Fidelity／獨立 QA／真機項未驗；`ui2-browser-gate` 需 user 在 GitHub 設為 required check 後才算強制。
 
 
-### DEC-138｜ChatGPT 文件／治理與 Claude Code 程式施工分工（客戶 2026-11-05）
+### DEC-139｜ChatGPT 文件／治理與 Claude Code 程式施工分工（客戶 2026-11-05）
 
 - **使用者裁示（本次對話）**：「簡單來說是這樣嗎?文書交給我，程式交給 Claude Code」；經確認後要求「請寫進記憶中」「那就開始吧」。其中「我」依前後文指 ChatGPT。
 - **分工**：ChatGPT 直接負責產品設計、UI／UX 草稿、文件撰寫與維護、正式規格整理、GitHub 唯讀驗證、文件型 PR 與合併治理、獨立驗收；Claude Code 負責應用程式、測試與自動化的實作／除錯／執行 QA，依明確核准的規格施工。使用者保留新 Layout、重大風險、付費、權限及不可逆操作最終裁示。
@@ -7648,10 +7648,10 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **決策者**：使用者。**效力**：2026-11-05 起的跨對話協作偏好；**落盤**：本 docs-only PR，合併後才成為 main 上正式紀錄。
 
 
-### DEC-139｜資料分層與死碼清理改由 ChatGPT 主責；與 Claude 工作衝突時 Claude 優先（客戶 2026-11-05）
+### DEC-140｜資料分層與死碼清理改由 ChatGPT 主責；與 Claude 工作衝突時 Claude 優先（客戶 2026-11-05）
 
 - **客戶原話**：「這部分能有你執行嗎? 不由專案AI，那如果跟專案AI有衝突時，請先以專案AI工作為主」。
-- **範圍**：對本次 `my-stock-dashboard` 的資料分層剝離、確認死碼與安全清理，**ChatGPT 可直接負責程式修改、文件、PR 與獨立驗收協調**；不再預設必交給 Claude Code。屬 DEC-138「Claude 原則上主責程式」的**明確特定任務例外**，不是全面推翻分工。
+- **範圍**：對本次 `my-stock-dashboard` 的資料分層剝離、確認死碼與安全清理，**ChatGPT 可直接負責程式修改、文件、PR 與獨立驗收協調**；不再預設必交給 Claude Code。屬 DEC-139「Claude 原則上主責程式」的**明確特定任務例外**，不是全面推翻分工。
 - **衝突規則**：Claude Code 目前／後續已授權工作**優先**；ChatGPT 每批修改前重新確認 GitHub main、Open/Draft PR、head/diff、branches、CI 與預定檔案 owner。若同檔或同資料契約／同測試／同 workflow／同 SSOT 有重疊，ChatGPT **停止或縮小自己的批次**，不可覆蓋、推擠或重設 Claude 分支；不要求 Claude 為本次清理讓路。
 - **落地要求**：安全小批、獨立 branch／PR、必要 tests／CI／獨立 QA；無法取得完整工作樹或執行足夠驗證時僅能唯讀探勘／文件化，不得將未驗證刪碼合併或宣稱已完成。對不可逆資料、Risk Cap、來源／公式與 UI Layout 仍適用原有客戶 Gate。
 - **決策者**：使用者；**範圍**：本次資料架構與死碼清理特例；**日期**：2026-11-05。此 DEC 合併到 main 前僅存在於 PR 分支。
