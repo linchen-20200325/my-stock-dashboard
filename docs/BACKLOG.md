@@ -1873,3 +1873,10 @@
      - **未將任何既有 open 項改為 closed。**
 
 - **NUI2-HOLD-W11-BATCH1（2026-11-05；補註，只追加；實作組單組、**獨立 QA 待做**；draft PR `ui2/hold-w11-batch1`）**：依客戶 Q1~Q8 裁示（DEC-141，記於 docs PR #1027 分支，未合併）做 💼 持股 W-11 的**純版面／欄位結構／空槽**三項：(a) 組合狀態行（`組合：<既有 current_state 欄位> · 資料日 ⬜ 資料日未提供 · 判得出 ⬜ 尚未提供`）＋「今日需處理」單行（內容仍 `⬜ 尚未提供（待系統動作整合）`）；(b) Primary「產業曝險／集中度」空槽（桌機 min-height 240px、手機收成一行）＋「建議持股水位（市場端）」空槽（`⬜ 尚未提供`，不讀 Risk Cap、無區間數字、註明「這不是投資上限」）；(c) 持股表欄名（桌機八欄／手機四欄＋每列展開提示）、空狀態與原因句。DOM 順序＝手機順序（建議持股水位→OneBrain→Primary→持股表）；桌機 grid＝OneBrain／〔Primary｜建議持股水位〕／持股表。**W-11 狀態：版面空槽已施工，待獨立 QA；正式資料接線未做；不是完成。** 新守衛：`tests/test_ui2_hold_w11_batch1.py`（內容／CSS 幾何＋負向突變）、`measure_viewport` 新判定 `w11_hold_layout`（真瀏覽器量測＋突變單元測試）；`HOLD_FIRST_SCREEN_QS`（hold 無獨立 q3）。證據 `docs/vnext/newui2_hold_w11_batch1/`、4 份 `viewport_measurements*.json` 依 source_hash 守衛重生。**未做（仍 open）**：資料日 DEC-102 分組實作、判得出 M／N、需處理動作（Aggregator）、⑤ 區間與 Risk Cap、Primary 圖資料、持股表資料列（皆需 Auth／來源，Q8 不開放 SA／cron／快照）；績效／benchmark 次要區行；今日需處理清單；W-11 完整驗收。**解讀標示**：Q1「手機沿用已核准順序」依草稿 §2.2（⑤→OneBrain→Primary→表）而非 Wireframes §4.1 舊序（Overview 在表之後），請 QA 確認。**未動**：Risk Cap／System Action／登入／OneBrain／Digest／正式資料來源／投資公式／#1019 抽屜 JS／Light／`src.data`。
+
+## 2026-11-06｜New UI2 最新設計方向與舊規則收斂（PR #1030 Draft，未施工）
+- **NUI2-SSOT-SUPERSESSION-20261106**：先整合本 PR、#1022/#1027/#1029 及 main；以 DEC-142 作產品最新方向索引，完成 PROJECT_RULES、Active Presentation、Drawer 已過時布局的有效性註記；Frozen/history 保留，不得讓 Claude 同時採四頁與五頁規則。**待獨立 QA／CI／合併前不得認定完成**。
+- **NUI2-TOP-NAV-SHEET-GATE**：五頁＋頂部導覽（mobile 橫滑、桌面無 rail）＋頂部 Active Sheet＋右上帳號。先產出 390/1440 實際線框、登入/Sheet 契約、focus/a11y、safe area、首屏 CTA、回退規劃，視覺/安全 Gate 後才可替代 JS_V4/route/tests；不能只刪 guard。
+- **NUI2-SIX-DOMAIN-ONEBRAIN-GATE**：共用 Canonical/Evidence Registry/Digest，六域台股分析單元（市場/籌碼/財報/產業/持股/資料稽核）+ 1 全域證據複核；分頁 scoped 入口、白話文/短中長；資料與 AI 外連權限隔離、負面證據、Token budget、確定性 coverage/partial Gate；先做唯讀 lineage，再另案 High runtime/Schema QA。
+- **NUI2-LEGACY-PDF-REUSE**：財報 FH/趨勢、法人集保、前夜美股、持股個股/ETF、資料健康度依既有安全能力逐項重用；C 級只研究原上傳市場 PDF 的台股估值、籌碼、利率、AI 產業/FCF；未核准公式/來源保持研究空槽，非正式投資動作。
+- **協調**：Claude Code UI 施工優先；ChatGPT docs/驗收及資料清理避開 Claude PR 檔案，每批 ≤3 安全項；最新 GitHub Verification Gate 後才給下一個提示。
