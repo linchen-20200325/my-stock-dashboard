@@ -165,3 +165,12 @@ iOS Safari（`:has()`、`label for`、`env()`、動態工具列）；Android 真
 ## 14. 本檔的限制
 
 單組撰寫；未重跑任何研究組原型；像素與秒數為研究組單組結果；過期條文表（§2）可能漏列。`CLAUDE.md` §-2 規則 6：本檔任何全稱句（如「全 DOM 僅一個 radiogroup」「手機實測 10 個元素被 inert」）在獨立 QA 前只是待驗事項，不得當作後續動作的前提。
+
+
+## 15. 實作對照（2026-11-04，DEC-137；只追加）
+
+- **已落地**：☰（checkbox，`aria-label="主選單"`，符號 aria-hidden，role=switch；無 aria-expanded／aria-controls）＋遮罩＋左側抽屜（同一 `ui2_nav` container／`ui2_page` radio，無新 session key）；`min(82vw,320px)`；項目高 ≥48px；`prefers-reduced-motion`；☰ `top:0;left:0` 44×44 占既有 `padding-top:2.75rem`；CSS 併入既有區塊、☰ 標記在內容之後；桌機 176px rail、☰／遮罩／toggle `display:none`、帳戶摘要在四頁之前（`order:-1`）；換標籤輪替 hack 保留作降級；L-4 以 `.st-key-ui2_nav *{visibility:inherit !important}` 修。帳戶摘要＝`drawer_account_html()` 固定占位（Capability 軸）。**桌機也顯示此摘要**（統一規格 §7「抽屜與桌機 rail 的帳戶摘要固定占位」＋ WF §D 順序），未開始 P7 Account Area（同一元件預留）。
+- **R-11 改變**：Enter 現已支援（JS_V4，見 JS 設計 §15）；L-7 關閉。
+- **L-1（`section.stMain` 一次 Tab 停靠）**：實測仍存在（`section` 帶 `tabindex=0`，嘗試 `overflow:clip` 無效，不再追）；**限制，未消除**；L-2、L-3、L-5、L-6、L-9 未變；L-4 已修並由測試鎖。
+- **量測**：1.56.0／1.59.2 FAKE 六場景手機市場頁餘裕與基準逐位相同（stale 181.6／unavailable 162.5）；證據 `docs/vnext/newui2_batch3b/`、`newui2_realfeed/`（含 git_sha／source_hash）。
+- **L-8**（快速連點多頁最終停留頁 1.56／1.59 不同）未再驗，**未釘預期**，仍開放。

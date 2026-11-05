@@ -364,3 +364,26 @@ def primary_slot_html(twii_card: CardVM | None) -> str:
             f'<div class="ui2-primary-slot__body">{chip}'
             f'<span class="ui2-primary-slot__reason">{escape(PRIMARY_SLOT_REASON)}</span></div>'
             f'<div class="ui2-primary-slot__spec" data-ui2-spec="1">{escape(spec_line_text(fresh))}</div></div>')
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEC-137：手機抽屜／桌機 rail 的帳戶摘要（固定占位；J-6 採 B＝Capability 軸）
+# ════════════════════════════════════════════════════════════════════
+#: 標題與原因句（統一施工規格 §7；原因句沿用既有字樣家族）。
+DRAWER_ACCOUNT_TITLE = "Google 帳號"
+DRAWER_ACCOUNT_BUTTON = "Google 登入"
+DRAWER_ACCOUNT_REASON = "登入與 Sheet 操作尚未開放"
+DRAWER_ACCOUNT_MORE = "完整設定在 👤 我的"
+
+
+def drawer_account_html() -> str:
+    """抽屜／rail 帳戶摘要：**零輸入、固定占位**（⛔ 讀 `ui2_account`／`ui2_dev`／query；⛔ 宣稱已登入／未登入）。
+
+    `⬜ 尚未提供` 屬 **Capability 軸**（DEC-124／DEC-130；⛔ 放進 Data State「狀態」欄、⛔ 第六態）；
+    登入鈕 disabled（`aria-disabled`、非 button 元素、不可觸發）。DEC-129 的「⬜ 尚未登入」字面待正式 auth contract。
+    """
+    chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
+    btn = cta_html(CtaVM(DRAWER_ACCOUNT_BUTTON, enabled=False, disabled_reason=DRAWER_ACCOUNT_REASON))
+    return ('<div class="ui2-drawer-acct" data-ui2-drawer-account="1" data-axis="capability" data-state="not_provided">'
+            f'<div class="ui2-drawer-acct__title">{escape(DRAWER_ACCOUNT_TITLE)}</div>{chip}{btn}'
+            f'<div class="ui2-drawer-acct__more">{escape(DRAWER_ACCOUNT_MORE)}</div></div>')

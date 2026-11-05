@@ -98,6 +98,14 @@ def test_mobile_nav_stays_four_cells_in_css():
     assert "ui2_nav" in css                                     # 導覽 container 錨點仍在
     # Account Area 若加入，只能出現在桌機 media query（手機仍固定四格）：此處只釘「手機底部導覽規則存在」
     assert "position: fixed" in css or "position:fixed" in css
+    # D-12 加嚴（DEC-134／DEC-137；名稱保留以利追溯，「四格」現指「恰四頁」）：手機 @media 內有抽屜收合態、☰ 規則存在、
+    # ⛔ 底部固定 53px 主導覽；恰四頁由 test_ui2_batch2::test_w1_nav_is_exactly_four_fixed_pages_no_fifth 守。
+    from src.ui2.shell.css import CSS
+    mobile = CSS[CSS.index("@media (max-width:768px){\n  .st-key-ui2_nav{"):]
+    mobile = mobile[:mobile.index("\n}")]
+    assert "transform:translateX(-105%);visibility:hidden" in mobile
+    assert ".ui2-dr-toggle{position:fixed;top:0;left:0;" in CSS
+    assert "bottom:0;height:53px" not in CSS
 
 
 def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():

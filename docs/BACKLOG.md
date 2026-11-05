@@ -1850,3 +1850,15 @@
 
 - **`NUI2-DRAWER-NEW-JS-GATE`（補註，原列未動）**：候選 JS 全文與安全設計已入庫（JS 安全設計文件，46 行／規範化常數 sha256 見上），**仍 open（blocked-on-governance）**；「約 25 行」「`__ui2drJS2`」已過時（現為 `__ui2drJS3`）。未裁示不得自開抽屜／P6 程式批；JS 一旦核准，須與抽屜殼同批施工（統一施工規格 S-3）。
 - **`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`（補註，原列未動）**：H-11／J-6 的 **#1016 建議 B**（「⬜ 尚未提供」）已被本輪治理方向採用（Capability 軸歸屬；`TEXT_NOT_PROVIDED` 已存在，B 不需擴字樣表，`NUI2-AUTH-STATUS-TEXT-GUARD` 對 B 不是前置）；**客戶仍未裁示**，status 維持 blocked-on-customer；DEC-129 的「⬜ 尚未登入」字面僅正式 auth contract 具備後適用，未撤銷。
+
+
+### New UI2 手機抽屜施工批（2026-11-04；DEC-137；補註，原列未動；單組實作、獨立 QA 待做）
+
+- **`NUI2-DRAWER-NEW-JS-GATE`**：JS_V4 已經使用者授權（DEC-137）進入 repo（`src/ui2/shell/drawer_js.py`）；雜湊釘住、白名單、AST、全域掃描守衛已落地；**狀態：in-review（待獨立 QA）**，不是「已免審核」。
+- **`NUI2-DRAWER-UNIFIED-BUILD-SPEC`／`-JS-SAFETY-DESIGN`／`-TEST-ACCEPTANCE-SPEC`**：已追加實作對照（§15／§15／§7）；待獨立 QA。
+- **`NUI2-DRAWER-CI-BROWSER-LANE`**：workflow job `ui2-browser`（matrix）＋`ui2-browser-gate` 已加入；**⚠️ required check 需 user 在 GitHub Settings → Branches → Branch protection rules → main → Require status checks 加入 `ui2-browser-gate`；未設定前不得宣稱 required 生效**。runner 實際耗時、`--with-deps` 未在 Actions 驗（以該 PR 的 CI 結果為準）。
+- **`NUI2-DRAWER-CLOSED-A11Y-RESIDUAL`**：以 CSS `.st-key-ui2_nav *{visibility:inherit !important}` 修；T-13（CDP AXTree）鎖；Chromium only。
+- **`NUI2-DRAWER-NAV-RESIDUAL-BOTTOMNAV`**：本批已更換 D-1／D-7／D-9～D-12 判準；文件中其餘歷史「底部四格」原文保留。
+- **新增 open 項**：`NUI2-DRAWER-STMAIN-FOCUS-STOP`（P3，L-1：`section.stMain` 開啟時仍可拿一次 Tab 焦點；`overflow:clip` 無效；SR 影響未驗）｜`NUI2-DRAWER-QUICK-CLICK-L8`（P3，快速連點多頁 1.56／1.59 最終頁不同，未釘預期）｜`NUI2-DRAWER-DEVICE-UNVERIFIED`（P2，iOS Safari／Android／Cloud CSP／Manage app／VoiceOver／TalkBack／Firefox／WebKit／不支援 inert 瀏覽器皆未驗）｜`NUI2-DRAWER-CLOSE-BUTTON-S14`（P3，✕ 關閉鈕待線框定案；本批**未加**，測試守衛禁默默加入）。
+
+- **T09 flake 分析與 JS 呼叫精確計數守衛（2026-11-05；補註，只追加）**：① `test_t09_thirty_page_switches_leave_no_inert` 偶發紅的根因＝**測試等待條件過寬**（換頁後殼的標籤輪替重建與 rerun 競態；非產品 JS、無 inert 殘留），已改等待條件（`Ui.wait_settled`），12 負載壓力下修前 19～20／20 失敗、修後兩版本各 30／30 通過；證據 `docs/vnext/newui2_drawer_impl/T09_FLAKE_ANALYSIS.md`。② 新增 open 項 **`NUI2-DRAWER-TAP-DURING-RERUN`**（P3）：使用者在 rerun 未落定時點 ☰，開啟狀態可能因舊外層被輪替 hack 替換而遺失（既有降級機制的固有特性，非 JS_V4 引入；未改產品碼）。③ `NUI2-DRAWER-NEW-JS-GATE` 守衛補強：JS 呼叫改以「檔案×所在函式×精確次數」白名單（`tests/test_ui2_drawer_js_guard.py::JS_CALL_ALLOWLIST`），關閉 QA 變異 M8（同檔再加第二呼叫原本仍綠）。

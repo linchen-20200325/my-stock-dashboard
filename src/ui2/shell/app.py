@@ -24,8 +24,9 @@ from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import get_real_page_vm
 from src.services.ui2.real_feed import read_real_snapshot
 from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_PREVIEW_BANNER_NOTE
-from src.ui2.components.html import banner_html
+from src.ui2.components.html import banner_html, drawer_account_html
 from src.ui2.shell.css import CSS
+from src.ui2.shell.drawer_js import render_drawer_script
 from src.ui2.views import VIEWS
 
 KEY_PAGE = "ui2_page"
@@ -101,10 +102,29 @@ def run() -> None:
     VIEWS[st.session_state[KEY_PAGE]](vm)
     if dev:
         _render_dev_surface(real)
-    # W-1：固定四頁導覽（手機＝底部固定四格、桌機＝左側四項；位置由 CSS 決定，見 shell/css.py）。
-    # 放在內容之後：視覺位置由 `position:fixed` 決定，DOM 順序＝手機底部列的 Tab 順序（內容→導覽）。
-    # 用 `st.container(key=...)`（Streamlit ≥1.39 加 `st-key-ui2_nav` class）當唯一 CSS 錨點；
-    # 元件仍是 `st.radio`（key=`ui2_page`；原生 radiogroup／aria-checked＝當前頁語意；AppTest 可切頁）。
+    _render_nav()
+
+
+#: ☰ 外層標籤輪替（降級用）：切頁後外層換標籤 → React 重建 checkbox → 收合。JS 被擋時唯一的自動收合路徑。
+_WRAP_TAGS = ("div", "section", "article", "aside")
+#: ☰＋遮罩（固定字串；`role=switch`＋原生 checked；⛔ 靜態 aria-expanded、⛔ aria-controls；☰ 符號 aria-hidden）。
+#: 殼內唯一的 raw `<input>`（守衛 `tests/test_ui2_drawer_js_guard.py`）。
+_TOGGLE_HTML = ('<input type="checkbox" id="ui2dr" class="ui2-dr-toggle" role="switch" aria-label="主選單">'
+                '<label for="ui2dr" class="ui2-dr-btn" aria-hidden="true">☰</label>'
+                '<label for="ui2dr" class="ui2-dr-scrim" aria-hidden="true"></label>')
+
+
+def _render_nav() -> None:
+    """W-1 導覽（DEC-134／DEC-137）：手機＝左上 ☰＋左側抽屜（預設收合）、桌機＝左側固定 rail；同一份 DOM、只靠 CSS 換呈現。
+
+    放在內容之後（⛔ 在內容前新增 element container：會吃掉第一屏 ≥160px 餘裕）；視覺位置由 `position:fixed` 決定。
+    用 `st.container(key=...)`（`st-key-ui2_nav` class）當唯一 CSS 錨點；元件仍是 `st.radio`（key=`ui2_page`；
+    原生 radiogroup／checked＝當前頁語意；AppTest 可切頁）。⛔ 新增 session key；帳戶摘要固定占位（不讀 `ui2_account`）。
+    """
+    tag = _WRAP_TAGS[PAGE_IDS.index(st.session_state[KEY_PAGE])]
+    st.markdown(f'<{tag} class="ui2-dr-wrap">{_TOGGLE_HTML}</{tag}>', unsafe_allow_html=True)
     with st.container(key=KEY_NAV):
         st.radio("導覽", PAGE_IDS, key=KEY_PAGE, horizontal=True,
                  format_func=lambda p: PAGE4_LABELS[p], label_visibility="collapsed")
+        st.markdown(drawer_account_html(), unsafe_allow_html=True)
+    render_drawer_script()

@@ -1,0 +1,31 @@
+PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[1] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[2] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[3] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[4] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[5] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[6] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[7] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[8] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[9] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[10] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[11] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[12] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[13] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[14] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[15] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[16] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[17] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[18] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[19] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[20] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[21] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[22] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[23] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[24] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[25] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[26] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[27] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[28] PASSED
+tests/test_zz_t09_scratch.py::test_t09_rep[29] PASSED
+======================= 30 passed in 1271.20s (0:21:11) ========================

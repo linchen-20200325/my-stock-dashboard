@@ -58,7 +58,8 @@ CSS = """
 .ui2-section-title{font-weight:700;margin:12px 0 2px 0}
 @media (max-width:640px){.ui2-pagetitle{font-size:1.2rem}.ui2-card__value{font-size:1.1rem}}
 
-/* ── W-1 導覽（Wireframes §0.4／Freeze §16）：手機＝底部固定四格（53px）、桌機＝左側四項 ──
+/* ── W-1 導覽（Wireframes §0.4／Freeze §16；DEC-134／DEC-137）：手機＝左上 ☰＋左側抽屜（預設收合）、桌機＝左側四項 ──
+   （手機原底部固定四格 53px 已由 DEC-134 取代；53px 現為「底部保留帶」＝Manage app／家的指示條可能遮擋區，量測線 791 不變）
    選擇器不依賴 Streamlit 內部 class（1.56＝BaseWeb `data-baseweb`、1.59＝react-aria `stRadioOption`，
    兩代 DOM 不同）：只用 `.st-key-ui2_nav`（container key）＋ `[role=radiogroup] > label` ＋ `input:checked`。 */
 .st-key-ui2_nav{position:fixed;z-index:999990;margin:0 !important;padding:0 !important;gap:0 !important;
@@ -80,19 +81,39 @@ CSS = """
    避免依賴 Streamlit 無公開的主題變數；使用者若手動切 Light theme，導覽列仍為深色但字色同步，維持可讀。 */
 :root{--ui2-nav-bg:#161b22;--ui2-nav-fg:#e6edf3}
 .st-key-ui2_nav{color:var(--ui2-nav-fg)}
+/* 關閉態抽屜整塊不留在無障礙樹（L-4：內層某 class 會把 visibility 設回 visible；零 JS 修法） */
+.st-key-ui2_nav *{visibility:inherit !important}
 @media (max-width:768px){
-  .st-key-ui2_nav{left:0;right:0;bottom:0;height:53px;border-top-width:1px}
-  .st-key-ui2_nav [role="radiogroup"]{height:53px}
-  .st-key-ui2_nav [role="radiogroup"]>label{border-top-width:3px;text-align:center}
-  .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-top-color:currentColor}
+  .st-key-ui2_nav{z-index:999995;top:0;left:0;bottom:0;width:min(82vw,320px);box-sizing:border-box;border-right-width:1px;padding:3.6rem .75rem 1rem !important;
+    transform:translateX(-105%);visibility:hidden;overflow-y:auto;transition:transform .2s ease, visibility 0s linear .2s}
+  .st-key-ui2_nav [role="radiogroup"]{flex-direction:column}
+  .st-key-ui2_nav [role="radiogroup"]>label{flex:0 0 auto;min-height:48px;justify-content:flex-start;padding:0 .5rem;border-left-width:4px}
+  .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-left-color:currentColor}
+  .stApp:has(.ui2-dr-toggle:checked) .st-key-ui2_nav{transform:none;visibility:visible;transition:transform .2s ease, visibility 0s}
+  .stApp:has(.ui2-dr-toggle:checked) .ui2-dr-scrim{display:block}
   .block-container{padding-bottom:5rem !important}
 }
+@media (prefers-reduced-motion:reduce){.st-key-ui2_nav{transition:none !important}}
+/* ☰（checkbox＋label；占既有 padding-top:2.75rem＝44px 頂部保留帶，⛔ 新增位移）與遮罩 */
+.ui2-dr-btn{position:fixed;top:0;left:0;z-index:999996;min-height:44px;min-width:44px;box-sizing:border-box;padding:0 12px;display:flex;
+  align-items:center;justify-content:center;background:var(--ui2-nav-bg);color:var(--ui2-nav-fg);border:1px solid rgba(128,128,128,.5);
+  border-radius:8px;font:inherit;font-size:1.2rem;cursor:pointer}
+.ui2-dr-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999993}
+.ui2-dr-toggle{position:fixed;top:0;left:0;width:44px;height:44px;margin:0;opacity:0;z-index:999997;cursor:pointer}
+.ui2-dr-toggle:focus-visible+.ui2-dr-btn{outline:2px solid currentColor;outline-offset:2px}
+.ui2-drawer-acct{margin-top:1rem;padding-top:.75rem;border-top:1px solid rgba(128,128,128,.45);font-size:.85rem;line-height:1.5}
+.ui2-drawer-acct__title{font-weight:700}
+.ui2-drawer-acct .ui2-ctawrap{margin:6px 0 2px 0}
+.ui2-drawer-acct__more{font-size:.72rem;opacity:.7}
 /* 內容底部保留量加上 safe-area（iOS 家的指示條）：僅在瀏覽器支援 env() 時覆寫；Chromium 實測為 0（不變）、iOS 未驗 */
 @supports (padding-bottom:env(safe-area-inset-bottom)){
   @media (max-width:768px){.block-container{padding-bottom:calc(5rem + env(safe-area-inset-bottom,0px)) !important}}
 }
 @media (min-width:769px){
-  .st-key-ui2_nav{top:0;left:0;bottom:0;width:11rem;border-right-width:1px;padding-top:4rem !important}
+  .st-key-ui2_nav{top:0;left:0;bottom:0;width:11rem;border-right-width:1px;padding-top:4rem !important;overflow-y:auto}
+  .ui2-dr-btn,.ui2-dr-scrim,.ui2-dr-toggle{display:none !important}   /* 桌機：無 ☰／遮罩（不建立第二個主導覽入口） */
+  .st-key-ui2_nav>*:has(.ui2-drawer-acct){order:-1}      /* 桌機 rail：帳戶摘要在四頁之前（DEC-129 順序；手機抽屜為四頁→帳戶） */
+  .st-key-ui2_nav .ui2-drawer-acct{margin:0 .75rem .75rem .75rem;padding:0 0 .75rem 0;border-top:0;border-bottom:1px solid rgba(128,128,128,.45)}
   .st-key-ui2_nav [role="radiogroup"]{flex-direction:column}
   .st-key-ui2_nav [role="radiogroup"]>label{flex:0 0 auto;justify-content:flex-start;padding:.7rem 1rem;
     border-left-width:4px}

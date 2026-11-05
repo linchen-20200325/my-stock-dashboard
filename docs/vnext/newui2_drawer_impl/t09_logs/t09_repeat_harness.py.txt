@@ -1,0 +1,32 @@
+import traceback, pytest
+from tests.test_ui2_drawer_browser import pw, browser, url  # noqa: F401
+from tests.test_ui2_drawer_browser import Ui, NAV_LABEL, PAGES, MOBILE, PAGE_IDS
+pytestmark = pytest.mark.ui2_browser
+
+@pytest.mark.parametrize("rep", range(int(__import__("os").environ.get("REPS", "10"))))
+def test_t09_rep(browser, url, rep):
+    mob = Ui(browser, url, MOBILE, "ui2_dev=1")
+    i = -1
+    try:
+        for i in range(30):
+            mob.open_tap()
+            mob.pg.locator(NAV_LABEL, has_text=PAGES[(i + 1) % 4]).click(timeout=8000)
+            mob.wait_closed(PAGE_IDS[(i + 1) % 4])
+        mob.pg.wait_for_timeout(800)
+        s = mob.state()
+        assert s["inert"] == 0 and not s["checked"] and not mob.errs, s
+    except Exception:
+        try:
+            diag = mob.pg.evaluate("""() => ({checked: document.querySelector('.ui2-dr-toggle').checked,
+              inert: [...document.querySelectorAll('[inert]')].map(e => e.tagName + '.' + (e.dataset.testid||e.className).toString().slice(0,40)),
+              vis: getComputedStyle(document.querySelector('.st-key-ui2_nav')).visibility,
+              page: document.querySelector('.ui2-pagetitle') && document.querySelector('.ui2-pagetitle').dataset.ui2Page,
+              active: document.activeElement.tagName + '.' + document.activeElement.className})""")
+        except Exception as e2:
+            diag = repr(e2)
+        mob.pg.screenshot(path=f"/tmp/t09_fail_{rep}.png")
+        print("T09-DIAG iteration", i, diag, "errs", mob.errs)
+        print(traceback.format_exc())
+        raise
+    finally:
+        mob.close()

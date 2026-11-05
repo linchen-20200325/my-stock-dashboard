@@ -135,3 +135,16 @@
 ## 6. 未驗（持續標示，永不宣稱 PASS）
 
 iOS Safari；Android 真機；Streamlit Community Cloud／**Manage app 浮層**（本規格不宣稱已解決遮擋）；CSP 對 `st.html` JS；VoiceOver；TalkBack；Firefox；WebKit；GitHub Actions runner 的實際耗時與 `install-deps`；branch protection 現況；`inert` 不支援瀏覽器的實際降級；真機觸控手感；Real feed 下開關延遲。
+
+
+## 7. 實作對照（2026-11-04，DEC-137；只追加）
+
+- **D-1**：`test_w1_mobile_nav_is_bottom_fixed_53px` → `test_w1_mobile_nav_is_left_drawer_not_bottom_fixed`（`check_mobile_drawer_css`＋6 個變異 teeth：放回底部、收合態未移出、☰ 8px 案、頂部保留放大、非 fixed、底部留白消失）。不再覆蓋：手機導覽 `bottom:0;height:53px`（DEC-134 取代）。
+- **D-2／D-3／D-4**：桌機加 rail 176px、☰／遮罩 `display:none`；當前頁標示手機與桌機皆為左色條（不再覆蓋舊 `border-top-color`）；D-4 加禁 `stSidebar／stToolbar／stMain／stElementContainer／stVerticalBlock`。D-5 原封不動。
+- **D-6／D-7／D-8**：`NAV_MOBILE_H=53` 改註為底部保留帶；判定器 nav 判準改為抽屜語意（收合態在視窗外且 hidden、☰ (0,0)≥44×44、全 DOM 恰 1 個頁面 radiogroup、底部 0 個固定主導覽、桌機不顯示 ☰、缺 `drawer` 鍵＝紅）；牙齒測試同步改寫並新增；`click_nav()` 先開抽屜再點。
+- **D-9／D-10／D-11**：留白改以「底部保留帶 53＋16」；線 791 由 `_nav_line()` 提供，`p2_nav_margin_160` 數值等價（基準逐位相同）；證據 JSON **覆寫**（舊檔於 git 歷史；`newui2_batch3b`／`newui2_realfeed` 內舊 PNG 為歷史底部導覽畫面，未重生）。
+- **D-12**：`test_mobile_nav_stays_four_cells_in_css` 加斷言（收合態、☰ 規則、無底部 53px）。**D-15**：DEC-129／Active Contract 文字一字未動。**D-16**：新測試檔 `test_ui2_` 開頭。**D-17**：`ALLOWED_UI2_WRITES` 不變（有測試）。**D-18**：改用 `tests/ui2_browser.py::require_browser()`。
+- **§2.4/§2.5**：workflow `ui2-browser`（matrix 1.56.0／1.59.2、playwright==1.64.1、`UI2_BROWSER_LANE: required`、junit 解析 skipped>0 或 tests<40 紅）＋ `ui2-browser-gate`；fast lane meta 守衛；證據 meta 含 git_sha／source_hash／generated_at／playwright／chromium，`test_dec137_evidence_meta_is_fresh` 比對。
+- **§3 覆蓋**：T-01～T-19 皆有 Playwright 或 AST 測試（`tests/test_ui2_drawer_browser.py`）；T-20 為降級測試（JS 以空 script 取代；只驗切頁收合，明示非完整行為）。T-12 於 390 FAKE 驗；Real 態以 `newui2_realfeed` 證據與一條 Real 行為測試覆蓋，**Real 活 feed 的第一屏 160px 量測由 measure_viewport `--feed real` 證據承擔**。
+- **§4 突變 teeth（真實測試上重做）**：拿掉 inert、focus-return、去重旗標、release、Enter 分支、click 委派皆有紅燈測試；`sync()` 桌機 release 分支以 resize 殘留測試（T-09e）覆蓋，**未單獨做該行突變**。
+- **本機結果**：見 PR 描述（1.59.2／1.56.0 各 52 passed、skipped 0；fast 預設集結果見 PR）。
