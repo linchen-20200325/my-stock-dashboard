@@ -998,3 +998,9 @@ DEC-086 規則已於 main，本表已落地。
 - 依 DEC-141（客戶 Q1~Q8）施工：組合狀態行＋今日需處理單行、Primary／建議持股水位空槽、持股表欄名＋原因。**presentation-only，未接任何資料**。
 - **W-11 未完成**：版面空槽已施工，待獨立 QA；正式資料接線（Auth／來源／Aggregator／Risk Cap）未做，也未授權。
 - 新守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`；`viewport_measurements*.json` 已依 source_hash 重生。Draft PR，不合併。
+
+## 2026-11-06｜New UI2 最新設計／規則更新接手點（Draft PR #1030，未合併）
+- 客戶已提出並確認的下一版方向：**五頁+頂部五頁導覽（手機橫滑），頂部 Sheet、右上帳號，取消左側 rail/drawer**，資料健康度集中 🗂資料；手機 Dark-only、首屏可操作仍為守衛。基金截圖只借 UX 和「唯一資料層→完整證據→六領域 OneBrain→全域複核」架構，不移植基金財務領域語意。
+- OneBrain **一套協調系統、六個股票分析領域與全域證據複核**，完整 headless Evidence；分頁 scoped、白話文、短中長、資料/AI 嚴格隔離、Token 超限 partial/覆蓋 Gate；舊版有效資料與財報繼續重用。C 級只研原提供之市場 PDF 主題。
+- **本 PR 分支已修改** PROJECT_RULES、New UI2 Active Presentation、舊 Drawer 文件的適用性說明；舊四頁/我的資料健康/rail/drawer 仍保留歷史文本，但已明確標示新版本不得據此施工。新增 DEC-142/BACKLOG 接手項。**未通過獨立 QA/CI、未合併；不能宣稱 runtime、route、OAuth 或 JS 已改**。
+- 下一個安全步驟：GitHub Gate 重查 main/PR/diff/CI → 協調 #1022/#1027/#1029/#1030 文件唯一 Active 規格 → 390/1440 頂部導覽與 Sheet 視覺 Gate → Claude 才可分批改 production src + 相關 guards（其中 JS_V4、安全/資料 Gate 高風險）；與 Work 資料架構清理衝突則 Claude 優先。
