@@ -73,3 +73,15 @@
 - 驗資料須列 `source, identifier, as_of, retrieved_at, freshness, is_proxy, is_estimated, consumer, risk_gate`（不存在欄位標 `missing`，不是 0）。
 - 舊 UI 邏輯保留至正式 cutover，真資料與 AI 分離；Evidence 覆蓋與 UI 簡化分軌驗。
 - 本文件是 ChatGPT 的初步唯讀稽核，尚未經獨立 code-level QA，也未執行完整 CI，**不得以此標 DEAD_CONFIRMED 或批准任何刪除**。
+
+
+## 8. 2026-11-05 第二輪：已證明「不是可直接合併的重複碼」
+對照 main `481ae083f5276d003882d1e0954e501809aa3aa4` 的以下現行程式：
+- `shared/data_categories.py` 是 L0 **11 種 category 名稱與映射的 SSOT**；`category_for()` 不做取數、也不宣稱 runtime readiness。
+- `src/ui/pages/data_registry_panel.py::compute_registry_groups` 是 Old UI 的 L5 視圖格式化：補 `emoji/color/rows`、依 `last_updated` 的 UI 專用診斷尺表示健康；遇非 dict 資料列時**靜默跳過**。
+- `src/services/data_registry_summary_service.py::group_registry_entries/summarize_data_registry` 是 L3 唯讀聚合：不 import streamlit、輸出 count/missing/latest，遇非 Mapping 資料列時**raise ValueError（fail loud）**。它的檔頭明言不允許 L3 向上 import L5，且測試 `tests/test_batch_z54.py` 已有兩者正常輸入的對照。
+- 同名「registry」≠ 同一責任：`src/data/core/data_registry.py` 是靜態宣告；`src/services/data_registry_scanner.py` 是 session registry 寫入；`src/services/data_registry_summary_service.py` 是唯讀摘要；`src/ui/pages/data_registry_panel.py` 是 Old UI 呈現。
+
+**裁定**：這些不是可為「去重」而直接揉成一個函式／搬到 `src/data` 的候選。要再收斂必須先明確保留 L3 fail-loud 與 Old UI 相容性、並用成對測試證明舊 UI 觀測結果相等。本輪不碰任何 Python 實作。
+
+**目前獨立 ChatGPT code PR：** #1024 僅移除 ETF 已退役的回測 reader／條件輸出，新增三項靜態測試；與資料註冊表沒有交集。Draft CI 未全數結束前不得合併，Claude 原有功能工作具有優先權。
