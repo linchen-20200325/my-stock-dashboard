@@ -1060,9 +1060,9 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 11. **與既有規則的關係（撰寫組讀法，單組、未經第二組驗證）**：取代 §24.2「第一屏三層答不出＝FAIL」之第三層判準（已就地刪除線＋📌）；§19.2 資料中心責任落點改 👤 資料健康度；§24.1、§25 位階不變（本 DEC 為最新客戶 DEC）；與第 13 節（投資語意）、第 23 節（Scope Guard）、第 27 節（永久收尾 Gate）、第 28 節、第 29 節同向。`CLAUDE.md` §-1.5.D v3 §03-2 ①（UI 結構變更草稿先行）不受影響：新版面仍須先出文字線框。
 
 
-## 第 31 節｜ChatGPT × Claude Code 最小重工責任分工（DEC-138；客戶 2026-11-05）
+## 第 31 節｜ChatGPT × Claude Code 最小重工責任分工（DEC-139；客戶 2026-11-05）
 
-> **適用與位階**：本節為客戶最新跨工具協作分工的入口索引，正式裁示見 `docs/DECISIONS.md` DEC-138。它不凌駕 `CLAUDE.md`／`PROCESS.md`，也不自行給予任何產品碼、Auth、資料、Risk Cap、OneBrain 或新 Layout 施工授權。
+> **適用與位階**：本節為客戶最新跨工具協作分工的入口索引，正式裁示見 `docs/DECISIONS.md` DEC-139。它不凌駕 `CLAUDE.md`／`PROCESS.md`，也不自行給予任何產品碼、Auth、資料、Risk Cap、OneBrain 或新 Layout 施工授權。
 
 | 工作 | 主責 | 必須保留的獨立性／授權 |
 |---|---|---|
@@ -1076,8 +1076,8 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - **衝突與停止**：本節僅界定 ChatGPT 與 Claude Code 的跨工具工作分工；Claude Code 內部的總管／subagent 分工、獨立 QA、資料憲法仍依 `CLAUDE.md`／`PROCESS.md`。出現衝突時先停下相關工作，記錄差異，不以本節悄悄放寬上位規則。
 
 
-### 31.1 本次特例：ChatGPT 直接重構資料分層／死碼（DEC-139；2026-11-05）
+### 31.1 本次特例：ChatGPT 直接重構資料分層／死碼（DEC-140；2026-11-05）
 
 - 客戶已特別核准將「資料分層剝離、死碼查證及安全移除」由 ChatGPT **直接負責（包含程式修改）**，是第 31 節一般 Claude Code 程式主責規則的狹義例外，不擴及其他程式需求。
 - **Claude Code 工作優先**：ChatGPT 每次動手前做 GitHub Verification Gate＋per-file/per-contract/per-test 衝突比對；若重疊，ChatGPT 必須停手／退讓／分批改範圍，不能以自己先開 PR 要求 Claude Code 改道。
-- 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-139。
+- 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-140。
