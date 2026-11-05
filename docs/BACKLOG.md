@@ -1865,3 +1865,9 @@
 
 
 - **NUI2-VISUAL-BATCH1（2026-11-05；補註，只追加；實作組單組、獨立 QA 待做；draft PR `ui2/visual-batch1`）**：依視覺完善 Task 2 差異表的兩項 A 類（presentation-only）修正。① `.ui2-chip--positive/--warning/--danger` 文字色換為 `#3fb950／#d29922／#ff7b72`（對 `#0e1117` 與疊 tint 後皆 ≥4.5:1；tint／尺寸不動；`tests/test_ui2_chip_contrast.py`）。② 💼 持股桌機（≥769px）首屏依 Wireframes §4.2／W-11（客戶 Q3 核准）重排：header 列＝標題＋主 CTA（仍 disabled）、三 tile（Risk Cap／目前曝險／組合狀態）、其下今日需處理／下一步；元件／欄位／字樣／`data-ui2-*` 不增減，手機像素不變（`tests/test_ui2_hold_header.py`）。證據 `docs/vnext/newui2_visual_batch1/`（前後圖、README）。**未動**：A2（👤 去重 CTA，判為 B）、A3 泛稱卡片美化、B／C 類、JS（`drawer_js.py`、JS_V4 hash）、資料來源、公式、Risk Cap、OneBrain、OAuth。**仍 open**：Primary 圖／⑤ 建議持股區間／持股表（B 類，需草稿裁示）；Light theme 下三色對比未驗；Real feed 視覺截圖未擷取；真機／Cloud／iOS／1.56 與 1.59 以外版本未驗；非 pixel parity。
+   - **NUI2-VISUAL-BATCH1 獨立 QA 補註（2026-11-05；只追加，上一則「獨立 QA 待做」~~獨立 QA 待做~~ 已完成——有意識的更新，不是漏刪；DEC-138）**：
+     - **結果**：獨立 QA（限定範圍複驗）**0 FAIL，可合併**；3 項輕微偏離：① CTA 與 tile 垂直間距僅 1.3px；② header 缺「組合名稱·資料日·判得出」行；③ 今日需處理為兩列，非線框的一行。
+     - **Light 實測**：預設、`prefers-color-scheme`、`embed_options=light_theme`、設定選單（隱藏且無 Settings 項）、localStorage 皆仍 dark → **現無可達途徑**；惟若日後可達，新三色對白底疊 tint 後約 2.1～2.2，**不合格**（**open**，Streamlit Cloud 未驗）。客戶裁示（DEC-138）：維持 Dark-only，若 Light 可達且對比不合格須停手回報。
+     - **新增 P3（open）**：(a) 三 tile 與 CTA 位置的**幾何守衛缺口**（突變 3 欄改 2 欄仍綠）；(b) CTA 變可用時**重評視覺與 DOM 順序**（CDP AX 樹順序＝DOM 順序，與 main 相同）；(c) 真機／Cloud／iOS／Firefox／WebKit／Real feed 視覺截圖／彩色 emoji 字型**未驗**。
+     - **仍 open（B 類，需草稿裁示）**：W-11 Primary 圖、⑤ 建議持股區間、持股表。**A2（👤 去重 CTA）判 B，未動。**
+     - **未將任何既有 open 項改為 closed。**

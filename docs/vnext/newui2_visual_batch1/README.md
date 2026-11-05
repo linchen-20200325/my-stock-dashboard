@@ -39,3 +39,17 @@
 ## 未驗證
 
 iOS Safari／Android 真機、Streamlit Cloud（含 Manage app）、Firefox／WebKit、Streamlit 1.56／1.59 以外版本、Real-data feed 的視覺截圖、Light theme、彩色 emoji 字型下的實際外觀、與原始參考圖的逐像素比對（無原圖）。
+
+## 未做／未驗證（獨立 QA 後補註，2026-11-05；DEC-138）
+
+**未做**：W-11 Primary 圖、⑤ 建議持股區間、持股表、header 的「組合名稱·資料日·判得出」行；今日需處理仍為兩列（非線框一行）；A2（👤 去重 CTA）判 B 未動。**維持 Dark-only，未新增 Light 支援**（Light 現無可達途徑；若可達，新三色疊 tint 後約 2.1～2.2 不合格，須停手回報）。另有 P3：三 tile／CTA 位置幾何守衛缺口（突變 3 欄改 2 欄仍綠）、CTA 變可用時須重評視覺與 DOM 順序。真機／Cloud／iOS／Firefox／WebKit／Real feed 視覺截圖／彩色 emoji 字型仍未驗。
+
+### Visual Fidelity Gate 記錄
+| 範圍 | 結果 |
+|---|---|
+| chip 對比（局部修正） | **PASS** |
+| 💼 桌機 W-11 header／三 tile | **部分 PASS＋輕微偏離**（CTA 與 tile 間距 1.3px；缺資料日行；今日需處理兩列） |
+| **整頁 Visual Fidelity** | **未達**：A2／V1 在 Primary 圖補上前**不 PASS** |
+| pixel parity | **否**（非 pixel parity，無原圖） |
+
+獨立 QA：0 FAIL，可合併；局部修正、非整頁完成。

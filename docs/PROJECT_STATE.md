@@ -1113,3 +1113,8 @@
 - **實測（FAKE；Chromium headless）**：measure_viewport 70/70（1.59.2）、70/70（1.56.0）；Real 11/11（兩版）；📊 手機 stale 181.6／unavailable 162.5（與 before 逐位相同，≥160 守衛未退化）；`UI2_BROWSER_LANE=required` `ui2_browser` lane 52 passed（1.56.0）／52 passed（1.59.2）；`tests/test_ui2_*`＋c3＋portability 1470 passed。證據 JSON（`newui2_batch3b`／`newui2_realfeed`）因 source_hash 重生，僅 `p4_hold` 結果改變。
 - **未動**：JS（`drawer_js.py`、JS_V4 hash、`tests/test_ui2_drawer_js_guard.py`）、資料來源、公式、Risk Cap、OneBrain、OAuth、A2／A3／B／C 類；DEC 未新增。
 - **未驗**：iOS／Android 真機、Streamlit Cloud／Manage app、Firefox／WebKit、Light theme、Real feed 視覺截圖、1.56／1.59 以外版本；非 pixel parity（無原圖）。
+
+## 補註（2026-11-05｜#1020 視覺完善 Batch 1）
+- 獨立 QA 通過（0 FAIL），待合併（draft）；DEC-138 維持 Dark-only，不新增 Light 支援。
+- 局部修正、非整頁完成：W-11 Primary 圖／⑤ 建議持股區間／持股表未做（B 類，需草稿裁示）；限制保留於 BACKLOG／HANDOFF。
+- 下一個安全工作：💼 完整 W-11 與 🎯 精選線框草稿（須先出草稿裁示）。

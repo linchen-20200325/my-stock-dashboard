@@ -987,3 +987,9 @@ DEC-086 規則已於 main，本表已落地。
 
 
 - **Safe Handoff 補註（2026-11-05；NUI2-VISUAL-BATCH1；只追加）**：draft PR `ui2/visual-batch1`（不合併）：chip 文字色對比修正＋💼 持股桌機首屏重排（W-11）；證據 `docs/vnext/newui2_visual_batch1/`。獨立 QA 待做（重點：手機 💼 版面像素不變、📊 手機 unavailable 導覽餘裕 162.5／stale 181.6 不退化、`git diff` 不含 `drawer_js.py`／`tests/test_ui2_drawer_js_guard.py`）。仍禁止：A2／A3／B／C 類、JS、資料來源、公式、Risk Cap、OneBrain、OAuth；把本批當客戶視覺驗收或 pixel parity。未驗：真機、Streamlit Cloud、iOS、Light theme、Real feed 視覺、1.56／1.59 以外版本。
+
+## 補註（2026-11-05｜#1020 視覺完善 Batch 1 獨立 QA）
+- 獨立 QA 通過（0 FAIL）、待合併（PR #1020 仍為 draft，合併由客戶決定）。局部修正、非整頁完成。
+- DEC-138：維持 **Dark-only**，不新增 Light；Light 若可達且 chip 對比不合格須停手。
+- **未完成（仍 open，不得關閉）**：W-11 Primary 圖／⑤ 建議持股區間／持股表／「組合名稱·資料日」行；A2 判 B 未動；P3 守衛缺口與未驗項目見 BACKLOG `NUI2-VISUAL-BATCH1`。
+- 下一個安全工作：💼 完整 W-11 與 🎯 精選的線框草稿（**須先出草稿並取得裁示**才可寫 UI code）。
