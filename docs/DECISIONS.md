@@ -7636,3 +7636,13 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **範圍外（未動）**：P6 資料健康度、四頁視覺重排、OAuth／Sheet、OneBrain runtime、Digest schema、Risk Cap／System Action、投資公式、新資料來源、P7 Account Area；✕ 關閉鈕未加（S-14 待線框定案）。
 - **決策者**：**使用者**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：New UI2 手機導航施工。
 - **狀態**：施工 PR 為 draft；Visual Fidelity／獨立 QA／真機項未驗；`ui2-browser-gate` 需 user 在 GitHub 設為 required check 後才算強制。
+
+
+### DEC-138｜ChatGPT 文件／治理與 Claude Code 程式施工分工（客戶 2026-11-05）
+
+- **使用者裁示（本次對話）**：「簡單來說是這樣嗎?文書交給我，程式交給 Claude Code」；經確認後要求「請寫進記憶中」「那就開始吧」。其中「我」依前後文指 ChatGPT。
+- **分工**：ChatGPT 直接負責產品設計、UI／UX 草稿、文件撰寫與維護、正式規格整理、GitHub 唯讀驗證、文件型 PR 與合併治理、獨立驗收；Claude Code 負責應用程式、測試與自動化的實作／除錯／執行 QA，依明確核准的規格施工。使用者保留新 Layout、重大風險、付費、權限及不可逆操作最終裁示。
+- **最小重工**：ChatGPT 已產出可驗證的正式文件／決策／設計時，不再要求 Claude Code 重寫或重做相同研究。Claude 因程式施工需同步修改測試、技術文件或交接時，可在原施工 PR 一併處理；禁止為形式化分工拆出無意義 PR。
+- **不改安全治理**：GitHub Verification Gate、既有 CLAUDE.md／PROCESS.md 的程式施工協作與獨立 QA、CI、branch protection、不得直接改 main、Auto-Ship Gate、Data／AI 分離與正式 Decision 權威均不放寬。ChatGPT 直接提交文件仍須符合既有 PR／CI／QA 流程；此裁示不構成任何 UI、OAuth 或 OneBrain 程式施工授權。
+- **衝突處理**：本裁示是 ChatGPT／Claude 之間的工作責任分配，不等於取消 Claude Code 執行程式任務時其內部 subagent 派工及獨立 QA 義務；若上位程序對 ChatGPT 直接撰文有不同解釋，須明確標示差異、依既有治理處理，不得默默宣稱已修改上位憲法。
+- **決策者**：使用者。**效力**：2026-11-05 起的跨對話協作偏好；**落盤**：本 docs-only PR，合併後才成為 main 上正式紀錄。
