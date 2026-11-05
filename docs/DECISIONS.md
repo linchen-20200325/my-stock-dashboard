@@ -7660,3 +7660,11 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **衝突規則**：Claude Code 目前／後續已授權工作**優先**；ChatGPT 每批修改前重新確認 GitHub main、Open/Draft PR、head/diff、branches、CI 與預定檔案 owner。若同檔或同資料契約／同測試／同 workflow／同 SSOT 有重疊，ChatGPT **停止或縮小自己的批次**，不可覆蓋、推擠或重設 Claude 分支；不要求 Claude 為本次清理讓路。
 - **落地要求**：安全小批、獨立 branch／PR、必要 tests／CI／獨立 QA；無法取得完整工作樹或執行足夠驗證時僅能唯讀探勘／文件化，不得將未驗證刪碼合併或宣稱已完成。對不可逆資料、Risk Cap、來源／公式與 UI Layout 仍適用原有客戶 Gate。
 - **決策者**：使用者；**範圍**：本次資料架構與死碼清理特例；**日期**：2026-11-05。此 DEC 合併到 main 前僅存在於 PR 分支。
+
+
+### DEC-141｜💼 持股 W-11 未完成部分：客戶核准 Q1~Q8，授權純版面／空槽施工（客戶 2026-11-05）
+
+- **裁示**：Q1=A（Primary 與 ⑤ 在上、持股表在下；手機沿用已核准順序）；Q2=產業曝險／集中度為 Primary 主圖，績效／benchmark 在次要區不取代；Q3=手機無資料 Primary 收成一行明確空槽、桌機維持預定高度、施工後重測手機首屏；Q4=資料日沿用 DEC-102「多數＋例外分組」，不得以最舊一檔／今日／抓取時間冒充，未接線前顯示「⬜ 資料日未提供」，不授權新增組合層日期計算或來源；Q5=⑤「建議持股水位（市場端）」僅空槽，不讀 Risk Cap 數值、不呼叫會寫 session 的服務、不得暗示已有投資上限；Q6=「今日需處理」合為一行，Aggregator 前維持「⬜ 尚未提供」，不計算動作、不顯示「今日無需調整」；Q7=欄名＋原因，桌機八欄／手機四欄加展開，無登入資料不顯示假列／假成本／假報酬、不把未登入判為持股 0 檔；Q8=不開放 `gsheet_sa_reader`／cron 快照／Service Account 接入 UI2。
+- **授權範圍**：**僅**版面／欄位結構／空槽。**不授權**正式資料接線、Auth、Risk Cap、System Action、OneBrain、Digest、投資公式。W-11 須通過施工與獨立 QA 驗收才能標完成。詳見 `docs/vnext/NEWUI2_HOLD_W11_REMAINING_DRAFT_2026-11-05.md` §8。
+- **決策者**：客戶（2026-11-05）。｜**效力日期**：2026-11-05 起。｜**範圍**：New UI2 💼 持股頁 W-11。｜**不推翻** DEC-138（Dark-only；未完成部分不得宣稱整頁完成）。
+- **狀態**：本 DEC 位於 docs PR #1027（draft，未合併）；合併到 main 前僅存在於 PR 分支。
