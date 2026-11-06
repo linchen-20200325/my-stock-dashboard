@@ -23,14 +23,20 @@ on:
         description: '只印不寫（true / 留空）'
         required: false
         default: ''
+      publish_dry_run:
+        description: '只印發布計畫、不推分支不開 PR（true / 留空；與上方 dry_run=腳本不寫列 是兩件事）'
+        required: false
+        default: ''
   schedule:
     # UTC 09:40 = TW 17:40,週一~週五。
     # 17:40 是刻意的:TWSE 三大法人約 14:30 才齊(CLAUDE.md §2.3),
     # Yahoo EOD 更晚;太早跑會系統性記到「資料還沒到」的缺腿狀態。
     - cron: '40 9 * * 1-5'
 
-permissions:
-  contents: write
+# 同一 job 的發布串行、不取消進行中的（避免同分支並行 push）。
+concurrency:
+  group: data-publish-macro-forward-test
+  cancel-in-progress: false
 
 jobs:
   capture-macro-signal:
@@ -38,9 +44,16 @@ jobs:
     # 抓取鏈含多源 fallback + 重試;fetch_macro_bundle 自身上限 100s,
     # 但冷啟動加上 FinMind/TWSE 重試實測可達數分鐘,給足預算。
     timeout-minutes: 25
+    # 2026-11-06：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
+    permissions:
+      contents: write        # 推 auto/data-macro-forward-test 分支（不是 main）
+      pull-requests: write   # gh pr create / list
+      actions: write         # gh workflow run pr-check.yml（GITHUB_TOKEN 的 push 不觸發 workflow，須 dispatch 才有 required check）
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 發布 helper 需 merge origin/main 與切換分支
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -73,19 +86,20 @@ jobs:
           fi
           python scripts/update_macro_forward_test.py $ARGS
 
-      - name: Commit and Push Changes
+      - name: Publish via data PR (no direct push to main)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.publish_dry_run }}
+          OBS_DATE: ${{ steps.capture.outputs.observation_date }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add data_cache/macro_forward_test/
-          if git diff --staged --quiet; then
-            # 休市日 / 三來源全空 → 腳本刻意 exit 0 不寫列(§1 不落空殼),
-            # 這裡無變更是**正常**,不是失敗。
-            echo "→ data_cache/macro_forward_test/ 無變更（休市日或資料全敗），跳過 commit"
-          else
-            # 觀測日（= 實抓 ^TWII 最後一根 K 棒交易日）由腳本經 GITHUB_OUTPUT 交出；
-            # 取不到時退回 runner 日期（只影響訊息文字，不影響資料）。
-            OBS_DATE="${{ steps.capture.outputs.observation_date }}"
-            git commit -m "🤖 總經燈號落地：${OBS_DATE:-$(date +%Y-%m-%d)}"
-            git push
-          fi
+          # 2026-11-06：原「git add / commit / push」改由 helper 執行，只推 auto/data-macro-forward-test 並開 PR。
+          # 休市日 / 三來源全空 → 腳本刻意 exit 0 不寫列(§1 不落空殼),
+          # 這裡無變更是**正常**,helper 印「無實質變更」並 exit 0,不是失敗。
+          # 觀測日（= 實抓 ^TWII 最後一根 K 棒交易日）由腳本經 GITHUB_OUTPUT 交出；
+          # 取不到時退回 runner 日期（只影響訊息文字，不影響資料）。
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ -n "$OBS_DATE" ]; then ARGS="$ARGS --observation-date $OBS_DATE"; fi
+          python scripts/publish_data_pr.py --job macro-forward-test \
+            --paths data_cache/macro_forward_test/ \
+            --commit-msg "🤖 總經燈號落地：${OBS_DATE:-$(date +%Y-%m-%d)}" $ARGS

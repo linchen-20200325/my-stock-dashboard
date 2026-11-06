@@ -11,19 +11,32 @@ on:
         description: 'bootstrap 歷史長度（年）'
         required: false
         default: '20'
+      dry_run:
+        description: '只印發布計畫、不推分支不開 PR（true / 留空）'
+        required: false
+        default: ''
   schedule:
     # 每日 UTC 09:00（TW 17:00 收盤後，FinMind T+1 通常此時資料已備齊）
     - cron: '0 9 * * *'
 
-permissions:
-  contents: write
+# 同一 job 的發布串行、不取消進行中的（避免同分支並行 push）。
+concurrency:
+  group: data-publish-macro-history
+  cancel-in-progress: false
 
 jobs:
   update-history:
     runs-on: ubuntu-latest
+    # 2026-11-06：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
+    permissions:
+      contents: write        # 推 auto/data-macro-history 分支（不是 main）
+      pull-requests: write   # gh pr create / list
+      actions: write         # gh workflow run pr-check.yml（GITHUB_TOKEN 的 push 不觸發 workflow，須 dispatch 才有 required check）
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 發布 helper 需 merge origin/main 與切換分支
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -57,10 +70,14 @@ jobs:
             python scripts/update_macro_history.py
           fi
 
-      - name: Commit and Push Changes
+      - name: Publish via data PR (no direct push to main)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          # 2026-11-06：原「git add -f / commit / push」改由 scripts/publish_data_pr.py 執行
+          # （--force-add 保留下方 v19.97 的 -f 語意；只推 auto/data-macro-history 並開 PR，不 push main）。
+          # 下方歷史註解保留原文，其中 `git add -f data_cache/` 現由 helper 代為執行。
           # v19.97 bug fix:.gitignore(v18.461) 蓋掉 data_cache/*.parquet,原 `git add data_cache/`
           # 每日 no-op → cron 抓的歷史從未 commit。加 -f 強制納管 parquet+metadata
           # (CLAUDE.md §5:歷史運算用凍結快照 data_cache/ parquet)。
@@ -91,11 +108,8 @@ jobs:
           #    row_count:0 / last_error:"抓取結果為空")。真因是 dgtw 6100 的
           #    shape 假設過時,已由 v19.122 在 `scripts/update_macro_history.py`
           #    ::fetch_tw_pmi_history 補上 `result.distribution`(runtime 端為 v19.120)。
-          git add -f data_cache/
-          if git diff --staged --quiet; then
-            echo "→ data_cache/ 無增量，跳過 commit"
-          else
-            DATE=$(date +%Y-%m-%d)
-            git commit -m "🤖 每日總經歷史增量：$DATE"
-            git push
-          fi
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then ARGS="--dry-run"; fi
+          python scripts/publish_data_pr.py --job macro-history --force-add \
+            --paths data_cache/ \
+            --commit-msg "🤖 每日總經歷史增量：$(date +%Y-%m-%d)" $ARGS
