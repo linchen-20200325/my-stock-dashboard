@@ -38,6 +38,15 @@
 **上位與既有文件（本批不改）**：`CLAUDE.md`、`PROCESS.md`、`ARCHITECTURE.md`、`SPEC.md`、`STATE.md`、`docs/v2/spec/*`。
 **歷史全文**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（約 5150 行，含舊待辦、等你答、逐字收錄的客戶裁示）—— **未刪除、未凍結宣告**；其中尚未遷入的待辦見 `docs/BACKLOG.md` `BL-MIGRATE-1` 📌 註。
 
+
+### 0.4 GitHub 對話知識與第一版資料資格的保存／驗收（客戶 2026-11-06；DEC-143 待合併）
+
+- **不是帳戶 Memory、不是逐字聊天日誌**：客戶要求整理的是在 GitHub 保存的 ChatGPT ↔ 客戶對話產生的有效專案知識、裁示、交接。正式五檔按 §0.3 分工更新；舊規格和歷史 DEC 保留可追溯原文，當前適用性標 \`SUPERSEDED / HISTORICAL\`；不能再因看到歷史四頁／抽屜／rail 文字便當作下一輪已核准施工規格。須核對較新 Decision、最新 main 及尚未合併 PR。
+- **能力可用性是前置驗收，不是來源或公式改動授權**：任何從 Old UI／Legacy New UI 保留的缺貨、訂單、財報跨期、籌碼、宏觀與 ETF 資料，需分開驗證：① source 是否存在且獲核准；② 真實 API/授權/欄位/日期是否可抓；③ 數值是否有 missing/freshness/單位/代理/公式口徑問題；④ 是否已接 New UI2；⑤ 是否已完整進 Evidence Registry／Decision Digest。任一項失敗要明確標原因與降級，不能用 0／neutral／safe／未觸發補洞。
+- **嚴格區分狀態與推論**：repo 沒有 fetcher ≠ 外界永遠無資料；程式有 fetcher ≠ 今天實取成功；Old UI 顯示 ≠ New UI2 已接；「疑似缺貨的財務足跡」≠ 公司公告證實的缺貨或大型訂單；月／季資料缺失回 0 分 ≠ 真實零變化。發現任何決策級語意風險先依既有 Gate 停手／寫 Audit，不能為 UI 方便而自行更改正式權重／門檻／Risk Cap。
+- **業務／工程分離**：ChatGPT 寫治理及對話知識與稽核草案；Claude Code 對正式資料修復、跨期計算、High 風險測試及資料接線負責（DEC-139／140 的例外照舊）；如與 #1027／#1030／#1032 等在製治理文件同檔，先比對並協調，**不得直接覆蓋或繞過 CI／獨立 QA**。
+- **本節索引，不代替來源**：正式裁示 \`docs/DECISIONS.md\` DEC-143；有效知識 \`docs/PROJECT_STATE.md\` §70；待辦 \`docs/BACKLOG.md\` \`NUI2-GH-MEMORY-DATA-GATE\`；可恢復接手 \`docs/HANDOFF.md\` 最上方 2026-11-06 checkpoint；細節 PR #1033。#1032 的主動換對話第 32 節為相鄰獨立治理，**不在此複製第二套**；兩者皆需獨立審核及 main 合併才正式生效。
+
 ## 第 1 節｜Fact Truth vs Governance Truth（雙軌）
 
 ### 1.1 Fact Truth（「現在實際是什麼」）
