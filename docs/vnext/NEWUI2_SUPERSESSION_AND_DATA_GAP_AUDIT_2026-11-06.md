@@ -111,3 +111,64 @@ MCP 只能改善「工具怎麼訪問」，**不能創造來源不存在的真�
 1. 先建「Legacy Capability × Source Health × Decision Safety」矩陣，對每個欄位 trace `producer → canonical → deterministic calc → Evidence Registry → Digest/UI`，將 `GOOD / LIMITED / UNSAFE / NOT_VERIFIED / NOT_WIRED` 分軸標記，不用單一綠燈掩蓋來源/公式/接線差異。
 2. 先以測試固定缺貨 C4 missing→rankable 的情境，以及財報趨勢缺兩腿→neutral 的情境，開 High effort Risk/Data QA Gate；提出保留合法部分證據、禁止越級推論/正式動作的降級契約。**不要未裁示就改原分數公式或權重**。
 3. 通過資料/財務可追溯與源端驗證後，逐批薄 L3 feed 接 UI2，完整 Evidence 給 OneBrain；🗂資料頁明確列出「來源不存在」「來源失敗」「資料不可信」「未接線」「已過期」，並保留原因與修復路徑。
+
+## H. 2026-11-06 Claude 工程複驗勘誤與資料新鮮度阻塞（較本檔 B1/B2 舊稽核優先）
+
+> **來源分級**：本節含 (1) 本次 ChatGPT 親自核對的 GitHub workflow 事實及 (2) Claude Code 回報的重現/靜態掃描；Claude 工程測試報告尚未由 ChatGPT 在相同環境獨立重跑。**不能把單組回報升格成獨立 QA PASS**。本檔以前引用 2026-10-23 audit 的缺口，不得推論 2026-11-06 main 仍有同一 bug。
+
+### H.1 Cron write failure — 當前需要優先恢復的 production freshness
+
+- **直接查到的 GitHub FACT**：2026-11-05 UTC、台灣時間 2026-11-06 的三個失敗 workflow：「Update Macro History (Daily)」、「Update Sector Flow (Daily)」、「總經燈號每日落地 (Weekdays)」，其 Jobs 都在 `Commit and Push Changes` 失敗；先前 fetch / capture 段未顯示失敗。當時 main `343f0e0e`。
+- **workflow 原碼 FACT**：`.github/workflows/update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 的 commit 步驟均執行 `git push`、直接推送 checkout 的 main。
+- **Claude 回報的日誌 FACT（待 ChatGPT 獨立取得該份 log）**：`GH006 Required status check "ui2-browser-gate" is expected`；因 branch protection 無法直接寫 main。Branch protection 規則「何時/由誰更改」未驗；未取得 Admin API 權限，不推定責任。
+- **影響**：資料產生不等於已保存到 main。Claude 回報 `data_cache/twii_ohlcv.parquet` main 最後觀測 11-04；此項文件/內容日期仍需按實檔及 snapshot 再核。即使其他 workflow 綠也不得把新資料當已更新。日後每個資料產品必須揭露 last_observation_date / last_successful_published / freshness / status；不能用 runner 執行時間代替觀測日。
+
+### H.2 先前 audit 過期或須修正的四項
+
+| 本檔先前說法（歷史） | 最新複驗報告（Claude Code） | 處理 |
+|---|---|---|
+| 出口標籤錯把金額當訂單，仍未修 | 目前已修 | **改標歷史已修 / 需查 commit 和實際 UI 文字；不重開重複修復** |
+| TWII MA200 根數不足時回落現價，仍未修 | 目前已修 | **改標歷史已修 / 需看缺樣本負測試；不據舊稽核下修生產程式** |
+| 外資總經備援 fillna(0) 仍未修 | 目前已修 | **改標歷史已修 / 另查個股 data_loader 的 fillna(0) 是否仍存在** |
+| ETF 回測已完全無讀者 | 仍有 1 個殘留讀取點（Claude 程式掃描） | **更正：功能頁退役但殘留讀者；查 live/dynamic import 後才可刪；不得宣稱完全零引用** |
+
+以上為「舊稽核已過時」而非新資料來源已全部可用；**任何更正若無 GitHub 變更歷史/實測證據仍標待複核**。
+
+### H.3 財務及缺貨模型新重現清單（Claude 提供）
+
+| 優先級 | Claude 回報的可重現案例 | 待確認的正確性契約 |
+|---|---|---|
+| P0 | `compute_trend_score([], [])` 得 `0.0 / ➖ 中性` | coverage 不足 ≠ 中性；正式輸出需 `⬜ 無法判定` 或明確 degraded，不得當交易權威 |
+| P0 | 缺貨 8 季但所有數值 None ⇒ 0 分、tier「不明顯」仍排入 | 必須辨識 `NOT_EVALUATED`，不可當「缺貨證據不足因此真的不缺貨」 |
+| P0 待來源口徑 | 現金流由累計轉單季尚未完成 | FinMind 實際回傳口徑未現場驗證，先做 source period/unit/quarter reconcile + mutation；未驗不改公式 |
+| P1 | 月營收 `[20,30,NaN]` 仍選 M-1 為末月 | 不能將較早的月份冒充最新月；日曆月份連續性必須被驗證 |
+| P1 | 缺合約負債/存貨部分腿記 0 分 | 「未取得」與「真實低增長」需分開，評分資格先根據 coverage 降級 |
+| P1 | 月/季缺腿仍以 0 加權得到 0.233「中性」 | 應 fail-closed 或明確 partial，不可補成中性 |
+| P1 | `fin_health_diff` Warning/N/A/無共同欄位可能被判 stable | 不同型指標及缺欄必須有適用性門檻，`stable` 須有充分可比資料 |
+| P1 | 月營收時間序列有洞，M-2/M-1/M 不是連續月份 | 依 observation_date 連續性對齊，不以列表位置作真實月份 |
+| P2 | `fin_health_diff._score` 前綴匹配 | 目前無已證實誤判，列研究，不主張改程式 |
+
+Claude 回報此批相關測試 **322 passed**；這只表示既有測試通過，不否認上列案例存在，更不能取代缺值、期間與語意的負測試；不得直接以其報告修改正式 Risk Cap/公式/權重。
+
+### H.4 Evidence Registry / Digest 實作現況（依 Claude 逐項掃描，待正式獨立 QA）
+- `Evidence Registry` 尚無 production 實作；`RULE_ID_ALLOWLIST` 只是 rule whitelist，不是證據儲存體。
+- Decision Digest schema/builder/validator 已有基礎，但沒有 production caller；UI2 只顯示「尚未開放」。**不存在的 evidence 不能宣稱已被截斷**。
+- Builder 存在 `MAX_ACTIONS=3` 候選截斷、無省略計數/原因；這與完整必需證據的要求潛在衝突。**重要區分：完整 evidence ledger 不等於全部 action candidates 應直接下單**。須依 separate ledger/candidate list、cap/omission/coverage contract 與 safety gate 設計，不可簡單放大 MAX_ACTIONS 導致改動唯一動作權威。
+
+## I. 三方案與設計草案：保留 main 保護的 Cron 恢復 Gate
+
+**客戶向 ChatGPT 交付 Claude 回報；本節記錄 ChatGPT 建議路線，尚不是 production workflow 改動授權。**
+
+| 選項 | 安全與正確性 | 實施與成本 | 結論 |
+|---|---|---|---|
+| A 暫時取消 required `ui2-browser-gate` | 會降低所有 PR/寫入驗收 | 快但有保護回退 | 不採 |
+| **B 每個 cron 寫入獨立資料分支→ PR→既有必要檢查→經授權 merge** | **不破壞 main 保護；可留下每次資料發布證據** | 中等，初期多 CI、需確認 Actions token/PR/自動合併 | **推薦** |
+| C 指定 bot/特權 token 繞過 branch protection | 寫入快，放大權限且跳過必要檢查 | 低～中，但需要權限管理 | 不採 |
+
+**B 的可施工草案，尚待權限及端到端 Gate：**
+
+1. 三個 workflow 分開產出 deterministic、具日期的單一資料分支（例 `data-sync/<workflow>/<observation-date>`，以合法名稱及 collision policy 驗證），發 PR 到 main；用 per-workflow `concurrency` 避免相互覆蓋。checkout、更新、重試須處理 main 被別的 PR 推進、existing PR/head、Git conflicts；禁止 force push 與私憑證出 log。
+2. **GITHUB_TOKEN PR 觸發限制**：GitHub 官方文件表示其觸發的 PR 檢查有可能需要授權者手動核准；不可假設「建 PR 即自動跑必需 CI」。先製作 read-only PoC 比較 GitHub App 安裝 token、細粒度 PAT 與是否可由既有受保護 branch 的 workflow 分發/批准；任何新 token/權限或付費應先經客戶裁示，**不能重用現有 OAuth/Sheets secrets**。
+3. **合併 Gate**：真實 PR `ui2-browser-gate` 等 required check 全部 success、head SHA 未漂移、來源觀測日與 schema/單位/資料 coverage 完整、不可用時 fail-closed；對可安全按規則合併的 data-only PR 才考慮自動合併（權限另核准），禁止默默把 needed checkout approval 假設為自動完成。
+4. **恢復/補洞**：先判定 2026-11-05 三種資料實際觀測日與提交缺漏；重跑取得**真實**來源值，記錄 `as_of`／`fetched_at`，禁止拿 11-06 的值回填成 11-05。資料 cache 無新增應區分休市／fetch 無資料／出錯；驗收必須證明 main 新 commit 已讀得到。
+5. **成功定義**：三個每日排程至少各有一次無 bypass 經 CI 驗證的真實資料發布，main 讀回數據且下游 view health/freshness 可對帳；不得只拿 workflow run success 代表發布成功。改動 workflows/credentials/CI gate 屬獨立工程 PR；Draft/試運轉期間不停止舊資料監控，遇任何新權限、保護規則變更先停。
