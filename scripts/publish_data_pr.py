@@ -30,6 +30,7 @@ GITHUB_TOKEN 的 push／PR 事件通常不會觸發 pull_request workflow ⇒ re
     data_cache/sector_flow/metadata.json        updated_at（頂層）
     data_cache/sector_flow/bubble_latest.json   updated_at（頂層）
     data_cache/sector_flow/industry_raw.json    fetched_at（頂層）
+    data_cache/macro_last_good/tw_pmi.json      cached_at（頂層；macro_core._macro_durable_save 每次蓋 now()）
   其餘鍵（last_error / last_updated / row_count / per_day / warnings …）全是實質，
   特別是 `last_error` 變化代表來源失敗，**不可濾**。其他 JSON 預設只忽略頂層 updated_at / fetched_at。
 - parquet：以 DataFrame 內容比較；忽略 `VOLATILE_PARQUET_COLS`（列級 fetched_at / captured_at）。
@@ -51,6 +52,10 @@ key = date（兩邊都有 sector 欄時為 date+sector）。
 - 凍結帳本（`LEDGER_PATHS`，macro_forward_test/signals.parquet）：同 date 已存在則保留既有列，
   任何差異（含舊 null→新有值）一律 fail-closed；新 date 才追加。
 - 欄位：分支有而新輸出沒有的欄位保留；共同欄位型別群組衝突 → fail-closed。
+- **人工處理步驟（fail-closed 後每天都會紅，直到清除；這是刻意的設計取捨，不自動覆寫）**：
+  1) 關閉該資料 PR（不合併）；2) 刪除遠端分支 `auto/data-<job>`；
+  3) 下次排程會從 main 重建該分支（分支不存在 → 由 main 為基底開新分支）。
+  若判斷是資料契約問題（例如來源改了既有日的值），請回報 ChatGPT 決定契約，不要硬刪資料。
 - 本 helper 沒有任何補列／補缺日邏輯：缺漏就是缺漏，不以 11/6 的值冒充 11/5。
 
 metadata 一致性（commit 前重算 + 驗證，不可靠「下次自癒」）
@@ -103,6 +108,8 @@ VOLATILE_JSON_KEYS: dict[str, frozenset[str]] = {
     "data_cache/sector_flow/metadata.json": frozenset({"updated_at"}),
     "data_cache/sector_flow/bubble_latest.json": frozenset({"updated_at"}),
     "data_cache/sector_flow/industry_raw.json": frozenset({"fetched_at"}),
+    # macro_core._macro_durable_save 每次寫入都蓋 cached_at = now()（實讀 src/data/macro/macro_core.py）
+    "data_cache/macro_last_good/tw_pmi.json": frozenset({"cached_at"}),
 }
 _DEFAULT_VOLATILE = frozenset({"updated_at", "fetched_at"})
 VOLATILE_PARQUET_COLS = frozenset({"fetched_at", "captured_at"})
@@ -239,7 +246,7 @@ def union_parquet_by_date(base: bytes, new: bytes, log=None, ledger: bool = Fals
     if problems:
         raise PublishError(
             f"[{ctx}] fail-closed：分支既有資料與新輸出對同一 key 衝突（舊非空而新為空／缺欄，或兩邊皆有值但不同；"
-            f"凍結帳本任何差異皆不允許），未寫入、未 commit、未 push：\n  " + "\n  ".join(problems) + f"\n{HUMAN_ACTION}")
+            f"凍結帳本任何差異皆不允許），未 commit、未 push、本地工作樹已還原：\n  " + "\n  ".join(problems) + f"\n{HUMAN_ACTION}")
     if log and filled:
         log(f"  [union] 舊 null→新有值，採新值 {filled} 格")
 
@@ -277,30 +284,54 @@ def _pq_facts(root: Path, rel: str) -> tuple[int, str | None, int]:
     return len(df), d.max().date().isoformat(), int(d.nunique())
 
 
-def _expected_claims(root: Path, rel_meta: str, meta: dict) -> dict[str, tuple[object, object]]:
-    """{描述: (metadata 宣稱值, 由資料重算值)}；只含可由 parquet 重算的欄位。"""
+def _expected_claims(root: Path, rel_meta: str, meta: dict):
+    """回傳 (claims, problems)。
+
+    claims：{描述: (metadata 宣稱值, 由資料重算值)}，只含可由 parquet 重算的欄位。
+    problems：無對應 parquet、卻宣稱有列數／日期的 dataset（D7：不得把 row_count 改 0／last_updated 改 null，
+    一律 fail-closed 並指名）；宣稱 row_count=0 且 last_updated=null 者視為與「檔不存在」一致，不產生 claim。
+    """
     claims: dict[str, tuple[object, object]] = {}
+    problems: list[str] = []
+
+    def one(prefix: str, d: dict, rel_pq: str, check_last: bool) -> None:
+        if not (root / rel_pq).is_file():
+            if d.get("row_count") not in (0, None) or d.get("last_updated") is not None:
+                problems.append(f"{rel_meta} {prefix.rstrip('.') or 'sector_flow'}：無對應 parquet `{rel_pq}`，"
+                                f"但 metadata 宣稱 row_count={d.get('row_count')!r} last_updated={d.get('last_updated')!r}")
+            return
+        rows, last, ndays = _pq_facts(root, rel_pq)
+        claims[f"{prefix}row_count"] = (d.get("row_count"), rows)
+        if check_last:
+            claims[f"{prefix}last_updated"] = (d.get("last_updated"), last)
+        if rel_meta == SECTOR_META:
+            claims["n_days"] = (d.get("n_days"), ndays)
+
     if rel_meta == MACRO_META:
         for name, d in (meta.get("datasets") or {}).items():
-            rows, last, _ = _pq_facts(root, f"data_cache/{name}.parquet")
-            claims[f"datasets.{name}.row_count"] = (d.get("row_count"), rows)
-            if "sanity 不過" not in str(d.get("last_error") or ""):
-                claims[f"datasets.{name}.last_updated"] = (d.get("last_updated"), last)
+            # sanity 不過：腳本刻意不替不合格檔背書 last_updated → 只重算 row_count（last_updated 必須為 null，見 consistency）
+            one(f"datasets.{name}.", d, f"data_cache/{name}.parquet",
+                "sanity 不過" not in str(d.get("last_error") or ""))
     elif rel_meta == SECTOR_META:
-        rows, last, ndays = _pq_facts(root, SECTOR_PARQUET)
-        claims["row_count"] = (meta.get("row_count"), rows)
-        claims["last_updated"] = (meta.get("last_updated"), last)
-        claims["n_days"] = (meta.get("n_days"), ndays)
-    return claims
+        one("", meta, SECTOR_PARQUET, True)
+    return claims, problems
 
 
 def _consistency_problems(rel_meta: str, meta: dict) -> list[str]:
-    """不可重算但不得矛盾的規則：last_error 為空時 row_count 不得為 0。"""
+    """不可重算但不得矛盾的規則。
+
+    1) last_error 為空時 row_count 不得為 0；
+    2) last_error 含「sanity 不過」時 last_updated 必須為 null
+       （scripts/update_macro_history.py 於 skip／抓取例外／抓取為空三個 sanity 分支都不替不合格檔背書 last_updated，
+        維持初始值 None）；否則 fail-closed。
+    """
     out = []
     if rel_meta == MACRO_META:
         for name, d in (meta.get("datasets") or {}).items():
             if not d.get("last_error") and d.get("row_count") == 0:
                 out.append(f"datasets.{name}: last_error 為空但 row_count=0")
+            if "sanity 不過" in str(d.get("last_error") or "") and d.get("last_updated") is not None:
+                out.append(f"datasets.{name}: last_error 含「sanity 不過」但 last_updated={d.get('last_updated')!r}（必須為 null）")
     elif rel_meta == SECTOR_META:
         if not meta.get("last_error") and meta.get("row_count") == 0:
             out.append("last_error 為空但 row_count=0")
@@ -328,8 +359,12 @@ def reconcile_metadata(root: Path, paths: list[str], log=print) -> list[str]:
         if not f.is_file() or not _in_scope(rel, paths):
             continue
         meta = json.loads(f.read_text(encoding="utf-8"))
+        claims, probs = _expected_claims(root, rel, meta)
+        if probs:
+            raise PublishError("metadata 與資料不一致（無對應 parquet，fail-closed，不改寫 metadata）：\n  "
+                               + "\n  ".join(probs) + f"\n{HUMAN_ACTION}")
         changed = False
-        for desc, (claimed, actual) in _expected_claims(root, rel, meta).items():
+        for desc, (claimed, actual) in claims.items():
             if _canon(claimed) != _canon(actual):
                 fixes.append(f"{rel} {desc}: {claimed!r} -> {actual!r}")
                 _set_claim(meta, desc, actual)
@@ -349,7 +384,9 @@ def verify_metadata(root: Path, paths: list[str]) -> list[str]:
         if not f.is_file() or not _in_scope(rel, paths):
             continue
         meta = json.loads(f.read_text(encoding="utf-8"))
-        for desc, (claimed, actual) in _expected_claims(root, rel, meta).items():
+        claims, probs = _expected_claims(root, rel, meta)
+        bad += probs
+        for desc, (claimed, actual) in claims.items():
             if _canon(claimed) != _canon(actual):
                 bad.append(f"{rel} {desc}: metadata 宣稱 {claimed!r}，資料重算 {actual!r}")
         bad += [f"{rel} {p}" for p in _consistency_problems(rel, meta)]
@@ -407,20 +444,55 @@ def assess_state(files: dict[str, bytes], new_rows: dict[str, int | None], today
                 last_dates[path] = pd.to_datetime(df[PARQUET_KEY]).max().date().isoformat()
     t = _dt.date.fromisoformat(today)
     stale = {p: (d, (t - _dt.date.fromisoformat(d)).days) for p, d in last_dates.items()}
+    weekend_h, weekday_h = [], []
+    for d in holidays:
+        day = _parse_day(d)
+        (weekend_h if day is not None and day.weekday() >= 5 else weekday_h).append(d)
     known_new = [v for v in new_rows.values() if v is not None]
+    suspect = (f"⚠️ 週間日無資料，無法區分休市與抓取失敗，需人工確認：{sorted(weekday_h)}"
+               if weekday_h else None)
     if failures:
-        s2 = "有更新失敗，無法據以判定休市或無新資料"
-    elif holidays:
-        s2 = f"休市（holiday 旗標）：{sorted(holidays)}"
+        s2 = "有更新失敗，無法據以判定休市或無新資料" + (f"；{suspect}" if suspect else "")
+    elif suspect:
+        s2 = suspect  # sector_flow 兩源皆空也會標 holiday 且不記 last_error，週間日不得自動判休市
+    elif weekend_h:
+        s2 = f"休市（週末日 holiday 旗標）：{sorted(weekend_h)}"
     elif known_new and sum(known_new) == 0:
         s2 = "無新資料（各 parquet 相對 origin/main 無新列，且無錯誤）"
     elif not has_meta and not known_new:
         s2 = "無法判定"
     else:
         s2 = "無（本次有新列，且無休市旗標）"
-    s1 = "；".join(failures) if failures else ("無（metadata 未見 last_error／unresolved_days）" if has_meta
-                                              else "無法判定（無 metadata 可判讀）")
+    if failures:
+        s1 = "；".join(failures)
+    elif suspect:
+        s1 = f"疑似失敗／無法判定（週間日無資料）：{sorted(weekday_h)}"
+    else:
+        s1 = "無（metadata 未見 last_error／unresolved_days）" if has_meta else "無法判定（無 metadata 可判讀）"
     return {"failure": s1, "holiday": s2, "stale": stale}
+
+
+def _parse_day(v: str):
+    for fmt in ("%Y%m%d", "%Y-%m-%d"):
+        try:
+            return _dt.datetime.strptime(str(v), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+_HEAD_LINE_RE = re.compile(r"^最新 head SHA：`[^`]*`.*$", re.M)
+
+
+def head_line(sha: str) -> str:
+    return f"最新 head SHA：`{sha}`（每次 cron push 後更新此行；請核對 required check 對應的 SHA 與此相符）"
+
+
+def replace_head_line(body: str, sha: str) -> str:
+    """只替換 body 內「最新 head SHA」那一行；其餘（含人工補註）原樣保留。找不到該行 → 附加在尾端。"""
+    if _HEAD_LINE_RE.search(body):
+        return _HEAD_LINE_RE.sub(lambda _m: head_line(sha), body, count=1)
+    return body.rstrip("\n") + "\n\n" + head_line(sha) + "\n"
 
 
 def build_pr_body(job: str, files: list[str], observation_date: str | None, fetched_at: str,
@@ -436,7 +508,7 @@ def build_pr_body(job: str, files: list[str], observation_date: str | None, fetc
         "本 PR 由 GITHUB_TOKEN 建立，CI 不一定自動觸發；未見 `ui2-browser-gate` 綠燈（且 head SHA 與本 PR 相符）"
         "前不得合併；若無 CI，請有權限者 Close→Reopen 或按 Update branch 以產生原生 pull_request 檢查。\n"
         "**未經人工審閱不得合併。** 本 PR 未啟用 auto-merge。\n\n"
-        f"最新 head SHA：`{head_sha}`（每次 cron push 後更新此行；請核對 required check 對應的 SHA 與此相符）\n\n"
+        f"{head_line(head_sha)}\n\n"
         "### 時間欄位\n"
         "| 欄位 | 值 |\n|---|---|\n"
         f"| observation_date（資料最後日） | {observation_date or '見下方各檔最後資料日'} |\n"
@@ -446,7 +518,10 @@ def build_pr_body(job: str, files: list[str], observation_date: str | None, fetc
         f"- ① 更新失敗：{state['failure']}\n"
         f"- ② 休市／無新資料：{state['holiday']}\n"
         f"- ③ 資料過期（僅陳述事實天數，未套門檻）：\n{stale_lines}\n\n"
-        f"### 變更檔\n{listing}\n"
+        f"### 變更檔\n{listing}\n\n"
+        "### 人工處理（cron 發布 fail-closed 時）\n"
+        f"若每日排程在「發布資料」步驟持續失敗：① 關閉本 PR（不合併）；② 刪除分支 `{BRANCH_PREFIX}{job}`；"
+        "③ 下次排程會從 main 重建。資料契約疑義請回報 ChatGPT，不要硬刪資料。\n"
     )
 
 
@@ -491,8 +566,8 @@ def _guard(cmd: list[str]) -> None:
             raise PublishError("禁止 gh pr merge（合併由人工）")
         if cmd[1:2] == ["workflow"]:
             raise PublishError("禁止 gh workflow（workflow_dispatch 的 checks 不符合 required status checks）")
-        if cmd[1:2] == ["api"] and any("protection" in c for c in cmd):
-            raise PublishError("禁止透過 gh api 動 branch protection")
+        if cmd[1:2] == ["api"] and any("protection" in c or "dispatches" in c for c in cmd):
+            raise PublishError("禁止透過 gh api 動 branch protection／dispatch workflow")
 
 
 class Publisher:
@@ -582,6 +657,14 @@ class Publisher:
             return None
 
 
+def _abort_cleanup(pub: Publisher, orig: str, changed: list[tuple[str, str]]) -> None:
+    """fail-closed 路徑：中止 merge、切回原分支並丟棄本輪腳本輸出，工作樹回到乾淨（未 commit／未 push）。"""
+    pub.git("merge", "--abort", check=False)
+    pub.git("checkout", "-f", orig, check=False)
+    pub.restore([(st, p) for st, p in changed if st == "A"])  # 腳本新產生的未追蹤檔
+    pub.log("已還原本地工作樹並切回原分支。")
+
+
 def publish(args, pub: Publisher, today: str | None = None) -> int:
     job = args.job
     branch = f"{BRANCH_PREFIX}{job}"
@@ -623,67 +706,79 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
         pub.log(f"[dry-run] gh pr list --head {branch} --state open ; (無則) gh pr create --base {BASE_BRANCH} --head {branch} --title {title!r} ; (有則) gh pr edit <n> --body <更新 head SHA 行>")
         return 0
 
-    snapshot = {p: pub.worktree_bytes(p) for _, p in changed}
-    pub.git("config", "--local", "user.name", BOT_NAME)
-    pub.git("config", "--local", "user.email", BOT_EMAIL)
+    orig = pub.git("symbolic-ref", "-q", "--short", "HEAD", check=False).stdout.strip() \
+        or pub.git("rev-parse", "HEAD").stdout.strip()
 
-    def _finalize_metadata() -> None:
-        fixes = reconcile_metadata(root, paths, pub.log)
-        bad = verify_metadata(root, paths)
-        if bad:
-            raise PublishError("metadata 與資料不一致（fail-closed，未 commit、未 push）：\n  " + "\n  ".join(bad)
-                               + f"\n{HUMAN_ACTION}")
-        if fixes:
-            pub.log(f"metadata 已依資料重算 {len(fixes)} 項並通過驗證。")
+    def _stage() -> bool:
+        snapshot = {p: pub.worktree_bytes(p) for _, p in changed}
+        pub.git("config", "--local", "user.name", BOT_NAME)
+        pub.git("config", "--local", "user.email", BOT_EMAIL)
 
-    if not remote_has:
-        pub.git("checkout", "-B", branch)  # 工作樹變更隨身帶過去
-        _finalize_metadata()
-        pub.run(add)
-        pub.gitid("commit", "-m", args.commit_msg)
-        pushed = True
-    else:
-        tmp = Path(tempfile.mkdtemp(prefix="publish_data_pr_"))
-        try:
-            for st, p in changed:
-                if st != "D" and snapshot[p] is not None:
-                    dst = tmp / p
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    dst.write_bytes(snapshot[p])
-            pub.restore(changed)
-            pub.git("fetch", "origin", branch)
-            pub.git("fetch", "origin", BASE_BRANCH)
-            pub.git("checkout", "-B", branch, f"origin/{branch}")
-            m = pub.gitid("merge", "--no-edit", f"origin/{BASE_BRANCH}", check=False)
-            if m.rc != 0:
-                pub.git("merge", "--abort", check=False)
-                raise PublishError(
-                    f"合併衝突：origin/{BASE_BRANCH} 與 {branch} 無法自動合併，已中止，未 push、未開 PR、遠端未動。\n"
-                    f"請人工處理該分支後重跑。\n{m.stdout or ''}{m.stderr or ''}")
-            for st, p in changed:
-                dst = root / p
-                if st == "D":
-                    if dst.exists():
-                        dst.unlink()
-                    continue
-                if not (tmp / p).is_file():
-                    pub.log(f"  [skip] 無檔案內容可套用：{p}")
-                    continue
-                new = (tmp / p).read_bytes()
-                if p.endswith(".parquet") and dst.is_file():
-                    new = union_parquet_by_date(dst.read_bytes(), new, pub.log, ledger=p in LEDGER_PATHS,
-                                                ctx=f"job={job} {p}")
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.write_bytes(new)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        _finalize_metadata()
-        pub.run(add)
-        if pub.git("diff", "--cached", "--quiet", check=False).rc != 0:
+        def _finalize_metadata() -> None:
+            fixes = reconcile_metadata(root, paths, pub.log)
+            bad = verify_metadata(root, paths)
+            if bad:
+                raise PublishError("metadata 與資料不一致（fail-closed，未 commit、未 push）：\n  " + "\n  ".join(bad)
+                                   + f"\n{HUMAN_ACTION}")
+            if fixes:
+                pub.log(f"metadata 已依資料重算 {len(fixes)} 項並通過驗證。")
+
+        if not remote_has:
+            pub.git("checkout", "-B", branch)  # 工作樹變更隨身帶過去
+            _finalize_metadata()
+            pub.run(add)
             pub.gitid("commit", "-m", args.commit_msg)
-        head = pub.git("rev-parse", "HEAD").stdout.strip()
-        remote_head = pub.git("rev-parse", f"origin/{branch}").stdout.strip()
-        pushed = head != remote_head
+            pushed = True
+        else:
+            tmp = Path(tempfile.mkdtemp(prefix="publish_data_pr_"))
+            try:
+                for st, p in changed:
+                    if st != "D" and snapshot[p] is not None:
+                        dst = tmp / p
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        dst.write_bytes(snapshot[p])
+                pub.restore(changed)
+                pub.git("fetch", "origin", branch)
+                pub.git("fetch", "origin", BASE_BRANCH)
+                pub.git("checkout", "-B", branch, f"origin/{branch}")
+                m = pub.gitid("merge", "--no-edit", f"origin/{BASE_BRANCH}", check=False)
+                if m.rc != 0:
+                    pub.git("merge", "--abort", check=False)
+                    raise PublishError(
+                        f"合併衝突：origin/{BASE_BRANCH} 與 {branch} 無法自動合併，已中止，未 push、未開 PR、遠端未動。\n"
+                        f"請人工處理該分支後重跑。\n{m.stdout or ''}{m.stderr or ''}")
+                for st, p in changed:
+                    dst = root / p
+                    if st == "D":
+                        if dst.exists():
+                            dst.unlink()
+                        continue
+                    if not (tmp / p).is_file():
+                        pub.log(f"  [skip] 無檔案內容可套用：{p}")
+                        continue
+                    new = (tmp / p).read_bytes()
+                    if p.endswith(".parquet") and dst.is_file():
+                        new = union_parquet_by_date(dst.read_bytes(), new, pub.log, ledger=p in LEDGER_PATHS,
+                                                    ctx=f"job={job} {p}")
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    dst.write_bytes(new)
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+            _finalize_metadata()
+            pub.run(add)
+            if pub.git("diff", "--cached", "--quiet", check=False).rc != 0:
+                pub.gitid("commit", "-m", args.commit_msg)
+            head = pub.git("rev-parse", "HEAD").stdout.strip()
+            remote_head = pub.git("rev-parse", f"origin/{branch}").stdout.strip()
+            pushed = head != remote_head
+
+        return pushed
+
+    try:
+        pushed = _stage()
+    except PublishError:
+        _abort_cleanup(pub, orig, changed)
+        raise
 
     if pushed:
         pub.git("push", "-u", "origin", branch)
@@ -703,8 +798,10 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
         prs = json.loads(lst.stdout or "[]")
         if prs:
             if pushed:
-                pub.run(["gh", "pr", "edit", str(prs[0]["number"]), "--body", body])
-                pub.log("已有開啟中的 PR：已更新 body 的最新 head SHA／狀態（不留言）。")
+                n = str(prs[0]["number"])
+                cur = json.loads(pub.run(["gh", "pr", "view", n, "--json", "body"]).stdout or "{}").get("body") or ""
+                pub.run(["gh", "pr", "edit", n, "--body", replace_head_line(cur, head_sha)])
+                pub.log("已有開啟中的 PR：只更新 body 的「最新 head SHA」一行，其餘（含人工補註）保留；不留言。")
             else:
                 pub.log("已有開啟中的 PR，分支無新內容，不動。")
         else:

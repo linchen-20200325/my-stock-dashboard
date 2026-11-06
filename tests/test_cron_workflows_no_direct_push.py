@@ -104,4 +104,61 @@ def test_macro_history_paths_cover_all_fetchers_and_metadata():
     names = re.findall(r'^    "(\w+)": \(', block, re.M)
     assert names
     paths = set(_helper_paths((WF / "update_macro_history.yml").read_text(encoding="utf-8")))
-    assert {f"data_cache/{n}.parquet" for n in names} | {"data_cache/metadata.json"} == paths
+    assert {f"data_cache/{n}.parquet" for n in names} | {"data_cache/metadata.json", "data_cache/macro_last_good/"} == paths
+
+
+# ── 腳本實際寫入位置 vs --paths（D1：腳本新增寫入位置而 workflow 沒列 → 紅）──
+_LIT = re.compile(r"data_cache/[A-Za-z0-9_./-]+")
+ROOT = WF.parents[1]
+
+
+def _covers(paths: list[str], lit: str) -> bool:
+    lit = lit.rstrip("/")
+    return any(lit == p.rstrip("/") or lit.startswith(p.rstrip("/") + "/") for p in paths)
+
+
+def _durable_dirs() -> list[str]:
+    src = (ROOT / "src" / "data" / "macro" / "macro_core.py").read_text(encoding="utf-8")
+    m = re.search(r'^_MACRO_DURABLE_DIR\s*=\s*_os\.path\.join\("data_cache",\s*"([^"]+)"\)', src, re.M)
+    assert m, "macro_core._MACRO_DURABLE_DIR 定義改了，請同步此測試"
+    return [f"data_cache/{m.group(1)}"]
+
+
+def _forward_dirs() -> list[str]:
+    src = (ROOT / "shared" / "macro_forward_test_schema.py").read_text(encoding="utf-8")
+    m = re.search(r'^MACRO_FWD_TEST_RELPATH[^=]*=\s*\(([^)]*)\)', src, re.M)
+    assert m
+    parts = re.findall(r'"([^"]+)"', m.group(1))
+    return ["/".join(parts[:-1])]  # 檔案所在目錄
+
+
+def uncovered_writes(yml_text: str, script: str, extra: list[str]) -> list[str]:
+    paths = _helper_paths(yml_text)
+    lits = set(_LIT.findall((ROOT / "scripts" / script).read_text(encoding="utf-8"))) | set(extra)
+    return sorted(l for l in lits if not _covers(paths, l))
+
+
+def test_macro_history_paths_cover_all_script_written_locations():
+    text = (WF / "update_macro_history.yml").read_text(encoding="utf-8")
+    assert uncovered_writes(text, "update_macro_history.py", _durable_dirs()) == []
+    assert "data_cache/macro_last_good" in _durable_dirs()[0]
+
+
+def test_sector_flow_paths_cover_all_script_written_locations():
+    text = (WF / "update_sector_flow.yml").read_text(encoding="utf-8")
+    assert uncovered_writes(text, "update_sector_flow.py", []) == []
+
+
+def test_forward_test_paths_cover_store_location():
+    text = (WF / "update_macro_forward_test.yml").read_text(encoding="utf-8")
+    paths = _helper_paths(text)
+    assert all(_covers(paths, d) for d in _forward_dirs()), (paths, _forward_dirs())
+
+
+def test_mutation_missing_durable_dir_turns_red():
+    text = (WF / "update_macro_history.yml").read_text(encoding="utf-8")
+    mutated = text.replace("            data_cache/macro_last_good/ \\\n", "")
+    assert mutated != text
+    assert uncovered_writes(mutated, "update_macro_history.py", _durable_dirs())
+    # 腳本新增一個 workflow 沒列的寫入位置 → 紅
+    assert uncovered_writes(text, "update_macro_history.py", _durable_dirs() + ["data_cache/new_dir"]) == ["data_cache/new_dir"]

@@ -33,6 +33,7 @@ class Rec:
     def __init__(self, pr_open=False, fail_create=False):
         self.calls: list[list[str]] = []
         self.pr_open, self.fail_create = pr_open, fail_create
+        self.pr_body = "開頭\n最新 head SHA：`oldsha`（舊）\n人工補註：KEEP-ME\n"
 
     def __call__(self, cmd, cwd=None, input=None, binary=False):
         self.calls.append(list(cmd))
@@ -41,6 +42,8 @@ class Rec:
                 return pdp.Result(0, json.dumps([{"number": 7}] if self.pr_open else []), "")
             if cmd[1:3] == ["pr", "create"]:
                 return pdp.Result(1 if self.fail_create else 0, "", "boom" if self.fail_create else "")
+            if cmd[1:3] == ["pr", "view"]:
+                return pdp.Result(0, json.dumps({"body": self.pr_body}), "")
             if cmd[1:3] == ["pr", "edit"]:
                 return pdp.Result(0, "", "")
             raise AssertionError(cmd)
@@ -193,7 +196,9 @@ def test_existing_branch_takes_merge_path_without_force(env):
     assert not [c for c in rec.calls if c[0] == "gh" and "workflow" in c]
     assert not rec.has("gh", "pr", "comment")  # 不洗版
     edit = rec.has("gh", "pr", "edit")[0]  # 只更新 body 的最新 head SHA 行
-    assert f"`{_sh(work, 'git', 'rev-parse', 'HEAD')}`" in edit[edit.index("--body") + 1]
+    nb = edit[edit.index("--body") + 1]
+    assert f"`{_sh(work, 'git', 'rev-parse', 'HEAD')}`" in nb
+    assert "人工補註：KEEP-ME" in nb and "開頭" in nb and "oldsha" not in nb  # 只換 head 行，其餘保留
     got = pd.read_parquet(io.BytesIO(_sh_bytes(origin, f"{BRANCH}:data_cache/x.parquet")))
     assert sorted(got["date"].tolist()) == ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]  # 沒丟分支上的 01-03
     assert "other.txt" in _sh(origin, "git", "ls-tree", "-r", "--name-only", BRANCH)  # main 已併入
@@ -220,6 +225,9 @@ def test_merge_conflict_fails_loud_and_does_not_push(env):
         _run(work, rec)
     assert not rec.has("git", "push") and not rec.has("gh")
     assert _sh(origin, "git", "rev-parse", BRANCH) == before
+    # D4：失敗後本地乾淨並回到原分支
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == "main"
 
 
 def test_pr_not_duplicated_when_open(env):
@@ -571,11 +579,11 @@ def test_assess_state_three_states_and_unknown():
     st = pdp.assess_state({pdp.MACRO_META: fail}, {}, "2026-11-06")
     assert "a: 抓取結果為空" in st["failure"] and "b:" not in st["failure"]
     sec = json.dumps({"last_error": None, "unresolved_days": ["20261104"],
-                      "per_day": {"20261103": {"holiday": True}}}).encode()
+                      "per_day": {"20261107": {"holiday": True}}}).encode()
     st = pdp.assess_state({pdp.SECTOR_META: sec}, {}, "2026-11-06")
     assert "unresolved_days" in st["failure"] and "20261104" in st["failure"]
-    ok = json.dumps({"last_error": None, "unresolved_days": [], "per_day": {"20261103": {"holiday": True}}}).encode()
-    assert "休市" in pdp.assess_state({pdp.SECTOR_META: ok}, {}, "2026-11-06")["holiday"]
+    ok = json.dumps({"last_error": None, "unresolved_days": [], "per_day": {"20261107": {"holiday": True}}}).encode()
+    assert "休市" in pdp.assess_state({pdp.SECTOR_META: ok}, {}, "2026-11-09")["holiday"]  # 2026-11-07 是週六
     pq = _pq_bytes(pd.DataFrame({"date": ["2026-11-01", "2026-11-04"], "v": [1.0, 2.0]}))
     st = pdp.assess_state({"data_cache/x.parquet": pq}, {"data_cache/x.parquet": 0}, "2026-11-06")
     assert st["failure"].startswith("無法判定") and "無新資料" in st["holiday"]
@@ -618,3 +626,93 @@ def test_two_jobs_same_repo_do_not_eat_each_others_files(env):
         assert not df.duplicated(subset=[c for c in ("date", "sector") if c in df.columns]).any()
     sig = _rd(_sh_bytes(origin, "auto/data-macro-forward-test:data_cache/macro_forward_test/signals.parquet"))
     assert sig["label"].tolist() == ["紅", "綠"]
+
+
+# ───────────────── 第二輪 QA 缺陷（D1/D2/D4/D5/D6/D7）─────────────────
+def test_d1_durable_json_cached_at_is_volatile_but_value_is_not():
+    p = "data_cache/macro_last_good/tw_pmi.json"
+    a = json.dumps({"value": 50.1, "date": "2026-10", "cached_at": "t1"}).encode()
+    assert not pdp.json_substantive_change(p, a, json.dumps({"value": 50.1, "date": "2026-10", "cached_at": "t2"}).encode())
+    assert pdp.json_substantive_change(p, a, json.dumps({"value": 51.0, "date": "2026-10", "cached_at": "t1"}).encode())
+
+
+def _sec(per_day, last_error=None, unresolved=()):
+    return json.dumps({"last_error": last_error, "unresolved_days": list(unresolved), "per_day": per_day}).encode()
+
+
+def test_d2_weekday_holiday_flag_is_not_auto_closed_market():
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261104": {"holiday": True}})}, {}, "2026-11-06")  # 週三
+    assert "週間日無資料，無法區分休市與抓取失敗，需人工確認" in st["holiday"] and "20261104" in st["holiday"]
+    assert "休市（" not in st["holiday"]
+    assert st["failure"].startswith("疑似失敗／無法判定（週間日無資料）")
+    body = pdp.build_pr_body("t", ["a"], None, "n/a", st, "sha")
+    assert "⚠️ 週間日無資料，無法區分休市與抓取失敗，需人工確認" in body
+
+
+def test_d2_weekend_holiday_is_closed_market_and_last_error_is_failure():
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}})}, {}, "2026-11-09")  # 週六
+    assert st["holiday"].startswith("休市") and st["failure"].startswith("無（")
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}}, last_error="兩源皆失敗")}, {}, "2026-11-09")
+    assert "兩源皆失敗" in st["failure"]
+    mixed = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}, "20261104": {"holiday": True}})}, {}, "2026-11-09")
+    assert "20261104" in mixed["holiday"] and "休市（" not in mixed["holiday"]  # 週間日仍不得自動判休市
+
+
+def test_d4_merge_conflict_also_restores_worktree(env):
+    work, origin = env
+    _meta(work, updated_at="B", last_error="e1")
+    _run(work, Rec())
+    _sh(work, "git", "checkout", "-q", "main")
+    (work / "data_cache" / "metadata.json").write_text(json.dumps({"conflict": "main"}), encoding="utf-8")
+    _sh(work, "git", "commit", "-qam", "main edits meta")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    (work / "data_cache" / "metadata.json").write_text(
+        json.dumps({"updated_at": "C", "datasets": {"x": {"last_error": "e2", "row_count": 2}}}), encoding="utf-8")
+    with pytest.raises(pdp.PublishError, match="合併衝突"):
+        _run(work, Rec())
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+
+def test_d5_replace_head_line_only():
+    body = "標題\n\n最新 head SHA：`old`（舊）\n\n人工補註：保留\n"
+    out = pdp.replace_head_line(body, "NEW")
+    assert "`NEW`" in out and "old" not in out and "人工補註：保留" in out and "標題" in out
+    assert out.count("最新 head SHA") == 1
+    appended = pdp.replace_head_line("人工寫的\n", "NEW")  # 該行被人刪掉 → 附加，不覆寫
+    assert "人工寫的" in appended and "`NEW`" in appended
+
+
+def test_d6_sanity_exception_requires_null_last_updated(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=1, claimed_last="2099-01-01",
+                      last_error="e；既有檔 sanity 不過,待重建")
+    bad = pdp.verify_metadata(root, ["data_cache/"])
+    assert any("sanity 不過" in b and "2099-01-01" in b for b in bad)
+    ok = _meta_tree(tmp_path / "ok", ["2026-01-01"], claimed_rows=1, claimed_last=None,
+                    last_error="e；既有檔 sanity 不過,待重建")
+    assert pdp.verify_metadata(ok, ["data_cache/"]) == []
+
+
+def test_d7_missing_parquet_never_rewritten_to_zero_and_names_dataset(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=5, claimed_last="2026-01-01")
+    (root / "data_cache" / "x.parquet").unlink()
+    before = (root / "data_cache" / "metadata.json").read_bytes()
+    with pytest.raises(pdp.PublishError, match="datasets.x"):
+        pdp.reconcile_metadata(root, ["data_cache/"], log=lambda *_: None)
+    assert (root / "data_cache" / "metadata.json").read_bytes() == before  # 未被改成 0/null
+    assert any("datasets.x" in b for b in pdp.verify_metadata(root, ["data_cache/"]))
+
+
+def test_d7_missing_parquet_with_zero_null_claims_is_consistent(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=0, claimed_last=None, last_error="FINMIND_TOKEN 未設定")
+    (root / "data_cache" / "x.parquet").unlink()
+    assert pdp.verify_metadata(root, ["data_cache/"]) == []
+
+
+@pytest.mark.parametrize("bad", [
+    ["gh", "api", "-X", "POST", "repos/o/r/actions/workflows/pr-check.yml/dispatches"],
+    ["gh", "api", "repos/o/r/dispatches"],
+])
+def test_d7_guard_blocks_gh_api_dispatches(bad):
+    with pytest.raises(pdp.PublishError):
+        pdp._guard(bad)

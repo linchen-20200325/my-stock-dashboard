@@ -77,7 +77,7 @@ jobs:
           # 2026-11-06：原「git add -f / commit / push」改由 scripts/publish_data_pr.py 執行
           # （--force-add 保留下方 v19.97 的 -f 語意；只推 auto/data-macro-history 並開 PR，不 push main）。
           # 2026-11-06 批 2：--paths 由整個 data_cache/ 改為本 job 實際寫入的檔（= scripts/update_macro_history.py FETCHERS
-          # 各表 + metadata.json），避免與 sector-flow / macro-forward-test 兩 job 的檔案互相吃掉；新增 dataset 時須同步此清單
+          # 各表 + metadata.json + main() 末段 macro_core._macro_durable_save 寫的 data_cache/macro_last_good/），避免與 sector-flow / macro-forward-test 兩 job 的檔案互相吃掉；新增 dataset 時須同步此清單
           # （tests/test_cron_workflows_no_direct_push.py 會比對 FETCHERS）。
           # 下方歷史註解保留原文，其中 `git add -f data_cache/` 現由 helper 代為執行。
           # v19.97 bug fix:.gitignore(v18.461) 蓋掉 data_cache/*.parquet,原 `git add data_cache/`
@@ -116,4 +116,5 @@ jobs:
             --paths data_cache/metadata.json data_cache/twii_ohlcv.parquet \
             data_cache/finmind_inst.parquet data_cache/finmind_margin.parquet \
             data_cache/finmind_m1m2.parquet data_cache/tw_pmi.parquet \
+            data_cache/macro_last_good/ \
             --commit-msg "🤖 每日總經歷史增量：$(date +%Y-%m-%d)" $ARGS
