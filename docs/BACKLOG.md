@@ -1873,3 +1873,19 @@
      - **未將任何既有 open 項改為 closed。**
 
 - **NUI2-HOLD-W11-BATCH1（2026-11-05；補註，只追加；實作組單組、**獨立 QA 待做**；draft PR `ui2/hold-w11-batch1`）**：依客戶 Q1~Q8 裁示（DEC-141，記於 docs PR #1027 分支，未合併）做 💼 持股 W-11 的**純版面／欄位結構／空槽**三項：(a) 組合狀態行（`組合：<既有 current_state 欄位> · 資料日 ⬜ 資料日未提供 · 判得出 ⬜ 尚未提供`）＋「今日需處理」單行（內容仍 `⬜ 尚未提供（待系統動作整合）`）；(b) Primary「產業曝險／集中度」空槽（桌機 min-height 240px、手機收成一行）＋「建議持股水位（市場端）」空槽（`⬜ 尚未提供`，不讀 Risk Cap、無區間數字、註明「這不是投資上限」）；(c) 持股表欄名（桌機八欄／手機四欄＋每列展開提示）、空狀態與原因句。DOM 順序＝手機順序（建議持股水位→OneBrain→Primary→持股表）；桌機 grid＝OneBrain／〔Primary｜建議持股水位〕／持股表。**W-11 狀態：版面空槽已施工，待獨立 QA；正式資料接線未做；不是完成。** 新守衛：`tests/test_ui2_hold_w11_batch1.py`（內容／CSS 幾何＋負向突變）、`measure_viewport` 新判定 `w11_hold_layout`（真瀏覽器量測＋突變單元測試）；`HOLD_FIRST_SCREEN_QS`（hold 無獨立 q3）。證據 `docs/vnext/newui2_hold_w11_batch1/`、4 份 `viewport_measurements*.json` 依 source_hash 守衛重生。**未做（仍 open）**：資料日 DEC-102 分組實作、判得出 M／N、需處理動作（Aggregator）、⑤ 區間與 Risk Cap、Primary 圖資料、持股表資料列（皆需 Auth／來源，Q8 不開放 SA／cron／快照）；績效／benchmark 次要區行；今日需處理清單；W-11 完整驗收。**解讀標示**：Q1「手機沿用已核准順序」依草稿 §2.2（⑤→OneBrain→Primary→表）而非 Wireframes §4.1 舊序（Overview 在表之後），請 QA 確認。**未動**：Risk Cap／System Action／登入／OneBrain／Digest／正式資料來源／投資公式／#1019 抽屜 JS／Light／`src.data`。
+
+
+### NUI2-GH-MEMORY-DATA-GATE｜2026-11-06 客戶追加：GitHub 對話記憶、第一版資料篩選與 OneBrain 證據承接
+
+> **狀態：OPEN／Docs-only decision & gate planning；非資料修復施工授權**。正式依據：DEC-143（待本治理 PR 合併）；交接索引 \`docs/PROJECT_STATE.md\` §70／\`docs/HANDOFF.md\`；研究和證據 \`docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md\`（PR #1033，未合併）。與既有 DH-*、NSR-*、NUI2-* 互指，不複製原有工程修復清單。
+
+| 追蹤 ID | 狀態／責任 | 交付證據與完成條件 |
+|---|---|---|
+| **NUI2-GH-MEMORY-SUPERSEDE** | OPEN；ChatGPT docs／治理主責 | 整合 #1027／#1030／#1032／#1033 與本治理 PR 的重疊檔：經獨立 QA/CI 後，\`PROJECT_STATE\` 只保留有效摘要、\`HANDOFF\` 只保留最新接手點、\`DECISIONS\` append-only 更新、\`PROJECT_RULES\` 同步工作 Gate；五頁頂部導航等新方向明確 supersede 舊四頁／rail／drawer／我的資料健康牆**布局要求**，不刪歷史 DEC／安全守衛；正式 Active Contract 同步。無合併證據不得標 DONE |
+| **NUI2-LEGACY-DATA-QUALIFICATION** | OPEN；先只讀 Audit，必要時 Claude Code High | 依第一版功能×來源健康×計算正確性×新 UI2 接線×Digest coverage 建矩陣，逐欄 producer→canonical→calc→Evidence→Digest/UI；分 N0 無正式來源/N1 未接線/N2 有語意或計算風險/N3 未實測/N4 退役；每筆保留 source/as_of/fetched_at/單位/缺失原因/端到端證據。分類完≠當下 API 成功，真實來源需 read-only live probe |
+| **NUI2-SHORTAGE-VERIFIED-EVIDENCE** | OPEN；High，來源與公式改動另 Gate | 覆核 \`shortage_screener_service\`、\`shortage_screener\`：C4 月營收缺值記 0 但其餘分項可能仍 rankable；以合約負債／毛利／庫存／營收等四個代理證據**只允許稱疑似缺貨**，不得把「推論」當官方缺貨或大單；公司公告/法說/真實訂單與反證分級；缺資料/季別不齊/金融業的負測試與 coverage 降級。無核准不得動正式模型權重 |
+| **NUI2-FIN-CHANGE-QUALIFICATION** | OPEN；High，財報口徑另 Gate | \`fin_trend_score\` 的 65/35 缺月／缺季會回 0 再成「中性」；\`fin_health_diff\` 及 \`financial_health_engine\` 有跨期與現金流累計／單季等舊 audit 問題；建立 missing→非中性 regression/mutation、季別對齊、現金流量與已年化門檻 parity、來源覆蓋、金融業適用性測試；未通過前不得將結論作正式 OneBrain 多空或買賣權威 |
+| **NUI2-SOURCE-LIVE-PROBE-AND-FALLBACK** | OPEN；先研究，外部資料需來源 Gate | 對大盤 forward EPS、Sahm、TIPS/US2Y、OECD CLI、借券、TDCC、ETF 組成、CSP CAPEX/FCF、大型訂單等，先判 repo 既有已核准官方來源可否重用；再查 source actual availability/授權/頻率/欄位/缺值/失敗備援；僅必要 N0 提案新官方 API 或研究 Sheet。不得把單次 403／timeout 定義為永遠不可得 |
+| **NUI2-EVIDENCE-COVERAGE-PREFLIGHT** | OPEN；契約/Runtime High Gate | 接入 New UI2 前輸出 required evidence manifest 和 completeness；有問題的來源不得靜默流入 Risk Cap、正式得分或動作。Human UI 可只顯示重點；OneBrain scoped Digest 應保留有效正反證及未分析項/原因；Token 截斷不能假裝 Complete |
+
+**建議工作順序**：① 只讀重用/資料可用性矩陣＋真實抓取驗證（不動生產）；② 缺貨和財報跨期 correctness/coverage 測試（High+完整 QA）；③ 通過 Gate 才分批 thin L3 feed→Digest/UI 接線。與 Claude Code 已開始的 PR 不可搶同一檔；無新來源核准不得實際接 API/Sheet；模型建議：第一階段 Medium（查碼）／第二階段 High（財務模型/Risk Cap/缺值）／第三階段依範圍 Medium～High。**所有列目前仍 OPEN，不能因文件保存或 HTML 草稿而宣稱完成。**
