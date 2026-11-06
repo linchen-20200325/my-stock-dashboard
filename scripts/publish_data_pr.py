@@ -484,8 +484,17 @@ def _parse_day(v: str):
 
 STATUS_START = "<!-- data-status:start -->"
 STATUS_END = "<!-- data-status:end -->"
-_BLOCK_RE = re.compile(re.escape(STATUS_START) + r".*?" + re.escape(STATUS_END), re.S)
-_LEGACY_HEAD_RE = re.compile(r"^最新 head SHA：.*\n?", re.M)
+# 舊格式（0b9c5b1f／beb45c4c 版）中「確定屬於舊狀態」的標準行；只認原樣行，無法確定的人工文字一律保留。
+_LEGACY_LINE_RES = [re.compile(x) for x in (
+    r"^最新 head SHA：", r"^### 時間欄位\s*$", r"^\| 欄位 \| 值 \|\s*$", r"^\|---\|---\|\s*$",
+    r"^\| observation_date（", r"^\| fetched_at（", r"^\| published_at（",
+    r"^### 資料狀態（由 metadata／腳本輸出判斷，判不出即「無法判定」）\s*$",
+    r"^- ① 更新失敗：", r"^- ② 休市／無新資料：", r"^- ③ 資料過期（",
+    r"^  - `[^`]*`：最後資料日 .*距今 \d+ 天\s*$", r"^  - 無法判定（無 parquet 日期）\s*$")]
+_LISTING_HEAD = re.compile(r"^### 變更檔\s*$")
+_LISTING_ITEM = re.compile(r"^- `[^`]*`\s*$")
+_RESIDUAL_TOKENS = ("observation_date", "時間欄位", "資料狀態", "更新失敗", "休市／無新資料", "最後資料日", "最新 head SHA")
+STALE_WARNING = "⚠️ 下方可能殘留舊格式狀態，以此區塊為準"
 
 
 def head_line(sha: str) -> str:
@@ -516,23 +525,85 @@ def build_status_block(files: list[str], observation_date: str | None, fetched_a
     )
 
 
+def _scan_blocks(lines: list[str]):
+    """標記必須各自獨佔一行（strip 後完全相等）；嵌在人工文字中的標記字樣不算界線。
+    回傳 (完整區塊 [(start, end)], 孤兒標記行索引集合)。"""
+    blocks: list[tuple[int, int]] = []
+    orphans: set[int] = set()
+    open_idx = None
+    for i, ln in enumerate(lines):
+        t = ln.strip()
+        if t == STATUS_START:
+            if open_idx is not None:
+                orphans.add(open_idx)  # 前一個 start 沒有 end
+            open_idx = i
+        elif t == STATUS_END:
+            if open_idx is None:
+                orphans.add(i)
+            else:
+                blocks.append((open_idx, i))
+                open_idx = None
+    if open_idx is not None:
+        orphans.add(open_idx)
+    return blocks, orphans
+
+
 def update_pr_body(old: str, block: str) -> str:
     """只替換標記區塊內容，區塊外（含人工補註）原樣保留。
 
-    - 有標記 → 替換區塊；
-    - 無標記但為舊格式（有舊「最新 head SHA」行／「### 時間欄位」段）→ 移除舊的 head 行與
-      「### 時間欄位」到「### 人工處理」（或尾端）之間的舊狀態段，於原位置放入區塊（不出現兩份狀態）；
-    - 無標記且非舊格式（人工刪掉）→ 區塊附加在尾端。
+    - 標記需各自獨佔一行；多個完整區塊 → 保留第一個替換為新內容，其餘移除；
+      孤兒 start／end 只移除標記行本身，不吞其間的人工內容。
+    - 無完整區塊：保守升級舊格式 —— 只移除確定屬於舊狀態的標準行（舊 head SHA 行、舊時間欄位／三態／變更檔標準行），
+      其餘人工文字一律保留，新區塊放在第一個被移除行的位置（沒有則附加尾端）；
+      若移除後仍殘留疑似舊狀態字樣（例如標題被改名）→ 在區塊上方加一行警語，避免兩份「看起來都是最新」。
     """
-    if _BLOCK_RE.search(old):
-        return _BLOCK_RE.sub(lambda _m: block, old, count=1)
-    body = _LEGACY_HEAD_RE.sub("", old)
-    i = body.find("### 時間欄位")
-    if i >= 0:
-        j = body.find("### 人工處理", i)
-        j = len(body) if j < 0 else j
-        return body[:i] + block + "\n\n" + body[j:]
-    return body.rstrip("\n") + "\n\n" + block + "\n"
+    lines = old.split("\n")
+    blocks, orphans = _scan_blocks(lines)
+    blines = block.split("\n")
+    if blocks:
+        out: list[str] = []
+        skip_until = -1
+        starts = {st: en for st, en in blocks}
+        for i, ln in enumerate(lines):
+            if i <= skip_until or i in orphans:
+                continue
+            if i in starts:
+                if i == blocks[0][0]:
+                    out += blines
+                skip_until = starts[i]
+                continue
+            out.append(ln)
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+    kept: list[str] = []
+    first = None
+    in_list = False
+    for i, ln in enumerate(lines):
+        if i in orphans:
+            continue
+        remove = False
+        if _LISTING_HEAD.match(ln):
+            in_list, remove = True, True
+        elif in_list and _LISTING_ITEM.match(ln):
+            remove = True
+        else:
+            in_list = False
+            remove = any(r.match(ln) for r in _LEGACY_LINE_RES)
+        if remove:
+            if first is None:
+                first = len(kept)
+            continue
+        kept.append(ln)
+    rest = "\n".join(kept)
+    residual = any(tok in rest for tok in _RESIDUAL_TOKENS)
+    ins = ([STALE_WARNING, ""] if residual else []) + blines
+    if first is None:
+        out = kept[:]
+        while out and not out[-1].strip():
+            out.pop()
+        out += [""] + ins + [""]
+    else:
+        out = kept[:first] + ins + [""] + kept[first:]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out))
 
 
 def build_pr_body(job: str, files: list[str], observation_date: str | None, fetched_at: str,

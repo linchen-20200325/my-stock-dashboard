@@ -725,16 +725,78 @@ def test_n1_block_replaced_outside_text_preserved():
     assert "### ⚠️ 合併前必讀" in day2 and "### 人工處理" in day2  # 區塊外靜態段保留
 
 
-def test_n1_legacy_format_upgrades_without_two_statuses():
-    legacy = ("## 自動資料發布：t\n\n### ⚠️ 合併前必讀\n警語\n\n最新 head SHA：`old`（舊）\n\n"
-              "### 時間欄位\n| a | b |\n\n### 資料狀態（舊）\n- ① 更新失敗：無\n\n### 變更檔\n- `a`\n\n"
-              "### 人工處理（cron 發布 fail-closed 時）\n步驟\n\n人工補註：KEEP\n")
-    out = pdp.update_pr_body(legacy, _block(head="NEW"))
+_LEGACY = (
+    "## 自動資料發布：t\n\n### ⚠️ 合併前必讀\n警語\n\n"
+    "最新 head SHA：`old`（每次 cron push 後更新此行；請核對 required check 對應的 SHA 與此相符）\n\n"
+    "### 時間欄位\n| 欄位 | 值 |\n|---|---|\n| observation_date（資料最後日） | 見下方各檔最後資料日 |\n"
+    "| fetched_at（抓取時間，取自資料檔） | n/a |\n| published_at（來源發布時間） | n/a（來源未提供） |\n\n"
+    "### 資料狀態（由 metadata／腳本輸出判斷，判不出即「無法判定」）\n- ① 更新失敗：無\n- ② 休市／無新資料：y\n"
+    "- ③ 資料過期（僅陳述事實天數，未套門檻）：\n  - `p`：最後資料日 2026-11-04，距今 2 天\n\n"
+    "### 變更檔\n- `a`\n- `b`\n\n"
+    "### 人工處理（cron 發布 fail-closed 時）\n步驟\n\n人工補註：KEEP\n")
+
+
+def test_n1_legacy_standard_format_upgrades_cleanly_without_warning():
+    out = pdp.update_pr_body(_LEGACY, _block(head="NEW"))
     assert out.count("最新 head SHA") == 1 and "`NEW`" in out and "`old`" not in out
-    assert out.count("### 時間欄位") == 1 and "### 資料狀態（舊）" not in out
+    assert out.count("### 時間欄位") == 1 and out.count("① 更新失敗") == 1 and out.count("### 變更檔") == 1
     assert "警語" in out and "### 人工處理" in out and "人工補註：KEEP" in out and out.count(pdp.STATUS_START) == 1
+    assert pdp.STALE_WARNING not in out
     again = pdp.update_pr_body(out, _block(head="NEW2"))  # 升級後再更新 = 純區塊替換
     assert again.count("最新 head SHA") == 1 and "`NEW2`" in again and "人工補註：KEEP" in again
+
+
+def test_m1_inline_marker_text_is_not_a_boundary_and_prefix_text_survives():
+    prose = f"前文 {pdp.STATUS_START} 人工提到 {pdp.STATUS_END} 後文"
+    old = f"人工開頭\n{prose}\n\n{_block(head='old1')}\n\n人工結尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert prose in out and "人工開頭" in out and "人工結尾" in out  # 區塊前的人工內容不被吃掉
+    assert "old1" not in out and "`NEW`" in out
+    assert out.count("最新 head SHA") == 1
+    # 只有行內標記、沒有獨佔一行的真區塊 → 視為無區塊，附加新區塊，人工文字完整保留
+    only_inline = pdp.update_pr_body(f"x\n{prose}\ny\n", _block(head="N2"))
+    assert prose in only_inline and "x\n" in only_inline and "`N2`" in only_inline
+
+
+def test_m1_marker_lines_may_have_surrounding_whitespace():
+    old = f"頭\n  {pdp.STATUS_START}  \n舊內容 `old1`\n\t{pdp.STATUS_END}\n尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert "old1" not in out and "頭" in out and "尾" in out and "`NEW`" in out
+
+
+def test_m2_duplicate_blocks_keep_first_replaced_remove_rest():
+    old = f"頭\n{_block(head='old1')}\n中間人工\n{_block(head='old2')}\n尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert out.count(pdp.STATUS_START) == 1 and out.count(pdp.STATUS_END) == 1
+    assert "old1" not in out and "old2" not in out and out.count("最新 head SHA") == 1
+    assert "頭" in out and "中間人工" in out and "尾" in out
+    assert out.index("頭") < out.index("`NEW`") < out.index("中間人工")  # 第一個位置替換
+
+
+def test_m3_orphan_start_and_end_cleaned_without_eating_manual_text():
+    o_start = pdp.update_pr_body(f"頭\n{pdp.STATUS_START}\n人工文字（沒有 end）\n", _block(head="NEW"))
+    assert "人工文字（沒有 end）" in o_start and "頭" in o_start
+    assert o_start.count(pdp.STATUS_START) == 1 and o_start.count(pdp.STATUS_END) == 1 and "`NEW`" in o_start
+    o_end = pdp.update_pr_body(f"頭\n人工文字（沒有 start）\n{pdp.STATUS_END}\n尾\n", _block(head="NEW"))
+    assert "人工文字（沒有 start）" in o_end and "尾" in o_end
+    assert o_end.count(pdp.STATUS_START) == 1 and o_end.count(pdp.STATUS_END) == 1
+    # 孤兒 start 在真區塊之前：孤兒標記移除、其後人工文字保留、真區塊被替換
+    mixed = pdp.update_pr_body(f"{pdp.STATUS_START}\n人工A\n{_block(head='old1')}\n人工B\n", _block(head="NEW"))
+    assert "人工A" in mixed and "人工B" in mixed and "old1" not in mixed
+    assert mixed.count(pdp.STATUS_START) == 1 and mixed.count("最新 head SHA") == 1
+
+
+def test_m4_m5_legacy_with_renamed_heading_and_inserted_text_is_conservative_with_warning():
+    legacy = _LEGACY.replace("### 資料狀態（由 metadata／腳本輸出判斷，判不出即「無法判定」）",
+                             "### 資料狀態（人工改名）\n人工插入說明").replace("### 變更檔\n", "### 變更檔\n人工註：這兩檔我看過\n")
+    out = pdp.update_pr_body(legacy, _block(head="NEW"))
+    assert pdp.STALE_WARNING in out and out.index(pdp.STALE_WARNING) < out.index(pdp.STATUS_START)
+    assert "人工插入說明" in out and "人工註：這兩檔我看過" in out and "人工補註：KEEP" in out  # 無法確定的人工文字全保留
+    assert "`old`" not in out and out.count("最新 head SHA") == 1  # 確定屬舊狀態的 head 行已移除
+    assert out.count("- ① 更新失敗") == 1 and out.count(pdp.STATUS_START) == 1  # 標準三態行已移除，只剩新區塊那份
+    assert "### 時間欄位" in out and out.count("### 時間欄位") == 1  # 標準標題被移除後只剩新區塊內的
+    again = pdp.update_pr_body(out, _block(head="NEW2"))
+    assert again.count(pdp.STATUS_START) == 1 and "`NEW2`" in again and "人工插入說明" in again
 
 
 def test_n1_deleted_block_is_appended_and_manual_text_kept():
