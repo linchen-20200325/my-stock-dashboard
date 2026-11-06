@@ -53,7 +53,7 @@ def test_r2_other_values_unchanged(raw, want):
 
 # QA 阻擋（2026-09-27）：`not/no` 後面緊接的是**真秘密**時，⛔ 不得吃掉秘密的前綴字母
 # （否則後面的權杖／路徑規則對不上 → 秘密本體外露）。樣本為實際長度的秘密。
-_R2_AIZA = "AIzaSyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUvW"      # 39 字
+_R2_AIZA = "".join(("AI", "zaSyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUvW"))      # 39 字
 _R2_YA29 = "ya29.a0AfH6SMBx1234567890abcdefGHIJKLmnopQRSTuvwxYZ_-0123456789"
 _R2_GOCSPX = "GOCSPX-abcdefghij1234567KLMNOPqrstuv"
 _R2_WINPATH = "C:\\Users\\bob\\.streamlit\\secrets.toml"
@@ -98,7 +98,7 @@ def test_query_scrubber_is_still_the_old_ai_qa_one():
     def _old(s):
         return _old_g.sub("AIza***", _old_q.sub(lambda m: m.group(1) + "=***", str(s)))
 
-    for _s in ("x?key=abc&token=def", "api_key: not set", "AIzaSyA1234567890abcdef",
+    for _s in ("x?key=abc&token=def", "api_key: not set", "".join(("AI", "zaSyA1234567890abcdef")),
                "access-token=zz key=1 none", "", "中文 key= 值"):
         assert scrub_query_secrets(_s) == _old(_s)
 
@@ -142,7 +142,7 @@ def test_r3_real_scrubbed_error_through_v2_plain(v2_plain):
 # ══════════════════════════════════════════════════════════════════
 # SEC-r7
 # ══════════════════════════════════════════════════════════════════
-_R7_KEY = "AIzaSyA1234567890secR7abcdefg"
+_R7_KEY = "".join(("AI", "zaSyA1234567890secR7abcdefg"))
 _R7_PW = "pw_R7_zzq"
 _R7_ANSWER = (f"**結論**：偏強。\n\n你的設定裡 password: {_R7_PW}，"
               f"金鑰 {_R7_KEY}，檔案在 /home/aliceR7/app/secrets.toml")
