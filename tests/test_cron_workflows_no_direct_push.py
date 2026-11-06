@@ -12,7 +12,8 @@ CRONS = {
     "update_sector_flow.yml": "sector-flow",
     "update_macro_forward_test.yml": "macro-forward-test",
 }
-NEED_PERMS = {"contents": "write", "pull-requests": "write", "actions": "write"}
+# 精確兩項：不得有 actions: write（本流程不 dispatch；dispatch 的 checks 不符合 required checks）
+NEED_PERMS = {"contents": "write", "pull-requests": "write"}
 
 
 def _code_lines(text: str) -> str:
@@ -40,8 +41,13 @@ def violations(name: str, text: str) -> list[str]:
                      r"  cancel-in-progress: false[ \t]*$", code, re.M):
         out.append("concurrency 不符")
     perms = _job_permissions(code)
-    if any(perms.get(k) != v for k, v in NEED_PERMS.items()):
-        out.append("job permissions 不全")
+    if perms != NEED_PERMS:
+        out.append(f"job permissions 必須恰為 {NEED_PERMS}，實際 {perms}")
+    nc = re.sub(r"[ \t]#.*$", "", code, flags=re.M)  # 去行內註解（權限行註解會提到 actions: write）
+    if re.search(r"\bactions:\s*write\b", nc):
+        out.append("含 actions: write")
+    if re.search(r"\bgh\s+workflow\b|workflow_dispatch\s*\)|/dispatches", nc):
+        out.append("含 gh workflow／dispatch 呼叫")
     if "write-all" in code:
         out.append("write-all")
     if re.search(r"^permissions:", code, re.M):
@@ -62,10 +68,40 @@ def test_workflow_ok(name):
 
 @pytest.mark.parametrize("name", sorted(CRONS))
 def test_mutation_guard_turns_red(name):
-    """突變驗證：把裸 git push 加回、或拿掉權限 / concurrency，守衛必須轉紅。"""
+    """突變驗證：裸 push、actions: write、dispatch、concurrency/fetch-depth/helper 被拿掉，守衛必須轉紅。"""
     text = (WF / name).read_text(encoding="utf-8")
     assert violations(name, text + "\n      - run: git push\n")
-    assert violations(name, text.replace("actions: write", "actions: read", 1))
+    assert violations(name, text.replace("    permissions:\n", "    permissions:\n      actions: write\n", 1))
+    assert violations(name, text + "\n      - run: gh workflow run pr-check.yml --ref x\n")
     assert violations(name, text.replace("cancel-in-progress: false", "cancel-in-progress: true", 1))
     assert violations(name, text.replace("fetch-depth: 0", "fetch-depth: 1", 1))
     assert violations(name, text.replace("scripts/publish_data_pr.py", "scripts/x.py"))
+
+
+def _helper_paths(text: str) -> list[str]:
+    code = _code_lines(text).replace("\\\n", " ")
+    m = re.search(r"--paths\s+(.*?)\s+--commit-msg", code, re.S)
+    return m.group(1).split() if m else []
+
+
+def test_job_paths_do_not_overlap():
+    """三個 job 的 --paths 互不重疊（不得互相吃掉對方檔案）。"""
+    allp = {n: _helper_paths((WF / n).read_text(encoding="utf-8")) for n in CRONS}
+    assert all(allp.values())
+    items = [(n, p) for n, ps in allp.items() for p in ps]
+    for i, (n1, a) in enumerate(items):
+        for n2, b in items[i + 1:]:
+            if n1 == n2:
+                continue
+            assert not (a == b or a.startswith(b.rstrip("/") + "/") or b.startswith(a.rstrip("/") + "/")), (n1, a, n2, b)
+
+
+def test_macro_history_paths_cover_all_fetchers_and_metadata():
+    """macro-history 的明確 --paths 必須涵蓋 FETCHERS 各表 parquet + metadata.json（新增 dataset 漏列即紅）。"""
+    src = (WF.parents[1] / "scripts" / "update_macro_history.py").read_text(encoding="utf-8")
+    block = src[src.index("\nFETCHERS = {"):]
+    block = block[:block.index("\n}\n")]
+    names = re.findall(r'^    "(\w+)": \(', block, re.M)
+    assert names
+    paths = set(_helper_paths((WF / "update_macro_history.yml").read_text(encoding="utf-8")))
+    assert {f"data_cache/{n}.parquet" for n in names} | {"data_cache/metadata.json"} == paths

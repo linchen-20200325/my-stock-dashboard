@@ -30,8 +30,7 @@ jobs:
     # 2026-11-06：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
     permissions:
       contents: write        # 推 auto/data-macro-history 分支（不是 main）
-      pull-requests: write   # gh pr create / list
-      actions: write         # gh workflow run pr-check.yml（GITHUB_TOKEN 的 push 不觸發 workflow，須 dispatch 才有 required check）
+      pull-requests: write   # gh pr create / list / edit。不給 actions: write —— 本流程不 dispatch 任何 workflow（dispatch 的 checks 不符合 required checks）
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -77,6 +76,9 @@ jobs:
         run: |
           # 2026-11-06：原「git add -f / commit / push」改由 scripts/publish_data_pr.py 執行
           # （--force-add 保留下方 v19.97 的 -f 語意；只推 auto/data-macro-history 並開 PR，不 push main）。
+          # 2026-11-06 批 2：--paths 由整個 data_cache/ 改為本 job 實際寫入的檔（= scripts/update_macro_history.py FETCHERS
+          # 各表 + metadata.json），避免與 sector-flow / macro-forward-test 兩 job 的檔案互相吃掉；新增 dataset 時須同步此清單
+          # （tests/test_cron_workflows_no_direct_push.py 會比對 FETCHERS）。
           # 下方歷史註解保留原文，其中 `git add -f data_cache/` 現由 helper 代為執行。
           # v19.97 bug fix:.gitignore(v18.461) 蓋掉 data_cache/*.parquet,原 `git add data_cache/`
           # 每日 no-op → cron 抓的歷史從未 commit。加 -f 強制納管 parquet+metadata
@@ -111,5 +113,7 @@ jobs:
           ARGS=""
           if [ "$DRY_RUN" = "true" ]; then ARGS="--dry-run"; fi
           python scripts/publish_data_pr.py --job macro-history --force-add \
-            --paths data_cache/ \
+            --paths data_cache/metadata.json data_cache/twii_ohlcv.parquet \
+            data_cache/finmind_inst.parquet data_cache/finmind_margin.parquet \
+            data_cache/finmind_m1m2.parquet data_cache/tw_pmi.parquet \
             --commit-msg "🤖 每日總經歷史增量：$(date +%Y-%m-%d)" $ARGS

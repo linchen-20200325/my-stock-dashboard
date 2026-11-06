@@ -34,8 +34,7 @@ jobs:
     # 2026-11-06：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
     permissions:
       contents: write        # 推 auto/data-sector-flow 分支（不是 main）
-      pull-requests: write   # gh pr create / list
-      actions: write         # gh workflow run pr-check.yml（GITHUB_TOKEN 的 push 不觸發 workflow，須 dispatch 才有 required check）
+      pull-requests: write   # gh pr create / list / edit。不給 actions: write —— 本流程不 dispatch 任何 workflow（dispatch 的 checks 不符合 required checks）
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
