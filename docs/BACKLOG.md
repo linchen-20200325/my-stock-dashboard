@@ -1880,6 +1880,9 @@
 
 ### NUI2-GH-MEMORY-DATA-GATE｜2026-11-06 客戶追加：GitHub 對話記憶、第一版資料篩選與 OneBrain 證據承接
 
+> **2026-11-06 #1035 head `04e0d440` 狀態修正（取代上方同題舊『不可 Ready』）**：Claude 工程三輪 QA 後，ChatGPT 獨立查核 PR 最新 GitHub diff/五個 jobs 全綠；`workflow_dispatch` 錯誤已移除，現採 GITHUB_TOKEN 建 PR → 原生 `pull_request` 工作流程待人工批准 → 人工合併。parquet 同 key 缺值/衝突 fail-closed，metadata 可重算欄位先重算/驗證。**STATUS=ENGINEERING REVIEW PASS / PRODUCTION PUBLISH NOT VERIFIED**；可進使用者授權的受控 PoC/合併 Gate，不能宣稱已恢復每日發布；仍需 Actions 建 PR 權限、原生 required head/merge SHA 對帳及 main readback。參見 #1033 §K。
+
+
 > **2026-11-06 PR #1035 合併阻擋（獨立核對 GitHub 官方）**：#1035 的 `gh workflow run pr-check.yml --ref auto/data-<job>` 是 `workflow_dispatch`，其 job check **不能滿足** PR required `ui2-browser-gate`，即使 head 上綠；需要原生 `pull_request` 事件及可能的人工 Approve workflows。並發現 helper `union_parquet_by_date()` 新列缺值向舊列取值可能掩蓋資料缺失、跨日合併 `metadata.row_count` 可能不一致。**STATUS=BLOCKED，PR #1035 不可 Ready/merge**；先由 Claude Code 在原工程 PR 最小修復與完整 QA，ChatGPT 保管規格；詳細 #1033 §J。建議首輪 GITHUB_TOKEN PR→人工批准原生 checks→人工合併的安全 PoC，權限/credentials/自動合併仍需另裁示。
 
 > **狀態：OPEN／Docs-only decision & gate planning；非資料修復施工授權**。正式依據：DEC-143（待本治理 PR 合併）；交接索引 `docs/PROJECT_STATE.md` §70／`docs/HANDOFF.md`；研究和證據 `docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md`（PR #1033，未合併）。與既有 DH-*、NSR-*、NUI2-* 互指，不複製原有工程修復清單。
