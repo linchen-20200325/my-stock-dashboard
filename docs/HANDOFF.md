@@ -1,3 +1,7 @@
+
+
+> **2026-11-06 P0 工程回報校正（本 PR 尚未合併）**：三個每日 cron 在 2026-11-05 UTC 的 `Commit and Push Changes` 失敗，Claude 提供 `GH006 Required status check "ui2-browser-gate" is expected`；main `343f0e0e`（當時）。安全設計優先**保持 branch protection**、研究資料分支→PR→CI→合併，而非 bypass；新 GitHub App/PAT／權限與實際自動合併仍要 Gate。**下一安全任務改為**：(1) Claude 對三 workflow 提供不改 production 的分支＋PR 寫入 PoC 與 GitHub token 觸發核准證據；(2) ChatGPT 繼續協調 #1027/#1030/#1032/#1033/#1034 五治理文件衝突；(3) 需等經核准、CI、實際 main readback 方可宣告每日資料已恢復。詳細 #1033 §H–I；模型計算錯誤證據見 BACKLOG `NUI2-GH-MEMORY-DATA-GATE`，不授權直接修公式。
+
 # HANDOFF — 現行交接（my-stock-dashboard）
 
 
