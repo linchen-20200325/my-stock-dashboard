@@ -70,7 +70,7 @@ MCP 只能改善「工具怎麼訪問」，**不能創造來源不存在的真�
 1. GitHub 五檔職責固定：`PROJECT_RULES` 方法與停手；`DECISIONS` 客戶裁示及 supersession；`BACKLOG` 未完成事項；`PROJECT_STATE` **目前有效**的專案知識；`HANDOFF` 當下接手點。不要另建記憶權威，也不直接覆寫聊天記錄。
 2. 歷史 DEC、舊框架與線框**不得物理刪除**；以 `SUPERSEDED / HISTORICAL` 和一個最新 Active Contract 明確取代，避免 Claude 讀取過時條文；專案記憶摘要只引用有效最新版本。
 3. 待 #1030/#1032 和本草案協調通過 Gate，才以**獨立最小 patch**更新五治理檔／原規格，保留原始決策來源，附驗收／回歸證據及 supersession map。
-4. ChatGPT 帳戶 Memory summary 與 GitHub 文件是**不同系統**：這個 PR 無法刪除帳戶內的記憶；對話中會避免沿用已淘汰的四頁/rail/drawer 方向。要做帳戶 Memory 的完整移除，需使用者在 Settings → Personalization 的 Memory summary → Manage 修正摘要，並刪除原聊天與其他相關來源。
+4. **客戶澄清（2026-11-06）**：「記憶」特指 GitHub 內保存的 ChatGPT 與客戶討論、裁示、設計及跨對話交接的**專案長期知識**，**不指 ChatGPT 帳戶的 Memory**。治理範圍是 repo 中 `docs/PROJECT_STATE.md`、`docs/HANDOFF.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`PROJECT_RULES.md` 及各主題 handoff/歷史討論引用（例如 `docs/vnext/ONEBRAIN_HANDOFF_STATE_2026-10-31.md`）；保留歷史決策，將不再適用的設計與舊狀態標為 SUPERSEDED，從當前有效摘要/接手點移除或更正，避免新 ChatGPT/Claude 誤認舊版為最新。**不應對使用者要求操作 ChatGPT Memory 設定**。
 5. 交接與換對話規則依 #1032 避免重複：可預見上下文丟失風險時主動提供完整新對話提示；重大決策在有授權/連線時及時 GitHub checkpoint；不可承諾平台斷線後自動存檔。
 
 ## E. 下一批 Gate / 驗收條件
@@ -82,3 +82,12 @@ MCP 只能改善「工具怎麼訪問」，**不能創造來源不存在的真�
 - 新需求不能悄悄夾入 Claude 的 UI 主線工作；共檔衝突一律先停。
 
 **本檔尚未完成：** production live probe、獨立第二組 QA、CI、新規則正式 main 合併。不得把上一個 2026-10-23 audit 的 🔴 視為 2026-11-06 API 現在不可用。
+
+
+## F. 2026-11-06 客戶對「GitHub 對話記憶」的澄清與更新作業
+
+- 本次「清理記憶」的對象是已存入 GitHub 的 **ChatGPT ↔ 客戶討論成果**，不是更動模型、平台帳號記憶或刪掉聊天。
+- **保存歷史（Evidence）與有效記憶（Active）分離**：DEC 原文、歷史 handoff、舊藍圖/討論摘要保留，以 supersession 引用鏈標記；`docs/PROJECT_STATE.md` 只保留當前有效產品方向／限制／來源；`docs/HANDOFF.md` 只保留可接續工作；避免逐字對話堆積、雙重 SSOT、以舊 PR 當完成。
+- 本次清理的具體錯誤示例：若 PROJECT_STATE／HANDOFF 仍稱「正式只有四頁」「手機抽屜、桌機 rail」「資料健康度在我的頁」「六個互不相連 AI」「固定 3/6/9 個月」「大盤 EPS×PE 已可出正式價位」，應更新為最新客戶方向或研究中/未核准狀態，並標出取代 DEC/PR。凡描述「已施工／已合併／已修資料」必有 GitHub main/diff/CI 證據，否則降為 Draft/Proposal。
+- **不要把本 Draft 當成清理完成**：這份獨立檔案先提交具體取代清單。現有 #1030/#1032 也涉及 PROJECT_RULES/HANDOFF/DECISIONS；只有在 owner 協調、獨立 QA、CI 完成後，才可於正式治理文件落實，不得在其他 PR 仍同檔修改時直接覆蓋。
+- 下次對話啟動：先查 main/PR/CI 與正式五檔，再看 supersession map、可追溯的新設計與缺料清單；禁止從歷史逐字聊天恢復已被較新客戶決策取代的規格。
