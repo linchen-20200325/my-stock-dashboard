@@ -52,6 +52,7 @@ import datetime as _dt
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -88,19 +89,32 @@ class PublishError(RuntimeError):
 
 
 # ───────────────────────── 純函式：實質變更判定 ─────────────────────────
-def _strip_keys(obj, drop: frozenset[str]):
+def _strip_keys(obj, drop: frozenset[str], top_only: bool = False, _top: bool = True):
+    """移除揮發鍵。top_only=True 時只動頂層（巢狀同名鍵視為實質）。"""
     if isinstance(obj, dict):
-        return {k: _strip_keys(v, drop) for k, v in obj.items() if k not in drop}
+        return {k: _strip_keys(v, drop, top_only, False) for k, v in obj.items()
+                if not (k in drop and (_top or not top_only))}
     if isinstance(obj, list):
-        return [_strip_keys(v, drop) for v in obj]
+        return [_strip_keys(v, drop, top_only, False) for v in obj]
     return obj
 
 
+def _canon(obj) -> str:
+    """型別嚴格：json.dumps 讓 True/1/1.0 互不相等（Python == 會把它們視為相等）。"""
+    return json.dumps(obj, sort_keys=True, ensure_ascii=False)
+
+
 def json_substantive_change(path: str, old: bytes, new: bytes) -> bool:
-    """True = 有實質差異（揮發鍵以外有任何不同；解析失敗 → 視為實質）。"""
+    """True = 有實質差異（揮發鍵以外有任何不同；解析失敗 → 視為實質）。
+
+    已登記檔：揮發鍵依 VOLATILE_JSON_KEYS 於任意深度忽略（照舊）；
+    未登記檔：只忽略頂層 updated_at / fetched_at，巢狀位置視為實質。
+    """
+    registered = path in VOLATILE_JSON_KEYS
     drop = VOLATILE_JSON_KEYS.get(path, _DEFAULT_VOLATILE)
     try:
-        return _strip_keys(json.loads(old), drop) != _strip_keys(json.loads(new), drop)
+        return _canon(_strip_keys(json.loads(old), drop, not registered)) != \
+            _canon(_strip_keys(json.loads(new), drop, not registered))
     except (ValueError, UnicodeDecodeError):
         return old != new
 
@@ -126,15 +140,73 @@ def is_substantive(path: str, status: str, old: bytes | None, new: bytes | None)
     return old != new
 
 
-def union_parquet_by_date(base: bytes, new: bytes) -> bytes:
-    """base（分支上現有）∪ new（腳本輸出）：new 出現的日期整日取代 base 同日列。"""
+def _dtype_group(dt) -> str:
+    k = getattr(dt, "kind", None)
+    if k in ("i", "u", "f", "b"):
+        return "num" if k != "b" else "bool"
+    if k == "M":
+        return "time"
+    return str(dt)
+
+
+def union_parquet_by_date(base: bytes, new: bytes, log=None) -> bytes:
+    """base（分支上現有）∪ new（腳本輸出）。
+
+    - new 出現的日期整日取代 base 同日列（log 印被取代日期與列數）；
+    - 欄位級保守：新列某欄缺值（NaN/None）而同 key（date[+sector]）舊列有值 → 保留舊值；
+    - base 有而 new 沒有的欄位保留（不丟）；共同欄位型別群組衝突 → PublishError。
+    """
     b = pd.read_parquet(io.BytesIO(base))
     n = pd.read_parquet(io.BytesIO(new))
     if PARQUET_KEY not in b.columns or PARQUET_KEY not in n.columns:
         raise PublishError(f"parquet 缺 `{PARQUET_KEY}` 欄，無法安全合併分支既有資料，中止（不覆寫以免丟資料）")
-    new_days = set(pd.to_datetime(n[PARQUET_KEY]).dt.normalize())
-    keep = ~pd.to_datetime(b[PARQUET_KEY]).dt.normalize().isin(new_days)
-    out = pd.concat([b[keep.to_numpy()], n], ignore_index=True)
+    for c in set(b.columns) & set(n.columns):
+        if b[c].isna().all() or n[c].isna().all():
+            continue
+        if _dtype_group(b[c].dtype) != _dtype_group(n[c].dtype):
+            raise PublishError(f"parquet 欄 `{c}` 型別衝突（分支 {b[c].dtype} vs 新輸出 {n[c].dtype}），中止")
+    bd = pd.to_datetime(b[PARQUET_KEY]).dt.normalize()
+    nd = pd.to_datetime(n[PARQUET_KEY]).dt.normalize()
+    new_days = set(nd)
+    rep = bd.isin(new_days).to_numpy()
+    old_rep = b[rep]
+    if log and rep.any():
+        days = sorted({d.date().isoformat() for d in bd[rep]})
+        log(f"  [union] 取代分支既有日期 {days}，共 {int(rep.sum())} 列")
+    keys = [PARQUET_KEY] + (["sector"] if "sector" in b.columns and "sector" in n.columns else [])
+
+    def _k(df, dates):
+        parts = [dates.dt.strftime("%Y-%m-%d")] + [df[c].astype(str) for c in keys[1:]]
+        return parts[0] if len(parts) == 1 else parts[0].str.cat(parts[1:], sep="|")
+
+    n = n.copy()
+    for c in b.columns:
+        if c not in n.columns:  # D4：分支有而新輸出沒有的欄 → 保留（新列補缺值，可由下方同 key 舊值回填）
+            col = pd.Series([None] * len(n), index=n.index, dtype=object)
+            try:
+                col = col.astype(b[c].dtype)
+            except (TypeError, ValueError):
+                pass
+            n[c] = col
+    if len(old_rep):
+        old_lookup = old_rep.assign(_k=_k(old_rep, bd[rep])).drop_duplicates("_k", keep="last").set_index("_k")
+        nk = _k(n, nd)
+        if not nk.duplicated().any():
+            filled = 0
+            for c in n.columns:
+                if c not in old_lookup.columns:
+                    continue
+                m = (n[c].isna() & nk.isin(old_lookup.index)).to_numpy()
+                if m.any():
+                    vals = old_lookup.loc[nk[m], c].to_numpy()
+                    ok = ~pd.isna(vals)
+                    if ok.any():
+                        idx = n.index[m][ok]
+                        n.loc[idx, c] = pd.Series(vals[ok], index=idx).astype(n[c].dtype, errors="ignore")
+                        filled += int(ok.sum())
+            if log and filled:
+                log(f"  [union] 新列缺值而舊列有值 → 保留舊值 {filled} 格")
+    out = pd.concat([b[~rep], n], ignore_index=True)
     out = out.loc[:, list(n.columns)]
     out = out.iloc[pd.to_datetime(out[PARQUET_KEY]).argsort(kind="stable")].reset_index(drop=True)
     buf = io.BytesIO()
@@ -182,22 +254,40 @@ def default_runner(cmd: list[str], cwd: str | None = None, input: str | None = N
     return Result(p.returncode, p.stdout, p.stderr)
 
 
+JOB_RE = r"^[a-z0-9][a-z0-9-]*$"
+_PUSH_BRANCH_RE = re.compile(r"^auto/data-[a-z0-9][a-z0-9-]*$")
+
+
 def _guard(cmd: list[str]) -> None:
-    """程式碼強制：禁 force / push main / rebase / +refspec。"""
+    """白名單式縱深防禦（只看 argv 的子命令位置，不比對 -m 訊息字串）。
+
+    push 只允許恰為 `push [-u] origin auto/data-<job>`；其餘 push 形式一律拒絕。
+    另拒絕 rebase / reset --hard / update-ref / send-pack / pull --rebase /
+    gh pr merge / gh api 含 protection。
+    """
     if cmd[:1] == ["git"]:
-        sub_cmd = next((c for c in cmd[1:] if c in ("push", "rebase")), None)
-        if sub_cmd == "rebase":
-            raise PublishError("禁止 rebase")
-        if sub_cmd == "push":
-            for c in cmd:
-                if c.startswith("--force") or c == "-f" or c.startswith("+"):
-                    raise PublishError("禁止 force push")
-            tail = [c for c in cmd[cmd.index("push") + 1:] if not c.startswith("-")]
-            if any(t in (BASE_BRANCH, f"HEAD:{BASE_BRANCH}", f"refs/heads/{BASE_BRANCH}") or t.endswith(f":{BASE_BRANCH}")
-                   for t in tail):
-                raise PublishError("禁止 push main")
-            if not any(t.startswith(BRANCH_PREFIX) for t in tail):
-                raise PublishError("push 目標必須是 auto/data-* 分支")
+        i = 1
+        while i < len(cmd) and cmd[i].startswith("-"):
+            i += 2 if cmd[i] in ("-c", "-C", "--git-dir", "--work-tree") else 1
+        if i >= len(cmd):
+            return
+        sub, rest = cmd[i], cmd[i + 1:]
+        if sub == "push":
+            ok = (rest[:1] == ["-u"] and len(rest) == 3 and rest[1] == "origin" and _PUSH_BRANCH_RE.match(rest[2])) or \
+                 (len(rest) == 2 and rest[0] == "origin" and _PUSH_BRANCH_RE.match(rest[1]))
+            if not ok:
+                raise PublishError(f"禁止的 push 形式（僅允許 push [-u] origin auto/data-<job>）：{' '.join(cmd)}")
+        elif sub in ("rebase", "update-ref", "send-pack"):
+            raise PublishError(f"禁止 {sub}")
+        elif sub == "reset" and "--hard" in rest:
+            raise PublishError("禁止 reset --hard")
+        elif sub == "pull" and any(r.startswith("--rebase") for r in rest):
+            raise PublishError("禁止 pull --rebase")
+    elif cmd[:1] == ["gh"]:
+        if cmd[1:3] == ["pr", "merge"]:
+            raise PublishError("禁止 gh pr merge（合併由人工）")
+        if cmd[1:2] == ["api"] and any("protection" in c for c in cmd):
+            raise PublishError("禁止透過 gh api 動 branch protection")
 
 
 class Publisher:
@@ -224,9 +314,18 @@ class Publisher:
         res: list[tuple[str, str]] = []
         for ent in filter(None, out.split("\0")):
             xy, path = ent[:2], ent[3:]
+            if "__pycache__" in path.split("/") or path.endswith(".pyc"):
+                continue
             if xy == "!!":
                 if force_add:
-                    res.append(("A", path))
+                    if path.endswith("/"):  # 被 ignore 的整個目錄項 → 展開成檔案
+                        root = Path(self.cwd or ".")
+                        for f in sorted((root / path).rglob("*")):
+                            rel = f.relative_to(root).as_posix()
+                            if f.is_file() and "__pycache__" not in rel.split("/") and not rel.endswith(".pyc"):
+                                res.append(("A", rel))
+                    else:
+                        res.append(("A", path))
             elif xy == "??":
                 res.append(("A", path))
             elif "D" in xy:
@@ -255,7 +354,9 @@ class Publisher:
         for st, p in changed:
             if st == "A":
                 f = Path(self.cwd or ".") / p
-                if f.exists():
+                if f.is_dir():
+                    shutil.rmtree(f, ignore_errors=True)
+                elif f.exists():
                     f.unlink()
             else:
                 self.git("checkout", "HEAD", "--", p)
@@ -283,7 +384,7 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
         return 0
 
     files = [p for _, p in changed]
-    add = ["git", "add"] + (["-f"] if args.force_add else []) + ["--", *paths]
+    add = ["git", "add"] + (["-f"] if args.force_add else []) + ["--", *paths, ":(exclude,glob)**/__pycache__/**"]
     title_date = args.observation_date or today
     title = f"🤖 資料發布 {job}：{title_date}"
     remote_has = pub.git("ls-remote", "--exit-code", "--heads", "origin", branch, check=False).rc == 0
@@ -335,9 +436,12 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
                     if dst.exists():
                         dst.unlink()
                     continue
+                if not (tmp / p).is_file():
+                    pub.log(f"  [skip] 無檔案內容可套用：{p}")
+                    continue
                 new = (tmp / p).read_bytes()
                 if p.endswith(".parquet") and dst.is_file():
-                    new = union_parquet_by_date(dst.read_bytes(), new)
+                    new = union_parquet_by_date(dst.read_bytes(), new, pub.log)
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_bytes(new)
         finally:
@@ -357,6 +461,7 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
 
     hint = ("分支已推送、PR/check 未建立；請檢查『Allow GitHub Actions to create and approve pull requests』"
             "設定與 actions: write 權限")
+    created = False
     try:
         lst = pub.run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"])
         if json.loads(lst.stdout or "[]"):
@@ -364,9 +469,10 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
         else:
             body = build_pr_body(job, files, args.observation_date,
                                  collect_fetched_at({p: b for p, b in snapshot.items() if b is not None}))
+            created = True
             pub.run(["gh", "pr", "create", "--base", BASE_BRANCH, "--head", branch, "--title", title, "--body", body])
             pub.log("已建立 PR。")
-        if pushed:
+        if pushed or created:  # 新建 PR 即使沒有新 push 也要有 required check
             pub.run(["gh", "workflow", "run", CHECK_WORKFLOW, "--ref", branch])
             pub.log(f"已 dispatch {CHECK_WORKFLOW}（--ref {branch}）以產生 required check。")
     except PublishError as e:
@@ -374,9 +480,15 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
     return 0
 
 
+def _job_type(v: str) -> str:
+    if not re.match(JOB_RE, v):
+        raise argparse.ArgumentTypeError(f"--job 必須符合 {JOB_RE}")
+    return v
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--job", required=True)
+    ap.add_argument("--job", required=True, type=_job_type)
     ap.add_argument("--paths", nargs="+", required=True)
     ap.add_argument("--commit-msg", required=True)
     ap.add_argument("--observation-date", default=None)

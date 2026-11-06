@@ -10,8 +10,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import os
+
 _SPEC = importlib.util.spec_from_file_location(
-    "publish_data_pr", Path(__file__).resolve().parents[1] / "scripts" / "publish_data_pr.py")
+    "publish_data_pr", os.environ.get("PDP_PATH") or Path(__file__).resolve().parents[1] / "scripts" / "publish_data_pr.py")
 pdp = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(pdp)
 
@@ -278,3 +280,122 @@ def test_collect_fetched_at_from_real_data():
     buf = io.BytesIO()
     _df(["2026-01-01"], fetched="2026-05-05T00:00:00Z").to_parquet(buf, index=False)
     assert pdp.collect_fetched_at({"x.parquet": buf.getvalue()}) == "2026-05-05T00:00:00Z"
+
+
+# ───────────────── QA 缺陷修正（D1~D6）─────────────────
+def _pq_bytes(df):
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("bad", [
+    ["git", "push", "-fu", "origin", BRANCH], ["git", "push", "-uf", "origin", BRANCH],
+    ["git", "push", "origin", f"{BRANCH}:main"], ["git", "push", "--delete", "origin", BRANCH],
+    ["git", "push", "--prune", "origin", BRANCH], ["git", "push", "origin", "HEAD:main"],
+    ["git", "push", "-u", "origin", BRANCH, "extra"], ["git", "push"],
+    ["git", "reset", "--hard", "HEAD"], ["git", "update-ref", "-d", "x"], ["git", "send-pack", "x"],
+    ["git", "pull", "--rebase"], ["git", "-c", "a=b", "push", "origin", "main"],
+    ["gh", "pr", "merge", "7"], ["gh", "api", "-X", "DELETE", "repos/o/r/branches/main/protection"],
+])
+def test_d1_guard_whitelist_rejects(bad):
+    with pytest.raises(pdp.PublishError):
+        pdp._guard(bad)
+
+
+@pytest.mark.parametrize("good", [
+    ["git", "push", "-u", "origin", BRANCH], ["git", "push", "origin", BRANCH],
+    ["git", "commit", "-m", "push"], ["git", "commit", "-m", "rebase main push --force"],
+    ["git", "-c", "user.name=x", "commit", "-m", "git push origin main"], ["git", "reset", "-q", "--", "p"],
+    ["gh", "pr", "list", "--head", BRANCH], ["gh", "api", "repos/o/r/pulls"],
+])
+def test_d1_guard_allows_normal_and_no_false_positive(good):
+    pdp._guard(good)
+
+
+def test_d1_job_name_validated():
+    for bad in ("Bad", "-x", "a/b", "a b", "a_b", ""):
+        with pytest.raises(SystemExit):
+            pdp.parse_args(["--job", bad, "--paths", "p", "--commit-msg", "m"])
+    assert pdp.parse_args(["--job", "macro-history", "--paths", "p", "--commit-msg", "m"]).job == "macro-history"
+
+
+def test_d2_same_day_nan_does_not_overwrite_old_value():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [float("nan")]})
+    logs = []
+    out = pd.read_parquet(io.BytesIO(pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new), logs.append)))
+    assert out.set_index("date")["v"].to_dict() == {"2026-01-01": 1.0, "2026-01-02": 2.0}
+    assert any("2026-01-02" in l and "1 列" in l for l in logs)
+
+
+def test_d2_same_day_new_value_wins():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [3.0]})
+    out = pd.read_parquet(io.BytesIO(pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new))))
+    assert out.set_index("date")["v"].to_dict() == {"2026-01-01": 1.0, "2026-01-02": 3.0}
+
+
+def test_d4_columns_only_in_branch_are_kept():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0], "extra": ["a", "b"]})
+    new = pd.DataFrame({"date": ["2026-01-02", "2026-01-03"], "v": [5.0, 6.0]})
+    out = pd.read_parquet(io.BytesIO(pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new))))
+    assert "extra" in out.columns
+    r = out.set_index("date")["extra"].to_dict()
+    assert r["2026-01-01"] == "a" and r["2026-01-02"] == "b" and pd.isna(r["2026-01-03"])  # 同日舊值回填
+
+
+def test_d4_dtype_conflict_fails_loud():
+    base = pd.DataFrame({"date": ["2026-01-01"], "v": ["text"]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [1.0]})
+    with pytest.raises(pdp.PublishError, match="型別衝突"):
+        pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new))
+
+
+def test_d5_json_strict_types_and_nested_keys():
+    a = json.dumps({"k": True}).encode()
+    assert pdp.json_substantive_change("z.json", a, json.dumps({"k": 1}).encode())  # bool != int
+    assert pdp.json_substantive_change("z.json", json.dumps({"k": 1}).encode(), json.dumps({"k": 1.0}).encode())
+    n1 = json.dumps({"a": {"updated_at": 1}}).encode()
+    n2 = json.dumps({"a": {"updated_at": 2}}).encode()
+    assert pdp.json_substantive_change("z.json", n1, n2)  # 未登記檔：巢狀視為實質
+    assert not pdp.json_substantive_change("data_cache/metadata.json", n1, n2)  # 已登記檔：照舊任意深度
+    assert not pdp.json_substantive_change("z.json", json.dumps({"updated_at": 1}).encode(),
+                                           json.dumps({"updated_at": 2}).encode())  # 頂層仍忽略
+
+
+def test_d3_ignored_directory_entries_do_not_crash_on_existing_branch_path(env):
+    work, origin = env
+    (work / ".gitignore").write_text("data_cache/ign/\n")
+    _sh(work, "git", "add", ".gitignore")
+    _sh(work, "git", "commit", "-qm", "ignore")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    # 先開分支，讓第二輪走 remote_has 路徑
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _run(work, Rec(), force_add=True)
+    _sh(work, "git", "checkout", "-q", "main")
+    ign = work / "data_cache" / "ign"
+    (ign / "__pycache__").mkdir(parents=True)
+    (ign / "a.json").write_text("{}")
+    (ign / "__pycache__" / "m.pyc").write_bytes(b"x")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-04"]))
+    rec = Rec(pr_open=True)
+    assert _run(work, rec, force_add=True) == 0
+    tree = _sh(origin, "git", "ls-tree", "-r", "--name-only", BRANCH)
+    assert "data_cache/ign/a.json" in tree and "__pycache__" not in tree
+    # 不 force_add：目錄項被跳過，不當機
+    _sh(work, "git", "checkout", "-q", "main")
+    assert _run(work, Rec(pr_open=True), force_add=False) == 0
+
+
+def test_d6_new_pr_dispatches_even_without_new_push(env):
+    work, _ = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    with pytest.raises(pdp.PublishError):
+        _run(work, Rec(fail_create=True))  # 分支已推送、PR 建立失敗
+    _sh(work, "git", "checkout", "-q", "main")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(pr_open=False)  # 第二輪：內容與分支相同 → 無新 push，但 PR 為新建
+    _run(work, rec)
+    assert not rec.has("git", "push")
+    assert rec.has("gh", "pr", "create") and rec.has("gh", "workflow", "run")
