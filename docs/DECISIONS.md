@@ -7672,3 +7672,12 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **與既有產品裁示的關係**：New UI2 五頁＋頂部導航、六領域協調 OneBrain 與 UI ViewModel／Decision Digest 雙投影，依 PR #1030 中 DEC-142 草案對照；保留 Risk Cap／Single Action Authority／缺值規則；本裁示**不自動核准**新資料來源、新 Sheet schema、行情推估公式、OneBrain runtime、布局施工或交易指令。
 - **治理處理**：`PROJECT_STATE` 保存有效知識、`DECISIONS` 保存本裁示與 supersession、`BACKLOG` 保存待做 Gate、`HANDOFF` 保存最新可恢復接手點、`PROJECT_RULES` 保存工作流程與權限限制；與 #1027/#1030/#1032 相關文件並行修改**必須先協調順序、重新比對 diff／CI／獨立 QA**，不能覆寫其他工作。
 - **決策者**：使用者。**日期**：2026-11-06。**證據限制**：本 session 原文，A/B/C 資料來源判定須逐案測試；本治理 PR 與 #1030/#1033 尚未合併前，**main 未生效**。**實作狀態**：僅 docs-only Gate；未作 live probe、產品實作或正式數據篩除。
+
+
+### DEC-144｜三方案比較、推薦、最小人工介入與避免原地試錯（客戶 2026-11-07）
+
+- **客戶原話（來源 D，本次對話）**：「我給你新的想法，以後你要問我之前先給三種方法，然後評估哪種方法比較，你推薦的，所以你這問題再一次」；後續指示「請繼續」。此前亦授權「這些你能做 我授權你繼續」。
+- **正式裁示**：處理尚待解決的問題，尤其請客戶操作前，先查最新 GitHub 實況，主動提出三條實際可行方案，逐項比較正確性／風險、速度、Token／成本、可逆性、人工操作量，並明確推薦最適方法。優先自主執行已授權、安全可逆且工具支援的工作，不堅持單一路徑、不重複原地試錯、不重跑已在執行的 CI、不無意義依賴客戶手動操作。若權限或工具不支援，須透明揭露，並提出最小必要人工操作與備選方案。
+- **案例（狀態非最終結果）**：2026-11-07 GitHub 查核時 #1036 head 905def98、#1037 head dfbc8559、#1038 head 9e7014c7 的原生 PR CI 已從 action_required 轉為 in_progress，應沿用既有 CI 而非重複要求客戶批准。舊 head 綠燈不得套用新 head；必要檢查與 parquet、metadata、觀測日期仍須獨立複驗，不能宣告三 PR 已可合併。
+- **安全邊界**：不改上位 CLAUDE.md／PROCESS.md 與既有授權 Gate；不得跳過 required CI／獨立 QA、偽造資料來源證據、變更 Risk Cap／公式或未經核准的新 UI Layout；只能執行 GitHub 工具確實提供的動作，不得聲稱可用不存在的 workflow-approval 操作。
+- **決策者**：使用者。**日期**：2026-11-07。**範圍**：my-stock-dashboard 跨 AI 協作、請示與問題解決。**落盤**：#1034 docs-only Draft PR，合併前不視為 main 生效。
