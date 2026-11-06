@@ -1089,3 +1089,15 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - 客戶已特別核准將「資料分層剝離、死碼查證及安全移除」由 ChatGPT **直接負責（包含程式修改）**，是第 31 節一般 Claude Code 程式主責規則的狹義例外，不擴及其他程式需求。
 - **Claude Code 工作優先**：ChatGPT 每次動手前做 GitHub Verification Gate＋per-file/per-contract/per-test 衝突比對；若重疊，ChatGPT 必須停手／退讓／分批改範圍，不能以自己先開 PR 要求 Claude Code 改道。
 - 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-140。
+
+
+## 第 32 節｜請示前的三方案決策 Gate（DEC-144；客戶 2026-11-07）
+
+> 本節是 ChatGPT／Claude Code 的問題解決與請示流程，不改動 CLAUDE.md、PROCESS.md、PR required checks、風險授權或投資決策門檻；正式裁示見 docs/DECISIONS.md DEC-144。
+
+1. **先查證再求助**：先執行最新 GitHub Verification Gate（main SHA、Open／Draft PR、head／diff、CI／QA、branch），查明問題是否已解除、是否已有可用且經授權工具；不得把舊的 action_required 當成現在仍需客戶批准。
+2. **列三種方案**：針對待解問題，提出 A／B／C 三條現實可行的路徑；權限或工具不足的路徑須標記不可執行。逐項比較正確性／風險、速度、Token／費用、可逆性與使用者操作成本。
+3. **推薦與自助**：選擇已授權、風險最低、速度快、Token 省且人工操作少的解法；已有 CI 在跑時沿用，不重複觸發、不無意義 Close→Reopen、不繞過 branch protection。
+4. **請示僅限真正 Gate**：可安全自主處理的工作先完成；工具缺失、權限不足、不可逆、高風險、付費、新資料來源、公式／Risk Cap、OneBrain 正式行為或 UI Layout 等已有客戶 Gate 才請示，且先附三方案比較和推薦，再請求最小必要操作。
+5. **證據與狀態**：workflow success ≠ 原生 PR required check success；舊 head 綠燈 ≠ 新 head 綠燈；metadata 自述 ≠ parquet 實測；未取得資料 ≠ 0／中性／安全。未驗證不得合併。
+6. **交付**：繁中精簡表格，指出推薦方案、待證據與唯一下一步；重要決策及執行狀態依既有五治理文件保存；Draft PR 不等於已進 main。
