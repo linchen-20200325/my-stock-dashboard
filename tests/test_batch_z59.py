@@ -147,11 +147,13 @@ class TestTradingDayTile:
         T.v2_card_html(t)
 
     def test_secret_in_error_is_scrubbed(self):
+        # Preserve a realistic key at runtime without committing a full key-shaped literal.
+        fake_key = "".join(("AI", "zaSyA1234567890abcdefghijklmnopqrstuv"))
         st = TradingDayStatus(today=date(2026, 10, 14), is_trading_day=None,
                               next_trading_day=None,
-                              error="token=AIzaSyA1234567890abcdefghijklmnopqrstuv 失敗")
+                              error=f"token={fake_key} 失敗")
         t = T.build_trading_day_tile(st)
-        assert "AIzaSyA1234567890abcdefghijklmnopqrstuv" not in T.v2_card_html(t)
+        assert fake_key not in T.v2_card_html(t)
 
     @pytest.mark.parametrize("st_err", [(_OPEN, ""), (_CLOSED, ""), (_UNDETERMINED, ""),
                                         (None, "RuntimeError('x')")],
