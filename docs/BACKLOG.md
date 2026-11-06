@@ -1877,13 +1877,6 @@
 
 
 
-#### 2026-11-06 Claude 複驗補充／Cron 寫回安全 Gate（最新進展，仍 OPEN）
-
-- **NUI2-CRON-PROTECTED-PUBLISHING**（P0，待權限與 workflow 變更 Gate）：`.github/workflows/update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 都有直接 `git push` main 的路徑；2026-11-05 UTC 三次 workflow 在 `Commit and Push Changes` 失敗，Claude 提供 log `GH006 Required status check "ui2-browser-gate" is expected`（該原文待獨立讀 log）；推薦「獨立資料分支 → PR → required CI → 經授權合併」，**不關閉 required check、不 grant bypass**。先查建 PR 的 `GITHUB_TOKEN` 可能需要人工 approve workflow；GitHub App/PAT 權限及自動 merge 都是另案 Gate；研究/工程 PoC 需保留 release data freshness、失敗期間補洞與 main readback 證據。設計及替代比較見 #1033 §I。
-- **稽核勘誤**：出口標籤、TWII MA200、總經外資備援 `fillna(0)` 經 Claude 回報已修，須以當時 main/commit/負測試重查，不得當現存 bug；**個股**法人 `data_loader.fillna(0)` 另案仍待審。ETF 回測功能退役但仍有殘留讀者，不得宣稱全 repo 0 引用。
-- **資料模型實際負測試**：Claude 回報 322 既有測試通過，但 `compute_trend_score([], [])` 回中性；缺貨全 None 仍 rankable 且不明顯；月營收缺最新月以 M-1 代末月；`fin_health_diff` 警示/無共同比對可能 stable；現金流單季還原缺口仍待 FinMind 實際口徑。先 QA/coverage/決策語意 Gate，不未授權直接調整投資公式。
-- **Evidence/Digest**：Claude 靜態檢查 Evidence Registry 尚無 runtime，Digest builder 沒 production caller，`MAX_ACTIONS=3` 無省略披露；補 required evidence manifest、正反證與 omissions schema 設計 Gate，**不把修改 MAX_ACTIONS 當作證據完整性修復**。設計所有權 ChatGPT，Claude 僅唯讀核對/提出 engineering feasibility。
-
 ### NUI2-GH-MEMORY-DATA-GATE｜2026-11-06 客戶追加：GitHub 對話記憶、第一版資料篩選與 OneBrain 證據承接
 
 > **狀態：OPEN／Docs-only decision & gate planning；非資料修復施工授權**。正式依據：DEC-143（待本治理 PR 合併）；交接索引 `docs/PROJECT_STATE.md` §70／`docs/HANDOFF.md`；研究和證據 `docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md`（PR #1033，未合併）。與既有 DH-*、NSR-*、NUI2-* 互指，不複製原有工程修復清單。
@@ -1898,3 +1891,10 @@
 | **NUI2-EVIDENCE-COVERAGE-PREFLIGHT** | OPEN；契約/Runtime High Gate | 接入 New UI2 前輸出 required evidence manifest 和 completeness；有問題的來源不得靜默流入 Risk Cap、正式得分或動作。Human UI 可只顯示重點；OneBrain scoped Digest 應保留有效正反證及未分析項/原因；Token 截斷不能假裝 Complete |
 
 **建議工作順序**：① 只讀重用/資料可用性矩陣＋真實抓取驗證（不動生產）；② 缺貨和財報跨期 correctness/coverage 測試（High+完整 QA）；③ 通過 Gate 才分批 thin L3 feed→Digest/UI 接線。與 Claude Code 已開始的 PR 不可搶同一檔；無新來源核准不得實際接 API/Sheet；模型建議：第一階段 Medium（查碼）／第二階段 High（財務模型/Risk Cap/缺值）／第三階段依範圍 Medium～High。**所有列目前仍 OPEN，不能因文件保存或 HTML 草稿而宣稱完成。**
+
+#### 2026-11-06 Claude 複驗補充／Cron 寫回安全 Gate（最新進展，仍 OPEN）
+
+- **NUI2-CRON-PROTECTED-PUBLISHING**（P0，待權限與 workflow 變更 Gate）：`.github/workflows/update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 都有直接 `git push` main 的路徑；2026-11-05 UTC 三次 workflow 在 `Commit and Push Changes` 失敗，Claude 提供 log `GH006 Required status check "ui2-browser-gate" is expected`（該原文待獨立讀 log）；推薦「獨立資料分支 → PR → required CI → 經授權合併」，**不關閉 required check、不 grant bypass**。先查建 PR 的 `GITHUB_TOKEN` 可能需要人工 approve workflow；GitHub App/PAT 權限及自動 merge 都是另案 Gate；研究/工程 PoC 需保留 release data freshness、失敗期間補洞與 main readback 證據。設計及替代比較見 #1033 §I。
+- **稽核勘誤**：出口標籤、TWII MA200、總經外資備援 `fillna(0)` 經 Claude 回報已修，須以當時 main/commit/負測試重查，不得當現存 bug；**個股**法人 `data_loader.fillna(0)` 另案仍待審。ETF 回測功能退役但仍有殘留讀者，不得宣稱全 repo 0 引用。
+- **資料模型實際負測試**：Claude 回報 322 既有測試通過，但 `compute_trend_score([], [])` 回中性；缺貨全 None 仍 rankable 且不明顯；月營收缺最新月以 M-1 代末月；`fin_health_diff` 警示/無共同比對可能 stable；現金流單季還原缺口仍待 FinMind 實際口徑。先 QA/coverage/決策語意 Gate，不未授權直接調整投資公式。
+- **Evidence/Digest**：Claude 靜態檢查 Evidence Registry 尚無 runtime，Digest builder 沒 production caller，`MAX_ACTIONS=3` 無省略披露；補 required evidence manifest、正反證與 omissions schema 設計 Gate，**不把修改 MAX_ACTIONS 當作證據完整性修復**。設計所有權 ChatGPT，Claude 僅唯讀核對/提出 engineering feasibility。
