@@ -1121,3 +1121,32 @@
 
 ## 補註（2026-11-05｜💼 W-11 批 1 版面空槽）
 - draft PR `ui2/hold-w11-batch1`：純版面空槽（狀態行／需處理單行／Primary 與建議持股水位空槽／持股表欄名）。W-11 仍 open（待獨立 QA＋資料接線）。守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`。
+
+
+## 70. New UI2 GitHub 對話知識收斂＋第一版資料重用安全門（客戶 2026-11-06；DEC-143，docs-only Draft）
+
+> **Active knowledge index（本治理 PR 尚未合併，不能宣稱 main 已正式更新）**：這裡保存 ChatGPT 與客戶討論後仍適用的專案知識，**不是帳戶 Memory，也不是逐字聊天紀錄**。本節以 2026-11-06 GitHub main \`343f0e0e\` 的原碼、既有 \`DATA_HEALTH_AUDIT_2026-10-23.md\` 和目前 Draft PR #1030／#1031／#1033 為來源。最新工作事實必須重新查 GitHub，舊 audit 不可當現時 API 成功率。
+
+### 70.1 仍有效的產品方向（有使用者裁示；正式施工另走 Gate）
+- **New UI2 五頁**：📊市場／🎯標的／💼持股／👤我的／🗂資料；手機／桌機頂部五頁導航，頂部 Sheet 選擇、右上帳號入口，Dark-only、mobile-first。較舊的四頁硬上限、桌機左 rail、手機 ☰ 抽屜、👤我的內完整資料健康牆是**歷史布局**，不得當下次五頁施工依據；歷史 DEC 與 JS_V4 安全守衛保留，正式替換須視覺／OAuth／測試 Gate。產品規格以 PR #1030 DEC-142 的收斂與合併結果為準。
+- **OneBrain**：唯一核准 canonical/Evidence → 確定性 Domain → **Human UI ViewModel 與完整 Decision Digest 雙投影** → 同一個 OneBrain 協調市場／籌碼／財報／產業／持股／資料稽核六任務領域 → 全域正反證複核，白話短／中／長。按需 Evidence 索引／分包／coverage Gate；不是每次硬跑六次 LLM；AI 禁止自行抓新事實、回寫或越權改 Risk Cap。草案不等於已實作。
+- **研究證據**：大盤 EPS×PE 情境、產業疑似缺貨、公司大型訂單與 AI/CSP CAPEX／OCF／FCF 納入研究 Sheet **設計**；需來源、資料日、期間／口徑、verified/unverified、反證及更新版本。尚無正式大盤 forward EPS、核准 PE 假設或已驗訂單時只能是 Research-only，不產正式指數價位或交易動作。
+- **第一版重用**：財務體檢、月營收、季報跨期、法人／外資、集保、大盤／國際、缺貨疑似訊號、持股／ETF 曝險、資料診斷等需先受「來源／品質／時點／缺值／計算／接線／Digest」逐欄審查；不搬密集舊 UI，也不以 UI 的 Top-N 截掉 OneBrain 證據。
+
+### 70.2 本次驗證的真相（何者已做／未做）
+
+| 子題 | 現狀 | 必守限制 |
+|---|---|---|
+| Old UI Capability／Reuse Matrix | repo 已存在、初步讀碼與分級完成 | 不是逐來源 live probe，不代表可安全直接重用 |
+| 不可用資料分級 | 2026-10-23 舊資料健康稽核＋PR #1033 的 N0~N4 分級草案 | N0 無正式 repo 來源；N1 有來源未接線；N2 語意/正確性有風險；N3 端到端未驗；N4 退役。勿混成一個 unavailable |
+| 缺貨模型 | \`src/services/shortage_screener_service.py\` + \`src/compute/screener/shortage_screener.py\` 實有四個財務足跡訊號 | 僅**疑似供不應求**；月營收資料不足 C4 0 分、其餘可 rankable；需 evidence/coverage/降級 Gate，未核實大單不能當事實 |
+| 財報變化模型 | \`src/compute/health/fin_health_diff.py\` 與 \`fin_trend_score.py\` 實有跨期、65/35 月/季模型 | 缺腿 0 分有「中性」風險；另有現金流累計/單季、缺科目 0 舊 audit 待現時重驗 |
+| New UI2 Real Feed | \`src/services/ui2/real_feed.py\` 目前只讀台股 TWII 快照＋市場位階 | 缺貨／季報／籌碼／ETF／完整 Digest **未正式接線**；HTML 草稿不算功能 |
+| 資料真實可達性 | **尚未完成現時 production 端到端 API 驗收** | 不可宣稱所有來源永久無法抓取；須記錄 HTTP/欄位/日期/限制/權限與 fallback |
+
+### 70.3 應改的記憶／過期說法
+- \`docs/PROJECT_STATE\` 和 \`docs/HANDOFF\` 中歷史段落仍可能提到「現行四頁／抽屜／rail／資料健康度在我的」等，其**布局現行效力由最新客戶方向取代**，不能被新對話誤升格。歷史細節保留，不刪除正式安全 guard。
+- 資料健康舊稽核標紅不等於來源在今天完全不可達；未接線不等於無 API；資料不足不等於 neutral；C4=0 與缺腿 0 也不等於真實觀測零成長。
+- Claude Code 程式施工與 ChatGPT docs／獨立治理各依 DEC-139／140 分工，若有相同檔案 PR 衝突，Claude Code 既授權工作優先；需由正式 GitHub 驗收先確定合併順序。
+
+**接手來源索引**：DEC-143（本治理 PR）／#1030 DEC-142 草案／#1031 研究 Sheet／#1033 過期與缺口稽核／\`docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md\`／\`docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md\`／\`docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md\`。**任務進度與下一動作只看最新 GitHub＋HANDOFF；未完成事項只看 BACKLOG。**
