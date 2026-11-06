@@ -21,7 +21,8 @@ BRANCH = "auto/data-t"
 
 
 def _sh(cwd, *cmd):
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    """本測試以 tmp git repo＋本機 bare origin 驗證真實 git 行為，無純 Python 替代；Windows 開發者需安裝 git。"""
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)  # portability-ok
     assert r.returncode == 0, (cmd, r.stderr)
     return r.stdout.strip()
 
@@ -191,8 +192,8 @@ def test_existing_branch_takes_merge_path_without_force(env):
 
 
 def _sh_bytes(cwd, spec):
-    cmd = ["git", "show", spec]  # 與 _sh 同為非字面 argv；驗 tmp repo 行為必須用 git
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, check=True).stdout
+    """本測試以 tmp git repo＋本機 bare origin 驗證真實 git 行為，無純 Python 替代；Windows 開發者需安裝 git。"""
+    return subprocess.run(["git", "show", spec], cwd=cwd, capture_output=True, check=True).stdout  # portability-ok
 
 
 def test_merge_conflict_fails_loud_and_does_not_push(env):
