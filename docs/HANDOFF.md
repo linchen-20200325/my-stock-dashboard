@@ -3,9 +3,9 @@
 > **2026-11-06 P0 工程回報校正（本 PR 尚未合併）**：三個每日 cron 在 2026-11-05 UTC 的 `Commit and Push Changes` 失敗，Claude 提供 `GH006 Required status check "ui2-browser-gate" is expected`；main `343f0e0e`（當時）。安全設計優先**保持 branch protection**、研究資料分支→PR→CI→合併，而非 bypass；新 GitHub App/PAT／權限與實際自動合併仍要 Gate。**下一安全任務改為**：(1) Claude 對三 workflow 提供不改 production 的分支＋PR 寫入 PoC 與 GitHub token 觸發核准證據；(2) ChatGPT 繼續協調 #1027/#1030/#1032/#1033/#1034 五治理文件衝突；(3) 需等經核准、CI、實際 main readback 方可宣告每日資料已恢復。詳細 #1033 §H–I；模型計算錯誤證據見 BACKLOG `NUI2-GH-MEMORY-DATA-GATE`，不授權直接修公式。
 
 
-> **2026-11-06 最新安全覆寫接手點（PR #1035）**：#1035 head `dd3a1611` 全綠但 Draft，**BLOCKED，不可合併**；其 dispatch 的 PR check 不具 required-check 資格（GitHub 官方說明），helper 同日缺值用舊值補與 metadata 跨日不一致待修。**下一唯一安全動作：Claude 在 #1035 原工程分支先修 trigger 與資料正確性，維持 main required checks、無新 credential／不合併；ChatGPT 維護正式規格與 #1033/#1034 稽核。** 不能因 CI 綠或人工先開權限就稱資料已恢復。詳細 #1033 §J、BACKLOG `NUI2-CRON-PROTECTED-PUBLISHING`；GitHub main/CI 仍需每次重查。
-
 # HANDOFF — 現行交接（my-stock-dashboard）
+
+> **2026-11-06 最新安全覆寫接手點（PR #1035）**：#1035 head `dd3a1611` 全綠但 Draft，**BLOCKED，不可合併**；其 dispatch 的 PR check 不具 required-check 資格（GitHub 官方說明），helper 同日缺值用舊值補與 metadata 跨日不一致待修。**下一唯一安全動作：Claude 在 #1035 原工程分支先修 trigger 與資料正確性，維持 main required checks、無新 credential／不合併；ChatGPT 維護正式規格與 #1033/#1034 稽核。** 不能因 CI 綠或人工先開權限就稱資料已恢復。詳細 #1033 §J、BACKLOG `NUI2-CRON-PROTECTED-PUBLISHING`；GitHub main/CI 仍需每次重查。
 
 
 ### 2026-11-06 ChatGPT 對話記憶與資料安全接手修正（本治理 PR 未合併，不能當 main 現況）
