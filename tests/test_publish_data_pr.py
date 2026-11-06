@@ -674,15 +674,6 @@ def test_d4_merge_conflict_also_restores_worktree(env):
     assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == "main"
 
 
-def test_d5_replace_head_line_only():
-    body = "標題\n\n最新 head SHA：`old`（舊）\n\n人工補註：保留\n"
-    out = pdp.replace_head_line(body, "NEW")
-    assert "`NEW`" in out and "old" not in out and "人工補註：保留" in out and "標題" in out
-    assert out.count("最新 head SHA") == 1
-    appended = pdp.replace_head_line("人工寫的\n", "NEW")  # 該行被人刪掉 → 附加，不覆寫
-    assert "人工寫的" in appended and "`NEW`" in appended
-
-
 def test_d6_sanity_exception_requires_null_last_updated(tmp_path):
     root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=1, claimed_last="2099-01-01",
                       last_error="e；既有檔 sanity 不過,待重建")
@@ -716,3 +707,116 @@ def test_d7_missing_parquet_with_zero_null_claims_is_consistent(tmp_path):
 def test_d7_guard_blocks_gh_api_dispatches(bad):
     with pytest.raises(pdp.PublishError):
         pdp._guard(bad)
+
+
+# ───────────────── 第三輪 QA：N1 區塊重算 / N2 任何例外還原 / N4 fetched_at 揮發 ─────────────────
+def _block(head="H", failure="無（x）", holiday="y"):
+    return pdp.build_status_block(["a"], None, "n/a", {"failure": failure, "holiday": holiday, "stale": {}}, head)
+
+
+def test_n1_block_replaced_outside_text_preserved():
+    day1 = pdp.build_pr_body("t", ["a"], None, "n/a", {"failure": "無（x）", "holiday": "y", "stale": {}}, "sha1")
+    body = day1 + "\n人工補註：KEEP-ME\n"
+    day2 = pdp.update_pr_body(body, _block(head="sha2", failure="macro: 抓取結果為空", holiday="⚠️ 週間日無資料"))
+    assert "人工補註：KEEP-ME" in day2 and "sha2" in day2 and "sha1" not in day2
+    assert "抓取結果為空" in day2 and "無（x）" not in day2  # 反映新狀態，舊「無失敗」消失
+    assert day2.count(pdp.STATUS_START) == 1 and day2.count(pdp.STATUS_END) == 1
+    assert day2.count("最新 head SHA") == 1 and day2.count("### 時間欄位") == 1
+    assert "### ⚠️ 合併前必讀" in day2 and "### 人工處理" in day2  # 區塊外靜態段保留
+
+
+def test_n1_legacy_format_upgrades_without_two_statuses():
+    legacy = ("## 自動資料發布：t\n\n### ⚠️ 合併前必讀\n警語\n\n最新 head SHA：`old`（舊）\n\n"
+              "### 時間欄位\n| a | b |\n\n### 資料狀態（舊）\n- ① 更新失敗：無\n\n### 變更檔\n- `a`\n\n"
+              "### 人工處理（cron 發布 fail-closed 時）\n步驟\n\n人工補註：KEEP\n")
+    out = pdp.update_pr_body(legacy, _block(head="NEW"))
+    assert out.count("最新 head SHA") == 1 and "`NEW`" in out and "`old`" not in out
+    assert out.count("### 時間欄位") == 1 and "### 資料狀態（舊）" not in out
+    assert "警語" in out and "### 人工處理" in out and "人工補註：KEEP" in out and out.count(pdp.STATUS_START) == 1
+    again = pdp.update_pr_body(out, _block(head="NEW2"))  # 升級後再更新 = 純區塊替換
+    assert again.count("最新 head SHA") == 1 and "`NEW2`" in again and "人工補註：KEEP" in again
+
+
+def test_n1_deleted_block_is_appended_and_manual_text_kept():
+    out = pdp.update_pr_body("人工寫的內容\n", _block(head="NEW"))
+    assert out.startswith("人工寫的內容") and out.count(pdp.STATUS_START) == 1 and "`NEW`" in out
+
+
+def test_n1_integration_day2_reflects_new_failure_state(env):
+    work, origin = env
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-03"])
+    rec1 = Rec()
+    _run(work, rec1)
+    create = rec1.has("gh", "pr", "create")[0]
+    day1_body = create[create.index("--body") + 1]
+    assert "① 更新失敗：無（" in day1_body
+    _sh(work, "git", "checkout", "-q", "main")
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-04"])
+    mp = work / "data_cache" / "metadata.json"
+    m = json.loads(mp.read_text(encoding="utf-8"))
+    m["datasets"]["x"]["last_error"] = "抓取結果為空"
+    mp.write_text(json.dumps(m), encoding="utf-8")
+    rec2 = Rec(pr_open=True)
+    rec2.pr_body = day1_body + "\n人工補註：KEEP-ME\n"
+    _run(work, rec2)
+    nb = rec2.has("gh", "pr", "edit")[0]
+    nb = nb[nb.index("--body") + 1]
+    assert "① 更新失敗：x: 抓取結果為空" in nb and "① 更新失敗：無（" not in nb
+    assert "人工補註：KEEP-ME" in nb and nb.count("最新 head SHA") == 1 and nb.count("### 時間欄位") == 1
+    assert f"`{_sh(work, 'git', 'rev-parse', 'HEAD')}`" in nb
+
+
+def _assert_pristine(work, branch="main"):
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == branch
+
+
+def test_n2_corrupt_script_parquet_restores_and_reraises_original(env):
+    work, origin = env
+    (work / "data_cache" / "x.parquet").write_bytes(b"not a parquet at all")
+    rec = Rec()
+    with pytest.raises(Exception) as ei:
+        _run(work, rec)
+    assert not isinstance(ei.value, pdp.PublishError) and "arquet" in str(ei.value)  # 原例外保留
+    _assert_pristine(work)
+    assert not rec.has("push")
+
+
+def test_n2_corrupt_json_metadata_restores_and_reraises(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    (work / "data_cache" / "metadata.json").write_text("{ broken json", encoding="utf-8")
+    rec = Rec()
+    with pytest.raises(ValueError):  # json.JSONDecodeError 是 ValueError 子類
+        _run(work, rec)
+    _assert_pristine(work)
+    assert not rec.has("git", "push")
+    assert BRANCH not in _sh(origin, "git", "branch", "--list")
+
+
+def test_n2_corrupt_branch_parquet_in_union_restores_and_reraises(env):
+    work, origin = env
+    _sh(work, "git", "checkout", "-q", "-b", BRANCH)
+    (work / "data_cache" / "x.parquet").write_bytes(b"garbage committed on the branch")
+    _sh(work, "git", "commit", "-qam", "corrupt")
+    _sh(work, "git", "push", "-q", "origin", BRANCH)
+    before = _sh(origin, "git", "rev-parse", BRANCH)
+    _sh(work, "git", "checkout", "-q", "main")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(pr_open=True)
+    with pytest.raises(Exception) as ei:
+        _run(work, rec)
+    assert not isinstance(ei.value, pdp.PublishError) and "arquet" in str(ei.value)
+    _assert_pristine(work)
+    assert not rec.has("git", "push") and _sh(origin, "git", "rev-parse", BRANCH) == before
+
+
+def test_n4_tw_pmi_json_fetched_at_is_volatile_but_value_is_not():
+    p = "data_cache/macro_last_good/tw_pmi.json"
+    a = json.dumps({"value": 50.1, "date": "2026-10", "source": "s", "fetched_at": "t1", "cached_at": "c1"}).encode()
+    same = json.dumps({"value": 50.1, "date": "2026-10", "source": "s", "fetched_at": "t2", "cached_at": "c2"}).encode()
+    assert not pdp.json_substantive_change(p, a, same)
+    for k, v in (("value", 51.0), ("date", "2026-11"), ("source", "other")):
+        d = json.loads(a)
+        d[k] = v
+        assert pdp.json_substantive_change(p, a, json.dumps(d).encode()), k

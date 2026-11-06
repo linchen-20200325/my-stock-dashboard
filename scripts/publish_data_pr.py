@@ -30,7 +30,7 @@ GITHUB_TOKEN 的 push／PR 事件通常不會觸發 pull_request workflow ⇒ re
     data_cache/sector_flow/metadata.json        updated_at（頂層）
     data_cache/sector_flow/bubble_latest.json   updated_at（頂層）
     data_cache/sector_flow/industry_raw.json    fetched_at（頂層）
-    data_cache/macro_last_good/tw_pmi.json      cached_at（頂層；macro_core._macro_durable_save 每次蓋 now()）
+    data_cache/macro_last_good/tw_pmi.json      cached_at（頂層；macro_core._macro_durable_save 每次蓋 now()）、fetched_at
   其餘鍵（last_error / last_updated / row_count / per_day / warnings …）全是實質，
   特別是 `last_error` 變化代表來源失敗，**不可濾**。其他 JSON 預設只忽略頂層 updated_at / fetched_at。
 - parquet：以 DataFrame 內容比較；忽略 `VOLATILE_PARQUET_COLS`（列級 fetched_at / captured_at）。
@@ -109,7 +109,8 @@ VOLATILE_JSON_KEYS: dict[str, frozenset[str]] = {
     "data_cache/sector_flow/bubble_latest.json": frozenset({"updated_at"}),
     "data_cache/sector_flow/industry_raw.json": frozenset({"fetched_at"}),
     # macro_core._macro_durable_save 每次寫入都蓋 cached_at = now()（實讀 src/data/macro/macro_core.py）
-    "data_cache/macro_last_good/tw_pmi.json": frozenset({"cached_at"}),
+    # fetched_at 與 cached_at 同理（重抓時間戳）；value／date／source 等欄位變動仍為實質
+    "data_cache/macro_last_good/tw_pmi.json": frozenset({"cached_at", "fetched_at"}),
 }
 _DEFAULT_VOLATILE = frozenset({"updated_at", "fetched_at"})
 VOLATILE_PARQUET_COLS = frozenset({"fetched_at", "captured_at"})
@@ -481,33 +482,25 @@ def _parse_day(v: str):
     return None
 
 
-_HEAD_LINE_RE = re.compile(r"^最新 head SHA：`[^`]*`.*$", re.M)
+STATUS_START = "<!-- data-status:start -->"
+STATUS_END = "<!-- data-status:end -->"
+_BLOCK_RE = re.compile(re.escape(STATUS_START) + r".*?" + re.escape(STATUS_END), re.S)
+_LEGACY_HEAD_RE = re.compile(r"^最新 head SHA：.*\n?", re.M)
 
 
 def head_line(sha: str) -> str:
     return f"最新 head SHA：`{sha}`（每次 cron push 後更新此行；請核對 required check 對應的 SHA 與此相符）"
 
 
-def replace_head_line(body: str, sha: str) -> str:
-    """只替換 body 內「最新 head SHA」那一行；其餘（含人工補註）原樣保留。找不到該行 → 附加在尾端。"""
-    if _HEAD_LINE_RE.search(body):
-        return _HEAD_LINE_RE.sub(lambda _m: head_line(sha), body, count=1)
-    return body.rstrip("\n") + "\n\n" + head_line(sha) + "\n"
-
-
-def build_pr_body(job: str, files: list[str], observation_date: str | None, fetched_at: str,
-                  state: dict | None = None, head_sha: str = "（push 後更新）") -> str:
+def build_status_block(files: list[str], observation_date: str | None, fetched_at: str,
+                       state: dict | None, head_sha: str) -> str:
+    """每次 push 整段重算的區塊：最新 head SHA＋時間欄位＋三態資料狀態＋變更檔。"""
     listing = "\n".join(f"- `{p}`" for p in files)
     state = state or {"failure": "無法判定", "holiday": "無法判定", "stale": {}}
     stale_lines = "\n".join(f"  - `{p}`：最後資料日 {d}，距今 {n} 天" for p, (d, n) in sorted(state["stale"].items())) \
         or "  - 無法判定（無 parquet 日期）"
     return (
-        f"## 自動資料發布：{job}\n\n"
-        "本 PR 由每日 cron 自動產生（`scripts/publish_data_pr.py`），內容為腳本實際抓取的資料增量。\n\n"
-        "### ⚠️ 合併前必讀\n"
-        "本 PR 由 GITHUB_TOKEN 建立，CI 不一定自動觸發；未見 `ui2-browser-gate` 綠燈（且 head SHA 與本 PR 相符）"
-        "前不得合併；若無 CI，請有權限者 Close→Reopen 或按 Update branch 以產生原生 pull_request 檢查。\n"
-        "**未經人工審閱不得合併。** 本 PR 未啟用 auto-merge。\n\n"
+        f"{STATUS_START}\n"
         f"{head_line(head_sha)}\n\n"
         "### 時間欄位\n"
         "| 欄位 | 值 |\n|---|---|\n"
@@ -518,7 +511,40 @@ def build_pr_body(job: str, files: list[str], observation_date: str | None, fetc
         f"- ① 更新失敗：{state['failure']}\n"
         f"- ② 休市／無新資料：{state['holiday']}\n"
         f"- ③ 資料過期（僅陳述事實天數，未套門檻）：\n{stale_lines}\n\n"
-        f"### 變更檔\n{listing}\n\n"
+        f"### 變更檔\n{listing}\n"
+        f"{STATUS_END}"
+    )
+
+
+def update_pr_body(old: str, block: str) -> str:
+    """只替換標記區塊內容，區塊外（含人工補註）原樣保留。
+
+    - 有標記 → 替換區塊；
+    - 無標記但為舊格式（有舊「最新 head SHA」行／「### 時間欄位」段）→ 移除舊的 head 行與
+      「### 時間欄位」到「### 人工處理」（或尾端）之間的舊狀態段，於原位置放入區塊（不出現兩份狀態）；
+    - 無標記且非舊格式（人工刪掉）→ 區塊附加在尾端。
+    """
+    if _BLOCK_RE.search(old):
+        return _BLOCK_RE.sub(lambda _m: block, old, count=1)
+    body = _LEGACY_HEAD_RE.sub("", old)
+    i = body.find("### 時間欄位")
+    if i >= 0:
+        j = body.find("### 人工處理", i)
+        j = len(body) if j < 0 else j
+        return body[:i] + block + "\n\n" + body[j:]
+    return body.rstrip("\n") + "\n\n" + block + "\n"
+
+
+def build_pr_body(job: str, files: list[str], observation_date: str | None, fetched_at: str,
+                  state: dict | None = None, head_sha: str = "（push 後更新）") -> str:
+    return (
+        f"## 自動資料發布：{job}\n\n"
+        "本 PR 由每日 cron 自動產生（`scripts/publish_data_pr.py`），內容為腳本實際抓取的資料增量。\n\n"
+        "### ⚠️ 合併前必讀\n"
+        "本 PR 由 GITHUB_TOKEN 建立，CI 不一定自動觸發；未見 `ui2-browser-gate` 綠燈（且 head SHA 與本 PR 相符）"
+        "前不得合併；若無 CI，請有權限者 Close→Reopen 或按 Update branch 以產生原生 pull_request 檢查。\n"
+        "**未經人工審閱不得合併。** 本 PR 未啟用 auto-merge。\n\n"
+        + build_status_block(files, observation_date, fetched_at, state, head_sha) + "\n\n"
         "### 人工處理（cron 發布 fail-closed 時）\n"
         f"若每日排程在「發布資料」步驟持續失敗：① 關閉本 PR（不合併）；② 刪除分支 `{BRANCH_PREFIX}{job}`；"
         "③ 下次排程會從 main 重建。資料契約疑義請回報 ChatGPT，不要硬刪資料。\n"
@@ -676,7 +702,14 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
     if not changed:
         pub.log("無實質變更：--paths 下沒有任何變更檔，不開 PR。")
         return 0
-    subst, noise = pub.classify(changed)
+    orig = pub.git("symbolic-ref", "-q", "--short", "HEAD", check=False).stdout.strip() \
+        or pub.git("rev-parse", "HEAD").stdout.strip()
+    try:
+        subst, noise = pub.classify(changed)
+    except Exception:  # 例如損毀 parquet：還原本輪輸出、原例外往上拋
+        if not args.dry_run:
+            _abort_cleanup(pub, orig, changed)
+        raise
     for st, p in noise:
         pub.log(f"  [僅揮發欄位變動] {p}")
     for st, p in subst:
@@ -705,9 +738,6 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
         pub.log(f"[dry-run] {' '.join(add)} ; git commit -m {args.commit_msg!r} ; git push -u origin {branch}")
         pub.log(f"[dry-run] gh pr list --head {branch} --state open ; (無則) gh pr create --base {BASE_BRANCH} --head {branch} --title {title!r} ; (有則) gh pr edit <n> --body <更新 head SHA 行>")
         return 0
-
-    orig = pub.git("symbolic-ref", "-q", "--short", "HEAD", check=False).stdout.strip() \
-        or pub.git("rev-parse", "HEAD").stdout.strip()
 
     def _stage() -> bool:
         snapshot = {p: pub.worktree_bytes(p) for _, p in changed}
@@ -776,7 +806,7 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
 
     try:
         pushed = _stage()
-    except PublishError:
+    except Exception:  # N2：任何例外（含 pandas／IO）都先還原工作樹再原樣往上拋，不吞掉
         _abort_cleanup(pub, orig, changed)
         raise
 
@@ -789,6 +819,7 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
 
     final = {p: b for p in files if (b := pub.worktree_bytes(p)) is not None}
     state = assess_state(final, {p: pub.count_new_rows(p, b) for p, b in final.items()}, today)
+    block = build_status_block(files, args.observation_date, collect_fetched_at(final), state, head_sha)
     body = build_pr_body(job, files, args.observation_date, collect_fetched_at(final), state, head_sha)
 
     hint = ("分支已推送、PR 未建立／未更新；請檢查『Allow GitHub Actions to create and approve pull requests』"
@@ -800,8 +831,8 @@ def publish(args, pub: Publisher, today: str | None = None) -> int:
             if pushed:
                 n = str(prs[0]["number"])
                 cur = json.loads(pub.run(["gh", "pr", "view", n, "--json", "body"]).stdout or "{}").get("body") or ""
-                pub.run(["gh", "pr", "edit", n, "--body", replace_head_line(cur, head_sha)])
-                pub.log("已有開啟中的 PR：只更新 body 的「最新 head SHA」一行，其餘（含人工補註）保留；不留言。")
+                pub.run(["gh", "pr", "edit", n, "--body", update_pr_body(cur, block)])
+                pub.log("已有開啟中的 PR：只重算 body 的 data-status 標記區塊，區塊外（含人工補註）保留；不留言。")
             else:
                 pub.log("已有開啟中的 PR，分支無新內容，不動。")
         else:
