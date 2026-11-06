@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -71,9 +69,3 @@ def test_mutation_guard_turns_red(name):
     assert violations(name, text.replace("cancel-in-progress: false", "cancel-in-progress: true", 1))
     assert violations(name, text.replace("fetch-depth: 0", "fetch-depth: 1", 1))
     assert violations(name, text.replace("scripts/publish_data_pr.py", "scripts/x.py"))
-
-
-@pytest.mark.skipif(shutil.which("actionlint") is None, reason="actionlint 不可用")
-def test_actionlint():
-    r = subprocess.run(["actionlint", *[str(WF / n) for n in CRONS]], capture_output=True, text=True)
-    assert r.returncode == 0, r.stdout

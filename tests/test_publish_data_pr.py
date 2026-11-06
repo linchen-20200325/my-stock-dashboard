@@ -70,7 +70,7 @@ def env(tmp_path):
     d = work / "data_cache"
     d.mkdir()
     (d / "metadata.json").write_text(json.dumps(
-        {"updated_at": "A", "datasets": {"x": {"last_error": None, "row_count": 2}}}))
+        {"updated_at": "A", "datasets": {"x": {"last_error": None, "row_count": 2}}}), encoding="utf-8")
     _write_pq(d / "x.parquet", _df(["2026-01-01", "2026-01-02"]))
     _sh(work, "git", "add", "-A")
     _sh(work, "git", "commit", "-qm", "base")
@@ -92,11 +92,11 @@ def _run(work, rec, **kw):
 
 def _meta(work, **over):
     p = work / "data_cache" / "metadata.json"
-    m = json.loads(p.read_text())
+    m = json.loads(p.read_text(encoding="utf-8"))
     m.update({k: v for k, v in over.items() if k != "last_error"})
     if "last_error" in over:
         m["datasets"]["x"]["last_error"] = over["last_error"]
-    p.write_text(json.dumps(m))
+    p.write_text(json.dumps(m), encoding="utf-8")
 
 
 def _no_forbidden(rec):
@@ -173,7 +173,7 @@ def test_existing_branch_takes_merge_path_without_force(env):
     _run(work, Rec())
     # main 前進（無衝突的別檔）
     _sh(work, "git", "checkout", "-q", "main")
-    (work / "other.txt").write_text("x")
+    (work / "other.txt").write_text("x", encoding="utf-8")
     _sh(work, "git", "add", "other.txt")
     _sh(work, "git", "commit", "-qm", "main moves")
     _sh(work, "git", "push", "-q", "origin", "main")
@@ -191,7 +191,8 @@ def test_existing_branch_takes_merge_path_without_force(env):
 
 
 def _sh_bytes(cwd, spec):
-    return subprocess.run(["git", "show", spec], cwd=cwd, capture_output=True, check=True).stdout
+    cmd = ["git", "show", spec]  # 與 _sh 同為非字面 argv；驗 tmp repo 行為必須用 git
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, check=True).stdout
 
 
 def test_merge_conflict_fails_loud_and_does_not_push(env):
@@ -199,12 +200,12 @@ def test_merge_conflict_fails_loud_and_does_not_push(env):
     _meta(work, updated_at="B", last_error="e1")
     _run(work, Rec())  # 分支上 metadata 改成 e1
     _sh(work, "git", "checkout", "-q", "main")
-    (work / "data_cache" / "metadata.json").write_text(json.dumps({"conflict": "main"}))
+    (work / "data_cache" / "metadata.json").write_text(json.dumps({"conflict": "main"}), encoding="utf-8")
     _sh(work, "git", "commit", "-qam", "main edits meta")
     _sh(work, "git", "push", "-q", "origin", "main")
     before = _sh(origin, "git", "rev-parse", BRANCH)
     _meta_data = {"updated_at": "C", "datasets": {"x": {"last_error": "e2", "row_count": 2}}}
-    (work / "data_cache" / "metadata.json").write_text(json.dumps(_meta_data))
+    (work / "data_cache" / "metadata.json").write_text(json.dumps(_meta_data), encoding="utf-8")
     rec = Rec()
     with pytest.raises(pdp.PublishError, match="合併衝突"):
         _run(work, rec)
@@ -366,7 +367,7 @@ def test_d5_json_strict_types_and_nested_keys():
 
 def test_d3_ignored_directory_entries_do_not_crash_on_existing_branch_path(env):
     work, origin = env
-    (work / ".gitignore").write_text("data_cache/ign/\n")
+    (work / ".gitignore").write_text("data_cache/ign/\n", encoding="utf-8")
     _sh(work, "git", "add", ".gitignore")
     _sh(work, "git", "commit", "-qm", "ignore")
     _sh(work, "git", "push", "-q", "origin", "main")
@@ -376,7 +377,7 @@ def test_d3_ignored_directory_entries_do_not_crash_on_existing_branch_path(env):
     _sh(work, "git", "checkout", "-q", "main")
     ign = work / "data_cache" / "ign"
     (ign / "__pycache__").mkdir(parents=True)
-    (ign / "a.json").write_text("{}")
+    (ign / "a.json").write_text("{}", encoding="utf-8")
     (ign / "__pycache__" / "m.pyc").write_bytes(b"x")
     _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-04"]))
     rec = Rec(pr_open=True)
