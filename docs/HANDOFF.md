@@ -3,9 +3,9 @@
 
 ### 2026-11-06 ChatGPT 對話記憶與資料安全接手修正（本治理 PR 未合併，不能當 main 現況）
 
-> **目前 GitHub 查核基準**：main \`343f0e0e4072362c45bff1ccc25b61014d15c691\`（2026-11-06 台灣時間）；查詢時 Open/Draft #1022、#1023、#1025、#1027、#1029、#1030、#1031、#1032、#1033；另本治理 PR 待開。**所有 SHA／PR／CI 都是會變的快照，接手第一件事必須重新 GitHub Verification Gate。**
+> **目前 GitHub 查核基準**：main `343f0e0e4072362c45bff1ccc25b61014d15c691`（2026-11-06 台灣時間）；查詢時 Open/Draft #1022、#1023、#1025、#1027、#1029、#1030、#1031、#1032、#1033；另本治理 PR 待開。**所有 SHA／PR／CI 都是會變的快照，接手第一件事必須重新 GitHub Verification Gate。**
 >
-> **客戶明確追加**：「記憶」指存放 GitHub 的 ChatGPT↔客戶對話所提煉的設計／裁示／有效專案知識，不是 ChatGPT 帳戶 Memory。這些內容不只放稽核草稿，必須同步正式五治理檔；參照 DEC-143（待合併）、\`PROJECT_STATE\` §70、\`BACKLOG\` \`NUI2-GH-MEMORY-DATA-GATE\`。
+> **客戶明確追加**：「記憶」指存放 GitHub 的 ChatGPT↔客戶對話所提煉的設計／裁示／有效專案知識，不是 ChatGPT 帳戶 Memory。這些內容不只放稽核草稿，必須同步正式五治理檔；參照 DEC-143（待合併）、`PROJECT_STATE` §70、`BACKLOG` `NUI2-GH-MEMORY-DATA-GATE`。
 
 | 項目 | 現況及安全接手點 |
 |---|---|
@@ -13,11 +13,11 @@
 | 舊規格 | 舊四頁／桌機 rail／手機 drawer／我的資料健康牆是歷史**呈現布局**；不當新五頁施工依據。歷史 DEC/JS_V4/安全守衛禁止無 QA 直接刪，先處理 supersession conflict |
 | 第一版資料 | Reuse Matrix 與 2026-10-23 Data Health Audit 已存在；**未完成逐項 live probe／來源正確性驗證／不可信值全面篩除／New UI2/Digest 接線** |
 | 缺貨分析 | 舊版四訊號僅疑似缺貨，月營收缺值 C4=0 仍可能有 rankable；官方大單與供需尚須可追溯來源驗證 |
-| 財報變化 | 既有 \`fin_health_diff\`、\`fin_trend_score\` 等可重用，但月/季缺腿回 0→中性、現金流累計/單季與欄位缺失等舊稽核問題須 High Gate |
+| 財報變化 | 既有 `fin_health_diff`、`fin_trend_score` 等可重用，但月/季缺腿回 0→中性、現金流累計/單季與欄位缺失等舊稽核問題須 High Gate |
 | 資料缺口 | 優先 N0～N4 分類：無正式來源／未接線／語意有風險／實時未驗／已退役；先修既有來源，再薄 L3 adapter，最後才研究新官方 API／研究 Sheet；缺資料不能填 0 或推 safe |
 | **下一唯一安全工作** | **先協調 #1027／#1030／#1032／#1033 與本治理 PR 的檔案 owner、合併順序和 supersession；完成 docs-only 獨立 QA、CI、merge gate**。之後才安排唯讀資料 live probe→缺貨/財報 High QA→合格資料接 UI2/Digest；不跨步開新來源/寫入/新公式施工 |
 
-**對話交接限制**：ChatGPT 無法保證預知平台何時突然斷線；應在重要裁示當次保存 GitHub checkpoint，有實際風險時提供可貼上的新對話提示；未合併 Draft 與正式 main 須分開說明。已存在正式交接規則 DEC-088／\`docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md\`，#1032 為增補草案，不要再發明第二套權威。
+**對話交接限制**：ChatGPT 無法保證預知平台何時突然斷線；應在重要裁示當次保存 GitHub checkpoint，有實際風險時提供可貼上的新對話提示；未合併 Draft 與正式 main 須分開說明。已存在正式交接規則 DEC-088／`docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md`，#1032 為增補草案，不要再發明第二套權威。
 
 **新對話一句話接手**：先查 main/PR/CI/branches 並讀五治理檔；以 #1030/#1033＋DEC-143 的**實際合併狀態**判斷五頁、OneBrain、舊 UI 可用資料、C4 缺貨/財報缺值風險，不能把規劃當已實作；ChatGPT docs/治理、Claude Code 程式且 Claude 既授權同檔優先。
 
