@@ -1123,6 +1123,16 @@
 - draft PR `ui2/hold-w11-batch1`：純版面空槽（狀態行／需處理單行／Primary 與建議持股水位空槽／持股表欄名）。W-11 仍 open（待獨立 QA＋資料接線）。守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`。
 
 
+
+
+### 70.4 2026-11-06 新的獨立驗證／更正索引（非完成宣告）
+
+- main workflow 原碼實查：`update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 直接 `git push`，2026-11-05 UTC 的三次排程在 `Commit and Push Changes` 失敗，與 Claude 所讀 `GH006 ui2-browser-gate expected` 相符；branch protection Admin API 權限不足不能確認何時由誰設定。日資料未落 main 時不代表取不到 API；向使用者揭露 stale。
+- 舊 audit 部分已不適用：Claude 回報出口名、MA200、總經外資備援假零已修；個股法人假零仍需資格審查；ETF 回測無功能頁但有殘留讀者。先重新驗 source/commit/test，再更正有效狀態；詳情 #1033 §H。
+- Claude 實跑發現月/季缺值→中性、缺貨 all-None→不明顯仍排行、月營收末月洞、Warning→stable 等，舊 322 tests 綠不代表 correctness 通過。現金流單季還原須先實測 FinMind 口徑。
+- Evidence Registry 尚無 production 實作，Digest 未有 production caller，`MAX_ACTIONS=3` 候選截斷需保留 omission manifest；不得宣稱 OneBrain 已收到完整正反證。
+- **設計優先路線（尚待工程驗證／權限 Gate）**：保留 `ui2-browser-gate`，讓 cron 產生資料分支與 PR，經 required CI 且審核後合併；避免繞過 branch protection，先處理 GitHub Actions token 觸發/核准限制；三方案及契約詳 #1033 §I。資料修復與 OneBrain schema 是後續獨立 High Gate，不是本 docs PR 實作。
+
 ## 70. New UI2 GitHub 對話知識收斂＋第一版資料重用安全門（客戶 2026-11-06；DEC-143，docs-only Draft）
 
 > **Active knowledge index（本治理 PR 尚未合併，不能宣稱 main 已正式更新）**：這裡保存 ChatGPT 與客戶討論後仍適用的專案知識，**不是帳戶 Memory，也不是逐字聊天紀錄**。本節以 2026-11-06 GitHub main `343f0e0e` 的原碼、既有 `DATA_HEALTH_AUDIT_2026-10-23.md` 和目前 Draft PR #1030／#1031／#1033 為來源。最新工作事實必須重新查 GitHub，舊 audit 不可當現時 API 成功率。
