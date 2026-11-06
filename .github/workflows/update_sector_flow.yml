@@ -15,19 +15,31 @@ on:
         description: 'bootstrap 回溯日曆天（預設 30 ≈ 20 交易日）'
         required: false
         default: '30'
+      dry_run:
+        description: '只印發布計畫、不推分支不開 PR（true / 留空）'
+        required: false
+        default: ''
   schedule:
     # 每日 UTC 09:30（TW 17:30 收盤後，T86 / TPEX 三大法人盤後已備齊）
     - cron: '30 9 * * *'
 
-permissions:
-  contents: write
+# 同一 job 的發布串行、不取消進行中的（避免同分支並行 push）。
+concurrency:
+  group: data-publish-sector-flow
+  cancel-in-progress: false
 
 jobs:
   update-sector-flow:
     runs-on: ubuntu-latest
+    # 2026-11-06：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
+    permissions:
+      contents: write        # 推 auto/data-sector-flow 分支（不是 main）
+      pull-requests: write   # gh pr create / list / edit。不給 actions: write —— 本流程不 dispatch 任何 workflow（dispatch 的 checks 不符合 required checks）
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 發布 helper 需 merge origin/main 與切換分支
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -59,15 +71,16 @@ jobs:
             python scripts/update_sector_flow.py
           fi
 
-      - name: Commit and Push Changes
+      - name: Publish via data PR (no direct push to main)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          # 子目錄 data_cache/sector_flow/ 不受 data_cache/*.parquet gitignore 影響 → 免 -f
-          git add data_cache/sector_flow/
-          if git diff --staged --quiet; then
-            echo "→ data_cache/sector_flow/ 無變更，跳過 commit"
-          else
-            git commit -m "🤖 板塊資金泡泡圖每日增量：$(date +%Y-%m-%d)"
-            git push
-          fi
+          # 2026-11-06：原「git add / commit / push」改由 helper 執行，只推 auto/data-sector-flow 並開 PR。
+          # 子目錄 data_cache/sector_flow/ 不受 data_cache/*.parquet gitignore 影響 → 免 -f（不帶 --force-add）
+          # metadata/bubble_latest/industry_raw 的 updated_at/fetched_at 每次必變，由 helper 判定「無實質變更」則不開 PR。
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then ARGS="--dry-run"; fi
+          python scripts/publish_data_pr.py --job sector-flow \
+            --paths data_cache/sector_flow/ \
+            --commit-msg "🤖 板塊資金泡泡圖每日增量：$(date +%Y-%m-%d)" $ARGS

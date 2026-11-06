@@ -1,0 +1,884 @@
+"""scripts/publish_data_pr.py 測試：tmp git repo + 本機 bare origin + mock gh，不碰網路。"""
+from __future__ import annotations
+
+import importlib.util
+import io
+import json
+import subprocess
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+import os
+
+_SPEC = importlib.util.spec_from_file_location(
+    "publish_data_pr", os.environ.get("PDP_PATH") or Path(__file__).resolve().parents[1] / "scripts" / "publish_data_pr.py")
+pdp = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(pdp)
+
+BRANCH = "auto/data-t"
+
+
+def _sh(cwd, *cmd):
+    """本測試以 tmp git repo＋本機 bare origin 驗證真實 git 行為，無純 Python 替代；Windows 開發者需安裝 git。"""
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)  # portability-ok
+    assert r.returncode == 0, (cmd, r.stderr)
+    return r.stdout.strip()
+
+
+class Rec:
+    """記錄所有呼叫；git 走真的 repo，gh 走腳本化回應。"""
+
+    def __init__(self, pr_open=False, fail_create=False):
+        self.calls: list[list[str]] = []
+        self.pr_open, self.fail_create = pr_open, fail_create
+        self.pr_body = "開頭\n最新 head SHA：`oldsha`（舊）\n人工補註：KEEP-ME\n"
+
+    def __call__(self, cmd, cwd=None, input=None, binary=False):
+        self.calls.append(list(cmd))
+        if cmd[0] == "gh":
+            if cmd[1:3] == ["pr", "list"]:
+                return pdp.Result(0, json.dumps([{"number": 7}] if self.pr_open else []), "")
+            if cmd[1:3] == ["pr", "create"]:
+                return pdp.Result(1 if self.fail_create else 0, "", "boom" if self.fail_create else "")
+            if cmd[1:3] == ["pr", "view"]:
+                return pdp.Result(0, json.dumps({"body": self.pr_body}), "")
+            if cmd[1:3] == ["pr", "edit"]:
+                return pdp.Result(0, "", "")
+            raise AssertionError(cmd)
+        return pdp.default_runner(cmd, cwd, input, binary)
+
+    def has(self, *tokens):
+        return [c for c in self.calls if all(t in c for t in tokens)]
+
+
+def _df(dates, fetched="2026-01-01T00:00:00Z", extra=0.0):
+    return pd.DataFrame({"date": dates, "v": [1.0 + extra + i for i in range(len(dates))],
+                         "fetched_at": fetched})
+
+
+def _write_pq(path, df):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, index=False)
+
+
+@pytest.fixture
+def env(tmp_path):
+    origin = tmp_path / "origin.git"
+    _sh(tmp_path, "git", "init", "-q", "--bare", "-b", "main", str(origin))
+    work = tmp_path / "work"
+    _sh(tmp_path, "git", "clone", "-q", str(origin), str(work))
+    _sh(work, "git", "config", "user.name", "t")
+    _sh(work, "git", "config", "user.email", "t@t")
+    d = work / "data_cache"
+    d.mkdir()
+    (d / "metadata.json").write_text(json.dumps(
+        {"updated_at": "A", "datasets": {"x": {"last_error": None, "row_count": 2}}}), encoding="utf-8")
+    _write_pq(d / "x.parquet", _df(["2026-01-01", "2026-01-02"]))
+    _sh(work, "git", "add", "-A")
+    _sh(work, "git", "commit", "-qm", "base")
+    _sh(work, "git", "branch", "-M", "main")
+    _sh(work, "git", "push", "-q", "-u", "origin", "main")
+    return work, origin
+
+
+def _args(**kw):
+    base = dict(job="t", paths=["data_cache/"], commit_msg="msg", observation_date=None,
+                force_add=False, dry_run=False)
+    base.update(kw)
+    return type("A", (), base)()
+
+
+def _run(work, rec, **kw):
+    return pdp.publish(_args(**kw), pdp.Publisher(rec, str(work), log=lambda *_: None))
+
+
+def _meta(work, **over):
+    p = work / "data_cache" / "metadata.json"
+    m = json.loads(p.read_text(encoding="utf-8"))
+    m.update({k: v for k, v in over.items() if k != "last_error"})
+    if "last_error" in over:
+        m["datasets"]["x"]["last_error"] = over["last_error"]
+    p.write_text(json.dumps(m), encoding="utf-8")
+
+
+def _no_forbidden(rec):
+    for c in rec.calls:
+        assert not any(t.startswith("--force") or t == "-f" and "push" in c for t in c), c
+        if "push" in c:
+            assert not any(t in ("main", "HEAD:main") or t.startswith("+") for t in c), c
+            assert BRANCH in c
+        assert "rebase" not in c
+
+
+# ── 實質變更判定 ──
+def test_only_updated_at_changes_is_noop(env):
+    work, _ = env
+    _meta(work, updated_at="B")
+    rec = Rec()
+    assert _run(work, rec) == 0
+    assert not rec.has("gh") and not rec.has("push")
+    assert _sh(work, "git", "status", "--porcelain") == ""  # 工作樹已還原
+
+
+def test_last_error_change_is_substantive(env):
+    work, _ = env
+    _meta(work, updated_at="B", last_error="來源失敗")
+    rec = Rec()
+    assert _run(work, rec) == 0
+    assert rec.has("git", "push")
+    assert rec.has("gh", "create")
+
+
+def test_parquet_same_content_different_bytes_is_noop(env):
+    work, _ = env
+    # 只改 fetched_at 欄 + 不同 row group 寫法 → 位元組不同、內容相同
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02"], fetched="2099-01-01"))
+    rec = Rec()
+    assert _run(work, rec) == 0
+    assert not rec.has("push")
+
+
+def test_parquet_new_row_is_substantive(env):
+    work, _ = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec()
+    assert _run(work, rec) == 0
+    assert rec.has("push")
+
+
+def test_unit_functions():
+    a = json.dumps({"updated_at": 1, "k": 1}).encode()
+    assert not pdp.json_substantive_change("z.json", a, json.dumps({"updated_at": 2, "k": 1}).encode())
+    assert pdp.json_substantive_change("z.json", a, json.dumps({"updated_at": 2, "k": 2}).encode())
+    assert pdp.json_substantive_change("z.json", a, json.dumps({"updated_at": 1, "k": 1, "new": 0}).encode())  # 未知鍵=實質
+    assert pdp.is_substantive("f.bin", "M", b"1", b"2") and not pdp.is_substantive("f.bin", "M", b"1", b"1")
+    assert pdp.is_substantive("f.bin", "A", None, b"1")
+
+
+# ── 分支與 PR ──
+def test_new_branch_pushes_normally_and_never_main_or_force(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec()
+    _run(work, rec)
+    _no_forbidden(rec)
+    assert BRANCH in _sh(origin, "git", "branch", "--list")
+    assert _sh(origin, "git", "rev-parse", "main") == _sh(work, "git", "rev-parse", "origin/main")  # main 未動
+    assert not [c for c in rec.calls if c[0] == "gh" and "workflow" in c]  # 絕不 dispatch
+    create = rec.has("gh", "pr", "create")[0]
+    body = create[create.index("--body") + 1]
+    head = _sh(work, "git", "rev-parse", "HEAD")
+    for must in ("本 PR 由 GITHUB_TOKEN 建立，CI 不一定自動觸發", "ui2-browser-gate", "Close→Reopen", "Update branch",
+                 f"`{head}`", "published_at", "n/a（來源未提供）"):
+        assert must in body, must
+
+
+def test_existing_branch_takes_merge_path_without_force(env):
+    work, origin = env
+    # day1：開分支
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _run(work, Rec())
+    # main 前進（無衝突的別檔）
+    _sh(work, "git", "checkout", "-q", "main")
+    (work / "other.txt").write_text("x", encoding="utf-8")
+    _sh(work, "git", "add", "other.txt")
+    _sh(work, "git", "commit", "-qm", "main moves")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    # day2：以 main 為基底只產出 01-04（不含分支上的 01-03）
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-04"]))
+    rec = Rec(pr_open=True)
+    assert _run(work, rec) == 0
+    _no_forbidden(rec)
+    assert rec.has("git", "merge", "origin/main")
+    assert not rec.has("gh", "create")  # 已有開啟 PR 不重複建立
+    assert not [c for c in rec.calls if c[0] == "gh" and "workflow" in c]
+    assert not rec.has("gh", "pr", "comment")  # 不洗版
+    edit = rec.has("gh", "pr", "edit")[0]  # 只更新 body 的最新 head SHA 行
+    nb = edit[edit.index("--body") + 1]
+    assert f"`{_sh(work, 'git', 'rev-parse', 'HEAD')}`" in nb
+    assert "人工補註：KEEP-ME" in nb and "開頭" in nb and "oldsha" not in nb  # 只換 head 行，其餘保留
+    got = pd.read_parquet(io.BytesIO(_sh_bytes(origin, f"{BRANCH}:data_cache/x.parquet")))
+    assert sorted(got["date"].tolist()) == ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]  # 沒丟分支上的 01-03
+    assert "other.txt" in _sh(origin, "git", "ls-tree", "-r", "--name-only", BRANCH)  # main 已併入
+
+
+def _sh_bytes(cwd, spec):
+    """本測試以 tmp git repo＋本機 bare origin 驗證真實 git 行為，無純 Python 替代；Windows 開發者需安裝 git。"""
+    return subprocess.run(["git", "show", spec], cwd=cwd, capture_output=True, check=True).stdout  # portability-ok
+
+
+def test_merge_conflict_fails_loud_and_does_not_push(env):
+    work, origin = env
+    _meta(work, updated_at="B", last_error="e1")
+    _run(work, Rec())  # 分支上 metadata 改成 e1
+    _sh(work, "git", "checkout", "-q", "main")
+    (work / "data_cache" / "metadata.json").write_text(json.dumps({"conflict": "main"}), encoding="utf-8")
+    _sh(work, "git", "commit", "-qam", "main edits meta")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    before = _sh(origin, "git", "rev-parse", BRANCH)
+    _meta_data = {"updated_at": "C", "datasets": {"x": {"last_error": "e2", "row_count": 2}}}
+    (work / "data_cache" / "metadata.json").write_text(json.dumps(_meta_data), encoding="utf-8")
+    rec = Rec()
+    with pytest.raises(pdp.PublishError, match="合併衝突"):
+        _run(work, rec)
+    assert not rec.has("git", "push") and not rec.has("gh")
+    assert _sh(origin, "git", "rev-parse", BRANCH) == before
+    # D4：失敗後本地乾淨並回到原分支
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+
+def test_pr_not_duplicated_when_open(env):
+    work, _ = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(pr_open=True)
+    _run(work, rec)
+    assert not rec.has("gh", "create")
+
+
+def test_pr_create_failure_exit_1_with_hint(env, capsys):
+    work, _ = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(fail_create=True)
+    with pytest.raises(pdp.PublishError, match="Allow GitHub Actions to create and approve pull requests"):
+        _run(work, rec)
+    # CLI 層轉 exit 1 由 test_main_returns_1_on_publish_error 驗
+
+
+def test_main_returns_1_on_publish_error(monkeypatch, capsys):
+    def boom(*a, **k):
+        raise pdp.PublishError("分支已推送、PR/check 未建立；x")
+    monkeypatch.setattr(pdp, "publish", boom)
+    assert pdp.main(["--job", "t", "--paths", "p", "--commit-msg", "m"]) == 1
+    assert "PR/check 未建立" in capsys.readouterr().err
+
+
+def test_dry_run_writes_nothing(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    before_status = _sh(work, "git", "status", "--porcelain")
+    before_head = _sh(work, "git", "rev-parse", "HEAD")
+    rec = Rec()
+    assert _run(work, rec, dry_run=True) == 0
+    assert _sh(work, "git", "status", "--porcelain") == before_status
+    assert _sh(work, "git", "rev-parse", "HEAD") == before_head
+    assert _sh(work, "git", "branch", "--list") .count(BRANCH) == 0
+    assert not rec.has("gh") and not rec.has("push") and not rec.has("commit") and not rec.has("add")
+    assert BRANCH not in _sh(origin, "git", "branch", "--list")
+
+
+def test_guard_blocks_force_main_rebase():
+    p = pdp.Publisher(Rec(), None)
+    for bad in (["git", "push", "--force", "origin", BRANCH], ["git", "push", "--force-with-lease", "origin", BRANCH],
+                ["git", "push", "origin", "main"], ["git", "push", "origin", f"+{BRANCH}"],
+                ["git", "push", "origin", "HEAD:main"], ["git", "rebase", "origin/main"]):
+        with pytest.raises(pdp.PublishError):
+            p.run(bad)
+
+
+# ── 時間欄位不偽造 ──
+def test_pr_body_times_not_fabricated():
+    body = pdp.build_pr_body("t", ["a"], None, pdp.collect_fetched_at({"a.json": b"{}"}))
+    assert "見下方各檔最後資料日" in body and "n/a（來源未提供）" in body and "n/a（資料檔內無 fetched_at）" in body
+    assert "未經人工審閱不得合併" in body
+    body2 = pdp.build_pr_body("t", ["a"], "2026-11-05", "2026-11-05T09:40:00+00:00")
+    assert "2026-11-05" in body2 and "2026-11-05T09:40:00+00:00" in body2 and "n/a（來源未提供）" in body2
+
+
+def test_collect_fetched_at_from_real_data():
+    buf = io.BytesIO()
+    _df(["2026-01-01"], fetched="2026-05-05T00:00:00Z").to_parquet(buf, index=False)
+    assert pdp.collect_fetched_at({"x.parquet": buf.getvalue()}) == "2026-05-05T00:00:00Z"
+
+
+# ───────────────── QA 缺陷修正（D1~D6）─────────────────
+def _pq_bytes(df):
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("bad", [
+    ["git", "push", "-fu", "origin", BRANCH], ["git", "push", "-uf", "origin", BRANCH],
+    ["git", "push", "origin", f"{BRANCH}:main"], ["git", "push", "--delete", "origin", BRANCH],
+    ["git", "push", "--prune", "origin", BRANCH], ["git", "push", "origin", "HEAD:main"],
+    ["git", "push", "-u", "origin", BRANCH, "extra"], ["git", "push"],
+    ["git", "reset", "--hard", "HEAD"], ["git", "update-ref", "-d", "x"], ["git", "send-pack", "x"],
+    ["git", "pull", "--rebase"], ["git", "-c", "a=b", "push", "origin", "main"],
+    ["gh", "pr", "merge", "7"], ["gh", "workflow", "run", "pr-check.yml", "--ref", BRANCH], ["gh", "api", "-X", "DELETE", "repos/o/r/branches/main/protection"],
+])
+def test_d1_guard_whitelist_rejects(bad):
+    with pytest.raises(pdp.PublishError):
+        pdp._guard(bad)
+
+
+@pytest.mark.parametrize("good", [
+    ["git", "push", "-u", "origin", BRANCH], ["git", "push", "origin", BRANCH],
+    ["git", "commit", "-m", "push"], ["git", "commit", "-m", "rebase main push --force"],
+    ["git", "-c", "user.name=x", "commit", "-m", "git push origin main"], ["git", "reset", "-q", "--", "p"],
+    ["gh", "pr", "list", "--head", BRANCH], ["gh", "api", "repos/o/r/pulls"],
+])
+def test_d1_guard_allows_normal_and_no_false_positive(good):
+    pdp._guard(good)
+
+
+def test_d1_job_name_validated():
+    for bad in ("Bad", "-x", "a/b", "a b", "a_b", ""):
+        with pytest.raises(SystemExit):
+            pdp.parse_args(["--job", bad, "--paths", "p", "--commit-msg", "m"])
+    assert pdp.parse_args(["--job", "macro-history", "--paths", "p", "--commit-msg", "m"]).job == "macro-history"
+
+
+def test_d4_columns_only_in_branch_are_kept_for_untouched_keys():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0], "extra": ["a", "b"]})
+    new = pd.DataFrame({"date": ["2026-01-03"], "v": [6.0]})
+    out = pd.read_parquet(io.BytesIO(pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new))))
+    r = out.set_index("date")["extra"].to_dict()
+    assert r["2026-01-01"] == "a" and r["2026-01-02"] == "b" and pd.isna(r["2026-01-03"])
+
+
+def test_d4_dtype_conflict_fails_loud():
+    base = pd.DataFrame({"date": ["2026-01-01"], "v": ["text"]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [1.0]})
+    with pytest.raises(pdp.PublishError, match="型別衝突"):
+        pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new))
+
+
+def test_d5_json_strict_types_and_nested_keys():
+    a = json.dumps({"k": True}).encode()
+    assert pdp.json_substantive_change("z.json", a, json.dumps({"k": 1}).encode())  # bool != int
+    assert pdp.json_substantive_change("z.json", json.dumps({"k": 1}).encode(), json.dumps({"k": 1.0}).encode())
+    n1 = json.dumps({"a": {"updated_at": 1}}).encode()
+    n2 = json.dumps({"a": {"updated_at": 2}}).encode()
+    assert pdp.json_substantive_change("z.json", n1, n2)  # 未登記檔：巢狀視為實質
+    assert not pdp.json_substantive_change("data_cache/metadata.json", n1, n2)  # 已登記檔：照舊任意深度
+    assert not pdp.json_substantive_change("z.json", json.dumps({"updated_at": 1}).encode(),
+                                           json.dumps({"updated_at": 2}).encode())  # 頂層仍忽略
+
+
+def test_d3_ignored_directory_entries_do_not_crash_on_existing_branch_path(env):
+    work, origin = env
+    (work / ".gitignore").write_text("data_cache/ign/\n", encoding="utf-8")
+    _sh(work, "git", "add", ".gitignore")
+    _sh(work, "git", "commit", "-qm", "ignore")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    # 先開分支，讓第二輪走 remote_has 路徑
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _run(work, Rec(), force_add=True)
+    _sh(work, "git", "checkout", "-q", "main")
+    ign = work / "data_cache" / "ign"
+    (ign / "__pycache__").mkdir(parents=True)
+    (ign / "a.json").write_text("{}", encoding="utf-8")
+    (ign / "__pycache__" / "m.pyc").write_bytes(b"x")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-04"]))
+    rec = Rec(pr_open=True)
+    assert _run(work, rec, force_add=True) == 0
+    tree = _sh(origin, "git", "ls-tree", "-r", "--name-only", BRANCH)
+    assert "data_cache/ign/a.json" in tree and "__pycache__" not in tree
+    # 不 force_add：目錄項被跳過，不當機
+    _sh(work, "git", "checkout", "-q", "main")
+    assert _run(work, Rec(pr_open=True), force_add=False) == 0
+
+
+def test_no_dispatch_on_any_path_even_new_pr_without_push(env):
+    work, _ = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    with pytest.raises(pdp.PublishError):
+        _run(work, Rec(fail_create=True))  # 分支已推送、PR 建立失敗
+    _sh(work, "git", "checkout", "-q", "main")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(pr_open=False)  # 第二輪：內容與分支相同 → 無新 push，但 PR 為新建
+    _run(work, rec)
+    assert not rec.has("git", "push")
+    assert rec.has("gh", "pr", "create")
+    assert not [c for c in rec.calls if c[0] == "gh" and "workflow" in c]
+
+
+# ───────────────── 批 2：fail-closed 合併 / metadata 一致性 / 狀態 / 多 job ─────────────────
+def _rd(b):
+    return pd.read_parquet(io.BytesIO(b))
+
+
+def _union(base, new, **kw):
+    return _rd(pdp.union_parquet_by_date(_pq_bytes(base), _pq_bytes(new), ctx="job=t", **kw))
+
+
+def test_union_no_silent_backfill_old_value_vs_new_null_fails_closed():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [float("nan")]})
+    with pytest.raises(pdp.PublishError) as ei:
+        _union(base, new)
+    m = str(ei.value)
+    assert "2026-01-02" in m and "v" in m and "2.0" in m and "nan" in m.lower() and "job=t" in m
+    assert "關閉該資料 PR 並刪除分支" in m and "ChatGPT" in m
+
+
+def test_union_missing_column_in_new_for_common_key_fails_closed():
+    base = pd.DataFrame({"date": ["2026-01-02"], "v": [2.0], "extra": ["b"]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [2.0]})
+    with pytest.raises(pdp.PublishError, match="extra"):
+        _union(base, new)
+
+
+def test_union_both_non_null_but_different_fails_closed():
+    base = pd.DataFrame({"date": ["2026-01-02"], "v": [2.0]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [3.0]})
+    with pytest.raises(pdp.PublishError, match="舊值=2.0"):
+        _union(base, new)
+
+
+def test_union_identical_old_null_new_value_only_base_only_new():
+    base = pd.DataFrame({"date": ["2026-01-01", "2026-01-02", "2026-01-03"], "v": [1.0, float("nan"), 3.0],
+                         "fetched_at": ["old1", "old2", "old3"]})
+    new = pd.DataFrame({"date": ["2026-01-02", "2026-01-03", "2026-01-04"], "v": [22.0, 3.0, 4.0],
+                        "fetched_at": ["NEW2", "NEW3", "NEW4"]})
+    logs = []
+    out = _union(base, new, log=logs.append).set_index("date")
+    assert out["v"].to_dict() == {"2026-01-01": 1.0, "2026-01-02": 22.0, "2026-01-03": 3.0, "2026-01-04": 4.0}
+    assert len(out) == 4 and out.index.is_unique  # 無重複列
+    assert out.loc["2026-01-03", "fetched_at"] == "old3"  # 揮發欄：相同 key 保留舊值（不因時間戳造成差異）
+    assert out.loc["2026-01-04", "fetched_at"] == "NEW4"
+    assert any("舊 null→新有值" in l for l in logs)
+
+
+def test_union_volatile_only_difference_is_ok():
+    base = pd.DataFrame({"date": ["2026-01-02"], "v": [2.0], "fetched_at": ["a"]})
+    new = pd.DataFrame({"date": ["2026-01-02"], "v": [2.0], "fetched_at": ["b"]})
+    assert _union(base, new)["fetched_at"].tolist() == ["a"]
+
+
+def test_union_sector_key_date_plus_sector():
+    base = pd.DataFrame({"date": ["2026-01-02"] * 2, "sector": ["A", "B"], "net": [1.0, 2.0]})
+    new = pd.DataFrame({"date": ["2026-01-02"] * 2, "sector": ["B", "C"], "net": [2.0, 3.0]})
+    out = _union(base, new)
+    assert sorted(zip(out["sector"], out["net"])) == [("A", 1.0), ("B", 2.0), ("C", 3.0)]
+    bad = pd.DataFrame({"date": ["2026-01-02"], "sector": ["B"], "net": [9.0]})
+    with pytest.raises(pdp.PublishError, match="2026-01-02\\|B"):
+        _union(base, bad)
+
+
+def test_union_ledger_existing_date_kept_and_any_change_fails():
+    base = pd.DataFrame({"date": ["2026-01-02"], "label": ["紅"], "extra": [None]})
+    same = pd.DataFrame({"date": ["2026-01-02", "2026-01-03"], "label": ["紅", "綠"], "extra": [None, None]})
+    out = _union(base, same, ledger=True)
+    assert out["date"].tolist() == ["2026-01-02", "2026-01-03"] and out["label"].tolist() == ["紅", "綠"]
+    for bad in (pd.DataFrame({"date": ["2026-01-02"], "label": ["綠"], "extra": [None]}),  # 改既有列
+                pd.DataFrame({"date": ["2026-01-02"], "label": ["紅"], "extra": ["x"]})):  # 舊 null→新有值也不行
+        with pytest.raises(pdp.PublishError):
+            _union(base, bad, ledger=True)
+
+
+def test_integration_conflict_fails_closed_no_push_no_commit(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _run(work, Rec())
+    before = _sh(origin, "git", "rev-parse", BRANCH)
+    _sh(work, "git", "checkout", "-q", "main")
+    bad = _df(["2026-01-01", "2026-01-02", "2026-01-03"])
+    bad.loc[2, "v"] = 99.0  # 01-03 同 key 不同值
+    _write_pq(work / "data_cache" / "x.parquet", bad)
+    rec = Rec(pr_open=True)
+    with pytest.raises(pdp.PublishError, match="fail-closed"):
+        _run(work, rec)
+    assert not rec.has("git", "push") and not rec.has("gh")
+    assert _sh(origin, "git", "rev-parse", BRANCH) == before
+
+
+def _meta_tree(tmp_path, rows, claimed_rows, claimed_last, last_error=None):
+    d = tmp_path / "data_cache"
+    _write_pq(d / "x.parquet", _df(rows))
+    (d / "metadata.json").write_text(json.dumps({"updated_at": "u", "datasets": {"x": {
+        "name": "x", "last_updated": claimed_last, "row_count": claimed_rows, "last_error": last_error}}}),
+        encoding="utf-8")
+    return tmp_path
+
+
+def test_metadata_tamper_detected_then_recomputed_exactly(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01", "2026-01-02", "2026-01-03"], claimed_rows=2, claimed_last="2026-01-02")
+    bad = pdp.verify_metadata(root, ["data_cache/"])
+    assert any("row_count" in b and "宣稱 2" in b and "重算 3" in b for b in bad)
+    assert any("last_updated" in b for b in bad)
+    pdp.reconcile_metadata(root, ["data_cache/"], log=lambda *_: None)
+    m = json.loads((root / "data_cache" / "metadata.json").read_text(encoding="utf-8"))["datasets"]["x"]
+    assert m["row_count"] == 3 and m["last_updated"] == "2026-01-03" and m["name"] == "x"
+    assert pdp.verify_metadata(root, ["data_cache/"]) == []
+
+
+def test_metadata_sector_flow_recomputes_row_count_last_updated_n_days(tmp_path):
+    d = tmp_path / "data_cache" / "sector_flow"
+    _write_pq(d / "daily_net.parquet", pd.DataFrame({"date": pd.to_datetime(["2026-01-02"] * 2 + ["2026-01-05"]),
+                                                     "sector": ["A", "B", "A"], "net_amt_yi": [1.0, 2.0, 3.0]}))
+    (d / "metadata.json").write_text(json.dumps({"row_count": 1, "last_updated": "2026-01-02", "n_days": 1,
+                                                 "last_error": None}), encoding="utf-8")
+    assert len(pdp.verify_metadata(tmp_path, ["data_cache/sector_flow/"])) == 3
+    pdp.reconcile_metadata(tmp_path, ["data_cache/sector_flow/"], log=lambda *_: None)
+    m = json.loads((d / "metadata.json").read_text(encoding="utf-8"))
+    assert (m["row_count"], m["last_updated"], m["n_days"]) == (3, "2026-01-05", 2)
+
+
+def test_metadata_consistency_rule_and_sanity_exception(tmp_path):
+    root = _meta_tree(tmp_path, [], claimed_rows=0, claimed_last=None, last_error=None)
+    (root / "data_cache" / "x.parquet").unlink()
+    assert any("last_error 為空但 row_count=0" in b for b in pdp.verify_metadata(root, ["data_cache/"]))
+    root2 = _meta_tree(tmp_path / "s", ["2026-01-01"], claimed_rows=1, claimed_last=None,
+                       last_error="e；既有檔 sanity 不過,待重建")
+    assert pdp.verify_metadata(root2, ["data_cache/"]) == []  # sanity 例外：last_updated 刻意為 null
+
+
+def _script_output(work, rows):
+    _write_pq(work / "data_cache" / "x.parquet", _df(rows))
+    (work / "data_cache" / "metadata.json").write_text(json.dumps({"updated_at": rows[-1], "datasets": {"x": {
+        "name": "x", "last_updated": rows[-1], "row_count": len(rows), "last_error": None}}}), encoding="utf-8")
+
+
+def test_integration_metadata_recomputed_after_cross_day_union(env):
+    work, origin = env
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-03"])
+    _run(work, Rec())
+    _sh(work, "git", "checkout", "-q", "main")
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-04"])  # main 基底：不含分支上的 01-03
+    _run(work, Rec(pr_open=True))
+    m = json.loads(_sh_bytes(origin, f"{BRANCH}:data_cache/metadata.json"))["datasets"]["x"]
+    got = _rd(_sh_bytes(origin, f"{BRANCH}:data_cache/x.parquet"))
+    assert got["date"].tolist() == ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]
+    assert m["row_count"] == 4 and m["last_updated"] == "2026-01-04"  # 與 parquet 一致，不靠下次自癒
+
+
+def test_mutation_without_reconcile_verify_catches(env, monkeypatch):
+    """突變：把 metadata 重算拿掉 → verify 必須 fail-closed（且不 push）。"""
+    work, origin = env
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-03"])
+    _run(work, Rec())
+    _sh(work, "git", "checkout", "-q", "main")
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-04"])
+    monkeypatch.setattr(pdp, "reconcile_metadata", lambda *a, **k: [])
+    before = _sh(origin, "git", "rev-parse", BRANCH)
+    rec = Rec(pr_open=True)
+    with pytest.raises(pdp.PublishError, match="metadata 與資料不一致"):
+        _run(work, rec)
+    assert not rec.has("git", "push") and _sh(origin, "git", "rev-parse", BRANCH) == before
+
+
+def test_same_day_rerun_no_duplicates_no_loss(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _run(work, Rec())
+    _sh(work, "git", "checkout", "-q", "main")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"], fetched="2099"))
+    rec = Rec(pr_open=True)
+    _run(work, rec)
+    got = _rd(_sh_bytes(origin, f"{BRANCH}:data_cache/x.parquet"))
+    assert got["date"].tolist() == ["2026-01-01", "2026-01-02", "2026-01-03"]
+    assert set(got["fetched_at"]) == {"2026-01-01T00:00:00Z"}  # 同日重跑不改既有列（揮發欄保留舊值）
+
+
+def test_assess_state_three_states_and_unknown():
+    fail = json.dumps({"datasets": {"a": {"last_error": "抓取結果為空"}, "b": {"last_error": None}}}).encode()
+    st = pdp.assess_state({pdp.MACRO_META: fail}, {}, "2026-11-06")
+    assert "a: 抓取結果為空" in st["failure"] and "b:" not in st["failure"]
+    sec = json.dumps({"last_error": None, "unresolved_days": ["20261104"],
+                      "per_day": {"20261107": {"holiday": True}}}).encode()
+    st = pdp.assess_state({pdp.SECTOR_META: sec}, {}, "2026-11-06")
+    assert "unresolved_days" in st["failure"] and "20261104" in st["failure"]
+    ok = json.dumps({"last_error": None, "unresolved_days": [], "per_day": {"20261107": {"holiday": True}}}).encode()
+    assert "休市" in pdp.assess_state({pdp.SECTOR_META: ok}, {}, "2026-11-09")["holiday"]  # 2026-11-07 是週六
+    pq = _pq_bytes(pd.DataFrame({"date": ["2026-11-01", "2026-11-04"], "v": [1.0, 2.0]}))
+    st = pdp.assess_state({"data_cache/x.parquet": pq}, {"data_cache/x.parquet": 0}, "2026-11-06")
+    assert st["failure"].startswith("無法判定") and "無新資料" in st["holiday"]
+    assert st["stale"]["data_cache/x.parquet"] == ("2026-11-04", 2)
+    st = pdp.assess_state({"data_cache/y.parquet": pq}, {}, "2026-11-06")
+    assert st["holiday"] == "無法判定"
+
+
+def test_pr_body_states_and_head_line():
+    body = pdp.build_pr_body("t", ["a"], "2026-11-04", "2026-11-05T01:00:00Z",
+                             {"failure": "x", "holiday": "y", "stale": {"p": ("2026-11-04", 2)}}, "abc123")
+    for must in ("① 更新失敗：x", "② 休市／無新資料：y", "最後資料日 2026-11-04，距今 2 天", "`abc123`",
+                 "2026-11-05T01:00:00Z", "n/a（來源未提供）"):
+        assert must in body
+
+
+def test_two_jobs_same_repo_do_not_eat_each_others_files(env):
+    work, origin = env
+    sf = work / "data_cache" / "sector_flow"
+    ft = work / "data_cache" / "macro_forward_test"
+    _write_pq(sf / "daily_net.parquet", pd.DataFrame({"date": pd.to_datetime(["2026-01-02"]), "sector": ["A"], "net": [1.0]}))
+    _write_pq(ft / "signals.parquet", pd.DataFrame({"date": ["2026-01-02"], "label": ["紅"]}))
+    _sh(work, "git", "add", "-A")
+    _sh(work, "git", "commit", "-qm", "seed")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    # 同一工作樹同時有三個 job 的輸出
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    _write_pq(sf / "daily_net.parquet", pd.DataFrame({"date": pd.to_datetime(["2026-01-02", "2026-01-05"]),
+                                                      "sector": ["A", "A"], "net": [1.0, 5.0]}))
+    _write_pq(ft / "signals.parquet", pd.DataFrame({"date": ["2026-01-02", "2026-01-05"], "label": ["紅", "綠"]}))
+    jobs = [("macro-history", ["data_cache/x.parquet"], "data_cache/x.parquet"),
+            ("sector-flow", ["data_cache/sector_flow/"], "data_cache/sector_flow/daily_net.parquet"),
+            ("macro-forward-test", ["data_cache/macro_forward_test/"], "data_cache/macro_forward_test/signals.parquet")]
+    for job, paths, mine in jobs:
+        _run(work, Rec(), job=job, paths=paths, force_add=(job == "macro-history"))
+        _sh(work, "git", "checkout", "-q", "main")  # 回 main；其他 job 的未提交輸出隨工作樹保留
+        diff = _sh(origin, "git", "diff", "--name-only", "main", f"auto/data-{job}").splitlines()
+        assert diff == [mine], (job, diff)
+        df = _rd(_sh_bytes(origin, f"auto/data-{job}:{mine}"))
+        assert not df.duplicated(subset=[c for c in ("date", "sector") if c in df.columns]).any()
+    sig = _rd(_sh_bytes(origin, "auto/data-macro-forward-test:data_cache/macro_forward_test/signals.parquet"))
+    assert sig["label"].tolist() == ["紅", "綠"]
+
+
+# ───────────────── 第二輪 QA 缺陷（D1/D2/D4/D5/D6/D7）─────────────────
+def test_d1_durable_json_cached_at_is_volatile_but_value_is_not():
+    p = "data_cache/macro_last_good/tw_pmi.json"
+    a = json.dumps({"value": 50.1, "date": "2026-10", "cached_at": "t1"}).encode()
+    assert not pdp.json_substantive_change(p, a, json.dumps({"value": 50.1, "date": "2026-10", "cached_at": "t2"}).encode())
+    assert pdp.json_substantive_change(p, a, json.dumps({"value": 51.0, "date": "2026-10", "cached_at": "t1"}).encode())
+
+
+def _sec(per_day, last_error=None, unresolved=()):
+    return json.dumps({"last_error": last_error, "unresolved_days": list(unresolved), "per_day": per_day}).encode()
+
+
+def test_d2_weekday_holiday_flag_is_not_auto_closed_market():
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261104": {"holiday": True}})}, {}, "2026-11-06")  # 週三
+    assert "週間日無資料，無法區分休市與抓取失敗，需人工確認" in st["holiday"] and "20261104" in st["holiday"]
+    assert "休市（" not in st["holiday"]
+    assert st["failure"].startswith("疑似失敗／無法判定（週間日無資料）")
+    body = pdp.build_pr_body("t", ["a"], None, "n/a", st, "sha")
+    assert "⚠️ 週間日無資料，無法區分休市與抓取失敗，需人工確認" in body
+
+
+def test_d2_weekend_holiday_is_closed_market_and_last_error_is_failure():
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}})}, {}, "2026-11-09")  # 週六
+    assert st["holiday"].startswith("休市") and st["failure"].startswith("無（")
+    st = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}}, last_error="兩源皆失敗")}, {}, "2026-11-09")
+    assert "兩源皆失敗" in st["failure"]
+    mixed = pdp.assess_state({pdp.SECTOR_META: _sec({"20261107": {"holiday": True}, "20261104": {"holiday": True}})}, {}, "2026-11-09")
+    assert "20261104" in mixed["holiday"] and "休市（" not in mixed["holiday"]  # 週間日仍不得自動判休市
+
+
+def test_d4_merge_conflict_also_restores_worktree(env):
+    work, origin = env
+    _meta(work, updated_at="B", last_error="e1")
+    _run(work, Rec())
+    _sh(work, "git", "checkout", "-q", "main")
+    (work / "data_cache" / "metadata.json").write_text(json.dumps({"conflict": "main"}), encoding="utf-8")
+    _sh(work, "git", "commit", "-qam", "main edits meta")
+    _sh(work, "git", "push", "-q", "origin", "main")
+    (work / "data_cache" / "metadata.json").write_text(
+        json.dumps({"updated_at": "C", "datasets": {"x": {"last_error": "e2", "row_count": 2}}}), encoding="utf-8")
+    with pytest.raises(pdp.PublishError, match="合併衝突"):
+        _run(work, Rec())
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+
+def test_d6_sanity_exception_requires_null_last_updated(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=1, claimed_last="2099-01-01",
+                      last_error="e；既有檔 sanity 不過,待重建")
+    bad = pdp.verify_metadata(root, ["data_cache/"])
+    assert any("sanity 不過" in b and "2099-01-01" in b for b in bad)
+    ok = _meta_tree(tmp_path / "ok", ["2026-01-01"], claimed_rows=1, claimed_last=None,
+                    last_error="e；既有檔 sanity 不過,待重建")
+    assert pdp.verify_metadata(ok, ["data_cache/"]) == []
+
+
+def test_d7_missing_parquet_never_rewritten_to_zero_and_names_dataset(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=5, claimed_last="2026-01-01")
+    (root / "data_cache" / "x.parquet").unlink()
+    before = (root / "data_cache" / "metadata.json").read_bytes()
+    with pytest.raises(pdp.PublishError, match="datasets.x"):
+        pdp.reconcile_metadata(root, ["data_cache/"], log=lambda *_: None)
+    assert (root / "data_cache" / "metadata.json").read_bytes() == before  # 未被改成 0/null
+    assert any("datasets.x" in b for b in pdp.verify_metadata(root, ["data_cache/"]))
+
+
+def test_d7_missing_parquet_with_zero_null_claims_is_consistent(tmp_path):
+    root = _meta_tree(tmp_path, ["2026-01-01"], claimed_rows=0, claimed_last=None, last_error="FINMIND_TOKEN 未設定")
+    (root / "data_cache" / "x.parquet").unlink()
+    assert pdp.verify_metadata(root, ["data_cache/"]) == []
+
+
+@pytest.mark.parametrize("bad", [
+    ["gh", "api", "-X", "POST", "repos/o/r/actions/workflows/pr-check.yml/dispatches"],
+    ["gh", "api", "repos/o/r/dispatches"],
+])
+def test_d7_guard_blocks_gh_api_dispatches(bad):
+    with pytest.raises(pdp.PublishError):
+        pdp._guard(bad)
+
+
+# ───────────────── 第三輪 QA：N1 區塊重算 / N2 任何例外還原 / N4 fetched_at 揮發 ─────────────────
+def _block(head="H", failure="無（x）", holiday="y"):
+    return pdp.build_status_block(["a"], None, "n/a", {"failure": failure, "holiday": holiday, "stale": {}}, head)
+
+
+def test_n1_block_replaced_outside_text_preserved():
+    day1 = pdp.build_pr_body("t", ["a"], None, "n/a", {"failure": "無（x）", "holiday": "y", "stale": {}}, "sha1")
+    body = day1 + "\n人工補註：KEEP-ME\n"
+    day2 = pdp.update_pr_body(body, _block(head="sha2", failure="macro: 抓取結果為空", holiday="⚠️ 週間日無資料"))
+    assert "人工補註：KEEP-ME" in day2 and "sha2" in day2 and "sha1" not in day2
+    assert "抓取結果為空" in day2 and "無（x）" not in day2  # 反映新狀態，舊「無失敗」消失
+    assert day2.count(pdp.STATUS_START) == 1 and day2.count(pdp.STATUS_END) == 1
+    assert day2.count("最新 head SHA") == 1 and day2.count("### 時間欄位") == 1
+    assert "### ⚠️ 合併前必讀" in day2 and "### 人工處理" in day2  # 區塊外靜態段保留
+
+
+_LEGACY = (
+    "## 自動資料發布：t\n\n### ⚠️ 合併前必讀\n警語\n\n"
+    "最新 head SHA：`old`（每次 cron push 後更新此行；請核對 required check 對應的 SHA 與此相符）\n\n"
+    "### 時間欄位\n| 欄位 | 值 |\n|---|---|\n| observation_date（資料最後日） | 見下方各檔最後資料日 |\n"
+    "| fetched_at（抓取時間，取自資料檔） | n/a |\n| published_at（來源發布時間） | n/a（來源未提供） |\n\n"
+    "### 資料狀態（由 metadata／腳本輸出判斷，判不出即「無法判定」）\n- ① 更新失敗：無\n- ② 休市／無新資料：y\n"
+    "- ③ 資料過期（僅陳述事實天數，未套門檻）：\n  - `p`：最後資料日 2026-11-04，距今 2 天\n\n"
+    "### 變更檔\n- `a`\n- `b`\n\n"
+    "### 人工處理（cron 發布 fail-closed 時）\n步驟\n\n人工補註：KEEP\n")
+
+
+def test_n1_legacy_standard_format_upgrades_cleanly_without_warning():
+    out = pdp.update_pr_body(_LEGACY, _block(head="NEW"))
+    assert out.count("最新 head SHA") == 1 and "`NEW`" in out and "`old`" not in out
+    assert out.count("### 時間欄位") == 1 and out.count("① 更新失敗") == 1 and out.count("### 變更檔") == 1
+    assert "警語" in out and "### 人工處理" in out and "人工補註：KEEP" in out and out.count(pdp.STATUS_START) == 1
+    assert pdp.STALE_WARNING not in out
+    again = pdp.update_pr_body(out, _block(head="NEW2"))  # 升級後再更新 = 純區塊替換
+    assert again.count("最新 head SHA") == 1 and "`NEW2`" in again and "人工補註：KEEP" in again
+
+
+def test_m1_inline_marker_text_is_not_a_boundary_and_prefix_text_survives():
+    prose = f"前文 {pdp.STATUS_START} 人工提到 {pdp.STATUS_END} 後文"
+    old = f"人工開頭\n{prose}\n\n{_block(head='old1')}\n\n人工結尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert prose in out and "人工開頭" in out and "人工結尾" in out  # 區塊前的人工內容不被吃掉
+    assert "old1" not in out and "`NEW`" in out
+    assert out.count("最新 head SHA") == 1
+    # 只有行內標記、沒有獨佔一行的真區塊 → 視為無區塊，附加新區塊，人工文字完整保留
+    only_inline = pdp.update_pr_body(f"x\n{prose}\ny\n", _block(head="N2"))
+    assert prose in only_inline and "x\n" in only_inline and "`N2`" in only_inline
+
+
+def test_m1_marker_lines_may_have_surrounding_whitespace():
+    old = f"頭\n  {pdp.STATUS_START}  \n舊內容 `old1`\n\t{pdp.STATUS_END}\n尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert "old1" not in out and "頭" in out and "尾" in out and "`NEW`" in out
+
+
+def test_m2_duplicate_blocks_keep_first_replaced_remove_rest():
+    old = f"頭\n{_block(head='old1')}\n中間人工\n{_block(head='old2')}\n尾\n"
+    out = pdp.update_pr_body(old, _block(head="NEW"))
+    assert out.count(pdp.STATUS_START) == 1 and out.count(pdp.STATUS_END) == 1
+    assert "old1" not in out and "old2" not in out and out.count("最新 head SHA") == 1
+    assert "頭" in out and "中間人工" in out and "尾" in out
+    assert out.index("頭") < out.index("`NEW`") < out.index("中間人工")  # 第一個位置替換
+
+
+def test_m3_orphan_start_and_end_cleaned_without_eating_manual_text():
+    o_start = pdp.update_pr_body(f"頭\n{pdp.STATUS_START}\n人工文字（沒有 end）\n", _block(head="NEW"))
+    assert "人工文字（沒有 end）" in o_start and "頭" in o_start
+    assert o_start.count(pdp.STATUS_START) == 1 and o_start.count(pdp.STATUS_END) == 1 and "`NEW`" in o_start
+    o_end = pdp.update_pr_body(f"頭\n人工文字（沒有 start）\n{pdp.STATUS_END}\n尾\n", _block(head="NEW"))
+    assert "人工文字（沒有 start）" in o_end and "尾" in o_end
+    assert o_end.count(pdp.STATUS_START) == 1 and o_end.count(pdp.STATUS_END) == 1
+    # 孤兒 start 在真區塊之前：孤兒標記移除、其後人工文字保留、真區塊被替換
+    mixed = pdp.update_pr_body(f"{pdp.STATUS_START}\n人工A\n{_block(head='old1')}\n人工B\n", _block(head="NEW"))
+    assert "人工A" in mixed and "人工B" in mixed and "old1" not in mixed
+    assert mixed.count(pdp.STATUS_START) == 1 and mixed.count("最新 head SHA") == 1
+
+
+def test_m4_m5_legacy_with_renamed_heading_and_inserted_text_is_conservative_with_warning():
+    legacy = _LEGACY.replace("### 資料狀態（由 metadata／腳本輸出判斷，判不出即「無法判定」）",
+                             "### 資料狀態（人工改名）\n人工插入說明").replace("### 變更檔\n", "### 變更檔\n人工註：這兩檔我看過\n")
+    out = pdp.update_pr_body(legacy, _block(head="NEW"))
+    assert pdp.STALE_WARNING in out and out.index(pdp.STALE_WARNING) < out.index(pdp.STATUS_START)
+    assert "人工插入說明" in out and "人工註：這兩檔我看過" in out and "人工補註：KEEP" in out  # 無法確定的人工文字全保留
+    assert "`old`" not in out and out.count("最新 head SHA") == 1  # 確定屬舊狀態的 head 行已移除
+    assert out.count("- ① 更新失敗") == 1 and out.count(pdp.STATUS_START) == 1  # 標準三態行已移除，只剩新區塊那份
+    assert "### 時間欄位" in out and out.count("### 時間欄位") == 1  # 標準標題被移除後只剩新區塊內的
+    again = pdp.update_pr_body(out, _block(head="NEW2"))
+    assert again.count(pdp.STATUS_START) == 1 and "`NEW2`" in again and "人工插入說明" in again
+
+
+def test_n1_deleted_block_is_appended_and_manual_text_kept():
+    out = pdp.update_pr_body("人工寫的內容\n", _block(head="NEW"))
+    assert out.startswith("人工寫的內容") and out.count(pdp.STATUS_START) == 1 and "`NEW`" in out
+
+
+def test_n1_integration_day2_reflects_new_failure_state(env):
+    work, origin = env
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-03"])
+    rec1 = Rec()
+    _run(work, rec1)
+    create = rec1.has("gh", "pr", "create")[0]
+    day1_body = create[create.index("--body") + 1]
+    assert "① 更新失敗：無（" in day1_body
+    _sh(work, "git", "checkout", "-q", "main")
+    _script_output(work, ["2026-01-01", "2026-01-02", "2026-01-04"])
+    mp = work / "data_cache" / "metadata.json"
+    m = json.loads(mp.read_text(encoding="utf-8"))
+    m["datasets"]["x"]["last_error"] = "抓取結果為空"
+    mp.write_text(json.dumps(m), encoding="utf-8")
+    rec2 = Rec(pr_open=True)
+    rec2.pr_body = day1_body + "\n人工補註：KEEP-ME\n"
+    _run(work, rec2)
+    nb = rec2.has("gh", "pr", "edit")[0]
+    nb = nb[nb.index("--body") + 1]
+    assert "① 更新失敗：x: 抓取結果為空" in nb and "① 更新失敗：無（" not in nb
+    assert "人工補註：KEEP-ME" in nb and nb.count("最新 head SHA") == 1 and nb.count("### 時間欄位") == 1
+    assert f"`{_sh(work, 'git', 'rev-parse', 'HEAD')}`" in nb
+
+
+def _assert_pristine(work, branch="main"):
+    assert _sh(work, "git", "status", "--porcelain") == ""
+    assert _sh(work, "git", "rev-parse", "--abbrev-ref", "HEAD") == branch
+
+
+def test_n2_corrupt_script_parquet_restores_and_reraises_original(env):
+    work, origin = env
+    (work / "data_cache" / "x.parquet").write_bytes(b"not a parquet at all")
+    rec = Rec()
+    with pytest.raises(Exception) as ei:
+        _run(work, rec)
+    assert not isinstance(ei.value, pdp.PublishError) and "arquet" in str(ei.value)  # 原例外保留
+    _assert_pristine(work)
+    assert not rec.has("push")
+
+
+def test_n2_corrupt_json_metadata_restores_and_reraises(env):
+    work, origin = env
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    (work / "data_cache" / "metadata.json").write_text("{ broken json", encoding="utf-8")
+    rec = Rec()
+    with pytest.raises(ValueError):  # json.JSONDecodeError 是 ValueError 子類
+        _run(work, rec)
+    _assert_pristine(work)
+    assert not rec.has("git", "push")
+    assert BRANCH not in _sh(origin, "git", "branch", "--list")
+
+
+def test_n2_corrupt_branch_parquet_in_union_restores_and_reraises(env):
+    work, origin = env
+    _sh(work, "git", "checkout", "-q", "-b", BRANCH)
+    (work / "data_cache" / "x.parquet").write_bytes(b"garbage committed on the branch")
+    _sh(work, "git", "commit", "-qam", "corrupt")
+    _sh(work, "git", "push", "-q", "origin", BRANCH)
+    before = _sh(origin, "git", "rev-parse", BRANCH)
+    _sh(work, "git", "checkout", "-q", "main")
+    _write_pq(work / "data_cache" / "x.parquet", _df(["2026-01-01", "2026-01-02", "2026-01-03"]))
+    rec = Rec(pr_open=True)
+    with pytest.raises(Exception) as ei:
+        _run(work, rec)
+    assert not isinstance(ei.value, pdp.PublishError) and "arquet" in str(ei.value)
+    _assert_pristine(work)
+    assert not rec.has("git", "push") and _sh(origin, "git", "rev-parse", BRANCH) == before
+
+
+def test_n4_tw_pmi_json_fetched_at_is_volatile_but_value_is_not():
+    p = "data_cache/macro_last_good/tw_pmi.json"
+    a = json.dumps({"value": 50.1, "date": "2026-10", "source": "s", "fetched_at": "t1", "cached_at": "c1"}).encode()
+    same = json.dumps({"value": 50.1, "date": "2026-10", "source": "s", "fetched_at": "t2", "cached_at": "c2"}).encode()
+    assert not pdp.json_substantive_change(p, a, same)
+    for k, v in (("value", 51.0), ("date", "2026-11"), ("source", "other")):
+        d = json.loads(a)
+        d[k] = v
+        assert pdp.json_substantive_change(p, a, json.dumps(d).encode()), k
