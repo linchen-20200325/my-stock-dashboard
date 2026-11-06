@@ -91,3 +91,23 @@ MCP 只能改善「工具怎麼訪問」，**不能創造來源不存在的真�
 - 本次清理的具體錯誤示例：若 PROJECT_STATE／HANDOFF 仍稱「正式只有四頁」「手機抽屜、桌機 rail」「資料健康度在我的頁」「六個互不相連 AI」「固定 3/6/9 個月」「大盤 EPS×PE 已可出正式價位」，應更新為最新客戶方向或研究中/未核准狀態，並標出取代 DEC/PR。凡描述「已施工／已合併／已修資料」必有 GitHub main/diff/CI 證據，否則降為 Draft/Proposal。
 - **不要把本 Draft 當成清理完成**：這份獨立檔案先提交具體取代清單。現有 #1030/#1032 也涉及 PROJECT_RULES/HANDOFF/DECISIONS；只有在 owner 協調、獨立 QA、CI 完成後，才可於正式治理文件落實，不得在其他 PR 仍同檔修改時直接覆蓋。
 - 下次對話啟動：先查 main/PR/CI 與正式五檔，再看 supersession map、可追溯的新設計與缺料清單；禁止從歷史逐字聊天恢復已被較新客戶決策取代的規格。
+
+## G. 2026-11-06 追加：第一版缺貨/財報跨期能力「已存在 ≠ 已可安全重用」核對
+
+本節是本次使用者追問「不能取得的資料須篩選、產業缺貨、財報變化與舊版 UI 重用是否真正執行」的獨立讀碼證據；**尚未執行 production API、並未改正式公式或接 New UI2**。
+
+| 模組及錨點 | 已有能力（FACT，GitHub main 讀碼） | 需要額外驗收或未完成 |
+|---|---|---|
+| `src/services/shortage_screener_service.py`＋`src/compute/screener/shortage_screener.py` | 先全市場月營收動能候選，再深掃至多 50 檔；合約負債、毛利率、存貨天數、月營收 YoY 四代理指標評分，金融業排除，部分缺季資料有降級 | **它評的是財報「疑似缺貨足跡」，不是已證實產業缺貨或大單**。需要官方公告/法說/訂單事實證據及供需反證，並標區分 inferred/verified；實時來源驗證尚無 |
+| `shortage_screener.py::_score_revenue_yoy` / `score_shortage`，`shortage_screener_service::_score_and_diagnose` | C4 月營收缺失時回 `0.0`＋「資料不足」原因，其他 C1–C3 可照算且仍列 rankable（如果總分符合 tier） | **Data Gap Gate**：確認 UI/Digest 是否只顯示「疑似」、保留分項 missing 旗標、coverage 與降低可信度；絕不能讓 C4=0 被呈現為真實零成長。另審查主排名/閾值是否應 fail-closed；公式/語意改動需 High Gate |
+| `src/compute/health/fin_trend_score.py` | 月營收 65%＋近季財報 35% 的既有跨期趨勢模型，完整分項 detail，可給 OneBrain 研究證據 | `compute_monthly_revenue_subscore` 缺資料/缺 YoY 回 `0.0`＋ reason；`compute_fin_trend_subscore` 季數不足回 `0.0`＋ reason；`compute_trend_score` 直接合權重且 `_label_from_score` 可能產「中性」。**不能在資料缺口下把總分零/中性當經驗證的營運平穩**。需 coverage gate / mandatory data / missing-neutral mutation tests |
+| `src/compute/health/fin_health_diff.py` | 比較兩期體檢的改善/惡化、盈轉虧/虧轉盈，未知狀態 `_score` 回 None 跳過 | 需確認兩期財報期間一致、會計口徑、樣本完整度、無資料不得宣稱穩定；連結 `DH-FIN-HEALTH-CF` |
+| `src/services/financial_health_engine.py` 及 L1 financial statements fetcher | 原有財報體檢模組、現金流/獲利/負債等指標 | 舊稽核 `DATA_HEALTH_AUDIT_2026-10-23.md` 曾指出累計/單季現金流與缺科目 0、現金流比率口徑問題；最新 API 回應未實測，**不可整包當核准的 OneBrain 證據** |
+| `src/services/ui2/real_feed.py` | 現時 New UI2 Real 模式僅正式唯讀讀 TWII 快照與市場位階快照 | **缺貨、跨期財報、集保、ETF、完整籌碼尚未接 UI2 的 approved feed/Digest**；不能因 HTML 有卡片或 legacy code 存在就算已接線 |
+
+**稽核結果**：目前真正完成的是「初步模組資產盤點＋舊來源風險整理＋本次三處具體風險讀碼」；**不是**每一筆來源的 live reachability 測試、全面阻擋有問題數據、完整產業缺貨驗證、財務變化跨期正確性驗證或 New UI2/OneBrain runtime 接線。
+
+**建議三段式、每批最多三項**（均需依當下 GitHub Gate、Claude Code owner 與授權決定）：
+1. 先建「Legacy Capability × Source Health × Decision Safety」矩陣，對每個欄位 trace `producer → canonical → deterministic calc → Evidence Registry → Digest/UI`，將 `GOOD / LIMITED / UNSAFE / NOT_VERIFIED / NOT_WIRED` 分軸標記，不用單一綠燈掩蓋來源/公式/接線差異。
+2. 先以測試固定缺貨 C4 missing→rankable 的情境，以及財報趨勢缺兩腿→neutral 的情境，開 High effort Risk/Data QA Gate；提出保留合法部分證據、禁止越級推論/正式動作的降級契約。**不要未裁示就改原分數公式或權重**。
+3. 通過資料/財務可追溯與源端驗證後，逐批薄 L3 feed 接 UI2，完整 Evidence 給 OneBrain；🗂資料頁明確列出「來源不存在」「來源失敗」「資料不可信」「未接線」「已過期」，並保留原因與修復路徑。
