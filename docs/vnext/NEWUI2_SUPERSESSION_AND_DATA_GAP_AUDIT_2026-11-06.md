@@ -199,3 +199,14 @@ Claude 回報此批相關測試 **322 passed**；這只表示既有測試通過�
 3. **C. cron 只推資料分支，人工用自己的已核准身分建立 PR**：不需 Actions 建 PR 權限，不新增 credential，但人工操作最高；適合 PR 建立權限受限時的緊急恢復。
 
 **建議先採 A 作受控端到端 PoC**，把 `workflow_dispatch` 視為可診斷的跑測試但**不能**視為 required gate；保留真正 `pull_request` 事件與人工 approval，正式資料 PR head、required checks、合併後 main 讀回全鏈驗證後，再議長期全自動。不要取消 `ui2-browser-gate`，不要 bypass branch protection。
+
+## K. PR #1035 後續獨立設計／程式驗收（2026-11-06；head `04e0d440`）
+
+> **先前 §J 的合併阻擋已被工程變更針對處理**，不能永久將舊 head `dd3a1611` 當作當前 #1035 的狀態。本節是新的**靜態程式與 GitHub CI 查核**，不取代第一次真實 Actions Data-PR 端到端發布。GitHub main 查核時為 `343f0e0e`。
+
+- **變更與 CI FACT**：#1035 仍 Draft、6 files，head `04e0d440f517b5e88d16b8caef059585991555a3`；GitHub workflow run `42213815447` 成功，Fast checks、Slow tests、ui2-browser 1.56.0／1.59.2 與 `ui2-browser-gate` 五 jobs success。**查核 repo PR diff 不等於本人本地重跑 37552 測試；Claude 獨立 QA 三輪屬其回報，仍待第一次實際發布 Gate。**
+- **原錯誤已修**：`scripts/publish_data_pr.py` 不再 dispatch `pr-check.yml`，guard 阻擋 `gh workflow`／`gh pr merge`／`gh api ...dispatches`；三 cron 無 `actions:write`，但仍需 `pull-requests:write` 和 repo Actions 設定允許建立 PR。GitHub 官方：GITHUB_TOKEN 建 PR 時 `pull_request:opened/synchronize/reopened` 會產生**需人工批准的 workflow run**，正是預定 PoC 的路線，**不能假定一定需 Close→Reopen**。官方：https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow；required checks 只認合格事件，詳：https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks
+- **資料程式補強**：`union_parquet_by_date` 逐 `date[+sector]` 對照，舊有值而新缺失/衝突會 `PublishError`、凍結帳本同 date 差異中止；metadata `row_count`、`last_updated`、`n_days`（可重算者）於 commit 前重算＋驗證；失敗回復主工作樹，未經確認不 push。新數值與歷史共同 key **若來源追溯修正會 fail-closed**，此為明確保守取捨，可能需要人工處理，不等同永久資料業務公式已正確。
+- **驗收界限／未驗**：Repo Actions「Allow GitHub Actions to create and approve pull requests」是否啟用無管理權限核實；真實 GITHUB_TOKEN PR 建立、approval-required 原生 CI 與 required head SHA、人工合併後 main/parquet readback、下一次 cron 的 branch 存續／conflict、GitHub runner 真實失敗回復皆 **NOT VERIFIED**。#1035 變更上線只代表批准受控 PoC，不能說三 cron 已修復。
+- **建議放行條件**：目前可**考慮將 #1035 轉 Ready 進入人工審查與合併 Gate**（仍需使用者授權），條件為 ① head 未再變、② repo PR checks 與必要獨立 QA 有證據、③ user 在 repo Settings 適度開啟 Actions 建 PR 權限（不得額外新 Secret/Bypass）、④ 現場先做 `dry_run=true`，再僅對 `macro-history` 一條非 dry-run，人工批准原生 `pull_request` workflow 後按實際 head/merge ref 確認 required Gate，再人工合併資料 PR 並驗證 main/parquet。任何失敗停在資料 PR；後續另二 cron 不得直接宣稱已通。
+- **風險接受範圍**：資料 PR 每日需人工批准／合併，必要時 fail-closed 會維持紅燈；這是先保留 GitHub 保護的臨時方案，非「完全自動化」目標。其餘四個尚直接 push main 的 workflows 留獨立 BACKLOG，不能在本批擴大修改。§J 設計阻擋為**已修程式、未過真實發布 Gate**的歷史狀態。
