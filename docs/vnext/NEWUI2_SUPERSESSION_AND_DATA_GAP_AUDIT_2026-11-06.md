@@ -172,3 +172,30 @@ Claude 回報此批相關測試 **322 passed**；這只表示既有測試通過�
 3. **合併 Gate**：真實 PR `ui2-browser-gate` 等 required check 全部 success、head SHA 未漂移、來源觀測日與 schema/單位/資料 coverage 完整、不可用時 fail-closed；對可安全按規則合併的 data-only PR 才考慮自動合併（權限另核准），禁止默默把 needed checkout approval 假設為自動完成。
 4. **恢復/補洞**：先判定 2026-11-05 三種資料實際觀測日與提交缺漏；重跑取得**真實**來源值，記錄 `as_of`／`fetched_at`，禁止拿 11-06 的值回填成 11-05。資料 cache 無新增應區分休市／fetch 無資料／出錯；驗收必須證明 main 新 commit 已讀得到。
 5. **成功定義**：三個每日排程至少各有一次無 bypass 經 CI 驗證的真實資料發布，main 讀回數據且下游 view health/freshness 可對帳；不得只拿 workflow run success 代表發布成功。改動 workflows/credentials/CI gate 屬獨立工程 PR；Draft/試運轉期間不停止舊資料監控，遇任何新權限、保護規則變更先停。
+
+## J. PR #1035 獨立阻擋複驗（2026-11-06；GitHub + 官方文件）
+
+> **GitHub FACT（本次驗證）**：main `343f0e0e`；PR #1035 Draft、head `dd3a1611add735f0d1a22186b8d7e9e6edeb6559`、6 files、PR Check success；真實資料 PR、main readback/發布仍 **NOT VERIFIED**。本節的結論取代 §I 對 `workflow_dispatch` 可能滿足 required check 的開放式假設。
+
+### Critical — dispatch workflow check **不能**滿足 PR required checks
+
+- #1035 `scripts/publish_data_pr.py` 以 `GITHUB_TOKEN` 建立/更新 PR 後執行 `gh workflow run pr-check.yml --ref auto/data-<job>`。
+- GitHub 官方「Troubleshooting required status checks」明確說：`workflow_dispatch` 產生的 GitHub Actions jobs **不會算入 PR 的 required status checks**，即使在 head SHA 上全綠；要用 `pull_request` 或 `push` 等具資格的 event。官方：https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks
+- GitHub 官方 GITHUB_TOKEN 規則：用 `GITHUB_TOKEN` 建立/更新 PR 可觸發 `pull_request` checks，但會進入**需要 write 權限者 approve workflows** 的狀態；此批准流程不可用 `workflow_dispatch` 的綠燈代替。官方：https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
+- **結論（BLOCKER）**：PR #1035 在原設計下不應 Ready/merge，也不應要求使用者先開 PR 建立權限，直到該錯誤路徑移除且安全資料語意 Gate 通過。
+
+### Data safety blockers — #1035 helper 的實際程式邏輯
+
+| 問題 | main/PR 程式證據 | 最低修復 Gate |
+|---|---|---|
+| **跨日 metadata 與 rows 不一致** | helper 檔頭承認分支未合併跨日時 `metadata.json.row_count` 可能仍是最後一次腳本產生的值，與 union 後 parquet 不一致 | 不能以「下一輪 main 自癒」當做正式資料正確性；需一致性驗收／fail-closed 或不產生可發佈的不一致資料 |
+| **失敗／缺值被舊值回填** | `union_parquet_by_date()` 對相同 `date[+sector]` 的新列 `NaN/None`，從分支舊列回填有效值；若無明確 `carried_forward` provenance，可能把最新觀測缺失偷換成舊值 | 保持最新 missing status；需明示繼承策略/舊資料日時效/來源追溯並經正式資格 Gate；未授權時建議 fail-closed，不得 silent fill |
+| **同樣時間戳不代表數值一致** | `is_substantive()` 忽略標記為 volatile 的時間欄，這只適用於 `updated_at` 等確定無業務語意的 metadata | 以實際 snapshot/觀測日/缺口狀態負測試；unknown keys/period 必須視為實質，絕不過濾真實資料錯誤 |
+| **PR 防護與人工工作仍未驗證** | `GITHUB_TOKEN` PR 可能需 workflow approval；Repo `allow_auto_merge` 停用，日更需要人工審核/合併 | 先明示人工/低頻方案可接受範圍，不能把設計稱作全自動恢復 |
+
+### 三條安全可行方案（供工程比較；不得自行啟用權限）
+1. **A. GITHUB_TOKEN PR + 人工批准 pull_request checks + 人工合併**：不新增憑證，保護不變，但每日人工操作、須先確認 Actions PR permission；適合單次試運轉 Gate。
+2. **B. 最小權限 GitHub App token 建 PR → 原生 pull_request checks → 經核准 auto-merge**：可降低長期操作成本，但新增憑證、權限與自動合併治理，屬另一個客戶 Decision Gate。
+3. **C. cron 只推資料分支，人工用自己的已核准身分建立 PR**：不需 Actions 建 PR 權限，不新增 credential，但人工操作最高；適合 PR 建立權限受限時的緊急恢復。
+
+**建議先採 A 作受控端到端 PoC**，把 `workflow_dispatch` 視為可診斷的跑測試但**不能**視為 required gate；保留真正 `pull_request` 事件與人工 approval，正式資料 PR head、required checks、合併後 main 讀回全鏈驗證後，再議長期全自動。不要取消 `ui2-browser-gate`，不要 bypass branch protection。
