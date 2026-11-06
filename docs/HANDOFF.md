@@ -5,6 +5,9 @@
 
 # HANDOFF — 現行交接（my-stock-dashboard）
 
+> **2026-11-06 #1035 最新驗收覆寫（本治理 PR 未合併）**：#1035 Draft head `04e0d440`，PR Check 五 jobs 全綠；先前 `workflow_dispatch` 必要檢查錯誤、silent value fill、可重算 metadata 漏洞均有針對性修正，已可**申請**人工審查／受控試運轉（不是自動合併授權）。**唯一接手動作**：使用者確認是否批准受控合併／在 GitHub Actions 設定允許建 PR；先測 `dry_run`，再限 `macro-history` 一條真實發布 PR → 人工批准原生 checks → head SHA/merge/ref check → 合併後 main readback；如失敗退回工程 Draft。其餘兩條 cron 及其他四條直推不宣稱修好；官方限制與程式證據見 #1033 §K。上方舊『不可 Ready』是舊 head 事實，已被本段覆寫。
+
+
 > **2026-11-06 最新安全覆寫接手點（PR #1035）**：#1035 head `dd3a1611` 全綠但 Draft，**BLOCKED，不可合併**；其 dispatch 的 PR check 不具 required-check 資格（GitHub 官方說明），helper 同日缺值用舊值補與 metadata 跨日不一致待修。**下一唯一安全動作：Claude 在 #1035 原工程分支先修 trigger 與資料正確性，維持 main required checks、無新 credential／不合併；ChatGPT 維護正式規格與 #1033/#1034 稽核。** 不能因 CI 綠或人工先開權限就稱資料已恢復。詳細 #1033 §J、BACKLOG `NUI2-CRON-PROTECTED-PUBLISHING`；GitHub main/CI 仍需每次重查。
 
 
