@@ -1124,7 +1124,7 @@
 
 ## 70. New UI2 有效專案知識與第一版資料資格（2026-11-07 checkpoint；GitHub 最新為準）
 
-> 本節是**目前有效的專案知識索引**，不是逐字聊天、第二套 Decision，也不是授權直接施工；與未合併 Draft 不一致時先核對最新 GitHub。原始依據：使用者五頁與 OneBrain 方向（DEC-142，已為 main 正式 DEC；#1030 為原提案 PR，仍 open）；GitHub 記憶及資料資格（DEC-143，已為 main 正式 DEC；#1034 為原提案 PR，仍 open）；已入 main 的 #1031 研究提案、#1033 資料缺口及 supersession 稽核。DEC-141～145 的正式收斂 PR #1045 已合併（`848fd977`）；後續 DEC-146（#1050，`67a7cea5`）核准五頁頂部兩列導覽方向（工程未施工，見 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）；#1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點快照，非第二套 SSOT。cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，真實發布端到端 NOT VERIFIED，與 #1038 PIT 阻塞（禁合併）獨立。
+> 本節是**目前有效的專案知識索引**，不是逐字聊天、第二套 Decision，也不是授權直接施工；與未合併 Draft 不一致時先核對最新 GitHub。原始依據：使用者五頁與 OneBrain 方向（DEC-142，已為 main 正式 DEC；#1030 為原提案 PR，仍 open）；GitHub 記憶及資料資格（DEC-143，已為 main 正式 DEC；#1034 為原提案 PR，仍 open）；已入 main 的 #1031 研究提案、#1033 資料缺口及 supersession 稽核。DEC-141～145 的正式收斂 PR #1045 已合併（`848fd977`）；後續 DEC-146（#1050，`67a7cea5`）核准五頁頂部兩列導覽方向（工程未施工，見 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）；#1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點快照，非第二套 SSOT。cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，真實發布端到端 NOT VERIFIED，與 #1038 PIT 阻塞（禁合併）獨立。DEC-147 分工更新已由 #1052（`d709d87b`）合併生效；#1030／#1027 的獨有文件已由 #1053（`71ac2889`）保存，#1030、#1027 可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號**尚未做**；#1048 已被 DEC-146＋Gate 文件承接，可關閉。
 
 ### 70.1 對下一版仍有效的產品方向
 - **五頁目標**：📊市場／🎯標的／💼持股／👤我的／🗂資料。手機與桌機**頂部五頁導覽**（手機可橫滑）、頂部 Active Sheet 選擇與右上帳號、Dark-only、Mobile-first；完整資料來源健康度集中🗂資料。四頁、桌機左 rail、手機 Drawer、健康度牆留👤我的屬**舊版面歷史**；現行已寫的 JS_V4／安全守衛不得無等價 Gate 擅刪。文件適用性註記 PR #1046 已合併（`08bf2b68`）。

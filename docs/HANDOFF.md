@@ -43,7 +43,7 @@
 | **#1048** | 仍 open（Draft）之 390／1440 頂部五頁**文字候選**；其提案已被 **DEC-146＋Gate 文件（#1050）承接並取代**，不再是待裁示項 | 把 #1048 當現行施工依據，或以其 CI success 當 Visual Fidelity PASS |
 | **#1050** | **已合併**（squash `67a7cea5`）：DEC-146＋五頁頂部 Gate 文件 | UI 已施工或像素／真機驗收已通過 |
 | **#1051** | **已合併**（squash `9ca5441e`）：`docs/handoff/stock_github_checkpoint_2026-11-07.md` 快照；**歷史量測時點（取證 main=`08bf2b68`），不是第二套 SSOT** | 該快照內的 PR 狀態仍為最新 |
-| **#1027／#1030／#1034** | 舊版設計／治理 Draft，與共享 BACKLOG/HANDOFF/DECISIONS/PROJECT_RULES 有重疊或衝突；**各自獨特檔未核銷**（#1027 為 Draft，unique 內容待另 PR 抽出後才可關閉） | 直接依舊 head 合併、刪除或視為正式施工 SSOT |
+| **#1027／#1030／#1034** | 舊版設計／治理 Draft，與共享 BACKLOG/HANDOFF/DECISIONS/PROJECT_RULES 有重疊或衝突；**各自獨特檔未核銷**（#1027 為 Draft；其獨有文件已由 #1053 保存，可依 DEC-147 條件關閉） | 直接依舊 head 合併、刪除或視為正式施工 SSOT |
 | **#1038** | 資料 PR Draft（open），**PIT FAIL**：2026-11-05 觀測列之 captured_at = 11/07，部分來源 as_of = 11/06；目前**NO MERGE** | CI 綠＝當時已可用的投資訊號／合法回測 |
 | **#1041／#1042／#1043** | 已合併：讀取 Fail-Closed、Parquet 原子寫入、遺留隱藏 `.tmp` ignore 防護 | 三項仍待第一次施工 |
 | **#1035／#1036／#1037／#1042** | cron 資料發布路徑相關 PR **均已合併**；**真實發布端到端結果 NOT VERIFIED**（只驗了 PR 合併事實，未驗排程實跑產出）；與 #1038 PIT 阻塞**獨立**，不可互相替代 | 發布已端到端驗證，或 #1038 因此可合併 |
@@ -51,9 +51,9 @@
 
 ### 3. 唯一安全接手工作與分工（2026-11-07 晚更新；舊版「補 QA 合併 #1045/#1046」「三案比較」已完成或失效）
 
-1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1034／#1030 的 unique docs 抽出後關閉；#1027（Draft）unique 內容**待另 PR 抽出後**才可關閉；不要增加重複收斂 PR。
+1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1030／#1027 獨有文件已由 #1053（`71ac2889`）保存、可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號尚未做；#1048 已被 DEC-146＋Gate 文件承接、可關閉；不要增加重複收斂 PR。
 2. **產品視覺決策已完成**：DEC-146 核准「五頁頂部兩列導覽」方向、**不做臨時 B0 五頁抽屜**；三案比較已不需要。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**（距 ≥160px 約 2.5px）仍是施工風險，須以真瀏覽器量測證實不退化；不得放寬門檻或刪 JS_V4／focus／a11y／viewport regression。
-3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（#1052（DEC-147 分工更新，open、未合併）**不可引用為已生效**。）
+3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（**DEC-147 分工更新已由 #1052（`d709d87b`）合併生效**：Claude Code 負責 CODE 施工、獨立 QA、CI、PR Merge、Branch 清理（有條件，DEC-012）、正式治理文件同步；ChatGPT 負責產品規劃／UI-UX／架構／投資語意／需求／Decision Gate。）
 4. **資料及金融語意**：#1038 因 PIT 不合格**禁止合併**（獨立於 cron 發布路徑）；cron 發布路徑 #1035／#1036／#1037／#1042 雖已合併，**真實發布端到端仍 NOT VERIFIED**。完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
 
 ### 4. 新對話最低成本恢復程序（不讀千行歷史、不依賴聊天）
@@ -1088,7 +1088,7 @@ DEC-086 規則已於 main，本表已落地。
 | 本輪文件收斂 | #1045（DEC-141～145 從 Draft 逐字收斂）**已合併**（`848fd977`）；#1046（PROJECT_RULES + 兩份導航契約 2026-11-06 新五頁方向註記）**已合併**（`08bf2b68`）；〔更新註記：上述原寫「CI/QA pending」已過期〕；本 docs PR（#1047）只更新有效知識、Backlog 與本接手點 |
 | 舊 Draft 未結案 | #1027 W-11 線框及三份共享治理檔；#1030 五頁藍圖／PDF／六領域研究與共有 docs；#1034 專案記憶/資料資格 docs，三份都有與新 main 的治理檔差異，須**逐檔核銷**，不可直接舊 base merge 也不可因部分遷移便關閉 |
 | 正式產品方向 | 五頁（📊市場／🎯標的／💼持股／👤我的／🗂資料）＋桌手機頂部導航/Active Sheet/右上帳號/Dark-only；六領域協調 OneBrain＋全域反證，Human UI 簡潔／完整 Digest 分離；**目前 runtime 仍非五頁，正式 Layout/Auth/JS/Schema/AI 接線另待 Gate** |
-| **下一個唯一安全動作（ChatGPT）** | 〔更新註記：#1045／#1046 已合併，此格前半過期〕#1047 合併 Gate 後，對 #1034 的 `PROJECT_RULES §0.4`、其餘 #1030／#1027 獨立文件逐一核銷（#1027 為 Draft，unique 內容待另 PR 抽出後才可關閉），依 scope guard 優先五頁 Layout Gate，禁止把技術債當主線 |
+| **下一個唯一安全動作（ChatGPT）** | 〔更新註記：#1045／#1046 已合併，此格前半過期〕#1047 合併 Gate 後，對 #1034 的 `PROJECT_RULES §0.4`、其餘 #1030／#1027 獨立文件逐一核銷（#1027 為 Draft，獨有文件已由 #1053 保存、可依 DEC-147 條件關閉；#1034 抽取尚未做），依 scope guard 優先五頁 Layout Gate，禁止把技術債當主線 |
 | **下一個唯一安全動作（Claude Code）** | 依 Issue #1044 只改 `src/data/macro/macro_fwd_test_store.py` + targeted tests，跑必要 CI／QA，提交獨立 PR，不自行 merge；若 #1044 不可重現，只提交可驗證反證，勿憑空修改 |
 
 **停止條件**：任何新 Layout、Risk Cap／投資公式／Source、Sheet OAuth/credential、不可逆寫入、OneBrain schema/runtime、正式資料發布 PIT 變更；及新 CI／QA 失敗、同檔競爭。每批完成→重新 GitHub Gate→推薦下一個最小安全 batch，非阻擋 P2 不自動開 Stage。建議 Claude #1044：Sonnet 5.5／High；ChatGPT Docs：Medium 與 targeted docs check，完整 required CI 仍不可跳過。

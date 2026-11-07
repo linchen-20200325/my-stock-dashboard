@@ -1899,7 +1899,7 @@
 
 | ID | Priority / 目前狀態 | 下一個可驗收完成條件 |
 |---|---|---|
-| `NUI2-GH-MEMORY-SUPERSEDE` | P1 OPEN（ChatGPT docs） | 〔更新 2026-11-07 晚：**前置條件已達成**——DEC-141～145 收斂 #1045（`848fd977`）、舊布局適用性 #1046（`08bf2b68`）均已正式合併；DEC-146／Gate 文件（#1050，`67a7cea5`）亦已入 main，#1048 提案已被其承接〕**剩餘**：核對 #1027（Draft，unique 內容待另 PR 抽出後才可關閉）／#1030／#1034 的 unique docs 與共享檔 diff 並逐項核銷；保留歷史但令唯一 Active 方向一致，不能把 PR Ready 當 Done |
+| `NUI2-GH-MEMORY-SUPERSEDE` | P1 OPEN（ChatGPT docs） | 〔更新 2026-11-07 晚：**前置條件已達成**——DEC-141～145 收斂 #1045（`848fd977`）、舊布局適用性 #1046（`08bf2b68`）均已正式合併；DEC-146／Gate 文件（#1050，`67a7cea5`）亦已入 main，#1048 提案已被其承接〕**剩餘**：核對 #1027（Draft）／#1030／#1034 的 unique docs（〔更新〕#1030／#1027 獨有文件已由 #1053 `71ac2889` 保存，可依 DEC-147（#1052 `d709d87b`，已生效）條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號尚未做；#1048 已被 DEC-146＋Gate 文件承接可關閉） 與共享檔 diff 並逐項核銷；保留歷史但令唯一 Active 方向一致，不能把 PR Ready 當 Done |
 | `NUI2-LEGACY-DATA-QUALIFICATION` | P1 OPEN（ChatGPT 只讀研究→Claude 經 Gate 施工） | 依第一版 producer→canonical→calculation→UI2 feed→Digest coverage 逐欄列來源、日期/PIT、單位、缺值、算法資格、runtime 與負測；repo 無 adapter≠外部永無來源，未 live probe 不可稱可用 |
 | `NUI2-SHORTAGE-VERIFIED-EVIDENCE` | P1 OPEN（高風險語意 Gate） | 財務足跡只能標**疑似**缺貨；核實月營收缺值及 coverage 不得誤判無缺貨／官方訂單，不得未經授權改正式分數、權重、門檻 |
 | `NUI2-FIN-CHANGE-QUALIFICATION` | P1 OPEN（高風險公式 Gate） | 負測月／季缺腿 0→中性、財報跨期、現金流累計／單季、缺科目；先復驗資料口徑／修復需求，再另批施工 |
