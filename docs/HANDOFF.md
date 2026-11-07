@@ -1004,3 +1004,4 @@ DEC-086 規則已於 main，本表已落地。
 - 守衛與證據：`tests/test_macro_fwd_test_store_fail_closed.py`；BACKLOG `P0-FWD-STORE-FAILCLOSED`。**獨立 QA 待做。**
 - **未解**：寫入非原子（中途失敗可能留半檔），已列後續 BACKLOG。若 cron 因此紅燈：先人工檢查／自 git 史還原 `data_cache/macro_forward_test/signals.parquet`，**不要**刪檔讓它重建（會丟歷史）。
 - 未動：Parquet 資料、Schema、日期語意、公式、Risk Cap；#1038 維持 Draft。
+- 補修（2026-11-07）：空帳本判定改 `len(df)==0`，畸形表（有列零欄／None）fail-closed；見 BACKLOG `P0-FWD-STORE-FAILCLOSED`。

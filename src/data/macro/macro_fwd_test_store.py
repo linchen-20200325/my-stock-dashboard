@@ -82,7 +82,10 @@ def load_signals(path: Optional[Path] = None) -> list[dict]:
         raise _ledger_error(p, IsADirectoryError('路徑存在但不是一般檔案'))
     try:
         df = pd.read_parquet(p)
-        if df is None or df.empty:
+        if df is None:
+            raise ValueError('read_parquet 回傳 None')
+        # ⚠️ 不可用 `df.empty`:pandas 對「非零列、零欄」(shape=(n,0))也回 True,會把畸形表當空帳本。
+        if len(df) == 0:          # 僅「零列」是合法空帳本(0 列 0 欄 / 0 列有欄)
             return []
         if MACRO_FWD_TEST_KEY not in df.columns:
             raise ValueError(f'缺唯一鍵欄 {MACRO_FWD_TEST_KEY!r},現有欄 {list(df.columns)}')

@@ -1881,3 +1881,4 @@
 - **驗收證據**：`tests/test_macro_fwd_test_store_fail_closed.py`（故障注入 7 種檔案狀態＋5 種 pandas 讀取例外＋chmod 000［root 環境 skip，由注入涵蓋］＋保留行為＋cron 退出碼＋2 項自動突變）；mutation：`except→return []` 與「讀取前先寫入」各令真實檔案跑測試時大量轉紅（15／24 failed），已還原。獨立 QA 待做。
 - **未解（後續）**：`append_signals()` 寫入**非原子**（直接 `to_parquet(p)`，寫入中途失敗可能留下半檔）；本批未處理，建議後續改「同目錄暫存檔＋`os.replace`」。
 - **禁止事項聲明**：未改任何 Parquet 資料檔、`shared/macro_forward_test_schema.py`（Schema）、日期語意、公式、Risk Cap、投資訊號；#1038 維持 Draft、未修補歷史列。
+- **補修（2026-11-07，ChatGPT 靜態審查）**：`load_signals` 改以 `len(df)==0` 判空帳本、`None` 與「有列但缺唯一鍵／零欄」皆丟 `LedgerReadError`（`DataFrame.empty` 對 shape=(n,0) 也為 True，舊順序會把畸形表當空帳本）；新增注入測試與 M3 突變（改回 `df.empty` 先判斷→轉紅）。

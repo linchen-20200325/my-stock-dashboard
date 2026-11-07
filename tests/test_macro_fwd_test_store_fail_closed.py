@@ -209,6 +209,23 @@ class TestCorruptLedgerFailsClosed:
         assert _snapshot(tmp_path) == before
         assert [r['date'] for r in load_signals(led)] == ['2026-08-17'], '原帳本內容應完整保留'
 
+    @pytest.mark.parametrize('name,ret', [
+        ('rows_no_columns', lambda: pd.DataFrame(index=range(3))),
+        ('none', lambda: None),
+    ])
+    def test_malformed_table_returned_by_reader(self, tmp_path, monkeypatch, name, ret):
+        """read_parquet 回(3 列 0 欄)或 None:不得被當空帳本(`DataFrame.empty` 對 shape=(3,0) 也是 True)。"""
+        led = tmp_path / 'signals.parquet'
+        _good_parquet(led)
+        before = _snapshot(tmp_path)
+        monkeypatch.setattr(pd, 'read_parquet', lambda *a, **k: ret())
+        with pytest.raises(LedgerReadError):
+            load_signals(led)
+        with pytest.raises(LedgerReadError):
+            append_signals([_row()], led)
+        monkeypatch.undo()
+        assert _snapshot(tmp_path) == before  # sha256 + mtime_ns + 無新檔
+
     def test_to_parquet_never_reached_when_read_fails(self, tmp_path, monkeypatch):
         """寫入函式在讀取失敗時根本不得被呼叫(不只是結果相同)。"""
         led = tmp_path / 'signals.parquet'
@@ -323,7 +340,28 @@ _M2 = [("    _old = pd.DataFrame(load_signals(path))\n",
         "    _old = pd.DataFrame(load_signals(path))\n")]
 
 
+_M3 = [("        if len(df) == 0:          # 僅「零列」是合法空帳本(0 列 0 欄 / 0 列有欄)\n",
+        "        if df.empty:\n")]
+
+
 class TestMutationsAreCaught:
+    def test_m3_old_empty_order_is_caught_by_malformed_table_test(self, tmp_path, monkeypatch):
+        """M3:改回舊的 `df.empty` 先判斷 → (3 列 0 欄)被當空帳本,append 覆寫既有帳本;檢查必須抓到。"""
+        mod = _load_mutant(_M3)
+        led = tmp_path / 'signals.parquet'
+        _good_parquet(led)
+        monkeypatch.setattr(pd, 'read_parquet', lambda *a, **k: pd.DataFrame(index=range(3)))
+        bad = []
+        try:
+            mod.load_signals(led)
+            bad.append('load_signals 未丟例外')
+        except mod.LedgerReadError:
+            pass
+        monkeypatch.undo()
+        # 真實模組對同一注入必須丟例外(對照組),突變版必須「沒丟」
+        assert bad == ['load_signals 未丟例外']
+
+
     def test_unmutated_module_passes_the_checker(self, tmp_path):
         """基準:檢查器對真實模組回空清單(否則突變測試沒有意義)。"""
         mod = _load_mutant([])
