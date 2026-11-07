@@ -1,5 +1,7 @@
 # New UI2 Active Presentation Contract（現行唯一有效的 presentation contract；2026-11-03）
 
+> 📌 **2026-11-07 新客戶 DEC-146（待本 docs PR 合併進 main）— 下一版五頁頂部導覽方向已核准**：以 [五頁核准視覺方向與安全 Gate](NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md) 為後續施工邊界：第一列 Active Sheet/帳號、第二列五頁（手機可橫滑）、🗂資料第五，不做臨時五頁 Drawer B0；現行四頁＋Drawer/rail 仍是**目前 code 的安全回歸基準**，而非下一版施工目標。此註只就新布局方向取代下方四頁硬上限/舊抽屜呈現要求；**既有 Missing/Risk Cap/Digest/JS_V4/a11y/viewport 等守衛依舊有效，真瀏覽器與 CI/QA 未過不得合併工程 PR**。未核准正式 Auth/Sheet/source/schema/公式/OneBrain runtime。
+
 > 📌 **適用性更新（客戶 2026-11-06 五頁方向；來源 #1030，正式裁示收斂 #1045）**：本文件仍記錄**目前四頁 UI2 runtime 與舊版面回歸基線**，但其「正式主頁只能四頁／健康度只在👤我的／桌機左 rail／手機 Drawer」的**產品布局目標已被較新的五頁頂部導覽方向取代，僅在該呈現射程標 `SUPERSEDED FOR NEXT DESIGN`**。目標：📊市場、🎯標的、💼持股、👤我的、🗂資料；完整來源健康度集中資料頁、投資頁保留必要 source/as_of/缺值；頂部 Active Sheet 與右上帳號。**尚未獲准直接改 Layout、OAuth/Sheet、路由、JS、正式資料或 OneBrain Runtime**；正式新五頁可施工 Contract、390/1440 真機/視覺及等價安全/a11y 測試未完成前，此文件已批准的投資語意、Missing、Risk Cap、Digest、Dark-only 與目前安全回歸要求繼續有效。不要把此註當「已實作五頁」。
 
 
