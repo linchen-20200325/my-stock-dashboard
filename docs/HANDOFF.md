@@ -998,3 +998,10 @@ DEC-086 規則已於 main，本表已落地。
 - 依 DEC-141（客戶 Q1~Q8）施工：組合狀態行＋今日需處理單行、Primary／建議持股水位空槽、持股表欄名＋原因。**presentation-only，未接任何資料**。
 - **W-11 未完成**：版面空槽已施工，待獨立 QA；正式資料接線（Auth／來源／Aggregator／Risk Cap）未做，也未授權。
 - 新守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`；`viewport_measurements*.json` 已依 source_hash 重生。Draft PR，不合併。
+
+## 補註（2026-11-07｜P0-FWD-STORE-FAILCLOSED：總經前進式驗證帳本讀取失敗改 fail-closed）
+- 舊行為：帳本存在但讀取失敗 → 當空帳本 → `append_signals` 可能覆寫整本凍結帳本。現行：丟 `LedgerReadError`，不寫入任何位元組；cron 腳本（未改動）因例外未捕捉而退出碼 1＋traceback，workflow 紅燈。檔不存在（首次建檔）與合法 0 列 parquet 仍視為空帳本。
+- 守衛與證據：`tests/test_macro_fwd_test_store_fail_closed.py`；BACKLOG `P0-FWD-STORE-FAILCLOSED`。**獨立 QA 待做。**
+- **未解**：寫入非原子（中途失敗可能留半檔），已列後續 BACKLOG。若 cron 因此紅燈：先人工檢查／自 git 史還原 `data_cache/macro_forward_test/signals.parquet`，**不要**刪檔讓它重建（會丟歷史）。
+- 未動：Parquet 資料、Schema、日期語意、公式、Risk Cap；#1038 維持 Draft。
+- 補修（2026-11-07）：空帳本判定改 `len(df)==0`，畸形表（有列零欄／None）fail-closed；見 BACKLOG `P0-FWD-STORE-FAILCLOSED`。

@@ -30,6 +30,7 @@ captured_at 最早者最接近該交易日收盤後的觀測;較晚的假日 / �
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -45,25 +46,52 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 MACRO_FWD_TEST_PATH: Path = _REPO_ROOT.joinpath(*MACRO_FWD_TEST_RELPATH)
 
 
-def load_signals(path: Optional[Path] = None) -> list[dict]:
-    """讀本地快照 → list[dict]。檔不存在 → []。
+class LedgerReadError(RuntimeError):
+    """帳本檔「已存在」但讀不出來(損壞 / 不可讀 / 非 parquet / 權限 / 欄位無法解析)。
 
-    讀檔失敗**不吞**:print 明確訊息後回 []。§1 的「不可靜默」在這裡的
-    平衡點是 —— 一個壞掉的歷史檔不該讓 cron 整個掛掉(那會連新的一天也記不到),
-    但一定要在 log 留下痕跡,否則會出現「資料悄悄停止累積」而沒人發現。
+    與「檔不存在」(首次建檔,合法)嚴格區分。丟這個例外 = **fail-closed**:
+    呼叫端不得把它當成空帳本繼續寫,否則 `append_signals` 會用「只有新列」的內容
+    覆寫掉整本凍結帳本(§1:寧可炸掉,不可造假;帳本是唯一的無 lookahead 樣本)。
+    """
+
+
+def _ledger_error(p: Path, e: BaseException) -> LedgerReadError:
+    return LedgerReadError(
+        f'[macro_fwd_test_store] 帳本已存在但不可讀 {p}: {type(e).__name__}: {e} '
+        f'—— 已 fail-closed,未覆寫、未寫入任何位元組;請人工檢查或自 git 史還原該檔')
+
+
+def load_signals(path: Optional[Path] = None) -> list[dict]:
+    """讀本地快照 → list[dict]。
+
+    - 檔不存在 → [](首次建檔路徑,合法)。
+    - 合法 parquet 但 0 列 → [](空帳本)。
+    - 檔存在但讀取失敗(0 位元組 / 截斷 / 非 parquet / 目錄 / 權限 / 缺唯一鍵欄)
+      → 丟 `LedgerReadError`,**不回 []**。
     """
     p = Path(path) if path else MACRO_FWD_TEST_PATH
-    if not p.exists():
+    try:
+        p.stat()
+    except FileNotFoundError as _e:
+        if os.path.lexists(p):  # 懸空 symlink:路徑存在但目標讀不到,不是「首次建檔」
+            raise _ledger_error(p, _e) from _e
         return []
+    except OSError as _e:  # PermissionError / ELOOP / ENOTDIR 等:存在性無法判定
+        raise _ledger_error(p, _e) from _e
+    if not p.is_file():
+        raise _ledger_error(p, IsADirectoryError('路徑存在但不是一般檔案'))
     try:
         df = pd.read_parquet(p)
-    except Exception as _e:  # noqa: BLE001
-        print(f'[macro_fwd_test_store] ⚠️ 讀取失敗 {p}: {type(_e).__name__}: {_e} '
-              f'—— 本次視為無歷史,新列仍會寫入(舊檔請人工檢查)')
-        return []
-    if df is None or df.empty:
-        return []
-    return df.to_dict('records')
+        if df is None:
+            raise ValueError('read_parquet 回傳 None')
+        # ⚠️ 不可用 `df.empty`:pandas 對「非零列、零欄」(shape=(n,0))也回 True,會把畸形表當空帳本。
+        if len(df) == 0:          # 僅「零列」是合法空帳本(0 列 0 欄 / 0 列有欄)
+            return []
+        if MACRO_FWD_TEST_KEY not in df.columns:
+            raise ValueError(f'缺唯一鍵欄 {MACRO_FWD_TEST_KEY!r},現有欄 {list(df.columns)}')
+        return df.to_dict('records')
+    except Exception as _e:  # noqa: BLE001 — 不吞:轉成明確的 fail-closed 例外
+        raise _ledger_error(p, _e) from _e
 
 
 def append_signals(rows: list[dict], path: Optional[Path] = None) -> int:
@@ -73,6 +101,8 @@ def append_signals(rows: list[dict], path: Optional[Path] = None) -> int:
     全部被跳過時不重寫檔案、回 0。
 
     Raises:
+        LedgerReadError: 既有帳本存在但讀不出來 → **fail-closed**,不寫入任何位元組
+            (讀舊檔發生在任何寫入之前;見 `load_signals`)。
         ValueError: 列缺唯一鍵、同批內唯一鍵重複,或帶了 schema 外的欄位。
             **不靜默丟棄** —— 靜默丟欄會讓下游以為欄位從來不存在。
     """
