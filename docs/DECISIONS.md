@@ -7681,3 +7681,11 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **案例（狀態非最終結果）**：2026-11-07 GitHub 查核時 #1036 head 905def98、#1037 head dfbc8559、#1038 head 9e7014c7 的原生 PR CI 已從 action_required 轉為 in_progress，應沿用既有 CI 而非重複要求客戶批准。舊 head 綠燈不得套用新 head；必要檢查與 parquet、metadata、觀測日期仍須獨立複驗，不能宣告三 PR 已可合併。
 - **安全邊界**：不改上位 CLAUDE.md／PROCESS.md 與既有授權 Gate；不得跳過 required CI／獨立 QA、偽造資料來源證據、變更 Risk Cap／公式或未經核准的新 UI Layout；只能執行 GitHub 工具確實提供的動作，不得聲稱可用不存在的 workflow-approval 操作。
 - **決策者**：使用者。**日期**：2026-11-07。**範圍**：my-stock-dashboard 跨 AI 協作、請示與問題解決。**落盤**：#1034 docs-only Draft PR，合併前不視為 main 生效。
+
+
+### DEC-145｜每小時 GitHub 巡檢留下可恢復紀錄；非必要靜默，直到需給 Claude 提示語（客戶 2026-11-07）
+
+- **客戶原話（來源 D，本次對話）**：「記得每一次巡檢 要去難GITHUB裡面的內容，進度，未完成項目還有需要處理的事項，工作項目就根據之前談的 專案AI負責寫CODE，需要他的時候 你貼出來 我會再貼給她處理，有回覆會再跟你說」；「對了 你也需要做紀錄喔 我怕對話太長中斷，你也能靜默處理嗎? 直到要給專案AI提示語在提供」。
+- **裁示**：既有每小時巡檢應真正讀 GitHub 最新 main、PR/diff/head、CI/QA、branch、規格及五治理文件。需持久保存的有效進度、未完成事項、風險、決策與下一步走既有文件 checkpoint，不能依賴 ChatGPT 長對話；在工作不衝突且符合 CI／PR 治理下，ChatGPT 可自主處理文書，Claude Code 主責寫 CODE，只有需要 Claude 的明確工程工作時才向使用者提供完整可複製提示語（附模型、Effort、範圍、驗收與停止條件），使用者轉貼並回報。原則上**靜默**，例行狀態、無變化與文書中間進度不通知；真正客戶 Gate、Claude 新提示語、必要交接例外。
+- **長對話恢復**：ChatGPT 應在關鍵階段先把正式紀錄保存到 GitHub，再給可複製的新對話交接摘要；不得宣稱能在使用者離線時測量剩餘 token、自動遷移對話或無限背景施工。定期任務每小時只在支持的工具／權限／既有授權內行動；Draft 仍非 main 生效。
+- **決策者**：使用者。**日期**：2026-11-07。**落盤**：#1034 docs-only Draft PR，合併前未生效於 main。
