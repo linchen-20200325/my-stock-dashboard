@@ -1899,12 +1899,14 @@
 
 | ID | Priority / 目前狀態 | 下一個可驗收完成條件 |
 |---|---|---|
-| `NUI2-GH-MEMORY-SUPERSEDE` | P1 OPEN（ChatGPT docs） | DEC-141～145 收斂 #1045、舊布局適用性 #1046 均須**本 head required CI／獨立 QA／正式合併**，再核對 #1027/#1030/#1034 剩餘 unique docs 與共享檔 diff；保留歷史但令唯一 Active 方向一致，不能把 PR Ready 當 Done |
+| `NUI2-GH-MEMORY-SUPERSEDE` | P1 OPEN（ChatGPT docs） | 〔更新 2026-11-07 晚：**前置條件已達成**——DEC-141～145 收斂 #1045（`848fd977`）、舊布局適用性 #1046（`08bf2b68`）均已正式合併；DEC-146／Gate 文件（#1050，`67a7cea5`）亦已入 main，#1048 提案已被其承接〕**剩餘**：核對 #1027（Draft，unique 內容待另 PR 抽出後才可關閉）／#1030／#1034 的 unique docs 與共享檔 diff 並逐項核銷；保留歷史但令唯一 Active 方向一致，不能把 PR Ready 當 Done |
 | `NUI2-LEGACY-DATA-QUALIFICATION` | P1 OPEN（ChatGPT 只讀研究→Claude 經 Gate 施工） | 依第一版 producer→canonical→calculation→UI2 feed→Digest coverage 逐欄列來源、日期/PIT、單位、缺值、算法資格、runtime 與負測；repo 無 adapter≠外部永無來源，未 live probe 不可稱可用 |
 | `NUI2-SHORTAGE-VERIFIED-EVIDENCE` | P1 OPEN（高風險語意 Gate） | 財務足跡只能標**疑似**缺貨；核實月營收缺值及 coverage 不得誤判無缺貨／官方訂單，不得未經授權改正式分數、權重、門檻 |
 | `NUI2-FIN-CHANGE-QUALIFICATION` | P1 OPEN（高風險公式 Gate） | 負測月／季缺腿 0→中性、財報跨期、現金流累計／單季、缺科目；先復驗資料口徑／修復需求，再另批施工 |
 | `NUI2-SOURCE-LIVE-PROBE-AND-FALLBACK` | P1 OPEN（只讀，必要新 API 再 Gate） | 已核准來源的可達性/授權/更新日/欄位/缺值/失敗備援逐項實測，無憑證勿猜，不擅自開新 API 或 Research Sheet |
 | `NUI2-EVIDENCE-COVERAGE-PREFLIGHT` | P1 OPEN（Schema/Runtime Gate） | required evidence manifest、完整正反證／失效原因、missing 與 omissions、Token 分包 partial 機制；只有真正 production caller＋覆蓋測試可宣稱 OneBrain 有完整 Evidence |
 
-**當前工程分流**：Python-only [Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) object-float exact scalar validation 交 Claude Code；不得與 ChatGPT docs PR 共改 `PROJECT_RULES`／`BACKLOG`／`HANDOFF`。#1038 PIT BLOCK 持續；#1041／#1042／#1043 已合併，不能再當未修 P0。下一主線是五頁有效 Layout/資料契約收斂後安排實際 UI 與 Evidence/Digest 接線，P2 技術債不插隊。
+**當前工程分流**：〔更新註記 2026-11-07 晚：[Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) 已由 #1049（`63d55bad`）合併、Issue 已關閉，不得重派；以下為原文〕Python-only [Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) object-float exact scalar validation 交 Claude Code；不得與 ChatGPT docs PR 共改 `PROJECT_RULES`／`BACKLOG`／`HANDOFF`。#1038 PIT BLOCK 持續；#1041／#1042／#1043 已合併，不能再當未修 P0。下一主線是五頁有效 Layout/資料契約收斂後安排實際 UI 與 Evidence/Digest 接線，P2 技術債不插隊。
+
+**2026-11-07 晚更新註記**：(1) DEC-146（#1050，`67a7cea5`）已核准五頁頂部兩列導覽方向、不做臨時 B0 五頁抽屜，施工依 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`，**工程尚未啟動**；(2) #1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為**歷史量測時點快照**（非第二套 SSOT）；(3) cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，**真實發布端到端 NOT VERIFIED**，與 #1038 PIT 阻塞（禁止合併）**獨立**。
 

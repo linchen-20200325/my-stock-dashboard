@@ -1,23 +1,23 @@
 # HANDOFF — 現行交接（my-stock-dashboard）
 
 <!-- HANDOFF_ACTIVE_GATE:BEGIN -->
-## 先讀這裡｜GitHub Resume Gate（2026-11-07，**待 #1047 合併**）
+## 先讀這裡｜GitHub Resume Gate（2026-11-07；由 #1047 引入，合併後仍須重新 Gate）
 
-> **唯一用途：** 在長對話／換 Claude 或 ChatGPT session 時，先建立「哪裡能查事實」的**現況入口**。這一段是 `docs/HANDOFF.md` 內的可更新索引，**不是第二套 SSOT、不是永久狀態宣告**。建立本段時的 main = `63d55badad8dea1b4de767afbd20d31314d46be8`（#1049 merge）。**下次必須先查 LIVE GitHub**：main 完整 SHA／latest commits+diff、所有 Open/Draft PR head/base/diff/CI/mergeability、required QA/review threads、相關 branch。任何不一致先標記 STALE、修正再派工。**不可只信本段、Handoff 其他歷史章節、聊天摘要或 PR 自述。**
+> **唯一用途：** 在長對話／換 Claude 或 ChatGPT session 時，先建立「哪裡能查事實」的**現況入口**。這一段是 `docs/HANDOFF.md` 內的可更新索引，**不是第二套 SSOT、不是永久狀態宣告**。本段**最後更新時**的 main = `9ca5441ec129043747a00b87b56597982cdb4a46`（#1051 merge；更早的建立基準為 `63d55bad`＝#1049）。**下次必須先查 LIVE GitHub**：main 完整 SHA／latest commits+diff、所有 Open/Draft PR head/base/diff/CI/mergeability、required QA/review threads、相關 branch。任何不一致先標記 STALE、修正再派工。**不可只信本段、Handoff 其他歷史章節、聊天摘要或 PR 自述。**
 >
-> **這份入口尚在 PR #1047**，不在 main；若新對話看到的是舊 main，須明確讀 [#1047 的最新 PR head](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) `docs/HANDOFF.md` 開頭，**確認 head／原生 CI 後**才可引用。其他衝突分支不能取代已合併 main。提交本 checkpoint 會觸發新的 head CI；上次 head `68642056fa761fdf7b4480fefed41f5e51d80bca` 的 CI 結果**不可沿用**。
+> **更新註記（2026-11-07 晚）**：本入口原寫於 PR #1047（尚未合併）。#1047 已併入最新 main 並改寫過期敘述；**若 #1047 仍未合併，新對話須明確讀 [#1047 的最新 PR head](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) `docs/HANDOFF.md` 開頭，確認 head／原生 CI 後才可引用**；合併後以 main 為準。其他衝突分支不能取代已合併 main。每次提交都會觸發新的 head CI，舊 head 的 CI 結果**不可沿用**。
 
 ### 0. 狀態誤判防止表（每次接手必跑，不可只讀 PR 標題）
 
-> 2026-11-07 使用者指出：對話交接把「頁面已實作」與「新五頁導航未施工」混為一談。**本次重新讀 main 程式核對**，以可執行檔案/路由/真實資料 caller 優先，文件僅說明意圖。此處記錄的是**當時驗證結果**，不是未來永遠有效的事實。
+> 2026-11-07 使用者指出：對話交接把「頁面已實作」與「新五頁導航未施工」混為一談。**本次重新讀 main 程式核對**，以可執行檔案/路由/真實資料 caller 優先，文件僅說明意圖。此處記錄的是**當時驗證結果**（程式事實取自 `63d55bad` 時點；其後 main 只新增文件與 #1049 的 Python 修復，未改 UI2 路由），不是未來永遠有效的事實。
 
-| 問題 | 先查 live 證據 | 目前可證實的結論（main `63d55bad...`） | 必須避免的錯誤 |
+| 問題 | 先查 live 證據 | 目前可證實的結論（程式事實量測於 main `63d55bad...`；最新 main 見上） | 必須避免的錯誤 |
 |---|---|---|---|
 | 「頁面完成了嗎？」 | `shared/ui2_contract/pages.py::PAGE_IDS` + `src/ui2/views/__init__.py::VIEWS` + `src/ui2/shell/app.py` | **四頁 Preview 可路由**；不等於四頁所有功能/視覺都已完成；W-11 只有第一批 | 只看「線框 Draft」就回答「四頁還沒做」；或把空槽算正式功能 |
-| 「五頁與頂部導覽完成了嗎？」 | 同上 + `src/ui2/shell/css.py` 的 `ui2_nav` media rules | **未完成**；目前手機 Drawer、桌機 rail；第五頁僅 #1030/#1048 文件 | 把新方向或 CI 綠的 docs PR 當已部署 |
+| 「五頁與頂部導覽完成了嗎？」 | 同上 + `src/ui2/shell/css.py` 的 `ui2_nav` media rules | **未完成（程式）**；目前手機 Drawer、桌機 rail；方向已由 DEC-146 核准、工程未施工；第五頁僅有文件（#1030 提案、DEC-146＋Gate 文件的核准方向） | 把新方向或 CI 綠的 docs PR 當已部署 |
 | 「資料/登入/AI 已接上嗎？」 | `src/services/ui2/real_feed.py`、`src/ui2/shell/app.py` 的 FAKE/Real Preview 分支、實際 OAuth/Sheet/Digest caller + tests | FAKE 預設，Real Preview 有限；不可宣稱完整正式接線 | 有 VM、帳戶占位、OneBrain 卡片就宣稱可用 |
-| 「工程修好了嗎？」 | main commit/merged PR + 對應測試/CI；Issue 狀態 | #1049 merged、#1044 closed；#1038 PIT FAIL 仍 Draft | 把舊 BACKLOG 的 OPEN 或舊 HANDOFF 的 next action 當新任務 |
-| 「可以合併嗎？」 | PR **最新 head** 的 CI/QA、非作者 QA、threads、mergeability、main diff | #1045/#1046/#1047 仍待非作者 QA；#1048 僅視覺提案 | 用作者自驗、舊 head CI、草稿 PR 的綠燈代替 Gate |
+| 「工程修好了嗎？」 | main commit/merged PR + 對應測試/CI；Issue 狀態 | #1049 merged、#1044 closed；cron 資料發布路徑 #1035/#1036/#1037/#1042 merged（真實發布端到端 **NOT VERIFIED**）；#1038 PIT FAIL 仍 Draft、禁止合併（與 cron 發布路徑**獨立**） | 把舊 BACKLOG 的 OPEN 或舊 HANDOFF 的 next action 當新任務 |
+| 「可以合併嗎？」 | PR **最新 head** 的 CI/QA、非作者 QA、threads、mergeability、main diff | #1045/#1046 已合併（#1045=`848fd977`、#1046=`08bf2b68`）；#1047 為本文件所屬 PR，合併前仍須最新 head CI＋非作者 QA；#1048 提案已被 DEC-146＋Gate 文件承接（見 §2） | 用作者自驗、舊 head CI、草稿 PR 的綠燈代替 Gate |
 
 **交接格式固定為「可驗證已完成／部分完成／僅規格候選／阻塞／下一個安全動作」五欄**；每項要有 `path::symbol` 或 PR/commit + `main/head SHA`，否則標 `UNVERIFIED`。新對話應先回答「目前哪四頁已在 Code、第五頁為何未完成」，再規劃新 UI，**不得重新設計或重派已合併的四頁**。任何 checkpoint SHA/PR 狀態變動後，上表僅是歷史，必須重新 Gate。不要宣稱能監控剩餘 token 百分比；當出現重複查找、互相矛盾、摘要截斷，先保存 GitHub checkpoint，再主動提供完整新對話提示語。
 
@@ -28,34 +28,37 @@
 | **已合併程式** | New UI2 **四個 Preview 頁面** 📊市場／🎯標的／💼持股／👤我的，路由和 VIEWS 均為四頁；手機 ☰ Drawer + JS_V4、桌機固定 rail；不是五頁頂部導覽。| `shared/ui2_contract/pages.py` 的 `PAGE_IDS`、`src/ui2/views/__init__.py::VIEWS`、`src/ui2/shell/app.py::_render_nav`、`src/ui2/shell/css.py`；已合併 PR #998/#1000/#1001/#1019/#1020 |
 | **已合併部分完成** | 💼 持股 W-11 **批一版面／欄名／誠實空槽**已合併，不等於持股資料、Risk Cap、Action、正式 Auth/Sheet 接線完成；📊 OneBrain Outlook 仍是未啟用呈現槽，不等於 production OneBrain。 | #1028、`src/ui2/views/hold.py`、`src/ui2/views/market.py` |
 | **正式資料／能力接線** | `app_ui2` 當前是 **FAKE 預設**的 Preview；Real-data Preview 唯讀且有限，不是完整 production；正式 OAuth/Active Sheet、資料健康總覽、完整 Evidence→Digest coverage 尚未據此驗證。**已有 UI VM/空槽 ≠ 完整資料能力**。 | `src/ui2/shell/app.py`、`src/services/ui2/real_feed.py`、`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` |
-| **新版目標／待施工** | 使用者後來要求 **📊市場／🎯標的／💼持股／👤我的／🗂資料五頁**、**桌機和手機頂部五頁導航**、頂部 Active Sheet、右上帳號、Dark-only。**方向已提出，但第五頁、頂部導航尚未進 main；像素/互動 Visual Gate 尚未批准**。不得把文件草稿的圖當已實作。 | #1030（使用者方向的提案）、#1048（390/1440 視覺候選）、#1045（DEC-141～145 尚待正式合併） |
+| **新版目標／待施工** | 使用者後來要求 **📊市場／🎯標的／💼持股／👤我的／🗂資料五頁**、**桌機和手機頂部五頁導航**、頂部 Active Sheet、右上帳號、Dark-only。**客戶已於 DEC-146（#1050，main）核准「五頁頂部兩列導覽」視覺方向、不做臨時 B0 五頁抽屜**；但第五頁與頂部導覽**程式尚未進 main、工程未施工、像素／真機驗收未通過**（Gate 文件 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）。不得把文件草稿的圖當已實作。 | DEC-146、Gate 文件（#1050）、#1030（使用者方向提案，仍 open）、#1045（DEC-141～145，已合併） |
 
 **設計衝突處理：** 2026-11-02～04 的四頁抽屜／左 rail 文件，是**現行 Preview 回歸基準／歷史產品版型**；2026-11-06 之後五頁頂部導覽是**後續設計目標**，不是已實作。先以最新客戶裁示＋正式 DEC 與 Active Contract 對照，再通過 Visual Gate 才能改 Code。**#1029** 舊市場／標的線框已關閉且未合併；不能把其 drawer/rail 純文字畫面當五頁施工依據。
 
-### 2. 當下 GitHub 物件清單（**時點快照，永遠須重取**）
+### 2. 當下 GitHub 物件清單（**時點快照，永遠須重取**；更新於 main `9ca5441e`）
 
 | 物件 | 這次查到的狀態 | 不能誤判為 |
 |---|---|---|
 | **#1049／#1044** | #1049 squash **merged** main `63d55badad8dea1b4de767afbd20d31314d46be8`；Issue #1044 **closed**，pandas object float 精確驗證已交付 | **不得再次派 #1044**；不等於 #1038 PIT 或並行 append 無鎖已修 |
-| **#1045** | Ready，head `68d86d7b042ad41a3373a34a12d15e45e63a6791`，DEC-141～145 收斂；原 head 五項 CI success；缺真正非作者 QA | DEC-141～145 已在 main |
-| **#1046** | Ready，head `8288d2fa349a3bfa1f6d2ec4c9a7d01e5ed79b0b`，現行/歷史導覽適用性註記；原 head 五項 CI success；缺非作者 QA | 現行程式已換五頁 |
-| **#1047** | **本文件所屬 PR**，Ready；此 checkpoint 更新後 **head 必然變動，須動態讀 GitHub**，最新 CI/QA 待重新查；三個治理檔 | 本段已在 main 或上一個 head CI 可沿用 |
-| **#1048** | Draft，head `8fcf2a1fca64557b8508fe07e51e558cc7754cb4`，390／1440 頂部五頁**文字候選**；原 head CI success | Layout／Visual Fidelity 已核准或 UI 已施工 |
-| **#1027／#1030／#1034** | 舊版設計／治理 Draft，與共享 BACKLOG/HANDOFF/DECISIONS/PROJECT_RULES 有重疊或衝突；**各自獨特檔未核銷** | 直接依舊 head 合併、刪除或視為正式施工 SSOT |
-| **#1038** | 資料 PR Draft，**PIT FAIL**：2026-11-05 觀測列之 captured_at = 11/07，部分來源 as_of = 11/06；目前**NO MERGE** | CI 綠＝當時已可用的投資訊號／合法回測 |
+| **#1045** | **已合併**（squash `848fd977`），DEC-141～145 已在 main | 仍待合併 |
+| **#1046** | **已合併**（squash `08bf2b68`），舊四頁／抽屜規格適用性註記 | 現行程式已換五頁 |
+| **#1047** | **本文件所屬 PR**，Ready；每次更新後 **head 必然變動，須動態讀 GitHub**，最新 CI／非作者 QA 待重新查；改 BACKLOG／HANDOFF／PROJECT_STATE 三檔 | 本段已在 main 或上一個 head CI 可沿用 |
+| **#1048** | 仍 open（Draft）之 390／1440 頂部五頁**文字候選**；其提案已被 **DEC-146＋Gate 文件（#1050）承接並取代**，不再是待裁示項 | 把 #1048 當現行施工依據，或以其 CI success 當 Visual Fidelity PASS |
+| **#1050** | **已合併**（squash `67a7cea5`）：DEC-146＋五頁頂部 Gate 文件 | UI 已施工或像素／真機驗收已通過 |
+| **#1051** | **已合併**（squash `9ca5441e`）：`docs/handoff/stock_github_checkpoint_2026-11-07.md` 快照；**歷史量測時點（取證 main=`08bf2b68`），不是第二套 SSOT** | 該快照內的 PR 狀態仍為最新 |
+| **#1027／#1030／#1034** | 舊版設計／治理 Draft，與共享 BACKLOG/HANDOFF/DECISIONS/PROJECT_RULES 有重疊或衝突；**各自獨特檔未核銷**（#1027 為 Draft，unique 內容待另 PR 抽出後才可關閉） | 直接依舊 head 合併、刪除或視為正式施工 SSOT |
+| **#1038** | 資料 PR Draft（open），**PIT FAIL**：2026-11-05 觀測列之 captured_at = 11/07，部分來源 as_of = 11/06；目前**NO MERGE** | CI 綠＝當時已可用的投資訊號／合法回測 |
 | **#1041／#1042／#1043** | 已合併：讀取 Fail-Closed、Parquet 原子寫入、遺留隱藏 `.tmp` ignore 防護 | 三項仍待第一次施工 |
-| **main CI** | `63d55bad...` 當輪查詢**未找到該 SHA 對應 workflow run**；#1049 的 PR head 五項 CI success。 | 把 PR head CI success 寫成 main post-merge success |
+| **#1035／#1036／#1037／#1042** | cron 資料發布路徑相關 PR **均已合併**；**真實發布端到端結果 NOT VERIFIED**（只驗了 PR 合併事實，未驗排程實跑產出）；與 #1038 PIT 阻塞**獨立**，不可互相替代 | 發布已端到端驗證，或 #1038 因此可合併 |
+| **main CI** | 更新時未對最新 main 逐一查 post-merge workflow run（`63d55bad` 當輪亦曾**未找到**對應 run）；#1049 的 PR head 五項 CI success。 | 把 PR head CI success 寫成 main post-merge success |
 
-### 3. 唯一安全接手工作與分工
+### 3. 唯一安全接手工作與分工（2026-11-07 晚更新；舊版「補 QA 合併 #1045/#1046」「三案比較」已完成或失效）
 
-1. **ChatGPT（非 Code）**：先重新取 GitHub Gate，給 **#1045 → #1046 → #1047** 補真實非作者 QA／處理文件差異；每一個 PR 合併前再取最新 head/CI/threads/mergeability。**目前不能假稱作者自驗即獨立 QA，也不得繞過 Gate 合併**。成功後更新本現況入口並將已核銷的舊 Draft 逐項關閉；不要增加第六個重複收斂 PR。
-2. **產品視覺決策**：在保留既有四頁內容前提下，比較「沿用手機抽屜/桌機 rail + 第五頁」、「改頂部五頁」、「階段性導航」三案；#1048 的頂部雙列是**候選，不是已選定**。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**，距 ≥160px 約 2.5px，新增頁首高度會有退化風險；不得放寬門檻或刪 JS_V4/focus/a11y/viewport regression。
-3. **Claude Code（只做真 Code）**：目前**沒有已核准的新版五頁頂部導航施工包**，不可因 #1048 CI 綠就修改 Layout。通過 Visual/Data/Auth Gate 後才可給最小 UI shell／第五頁唯讀入口／測試批（≤3 項）；與 ChatGPT 文件 PR 勿改同檔。完成 #1049／#1044 的修復已結束、不能重做。
-4. **資料及金融語意**：#1038、完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
+1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1034／#1030 的 unique docs 抽出後關閉；#1027（Draft）unique 內容**待另 PR 抽出後**才可關閉；不要增加重複收斂 PR。
+2. **產品視覺決策已完成**：DEC-146 核准「五頁頂部兩列導覽」方向、**不做臨時 B0 五頁抽屜**；三案比較已不需要。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**（距 ≥160px 約 2.5px）仍是施工風險，須以真瀏覽器量測證實不退化；不得放寬門檻或刪 JS_V4／focus／a11y／viewport regression。
+3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（W1 分支的分工更新尚未成 PR，**不可引用為已生效**。）
+4. **資料及金融語意**：#1038 因 PIT 不合格**禁止合併**（獨立於 cron 發布路徑）；cron 發布路徑 #1035／#1036／#1037／#1042 雖已合併，**真實發布端到端仍 NOT VERIFIED**。完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
 
 ### 4. 新對話最低成本恢復程序（不讀千行歷史、不依賴聊天）
 
-先讀 **`CLAUDE.md` §-2／§-1.5、`PROCESS.md`、`PROJECT_RULES.md` §1／8／15／23／29／31／32** → 直接讀**本檔最前的本段** → 即時查 main/Open-Draft PR/CI/diff（上表僅索引），必要時讀 PR #1045/#1046/#1047/#1048 的**最新 head** → 對照 `docs/DECISIONS.md`（正式裁示）、`docs/BACKLOG.md`（未完成）、`docs/PROJECT_STATE.md`（穩定知識）和 New UI2 Active Contract；**只讀與本批有關的段落**，不要讓 250 KB 歷史 HANDOFF 或單一聊天摘要覆蓋程式事實。
+先讀 **`CLAUDE.md` §-2／§-1.5、`PROCESS.md`、`PROJECT_RULES.md` §1／8／15／23／29／31／32** → 直接讀**本檔最前的本段** → 即時查 main/Open-Draft PR/CI/diff（上表僅索引），必要時讀 PR #1047 等 open PR 的**最新 head**（#1045/#1046/#1050/#1051 已在 main） → 對照 `docs/DECISIONS.md`（正式裁示）、`docs/BACKLOG.md`（未完成）、`docs/PROJECT_STATE.md`（穩定知識）和 New UI2 Active Contract；**只讀與本批有關的段落**，不要讓 250 KB 歷史 HANDOFF 或單一聊天摘要覆蓋程式事實。
 
 **硬停止**：同檔競爭、CI 失敗、非作者 QA 缺、未核准新 Layout/Auth/Source/Schema/投資公式/Risk Cap、不可逆操作；不能將 'pending' 轉為 'done'。**對話超長前先在已有 HANDOFF 頂部此區更新已驗快照／在原 PR 存 Remote checkpoint，再給可複製新對話提示語**。歷史尾部各段是**當時記錄**，任何先前『唯一下一步』都不具有現行優先權。
 
@@ -1082,17 +1085,19 @@ DEC-086 規則已於 main，本表已落地。
 |---|---|
 | 已入 main | #1041 Fail-Closed、#1042 Parquet 原子寫入、#1043 忽略孤兒 hidden `.tmp`、#1031 Research Evidence 草案、#1033 supersession/data-gap 稽核；舊 Handoff「原子寫入尚未修」「暫存檔不受 ignore」屬歷史，**不能再當最新** |
 | 開放中的工程與資料 | #1044（Claude Code Python exact object-float 修復，Issue OPEN，沒有驗到對應 PR）；#1038（PIT FAIL，Draft，不得合併） |
-| 本輪文件收斂 | #1045（DEC-141～145 從 Draft 逐字收斂，CI/QA pending）；#1046（PROJECT_RULES + 兩份導航契約 2026-11-06 新五頁方向註記，CI/QA pending）；本 docs PR 只更新有效知識、Backlog 與本接手點 |
+| 本輪文件收斂 | #1045（DEC-141～145 從 Draft 逐字收斂）**已合併**（`848fd977`）；#1046（PROJECT_RULES + 兩份導航契約 2026-11-06 新五頁方向註記）**已合併**（`08bf2b68`）；〔更新註記：上述原寫「CI/QA pending」已過期〕；本 docs PR（#1047）只更新有效知識、Backlog 與本接手點 |
 | 舊 Draft 未結案 | #1027 W-11 線框及三份共享治理檔；#1030 五頁藍圖／PDF／六領域研究與共有 docs；#1034 專案記憶/資料資格 docs，三份都有與新 main 的治理檔差異，須**逐檔核銷**，不可直接舊 base merge 也不可因部分遷移便關閉 |
 | 正式產品方向 | 五頁（📊市場／🎯標的／💼持股／👤我的／🗂資料）＋桌手機頂部導航/Active Sheet/右上帳號/Dark-only；六領域協調 OneBrain＋全域反證，Human UI 簡潔／完整 Digest 分離；**目前 runtime 仍非五頁，正式 Layout/Auth/JS/Schema/AI 接線另待 Gate** |
-| **下一個唯一安全動作（ChatGPT）** | 檢查 #1045／#1046 最新 head 的完整 CI 與非作者 QA；可安全合併才依序合併。再對 #1034 的 `PROJECT_RULES §0.4`、其餘 #1030/#1027 獨立文件逐一核銷，依 scope guard 優先五頁 Layout Gate，禁止把技術債當主線 |
+| **下一個唯一安全動作（ChatGPT）** | 〔更新註記：#1045／#1046 已合併，此格前半過期〕#1047 合併 Gate 後，對 #1034 的 `PROJECT_RULES §0.4`、其餘 #1030／#1027 獨立文件逐一核銷（#1027 為 Draft，unique 內容待另 PR 抽出後才可關閉），依 scope guard 優先五頁 Layout Gate，禁止把技術債當主線 |
 | **下一個唯一安全動作（Claude Code）** | 依 Issue #1044 只改 `src/data/macro/macro_fwd_test_store.py` + targeted tests，跑必要 CI／QA，提交獨立 PR，不自行 merge；若 #1044 不可重現，只提交可驗證反證，勿憑空修改 |
 
 **停止條件**：任何新 Layout、Risk Cap／投資公式／Source、Sheet OAuth/credential、不可逆寫入、OneBrain schema/runtime、正式資料發布 PIT 變更；及新 CI／QA 失敗、同檔競爭。每批完成→重新 GitHub Gate→推薦下一個最小安全 batch，非阻擋 P2 不自動開 Stage。建議 Claude #1044：Sonnet 5.5／High；ChatGPT Docs：Medium 與 targeted docs check，完整 required CI 仍不可跳過。
 
-## 2026-11-07 17:10 後續更正｜#1049 已合併（優先於上一個 checkpoint）
+## 2026-11-07 17:10 後續更正｜#1049 已合併（優先於上一個 checkpoint；其後再被本檔最前入口更新取代，見末尾「晚間更新註記」）
 
 - **最新已實查 main SHA**：`63d55badad8dea1b4de767afbd20d31314d46be8`（#1049 squash）；`PR #1049` 已 merged，**Issue #1044 已 closed**。上方較早快照所寫「#1044 OPEN／Claude 下一步 #1044」是當時事實，**現在已過期、不得重派**。#1049 合併後此 SHA 的 main workflow 目前未見 run，不宣稱 main CI success；#1049 原 head 的五個 PR CI jobs success。
 - **當前 docs 續接**：#1045／#1046／#1047 各自 head CI success，但仍缺 repo 規定的**非作者 QA**，不得自行合併；#1048 390／1440 五頁頂部導覽**仍 Draft／僅候選方案**，CI success 不是 Visual Fidelity PASS。#1027／#1030／#1034 舊 Draft 仍需 unique docs 核銷，#1038 PIT FAIL 仍不合併。
 - **風險提示**：#1048 若採雙列頂部導覽，現有手機 stale／unavailable 的 nav_margin 最低 162.5px、距 ≥160px 門檻只有 2.5px；要以真正 390px 瀏覽器測量證實不退化，不能降測試門檻或直接撤 JS_V4 安全守衛。
 - **下一步分工**：ChatGPT 優先讓 #1045～1047 取得真正非作者 QA、完成 GitHub 合併 Gate；產品方依既有 Visual Gate 確認五頁導航可施工的候選版型後，Claude Code 才做 UI Code。**此 HANDOFF 補註不是新 layout 核准，也不是新 Code 工作。**
+
+> **晚間更新註記（#1047 隨後更新）**：上段「#1045／#1046／#1047 各自 head CI success、缺非作者 QA」「#1048 僅 Draft 候選」「下一步分工」**已過期**——#1045（`848fd977`）、#1046（`08bf2b68`）已合併；DEC-146＋Gate 文件（#1050，`67a7cea5`）已核准五頁頂部兩列方向並承接 #1048；#1051（`9ca5441e`）快照 `docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點（非第二套 SSOT）。現行下一步見本檔最前 §3。
