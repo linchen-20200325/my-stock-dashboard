@@ -1127,7 +1127,7 @@
 > 本節是**目前有效的專案知識索引**，不是逐字聊天、第二套 Decision，也不是授權直接施工；與未合併 Draft 不一致時先核對最新 GitHub。原始依據：使用者五頁與 OneBrain 方向（DEC-142，已為 main 正式 DEC；#1030 為原提案 PR，仍 open）；GitHub 記憶及資料資格（DEC-143，已為 main 正式 DEC；#1034 為原提案 PR，仍 open）；已入 main 的 #1031 研究提案、#1033 資料缺口及 supersession 稽核。DEC-141～145 的正式收斂 PR #1045 已合併（`848fd977`）；後續 DEC-146（#1050，`67a7cea5`）核准五頁頂部兩列導覽方向（工程未施工，見 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）；#1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點快照，非第二套 SSOT。cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，真實發布端到端 NOT VERIFIED，與 #1038 PIT 阻塞（禁合併）獨立。
 
 ### 70.1 對下一版仍有效的產品方向
-- **五頁目標**：📊市場／🎯標的／💼持股／👤我的／🗂資料。手機與桌機**頂部五頁導覽**（手機可橫滑）、頂部 Active Sheet 選擇與右上帳號、Dark-only、Mobile-first；完整資料來源健康度集中🗂資料。四頁、桌機左 rail、手機 Drawer、健康度牆留👤我的屬**舊版面歷史**；現行已寫的 JS_V4／安全守衛不得無等價 Gate 擅刪。文件適用性註記 PR #1046 仍待 CI／獨立驗收。
+- **五頁目標**：📊市場／🎯標的／💼持股／👤我的／🗂資料。手機與桌機**頂部五頁導覽**（手機可橫滑）、頂部 Active Sheet 選擇與右上帳號、Dark-only、Mobile-first；完整資料來源健康度集中🗂資料。四頁、桌機左 rail、手機 Drawer、健康度牆留👤我的屬**舊版面歷史**；現行已寫的 JS_V4／安全守衛不得無等價 Gate 擅刪。文件適用性註記 PR #1046 已合併（`08bf2b68`）。
 - **OneBrain**：同一核准 canonical/Evidence 基礎→確定性 Domain／Risk Cap／Single Action Authority→Human ViewModel 精簡呈現與完整 Decision Digest 分離→按需協調六研究領域（市場、籌碼、財報、產業、持股、資料稽核）及全域正反證複核；白話短／中／長不固定月份。AI **不自行取數、不回寫、不繞過正式動作權威**；VM 存在不代表 Digest 已涵蓋，現階段仍不能宣稱 production OneBrain 完成。
 - **研究候選（非正式行情／訊號）**：2026/10 教材中的大盤 EPS×PE 情境、疑似產業缺貨／大型訂單、AI/CSP CAPEX／OCF／FCF、外資融資與國際利率；需先審核來源、發布時點、EPS/PE 口徑、真實觀察與推論、反證及資格，才可設計研究 Sheet（另走 Schema/權限 Gate）。教材歷史指數區間不可當目前市場數值。
 - **Old UI 能力重用 Gate**：財報體檢／跨期變化、月營收、法人與集保、總經與國際、ETF/持股曝險、疑似缺貨及資料診斷，逐項檢查「來源核准／可達性／資料日與發布日／Missing／公式與期間／新 UI2 feed 接線／Digest 覆蓋」。有舊程式≠可用、有 VM≠已接 AI、有來源缺口≠官方無資料。細節見 main `docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md`。

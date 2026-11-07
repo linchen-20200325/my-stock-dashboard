@@ -53,7 +53,7 @@
 
 1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1034／#1030 的 unique docs 抽出後關閉；#1027（Draft）unique 內容**待另 PR 抽出後**才可關閉；不要增加重複收斂 PR。
 2. **產品視覺決策已完成**：DEC-146 核准「五頁頂部兩列導覽」方向、**不做臨時 B0 五頁抽屜**；三案比較已不需要。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**（距 ≥160px 約 2.5px）仍是施工風險，須以真瀏覽器量測證實不退化；不得放寬門檻或刪 JS_V4／focus／a11y／viewport regression。
-3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（W1 分支的分工更新尚未成 PR，**不可引用為已生效**。）
+3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（#1052（DEC-147 分工更新，open、未合併）**不可引用為已生效**。）
 4. **資料及金融語意**：#1038 因 PIT 不合格**禁止合併**（獨立於 cron 發布路徑）；cron 發布路徑 #1035／#1036／#1037／#1042 雖已合併，**真實發布端到端仍 NOT VERIFIED**。完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
 
 ### 4. 新對話最低成本恢復程序（不讀千行歷史、不依賴聊天）
