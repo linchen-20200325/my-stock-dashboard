@@ -7738,12 +7738,12 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **撰寫組整理（非客戶逐字，單組產出、未經第二組驗證）**：
   1. **取代關係**（有意識的政策變更，不是漏刪；決策者：使用者）：
      - 取代 DEC-139 中「ChatGPT 直接負責…文件撰寫與維護、正式規格整理、…文件型 PR 與合併治理、獨立驗收」的**正式治理文件同步、合併治理、獨立驗收歸屬**，改歸 Claude Code；
-     - 取代 DEC-140「ChatGPT 可直接改程式」對**未來批次**的效力（DEC-140 已完成批次，以及「與 Claude 衝突時 Claude 優先」維持有效）；
-     - PROJECT_RULES 第 31 節表中「GitHub 狀態、Diff、PR／CI／QA 複驗與文件 PR 治理」改歸 Claude Code 獨立 QA 組＋PR Merge；「文字文件與 Decision 記錄」中的**正式治理文件同步**改歸 Claude Code；ChatGPT 保留產品規劃、UI／UX、架構、投資語意、需求、Decision Gate 與文件草稿。
+     - 取代 DEC-140「ChatGPT 可直接改程式」對**未來批次**的效力（DEC-140 已完成批次，以及「與 Claude 衝突時 Claude 優先」維持有效）〔撰寫組推論，待使用者確認〕；
+     - PROJECT_RULES 第 31 節表中「GitHub 狀態、Diff、PR／CI／QA 複驗與文件 PR 治理」改歸 Claude Code 獨立 QA 組＋PR Merge；「文字文件與 Decision 記錄」中的**正式治理文件同步**改歸 Claude Code；ChatGPT 保留產品規劃、UI／UX、架構、投資語意、需求、Decision Gate 與文件草稿〔「文件草稿」為撰寫組推論，待使用者確認〕。
      - **兩邊理由並陳**：舊條文理由（讓 ChatGPT 承擔文書以減少 Claude 重工）仍然成立；被權衡掉的是「Merge、QA 與正式文件同步須落在可實測 CI 的環境」。
   2. **不取代**：DEC-001、DEC-004（merge 常設授權）、DEC-009、`PROCESS.md` §4、`CLAUDE.md` §-2 均繼續有效。
-  3. **自主 merge 前置條件**沿用 PROJECT_RULES 第 10 節：獨立稽核無必修；最新 head 原生 CI 綠（含 required `ui2-browser-gate`）；改動範圍與核准派工相符；mergeable；無未解 review thread；合併前後重新查 main SHA；以 GitHub 實際 merged 狀態為完成證據；squash merge。不得 force push、admin bypass、關閉或繞過 branch protection、以 `workflow_dispatch` 冒充 required check。
-  4. **Branch 清理**：僅限 (a) 本人已 merge 的功能分支，或 (b) 確認無其他使用者／工作流程依賴且獨有內容已保存的分支。DEC-147 為使用者對 DEC-012「分支刪除不得自主」的**有條件授權**，上述條件缺一不可；**不得清理**：`main`、`data`、`v2`、`auto/recalibrate-20261001`、`claude/stock-dashboard-handoff-g9dtm0`、含未保存獨有內容者、仍有開啟 PR 者。清理前須列出 unique commit 並確認已入 main 或另存。
+  3. **自主 merge 前置條件**＝PROJECT_RULES 第 10 節三項（獨立稽核無必修、CI 綠、改動範圍與派工相符）＋**本決策新增（收緊）**：最新 head 原生 CI 綠（含 required `ui2-browser-gate`）；mergeable；無未解 review thread；合併前後重新查 main SHA；以 GitHub 實際 merged 狀態為完成證據；squash merge。不得 force push、admin bypass、關閉或繞過 branch protection、以 `workflow_dispatch` 冒充 required check。
+  4. **Branch 清理**：單一條件——僅在確認無其他使用者或工作流程依賴、且獨有內容已保存（已入 main 或另存）後才清理；「已 merge」只是可能符合條件的情形之一，不是免查依賴的理由。DEC-147 為使用者對 DEC-012「分支刪除不得自主」及第 10 節同名條文的**有條件授權**，以此條件為準；**不得清理**：`main`、`data`、`v2`、`auto/recalibrate-20261001`（遠端現已不存在，仍列入保留名單）、`claude/stock-dashboard-handoff-g9dtm0`、含未保存獨有內容者、仍有開啟 PR 者。清理前須列出 unique commit 並確認已入 main 或另存。
   5. **作者≠QA**：施工組與獨立 QA 組分離；QA 結論須由非作者的獨立組產出並可追溯（PR 描述／評論）。ChatGPT 審閱意見可作輸入，但不取代 repo 要求的獨立 QA；Claude Code 總管不得自驗自己動手寫的內容（`CLAUDE.md` §-2）。
   6. **仍須停止並請使用者裁示**：新 Layout／欄位／動線；付費；權限；不可逆操作（刪生產資料、清單外刪分支、production switch、舊 UI 實體刪除）；新資料來源／公式／Risk Cap／OneBrain 正式行為；文件無法證明已核准的範圍。#1038 的 PIT 阻塞維持：未通過來源時間與資料資格驗證前禁止合併。不強制合併過時 Draft；同一時間最多三項安全工作。
 - **決策者**：使用者｜**日期**：2026-11-07｜**來源**：使用者對話訊息（D）｜**狀態**：進 main 前屬本 docs PR 待合併內容，不得宣稱已生效於 main。
