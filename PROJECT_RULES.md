@@ -1084,6 +1084,16 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - **Claude Code 工作優先**：ChatGPT 每次動手前做 GitHub Verification Gate＋per-file/per-contract/per-test 衝突比對；若重疊，ChatGPT 必須停手／退讓／分批改範圍，不能以自己先開 PR 要求 Claude Code 改道。
 - 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-140。
 
+### 31.2 分工更新（DEC-147；客戶 2026-11-07）
+
+> 屬第 31 節的補註（append-only，不改上文）。正式裁示與兩邊理由見 `docs/DECISIONS.md` DEC-147；進 main 前屬本 docs PR 待合併內容，不得宣稱已生效於 main。
+
+- **被取代處**（有意識的政策變更，不是漏刪；決策者：使用者）：(1) 第 31 節表中「GitHub 狀態、Diff、PR／CI／QA 複驗與文件 PR 治理」改歸 **Claude Code 獨立 QA 組＋PR Merge**；(2) 「文字文件與 Decision 記錄」中的**正式治理文件同步**改歸 **Claude Code**，ChatGPT 保留產品規劃、UI／UX、架構、投資語意、需求、Decision Gate 與文件草稿；(3) §31.1／DEC-140「ChatGPT 直接改程式」對**未來批次**不再適用（已完成批次與「與 Claude 衝突時 Claude 優先」維持）。其中 (3) 與 ChatGPT 保留「文件草稿」兩點為撰寫組推論，待使用者確認。
+- **其餘第 31 節仍有效**；DEC-001、DEC-004、DEC-009、`PROCESS.md` §4、`CLAUDE.md` §-2 不受影響。
+- **自主 merge**＝第 10 節三項（獨立稽核無必修、CI 綠、範圍相符）＋**本決策新增（收緊）**：最新 head 原生 CI 綠含 `ui2-browser-gate`、mergeable、無未解 thread、前後查 main SHA、以 GitHub merged 狀態為證據、squash；禁 force push／admin bypass／繞過 branch protection；施工與獨立 QA 必須分離。
+- **Branch 清理**為使用者對 DEC-012 的有條件授權，單一條件：僅在確認無其他使用者或工作流程依賴、且獨有內容已保存（已入 main 或另存）後才清理；「已 merge」不是免查理由；清理前須列 unique commit 並確認已入 main 或另存。第 10 節「既有遠端分支刪除不得自主執行」一條，改以此條件為準。不得清理 `main`、`data`、`v2`、`auto/recalibrate-20261001`（遠端現已不存在，仍列入保留名單）、`claude/stock-dashboard-handoff-g9dtm0`、含未保存內容或仍有開啟 PR 者。
+- **仍須停止並請使用者裁示**：新 Layout／欄位／動線、付費、權限、不可逆操作、新資料來源／公式／Risk Cap／OneBrain 正式行為、文件無法證明已核准的範圍；#1038 PIT 阻塞維持。
+
 ---
 
 ## 第 32 節｜對話風險預警與主動換對話交接（2026-11-06 客戶指示；要點轉述）
