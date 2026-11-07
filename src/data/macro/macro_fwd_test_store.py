@@ -120,7 +120,8 @@ def _scalar_exactly_equal(x, y) -> bool:
 
     - float:`float(x) == float(y)`(以 Python float 比較,float32 截斷後的值因此被視為「不同」);
       ±inf 必須同號(`inf == -inf` 為 False);**-0.0 與 0.0 視為相等**(`==` 語意:兩者
-      都是「零」,不是不同觀測;parquet 往返本就可能不保號,且記錄值的含義相同)。
+      都是「零」,零的符號位不帶資料意義;實測 pyarrow 往返會保留 -0.0 的符號位,
+      此處是刻意的語意選擇,不是為了容忍往返行為)。
       NaN 不會進到這裡 —— 已由 `_is_null` 空值規則處理(NaN≡None≡pd.NA≡NaT)。
     - int:`int(x) == int(y)`;bool:`bool(x) == bool(y)`;其餘(str…):`x == y`。
     - numpy scalar 與 Python scalar 同類別(np.float64≡float、np.bool_≡bool、np.int64≡int)。
@@ -138,7 +139,7 @@ def _scalar_exactly_equal(x, y) -> bool:
 def _verify_roundtrip(chk: pd.DataFrame, df: pd.DataFrame) -> None:
     """讀回的暫存檔必須與準備寫入的 `df` **逐格精確相等**,否則 raise ValueError。
 
-    四層(都不允許容差 —— 帳本是凍結紀錄,任何位元級漂移都是損壞):
+    四層(都不允許容差 —— 帳本是凍結紀錄,除「零的符號位」(-0.0 ≡ 0.0)外,任何數值漂移都是損壞):
       0. **純量層**(`_scalar_exactly_equal`,在型別/空值驗證之後,對所有非空純量逐格比較):
          版本無關 —— 不依賴 pandas `assert_frame_equal`(QA 回報 pandas 2.0.x 對 object 浮點欄
          的 `check_exact` 無效,1e-9 漂移漏網)。第 3 層保留為縱深,不再是唯一防線。
