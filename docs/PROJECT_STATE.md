@@ -1121,3 +1121,23 @@
 
 ## 補註（2026-11-05｜💼 W-11 批 1 版面空槽）
 - draft PR `ui2/hold-w11-batch1`：純版面空槽（狀態行／需處理單行／Primary 與建議持股水位空槽／持股表欄名）。W-11 仍 open（待獨立 QA＋資料接線）。守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`。
+
+## 70. New UI2 有效專案知識與第一版資料資格（2026-11-07 checkpoint；GitHub 最新為準）
+
+> 本節是**目前有效的專案知識索引**，不是逐字聊天、第二套 Decision，也不是授權直接施工；與未合併 Draft 不一致時先核對最新 GitHub。原始依據：使用者五頁與 OneBrain 方向（DEC-142，已為 main 正式 DEC；#1030 為原提案 PR，仍 open）；GitHub 記憶及資料資格（DEC-143，已為 main 正式 DEC；#1034 為原提案 PR，仍 open）；已入 main 的 #1031 研究提案、#1033 資料缺口及 supersession 稽核。DEC-141～145 的正式收斂 PR #1045 已合併（`848fd977`）；後續 DEC-146（#1050，`67a7cea5`）核准五頁頂部兩列導覽方向（工程未施工，見 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）；#1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點快照，非第二套 SSOT。cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，真實發布端到端 NOT VERIFIED，與 #1038 PIT 阻塞（禁合併）獨立。DEC-147 分工更新已由 #1052（`d709d87b`）合併生效；#1030／#1027 的獨有文件已由 #1053（`71ac2889`）保存，#1030、#1027 可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號**尚未做**；#1048 已被 DEC-146＋Gate 文件承接，可關閉。
+
+### 70.1 對下一版仍有效的產品方向
+- **五頁目標**：📊市場／🎯標的／💼持股／👤我的／🗂資料。手機與桌機**頂部五頁導覽**（手機可橫滑）、頂部 Active Sheet 選擇與右上帳號、Dark-only、Mobile-first；完整資料來源健康度集中🗂資料。四頁、桌機左 rail、手機 Drawer、健康度牆留👤我的屬**舊版面歷史**；現行已寫的 JS_V4／安全守衛不得無等價 Gate 擅刪。文件適用性註記 PR #1046 已合併（`08bf2b68`）。
+- **OneBrain**：同一核准 canonical/Evidence 基礎→確定性 Domain／Risk Cap／Single Action Authority→Human ViewModel 精簡呈現與完整 Decision Digest 分離→按需協調六研究領域（市場、籌碼、財報、產業、持股、資料稽核）及全域正反證複核；白話短／中／長不固定月份。AI **不自行取數、不回寫、不繞過正式動作權威**；VM 存在不代表 Digest 已涵蓋，現階段仍不能宣稱 production OneBrain 完成。
+- **研究候選（非正式行情／訊號）**：2026/10 教材中的大盤 EPS×PE 情境、疑似產業缺貨／大型訂單、AI/CSP CAPEX／OCF／FCF、外資融資與國際利率；需先審核來源、發布時點、EPS/PE 口徑、真實觀察與推論、反證及資格，才可設計研究 Sheet（另走 Schema/權限 Gate）。教材歷史指數區間不可當目前市場數值。
+- **Old UI 能力重用 Gate**：財報體檢／跨期變化、月營收、法人與集保、總經與國際、ETF/持股曝險、疑似缺貨及資料診斷，逐項檢查「來源核准／可達性／資料日與發布日／Missing／公式與期間／新 UI2 feed 接線／Digest 覆蓋」。有舊程式≠可用、有 VM≠已接 AI、有來源缺口≠官方無資料。細節見 main `docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md`。
+
+### 70.2 稽核發現與完成限制
+- `shortage_screener` 四種財務足跡僅是**疑似缺貨**，非官方確認大單；收入缺值曾見分項 0 及其他項仍 rankable。 `fin_trend_score` 月／季缺腿有 0→中性風險，`fin_health_diff` 與現金流單季／累計口徑仍須獨立負測試。這些是**待複驗稽核線索**，不是本批核准修改投資公式。
+- 第一版到 UI2 的真實 API 成功率、資料流、source/as_of、授權與完整 Digest coverage **未實測完成**；勿把 `NOT_VERIFIED` 或 `N0~N4` 稽核分組升格為正式 Data State 第六態。
+- 已落 main 的 #1041 帳本 Fail-Closed、#1042 Parquet 原子寫入與 #1043 孤兒暫存檔 ignore，是資料保存安全修復；**#1038 仍因 PIT（2026-11-05 資料列引用較晚的 as_of）不得合併**。pandas 舊版 object 浮點精確比對已由 #1049 合併（Issue #1044 closed）。讀到 BACKLOG/HANDOFF 舊段「非原子／孤兒 tmp 未 ignore」時，以 GitHub 真實合併證據為準。
+
+### 70.3 使用方法
+- 下一個 session **先重新 GitHub Verification Gate**（main、Open/Draft PR head/diff、CI/QA、branches），再參照 DECISIONS、BACKLOG、HANDOFF；舊文件原文保留歷史，不把歷史 next action 當今日工作。
+- 新五頁 Layout、Auth/Sheet、JS 安全遷移、正式 Evidence Schema／OneBrain runtime、來源/金融公式/Risk Cap 均須各自 Gate；**本節不代表已核准施工**。
+
