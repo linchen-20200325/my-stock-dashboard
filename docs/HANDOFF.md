@@ -1005,3 +1005,9 @@ DEC-086 規則已於 main，本表已落地。
 - **未解**：寫入非原子（中途失敗可能留半檔），已列後續 BACKLOG。若 cron 因此紅燈：先人工檢查／自 git 史還原 `data_cache/macro_forward_test/signals.parquet`，**不要**刪檔讓它重建（會丟歷史）。
 - 未動：Parquet 資料、Schema、日期語意、公式、Risk Cap；#1038 維持 Draft。
 - 補修（2026-11-07）：空帳本判定改 `len(df)==0`，畸形表（有列零欄／None）fail-closed；見 BACKLOG `P0-FWD-STORE-FAILCLOSED`。
+
+## 補註（2026-11-07｜P0-FWD-STORE-ATOMIC-WRITE：帳本寫入改原子）
+- `append_signals` 現為「同目錄暫存檔＋fsync＋讀回驗證＋`os.replace`」；任何失敗正式檔不變、tmp 清除、丟 `LedgerWriteError`。`FAILCLOSED` 段的「寫入非原子」已由此處理。證據與突變見 BACKLOG `P0-FWD-STORE-ATOMIC-WRITE`。**獨立 QA 待做。**
+- **殘留／注意**：被 SIGKILL 時可能留下 `data_cache/macro_forward_test/.signals.parquet.*.tmp`，**目前會被 publish helper 當未追蹤檔納入 data PR**（後續 BACKLOG 建議忽略 dotfile tmp）；若見到請直接刪除該 tmp，**不要**動 `signals.parquet`。並行 append 無鎖。
+- 未動：Parquet 資料、Schema、日期語意、公式、Risk Cap、`scripts/*`、workflow。
+- QA 回修（2026-11-07）：讀回驗證改精確比較（`check_exact=True`＋型別層，禁微小漂移）；既有帳本唯讀時於建 tmp 前拒寫（`LedgerWriteError`）。若 cron 因「型別改變」類驗證失敗而紅燈＝新列欄位型別與既有列不一致，**不要放寬驗證**，先修寫入端型別。詳見 BACKLOG `P0-FWD-STORE-ATOMIC-WRITE`。
