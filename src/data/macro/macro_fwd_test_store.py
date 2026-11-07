@@ -34,6 +34,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from shared.macro_forward_test_schema import (
@@ -98,6 +99,69 @@ class LedgerWriteError(RuntimeError):
     """寫入新帳本失敗(寫暫存檔 / fsync / 驗證 / replace)。**正式檔位元組完全不變**,暫存檔已清。"""
 
 
+def _is_null(v) -> bool:
+    return v is None or (pd.api.types.is_scalar(v) and bool(pd.isna(v)))
+
+
+def _value_category(v) -> str:
+    if isinstance(v, (bool, np.bool_)):
+        return 'bool'
+    if isinstance(v, (int, np.integer)):
+        return 'int'
+    if isinstance(v, (float, np.floating)):
+        return 'float'
+    if isinstance(v, str):
+        return 'str'
+    return type(v).__name__
+
+
+def _verify_roundtrip(chk: pd.DataFrame, df: pd.DataFrame) -> None:
+    """讀回的暫存檔必須與準備寫入的 `df` **逐格精確相等**,否則 raise ValueError。
+
+    比「逐格相等」更嚴的三層(都不允許容差 —— 帳本是凍結紀錄,任何位元級漂移都是損壞):
+      1. 列數 / 欄位集合與順序 / 唯一鍵集合一致。
+      2. 型別不可互換:非 object 欄的 dtype kind 必須相同(bool/int/float 不可互換);
+         每個非空格子的型別類別(bool / int / float / str)必須相同
+         (bool→int、int→float 都會被擋)。
+      3. 數值 `assert_frame_equal(check_exact=True)`:無 rtol/atol(預設 rtol=1e-5 會放行
+         ≤9e-6 相對偏移、0.0→1e-9、float32 截斷、四捨五入)。
+    **唯一的良性差異白名單**(以真實帳本往返實測決定):
+      (a) None ↔ NaN 視為同為「空值」(arrow 字串欄讀回會把 None 變 NaN);
+      (b) df 端為 object 欄(含全 None、或 None 與數值混合)時,讀回 dtype 可能變
+          float64 / str —— 不比 dtype kind,但**逐格型別類別與值仍須完全一致**。
+    """
+    if len(chk) != len(df):
+        raise ValueError(f'列數 {len(chk)} != {len(df)}')
+    if list(chk.columns) != list(df.columns):
+        raise ValueError(f'欄位 {list(chk.columns)} != {list(df.columns)}')
+    if set(chk[MACRO_FWD_TEST_KEY].astype(str)) != set(df[MACRO_FWD_TEST_KEY].astype(str)):
+        raise ValueError('唯一鍵集合不一致')
+    a = df.reset_index(drop=True)
+    b = chk.reset_index(drop=True)
+    for c in a.columns:
+        ka, kb = a[c].dtype.kind, b[c].dtype.kind
+        if ka in 'biufcM' and ka != kb:
+            raise ValueError(f'欄 {c!r} dtype kind 不一致:{a[c].dtype} → {b[c].dtype}')
+        for i, (x, y) in enumerate(zip(a[c].tolist(), b[c].tolist())):
+            nx, ny = _is_null(x), _is_null(y)
+            if nx != ny:
+                raise ValueError(f'欄 {c!r} 第 {i} 列空值不一致:{x!r} → {y!r}')
+            if not nx and _value_category(x) != _value_category(y):
+                raise ValueError(f'欄 {c!r} 第 {i} 列型別改變:{type(x).__name__} → {type(y).__name__}')
+
+    def _norm(x: pd.DataFrame) -> pd.DataFrame:
+        # 只把非數值欄(字串 / object)轉 object 並讓 None≡NaN;bool/int/float 欄保持原生 dtype,
+        # 使 `check_exact=True` 真正作用在浮點數上(若全轉 object,容差參數就形同虛設)。
+        x = x.copy()
+        for col in x.columns:
+            if x[col].dtype.kind not in 'biuf':
+                s = x[col].astype(object)
+                x[col] = s.where(s.notna(), None)
+        return x
+    from pandas.testing import assert_frame_equal
+    assert_frame_equal(_norm(b), _norm(a), check_dtype=False, check_exact=True)
+
+
 def _atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
     """原子寫入:同目錄暫存檔 → fsync → 讀回驗證 → `os.replace` → (POSIX)fsync 父目錄。
 
@@ -121,12 +185,17 @@ def _atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
     """
     import shutil
     import tempfile
-    from pandas.testing import assert_frame_equal
 
     real = Path(os.path.realpath(target))
     real.parent.mkdir(parents=True, exist_ok=True)
     tmp: Optional[str] = None
     try:
+        # 唯讀帳本:舊版 `to_parquet` 會 PermissionError 拒寫,但 `os.replace` 只看目錄權限、會繞過
+        # 檔案權限靜默替換 → 在建暫存檔**之前**顯式拒絕,維持原行為。
+        # (root 下 `os.access` 恆真,屬已知限制:root 本來就能寫任何檔。)
+        if real.exists() and not os.access(real, os.W_OK):
+            raise LedgerWriteError(
+                f'[macro_fwd_test_store] 帳本唯讀，已拒絕寫入 {real} —— 未建暫存檔、原檔位元組不變')
         try:
             fd, tmp = tempfile.mkstemp(dir=str(real.parent), prefix=f'.{real.name}.{os.getpid()}.',
                                        suffix='.tmp')
@@ -149,17 +218,7 @@ def _atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
                 f'—— 未替換正式檔(原檔位元組不變)') from e
         try:
             chk = pd.read_parquet(tmp)
-            if len(chk) != len(df):
-                raise ValueError(f'列數 {len(chk)} != {len(df)}')
-            if list(chk.columns) != list(df.columns):
-                raise ValueError(f'欄位 {list(chk.columns)} != {list(df.columns)}')
-            if set(chk[MACRO_FWD_TEST_KEY].astype(str)) != set(df[MACRO_FWD_TEST_KEY].astype(str)):
-                raise ValueError('唯一鍵集合不一致')
-            # None 與 NaN 視為相等(arrow 字串欄讀回會把 None 變 NaN);其餘逐格必須相等。
-            def _norm(x: pd.DataFrame) -> pd.DataFrame:
-                x = x.reset_index(drop=True).astype(object)
-                return x.where(x.notna(), None)
-            assert_frame_equal(_norm(chk), _norm(df), check_dtype=False)
+            _verify_roundtrip(chk, df)
         except Exception as e:  # noqa: BLE001
             raise LedgerWriteError(
                 f'[macro_fwd_test_store] 新檔驗證失敗 {real}: {type(e).__name__}: {e} '

@@ -76,6 +76,9 @@ def _check_midwrite(mod, d: Path, mp) -> list[str]:
     return bad
 
 
+_DRIFT_KINDS = ('rel_drift', 'zero_to_tiny', 'float32', 'round2', 'bool_to_int', 'int_to_float')
+
+
 def _tamper_patch(mp, kind: str):
     real_read = pd.read_parquet
 
@@ -91,13 +94,38 @@ def _tamper_patch(mp, kind: str):
             df = df.copy()
             df.loc[df.index[0], 'twii_close'] = float(df.loc[df.index[0], 'twii_close']) + 1.0
             return df
+        df = df.copy()
+        if kind == 'rel_drift':          # +9e-6 相對偏移(< assert_frame_equal 預設 rtol=1e-5)
+            df['twii_close'] = df['twii_close'] * (1 + 9e-6)
+            return df
+        if kind == 'zero_to_tiny':       # 0.0 → 1e-9(< 預設 atol=1e-8)
+            df['health'] = df['health'].where(df['health'] != 0.0, 1e-9)
+            return df
+        if kind == 'float32':            # float32 截斷
+            df['twii_close'] = df['twii_close'].astype('float32')
+            return df
+        if kind == 'round2':             # 四捨五入到 2 位
+            df['twii_close'] = df['twii_close'].round(2)
+            return df
+        if kind == 'bool_to_int':
+            df['defense'] = df['defense'].astype('int64')
+            return df
+        if kind == 'int_to_float':
+            df['conf'] = df['conf'].astype('float64')
+            return df
         raise AssertionError(kind)
     mp.setattr(pd, 'read_parquet', _read)
 
 
+def _drift_seed_row() -> dict:
+    """含「非整數 float」與「0.0」的種子列:讓微小漂移類竄改有東西可漂。"""
+    from tests.test_macro_fwd_test_store_fail_closed import _tl
+    return _row('2026-08-17', twii_close=23456.123456789, tl=_tl(health=0.0))
+
+
 def _check_tamper(mod, d: Path, mp, kind: str) -> list[str]:
     led = d / 'signals.parquet'
-    mod.append_signals([_row('2026-08-17')], led)
+    mod.append_signals([_drift_seed_row() if kind in _DRIFT_KINDS else _row('2026-08-17')], led)
     before = _snapshot(d)
     _tamper_patch(mp, kind)
     bad: list[str] = []
@@ -179,9 +207,43 @@ class TestWriteFailuresLeaveLedgerIntact:
         monkeypatch.undo()
         assert _snapshot(tmp_path) == before and _tmp_leftovers(tmp_path) == []
 
-    @pytest.mark.parametrize('kind', ['drop_row', 'drop_col', 'alter_value'])
+    @pytest.mark.parametrize('kind', ['drop_row', 'drop_col', 'alter_value', *_DRIFT_KINDS])
     def test_verification_failure_does_not_replace(self, tmp_path, monkeypatch, kind):
+        """含微小漂移:+9e-6 相對、0.0→1e-9、float32 截斷、四捨五入、bool→int、int→float 皆須擋下。"""
         assert _check_tamper(store, tmp_path, monkeypatch, kind) == []
+
+    def test_readonly_existing_ledger_refused_before_tmp(self, tmp_path, monkeypatch):
+        """D2:唯讀既有帳本 → 在建 tmp 之前拒寫(`os.replace` 不看檔案權限,否則會靜默替換)。"""
+        import tempfile
+        led = tmp_path / 'signals.parquet'
+        _seed(led)
+        before = _snapshot(tmp_path)
+        calls: list = []
+        real = tempfile.mkstemp
+        monkeypatch.setattr(tempfile, 'mkstemp', lambda *a, **k: calls.append(1) or real(*a, **k))
+        real_access = os.access
+        monkeypatch.setattr(os, 'access', lambda p, m, *a, **k:
+                            False if (Path(p) == led and m == os.W_OK) else real_access(p, m, *a, **k))
+        with pytest.raises(LedgerWriteError, match='帳本唯讀，已拒絕寫入'):
+            append_signals([_row('2026-08-18')], led)
+        assert calls == []
+        monkeypatch.undo()
+        assert _snapshot(tmp_path) == before
+
+    @pytest.mark.skipif(os.name != 'posix', reason='chmod 0444 語意僅 POSIX')
+    def test_real_chmod_0444_refused_when_not_root(self, tmp_path):
+        led = tmp_path / 'signals.parquet'
+        _seed(led)
+        led.chmod(0o444)
+        try:
+            if os.access(led, os.W_OK):
+                pytest.skip('以 root 執行,os.access 恆真;由注入測試涵蓋 D2')
+            before = _snapshot(tmp_path)
+            with pytest.raises(LedgerWriteError, match='唯讀'):
+                append_signals([_row('2026-08-18')], led)
+            assert _snapshot(tmp_path) == before
+        finally:
+            led.chmod(0o644)
 
     def test_first_creation_failure_leaves_no_ledger_no_tmp(self, tmp_path, monkeypatch):
         d = tmp_path / 'fresh'
@@ -380,6 +442,13 @@ _MUT_NO_VERIFY = [("            chk = pd.read_parquet(tmp)\n", "            chk 
 _MUT_NO_REPLACE = [("            os.replace(tmp, real)\n", "            shutil.copyfile(tmp, real)\n")]
 
 
+_MUT_NO_EXACT_ONLY = [("check_dtype=False, check_exact=True)", "check_dtype=False)")]
+_MUT_NO_TYPES = [("        if ka in 'biufcM' and ka != kb:", "        if False:"),
+                 ("            if not nx and _value_category(x) != _value_category(y):", "            if False:")]
+_MUT_NO_EXACT_AND_TYPES = _MUT_NO_EXACT_ONLY + _MUT_NO_TYPES
+_MUT_NO_RO = [("        if real.exists() and not os.access(real, os.W_OK):", "        if False:")]
+
+
 class TestMutationsAreCaught:
     def test_unmutated_module_passes_every_checker(self, tmp_path, monkeypatch):
         mod = _load_mutant([])
@@ -402,6 +471,43 @@ class TestMutationsAreCaught:
     def test_m3_no_verification_is_caught_by_tamper(self, tmp_path, monkeypatch):
         bad = _check_tamper(_load_mutant(_MUT_NO_VERIFY), tmp_path, monkeypatch, 'alter_value')
         assert bad != []
+
+    @pytest.mark.parametrize('kind', ['rel_drift', 'zero_to_tiny', 'float32', 'round2'])
+    def test_m5_no_check_exact_is_caught(self, tmp_path, monkeypatch, kind):
+        """D1:拿掉 `check_exact=True`(並旁路型別層)→ 微小漂移類竄改必須被某一層抓到;
+        這裡只拿掉 check_exact,確認漂移測試對「僅剩型別層」的版本仍轉紅的是數值層本身。"""
+        mod = _load_mutant(_MUT_NO_EXACT_AND_TYPES)
+        assert _check_tamper(mod, tmp_path, monkeypatch, kind) != []
+
+    def test_m6_remove_only_check_exact_still_caught_by_value_layer(self, tmp_path, monkeypatch):
+        """單獨拿掉 check_exact(其餘層都在):四種數值漂移都必須因此「漏網」→ 檢查器轉紅,
+        證明 check_exact 本身是獨立有效的一層(預設 rtol=1e-5 / atol=1e-8 會放行它們)。"""
+        mod = _load_mutant(_MUT_NO_EXACT_ONLY)
+        for k in ('rel_drift', 'zero_to_tiny', 'float32', 'round2'):
+            d = tmp_path / k
+            d.mkdir()
+            assert _check_tamper(mod, d, monkeypatch, k) != [], f'{k}:拿掉 check_exact 後仍被擋下'
+
+    @pytest.mark.parametrize('kind', ['bool_to_int', 'int_to_float'])
+    def test_m7_no_type_layer_is_caught(self, tmp_path, monkeypatch, kind):
+        mod = _load_mutant(_MUT_NO_TYPES)
+        assert _check_tamper(mod, tmp_path, monkeypatch, kind) != []
+
+    def test_m8_readonly_check_removed_is_caught(self, tmp_path, monkeypatch):
+        mod = _load_mutant(_MUT_NO_RO)
+        led = tmp_path / 'signals.parquet'
+        mod.append_signals([_row('2026-08-17')], led)
+        real_access = os.access
+        monkeypatch.setattr(os, 'access', lambda p, m, *a, **k:
+                            False if (Path(p) == led and m == os.W_OK) else real_access(p, m, *a, **k))
+        before = _snapshot(tmp_path)
+        try:
+            mod.append_signals([_row('2026-08-18')], led)
+            replaced = True
+        except mod.LedgerWriteError:
+            replaced = False
+        monkeypatch.undo()
+        assert replaced and _snapshot(tmp_path) != before, '拿掉唯讀檢查後應靜默替換(守衛才有意義)'
 
     def test_m4_no_os_replace_is_caught_by_replace_failure(self, tmp_path, monkeypatch):
         assert _check_replace_fail(_load_mutant(_MUT_NO_REPLACE), tmp_path, monkeypatch) != []
