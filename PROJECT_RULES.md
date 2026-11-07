@@ -1080,3 +1080,18 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - 客戶已特別核准將「資料分層剝離、死碼查證及安全移除」由 ChatGPT **直接負責（包含程式修改）**，是第 31 節一般 Claude Code 程式主責規則的狹義例外，不擴及其他程式需求。
 - **Claude Code 工作優先**：ChatGPT 每次動手前做 GitHub Verification Gate＋per-file/per-contract/per-test 衝突比對；若重疊，ChatGPT 必須停手／退讓／分批改範圍，不能以自己先開 PR 要求 Claude Code 改道。
 - 無完整引用證據、缺少可執行驗證或不能獨立複驗時，只能稽核／出設計文件，**不得刪碼、移資料或宣稱安全合併**；其他既有 PR／CI／客戶風險 Gate 不變。裁示全文見 DEC-140。
+
+---
+
+## 第 32 節｜對話風險預警與主動換對話交接（2026-11-06 客戶指示；要點轉述）
+
+> **客戶需求（要點轉述，來源：2026-11-06 ChatGPT 對話）**：使用者因台股對話突然無法使用，要求往後在對話長度／上下文接近不安全時，由 AI 主動先把必要記錄保存到 GitHub，並主動提供更新後的新對話完整提示語。這一條是對既有 durable-memory／Save-Handoff 的**執行補強**，不建立第二套 SSOT，也不凌駕上位治理；現行原則見 第 15 節 Save Check／Context Loss Check、第 20 節 Resume Checkpoint、第 26～27 節 Durable Memory Contract。不能聲稱有可量測的硬性 context/token 剩餘比例或監控已關閉的對話。
+
+1. **提前判斷的觸發訊號（擇一即檢查）**：對話已長到需要大量回溯／反覆檢索才能還原決策；已發生 context compaction 或答覆出現遺忘、狀態漂移／前後矛盾；跨越多個已完成 Batch／PR／重大裁示；對話 UI／工具開始不穩定；使用者主動詢問「是否該換對話」或要求交接。**不發明固定 Token 百分比／訊息數上限**；僅在本次回合有機會工作時檢查，無法在使用者離線或應用程式突然中斷後自行背景救援。
+2. **主動執行 Save Gate，不等使用者提醒**：在安全停點先重查當下 GitHub `main SHA`、Open／Draft PR、head SHA、相關 diff、CI／QA、branches（必要時）、正在施工／衝突文件及未合併工作；GitHub 實況優先於聊天記憶、舊 HANDOFF。若 Gate 所需資料不可得，保存可驗證部分並明標 `UNVERIFIED`，不可猜測完成狀態。
+3. **只更新既有權威文件**：新正式裁示 → `docs/DECISIONS.md`；未完成事項 → `docs/BACKLOG.md`；現況／阻塞／唯一 next safe action → `docs/HANDOFF.md`；穩定治理 → 本 `PROJECT_RULES.md`；正式設計／資料契約 → 對應既有 SSOT（遵守 frozen／amendment Gate）。穩定專案知識摘要 → `docs/PROJECT_STATE.md`； 新增的必要查核證據只放 `docs/evidence/`，並在既有權威入口留索引；**不另立 PROJECT_CONTEXT、MEMORY、第二份 HANDOFF 或影子決策帳本**。不要覆寫 Claude Code 或清理 Work 的在製文件。
+4. **交接內容需能零聊天恢復**：包括（a）正確 repo／分支／main 時點；（b）當前正式規則、已裁示與候選／尚待裁示的差別；（c）已完成 vs PR 未合併 vs 未驗收；（d）最新 UI／金融語意／資料契約／OneBrain 邊界；（e）未解阻塞／QA／CI 與衝突的在製工作；（f）單一可安全接續動作；（g）重要出處、檔案路徑、PR／commit／測試證據及限制；（h）不可碰的凍結檔、資料／公式／Risk Cap Gate。**舊記憶先標記 superseded／historical 並保留 provenance，不刪除 Git 歷史，也不能聲稱已刪除 ChatGPT 帳戶 Memory。**
+5. **先落盤再宣告可換對話**：只在獨立 branch／PR 寫入，不直接推 main；檢查 remote file 回讀、PR diff、head SHA、CI、必要獨立 QA。若 CI 或 QA 未完成、PR 尚未合併，明確告知新對話仍必須閱讀該 PR **head 版本**；不得假稱已進 main。與既有工作衝突則退讓／停在安全 checkpoint。
+6. **主動提供『可直接複製的新對話提示語』**：完成可恢復的遠端保存後，由 AI 主動告知「🟡 建議換新對話」／適當的狀態燈，附一份完整提示語，至少寫 repo、GitHub Verification Gate、必讀治理文件、未合併 PR head、正式 vs 候選需求、禁止事項、下一個唯一安全動作、Model／Mode／Minimum Sufficient Effort。**不能只給短摘要、不能只說『看上一個對話』**。若保存失敗則先說明阻塞，提供尚可驗證的手動救援提示語，不宣稱安全落盤。
+7. **與靜默巡航併用**：這是「對話不安全／需要安全交接」的明確狀態報告，而非逐 commit／CI 等待的進度碎訊；安全時保持靜默，只有真正接近無法可靠續聊或客戶要求時才提醒一次，避免重複打擾。
+8. **驗收／定義完成**：新對話只靠最新 GitHub main＋必要 Open／Draft PR head＋既有治理檔案即可正確恢復已核准內容、候選方向、阻塞和 next safe action；若恢復不全，交接尚未完成，不能把聊天中的記憶當補洞來源。此項屬文件／流程治理，不授權實作新功能或更動正式投資公式。
