@@ -1,4 +1,568 @@
 {
+ "fake/p4_data/cold/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "fake/p4_data/loaded/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "fake/p4_data/missing/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "fake/p4_data/not_evaluated/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "fake/p4_data/stale/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "fake/p4_data/unavailable/None": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
  "fake/p4_hold/cold/None": {
   "cards": [
    [
@@ -7850,6 +8414,852 @@
     "level": "L3",
     "mode": "curated",
     "title": "完整 6 欄表／跨季趨勢"
+   }
+  }
+ },
+ "real/p4_data/contract_error": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/loaded": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/missing": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/stale": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/stale_unknown": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/unavailable": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/unevaluated": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/unloaded": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
+   }
+  }
+ },
+ "real/p4_data/upstream_error": {
+  "cards": [],
+  "context_rows": [],
+  "first_screen": [
+   [
+    "資料健康度",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "是否需要行動",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "2a05873eefa9d5c0e6ca6d5b1116c80d2404b970",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ],
+   [
+    "下一步",
+    "capability",
+    null,
+    true,
+    false,
+    null,
+    null,
+    null,
+    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    null,
+    "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+   ]
+  ],
+  "lookup_sections": {},
+  "sections": {
+   "data_overview": {
+    "fields": [
+     [
+      "來源健康度",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "資料日",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "e3e57f52cc7afc1e4bc6280d7a52863506a01b65",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ],
+     [
+      "Active Sheet 連線",
+      "capability",
+      null,
+      true,
+      false,
+      null,
+      null,
+      null,
+      "2bb954b3412433c9ffd738a71b490553078dedcb",
+      null,
+      "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
+     ]
+    ],
+    "level": "L1",
+    "mode": null,
+    "title": "資料來源與連線"
    }
   }
  },

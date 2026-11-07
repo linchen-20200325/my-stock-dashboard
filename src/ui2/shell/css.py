@@ -6,7 +6,7 @@
 """
 CSS = """
 <style>
-.block-container{padding-top:2.75rem !important;padding-bottom:2rem !important}
+.block-container{padding-bottom:2rem !important}
 @media (max-width:640px){.block-container{padding-left:.9rem !important;padding-right:.9rem !important}}
 /* P1：單行標示（示意資料／Real-data）；note 與標示同一行（窄螢幕才折行） */
 .ui2-banner{border:1px dashed currentColor;border-radius:8px;padding:4px 10px;margin:0 0 8px 0;
@@ -60,67 +60,58 @@ CSS = """
 .ui2-section-title{font-weight:700;margin:12px 0 2px 0}
 @media (max-width:640px){.ui2-pagetitle{font-size:1.2rem}.ui2-card__value{font-size:1.1rem}}
 
-/* ── W-1 導覽（Wireframes §0.4／Freeze §16；DEC-134／DEC-137）：手機＝左上 ☰＋左側抽屜（預設收合）、桌機＝左側四項 ──
-   （手機原底部固定四格 53px 已由 DEC-134 取代；53px 現為「底部保留帶」＝Manage app／家的指示條可能遮擋區，量測線 791 不變）
-   選擇器不依賴 Streamlit 內部 class（1.56＝BaseWeb `data-baseweb`、1.59＝react-aria `stRadioOption`，
-   兩代 DOM 不同）：只用 `.st-key-ui2_nav`（container key）＋ `[role=radiogroup] > label` ＋ `input:checked`。 */
-.st-key-ui2_nav{position:fixed;z-index:999990;margin:0 !important;padding:0 !important;gap:0 !important;
-  background:var(--ui2-nav-bg);border:0 solid rgba(128,128,128,.45)}
-.st-key-ui2_nav>*,.st-key-ui2_nav [data-testid="stRadio"]{width:100% !important;max-width:none !important}
-.st-key-ui2_nav [role="radiogroup"]{display:flex !important;gap:0 !important;width:100%;margin:0;align-items:stretch !important}
-.st-key-ui2_nav [role="radiogroup"]>label{flex:1 1 0;min-width:0;margin:0 !important;cursor:pointer;
-  display:flex !important;align-items:center;justify-content:center;box-sizing:border-box;
-  border:0 solid transparent;padding:0 2px}
+/* ── DEC-146 頂部兩列導覽（桌機＝手機同一份 DOM；⛔ 左 rail、⛔ Drawer、⛔ JS）──
+   第一列（.ui2-top1）＝Active Sheet／帳號入口狀態（Capability `⬜ 尚未提供`，非互動）；第二列＝五頁 radiogroup。
+   fixed 在視窗頂端；內容以 `.block-container` 的 padding-top 讓出同高（--ui2-nav-h：桌機 28＋44＋1px；手機第一列 40px 兩行→ 85px）。
+   手機：第二列在**自身容器內**橫向捲動（overflow-x:auto；頁面本身 ⛔ 水平捲動），第 5 項（🗂 資料）可觸控滑動／Tab／方向鍵到達；
+   桌機：五項平分寬度全可見。選中態＝`● ` 符號＋粗體＋底線＋原生 radio checked（顏色不是唯一載體）。
+   選擇器不依賴 Streamlit 內部 class（1.56＝BaseWeb `data-baseweb`、1.59＝react-aria `stRadioOption`，兩代 DOM 不同）：
+   只用 `.st-key-ui2_nav`（container key）＋ `[role=radiogroup] > label` ＋ `input:checked`。 */
+:root{--ui2-nav-bg:#161b22;--ui2-nav-fg:#e6edf3;--ui2-nav-h:73px}
+.st-key-ui2_nav{position:fixed;top:0;left:0;right:0;z-index:999995;margin:0 !important;padding:0 !important;gap:0 !important;
+  box-sizing:border-box;background:var(--ui2-nav-bg);color:var(--ui2-nav-fg);border-bottom:1px solid rgba(128,128,128,.45);
+  padding-left:env(safe-area-inset-left,0px) !important;padding-right:env(safe-area-inset-right,0px) !important}
+.st-key-ui2_nav>*,.st-key-ui2_nav [data-testid="stRadio"]{width:100% !important;max-width:none !important;margin:0 !important;padding:0 !important}
+.st-key-ui2_nav [data-testid="stWidgetLabel"]{display:none}
+.st-key-ui2_nav [data-testid="stMarkdownContainer"]{margin:0 !important}   /* Streamlit 預設 margin-bottom:-1rem 會把第一列壓扁成 12px */
+.ui2-top1{display:flex;justify-content:space-between;align-items:center;gap:0 8px;height:28px;box-sizing:border-box;padding:0 12px;
+  font-size:.75rem;line-height:1.2;overflow:hidden}
+.ui2-top1__item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}
+.ui2-top1 .ui2-chip{font-size:.7rem;line-height:1.3;padding:0 6px}
+/* 資料模式標示（併入第一列；沿用 .ui2-banner 的 role=note 與文字契約）：單行、不折行、不截斷 */
+.ui2-top1__mode{display:inline-flex;align-items:center;min-width:0;flex:0 1 auto}
+.ui2-top1 .ui2-banner{border:0;border-radius:0;padding:0;margin:0;background:none;font-size:.75rem;line-height:1.2;white-space:nowrap}
+.ui2-top1 .ui2-banner__note{font-size:.7rem}
+@media (max-width:768px){   /* 手機：第一列固定兩行（標示一行、Sheet／帳號一行），高度固定、導覽讓位同步加高 */
+  .ui2-top1{flex-wrap:wrap;height:40px;align-content:center;gap:2px 8px}
+  .ui2-top1__mode{order:-1;flex:1 0 100%}
+  :root{--ui2-nav-h:85px}
+}
+@media (max-width:359px){.ui2-top1 .ui2-banner{font-size:.68rem}.ui2-top1 .ui2-banner__note{font-size:.64rem}}
+.st-key-ui2_nav [role="radiogroup"]{display:flex !important;flex-wrap:nowrap !important;gap:0 !important;width:100%;margin:0;
+  align-items:stretch !important;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;scroll-padding-inline:5.5rem}   /* 方向鍵／Tab 聚焦（input 在 label 左端）時連同整個 label 捲入視野 */
+.st-key-ui2_nav [role="radiogroup"]::-webkit-scrollbar{display:none}
+/* position:relative：Streamlit 的視覺隱藏 radio（絕對定位 1px）才會錨在各自的 label 而非固定導覽左緣；否則方向鍵／Tab 聚焦時瀏覽器不會把該項捲入視野 */
+.st-key-ui2_nav [role="radiogroup"]>label{position:relative;flex:1 0 auto;margin:0 !important;cursor:pointer;height:44px;box-sizing:border-box;
+  display:flex !important;align-items:center;justify-content:center;border:0 solid transparent;border-bottom-width:3px;padding:0 14px}
 .st-key-ui2_nav [role="radiogroup"]>label div:not(:empty){display:flex;align-items:center;justify-content:inherit;
   width:100%;min-width:0;margin:0}
-.st-key-ui2_nav [role="radiogroup"]>label *:has(>div:empty):not(:has(p)){display:none !important}   /* 隱藏圓點：當前頁改用符號＋粗體＋色條 */
+.st-key-ui2_nav [role="radiogroup"]>label *:has(>div:empty):not(:has(p)){display:none !important}   /* 隱藏圓點：當前頁改用符號＋粗體＋底線 */
 .st-key-ui2_nav [role="radiogroup"]>label p{margin:0;font-size:.85rem;line-height:1.2;white-space:nowrap}
-.st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){font-weight:700}
+.st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){font-weight:700;border-bottom-color:currentColor}
 .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked) p::before{content:"● ";font-size:.7em}
 .st-key-ui2_nav [role="radiogroup"]>label:has(input:focus-visible){outline:2px solid currentColor;outline-offset:-2px}
-.st-key-ui2_nav [data-testid="stWidgetLabel"]{display:none}
-/* 導覽列自帶底色＋字色（取自 `.streamlit/config.toml` [theme] 的 secondaryBackgroundColor／textColor），
-   避免依賴 Streamlit 無公開的主題變數；使用者若手動切 Light theme，導覽列仍為深色但字色同步，維持可讀。 */
-:root{--ui2-nav-bg:#161b22;--ui2-nav-fg:#e6edf3}
-.st-key-ui2_nav{color:var(--ui2-nav-fg)}
-/* 關閉態抽屜整塊不留在無障礙樹（L-4：內層某 class 會把 visibility 設回 visible；零 JS 修法） */
-.st-key-ui2_nav *{visibility:inherit !important}
-@media (max-width:768px){
-  .st-key-ui2_nav{z-index:999995;top:0;left:0;bottom:0;width:min(82vw,320px);box-sizing:border-box;border-right-width:1px;padding:3.6rem .75rem 1rem !important;
-    transform:translateX(-105%);visibility:hidden;overflow-y:auto;transition:transform .2s ease, visibility 0s linear .2s}
-  .st-key-ui2_nav [role="radiogroup"]{flex-direction:column}
-  .st-key-ui2_nav [role="radiogroup"]>label{flex:0 0 auto;min-height:48px;justify-content:flex-start;padding:0 .5rem;border-left-width:4px}
-  .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-left-color:currentColor}
-  .stApp:has(.ui2-dr-toggle:checked) .st-key-ui2_nav{transform:none;visibility:visible;transition:transform .2s ease, visibility 0s}
-  .stApp:has(.ui2-dr-toggle:checked) .ui2-dr-scrim{display:block}
-  .block-container{padding-bottom:5rem !important}
+@media (min-width:769px){
+  .st-key-ui2_nav [role="radiogroup"]>label{flex:1 1 0;min-width:0}
 }
-@media (prefers-reduced-motion:reduce){.st-key-ui2_nav{transition:none !important}}
-/* ☰（checkbox＋label；占既有 padding-top:2.75rem＝44px 頂部保留帶，⛔ 新增位移）與遮罩 */
-.ui2-dr-btn{position:fixed;top:0;left:0;z-index:999996;min-height:44px;min-width:44px;box-sizing:border-box;padding:0 12px;display:flex;
-  align-items:center;justify-content:center;background:var(--ui2-nav-bg);color:var(--ui2-nav-fg);border:1px solid rgba(128,128,128,.5);
-  border-radius:8px;font:inherit;font-size:1.2rem;cursor:pointer}
-.ui2-dr-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999993}
-.ui2-dr-toggle{position:fixed;top:0;left:0;width:44px;height:44px;margin:0;opacity:0;z-index:999997;cursor:pointer}
-.ui2-dr-toggle:focus-visible+.ui2-dr-btn{outline:2px solid currentColor;outline-offset:2px}
-.ui2-drawer-acct{margin-top:1rem;padding-top:.75rem;border-top:1px solid rgba(128,128,128,.45);font-size:.85rem;line-height:1.5}
-.ui2-drawer-acct__title{font-weight:700}
-.ui2-drawer-acct .ui2-ctawrap{margin:6px 0 2px 0}
-.ui2-drawer-acct__more{font-size:.72rem;opacity:.7}
+/* 讓位高度＝導覽高 + 4px − 2rem：導覽 container 在 DOM 最前（Tab 順序最先），其 0 高的外層包裝在 Streamlit 的 1rem 元素間距上多佔 1rem（連同 CSS 注入元素共 2rem），
+   這裡扣回（⛔ 讓第一個內容元素比「導覽高 + 4px」更低；量測見 evidence 的 title.top） */
+@media (prefers-reduced-motion:reduce){.st-key-ui2_nav,.st-key-ui2_nav *{transition:none !important;animation:none !important;scroll-behavior:auto !important}}   /* 1.56（BaseWeb）的 radio 內部元件帶 .2s transition */
+.block-container{padding-top:calc(var(--ui2-nav-h) + .25rem - 2rem) !important}
+@media (max-width:768px){.block-container{padding-bottom:5rem !important}}
 /* 內容底部保留量加上 safe-area（iOS 家的指示條）：僅在瀏覽器支援 env() 時覆寫；Chromium 實測為 0（不變）、iOS 未驗 */
 @supports (padding-bottom:env(safe-area-inset-bottom)){
   @media (max-width:768px){.block-container{padding-bottom:calc(5rem + env(safe-area-inset-bottom,0px)) !important}}
-}
-@media (min-width:769px){
-  .st-key-ui2_nav{top:0;left:0;bottom:0;width:11rem;border-right-width:1px;padding-top:4rem !important;overflow-y:auto}
-  .ui2-dr-btn,.ui2-dr-scrim,.ui2-dr-toggle{display:none !important}   /* 桌機：無 ☰／遮罩（不建立第二個主導覽入口） */
-  .st-key-ui2_nav>*:has(.ui2-drawer-acct){order:-1}      /* 桌機 rail：帳戶摘要在四頁之前（DEC-129 順序；手機抽屜為四頁→帳戶） */
-  .st-key-ui2_nav .ui2-drawer-acct{margin:0 .75rem .75rem .75rem;padding:0 0 .75rem 0;border-top:0;border-bottom:1px solid rgba(128,128,128,.45)}
-  .st-key-ui2_nav [role="radiogroup"]{flex-direction:column}
-  .st-key-ui2_nav [role="radiogroup"]>label{flex:0 0 auto;justify-content:flex-start;padding:.7rem 1rem;
-    border-left-width:4px}
-  .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-left-color:currentColor}
-  .block-container{padding-left:12.5rem !important}
 }
 
 /* ── Batch 3：📊 今日結論／今日主要風險、🎯 雙模式＋搜尋、👤 帳戶 skeleton ── */

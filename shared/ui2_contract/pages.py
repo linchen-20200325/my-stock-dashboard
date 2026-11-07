@@ -1,12 +1,22 @@
-"""四頁 id／顯示名：只取 `shared.ia_nav4`（SSOT，Reuse Matrix L0-5 KEEP AS-IS），⛔ 複製第二份。"""
+"""UI2 頁 id／顯示名。
+
+前四頁 id／顯示名只取 `shared.ia_nav4`（SSOT，Reuse Matrix L0-5 KEEP AS-IS），⛔ 複製第二份。
+第五頁 `🗂 資料`（DEC-146）是 **UI2 自有登錄**：⛔ 修改／擴充 `shared/ia_nav4`（舊 UI 共用，固定四頁）。
+"""
 from __future__ import annotations
 
 from shared.ia_nav4 import (  # noqa: F401  (re-export)
     P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS,
 )
 
-#: 順序＝導覽順序（客戶 (5)-7：市場／標的／持股／我的；⛔ 第五頁）。
-PAGE_IDS: tuple[str, ...] = tuple(PAGE4_LABELS)
+#: 第五頁（DEC-146 客戶核准：📊市場 → 🎯標的 → 💼持股 → 👤我的 → 🗂資料；頂部導覽）。UI2 自有，非 `ia_nav4`。
+P4_DATA = "p4_data"
+
+#: UI2 五頁 id → 顯示名（前四項取自 `ia_nav4.PAGE4_LABELS` 原值；順序＝導覽順序）。
+PAGE_LABELS: dict[str, str] = {**PAGE4_LABELS, P4_DATA: "🗂 資料"}
+
+#: 順序＝導覽順序。
+PAGE_IDS: tuple[str, ...] = tuple(PAGE_LABELS)
 
 #: Preview 場景（fake／scenario）。
 SCENARIO_COLD = "cold"

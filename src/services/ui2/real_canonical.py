@@ -44,13 +44,14 @@ from shared.allocation_decision import REGIME_LABEL
 from shared import regime_arbiter as RA
 from shared.ui2_contract.models import PageVM
 from shared.ui2_contract.pages import (
-    MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
+    MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
     SCENARIO_REAL,
 )
 from shared.ui2_contract.text import (
     RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
+from src.services.ui2.data_page import data_page_canonical
 from src.services.ui2.market_vm import build_market_page_vm
 from src.services.ui2.skeleton_vm import build_skeleton_page_vm
 
@@ -436,6 +437,11 @@ def _me() -> dict:
     }
 
 
+def _data() -> dict:
+    """🗂 資料頁：固定誠實空殼（與 FAKE 軸同一份內容；全為 Capability `⬜ 尚未提供`，⛔ 讀取任何 snapshot 欄位）。"""
+    return data_page_canonical()
+
+
 def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     """`page_id`×snapshot → canonical dict（`is_fake=False`、`scenario='real'`）。每次回新 dict。"""
     if page_id not in PAGE_IDS:
@@ -443,7 +449,7 @@ def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     if not isinstance(snap, RealFeedSnapshot):
         raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap)!r}")
     c = {P4_MARKET: lambda: _market(snap), P4_TARGET: lambda: _target(snap),
-         P4_HOLD: _hold, P4_ME: _me}[page_id]()
+         P4_HOLD: _hold, P4_ME: _me, P4_DATA: _data}[page_id]()
     c["scenario"] = SCENARIO_REAL
     c["is_fake"] = False
     return c

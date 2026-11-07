@@ -16,7 +16,7 @@ from typing import Any
 
 from shared.ui2_contract.pages import (
     ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_CURATED,
-    MODE_LOOKUP, MODE_LABELS, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
+    MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
     SCENARIO_COLD, SCENARIO_IDS, SCENARIO_LOADED, SCENARIO_MISSING, SCENARIO_NOT_EVALUATED,
     SCENARIO_STALE, SCENARIO_UNAVAILABLE,
 )
@@ -26,6 +26,7 @@ from shared.ui2_contract.text import (
     TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
+from src.services.ui2.data_page import data_page_canonical
 from src.services.ui2.vm_common import field_from_spec
 
 _FAKE_SRC = f"{FAKE_SOURCE_PREFIX} 示意資料"
@@ -212,6 +213,8 @@ def _me_account_variant(account: str) -> dict:
 
 
 def _base(page: str) -> dict:
+    if page == P4_DATA:
+        return data_page_canonical()
     if page == P4_MARKET:
         return {
             "page": page, "title": PAGE4_LABELS[page],
@@ -382,6 +385,11 @@ def fake_canonical(page: str, scenario: str, account: str | None = None) -> dict
         raise ValueError(f"unknown scenario {scenario!r}")
     if account is not None and account not in ACCOUNT_IDS:
         raise ValueError(f"unknown account {account!r}")
+    if page == P4_DATA:        # 固定誠實空殼：不套場景轉換（沒有任何資料事實可示意）
+        c = data_page_canonical()
+        c["scenario"] = scenario
+        c["is_fake"] = True
+        return c
     if page == P4_ME and account in (ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE):
         c = _me_account_variant(account)
         c["scenario"] = scenario
