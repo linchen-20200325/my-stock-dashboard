@@ -1892,3 +1892,19 @@
 - **殘留風險（open）**：(a) SIGKILL／斷電時 `finally` 不跑，可能殘留 `.signals.parquet.*.tmp` 孤兒（不影響正式檔）；實測該路徑**未被 ignore 規則涵蓋**，`scripts/publish_data_pr.py::detect`（`status -uall`）會視為 `??` 並納入 data PR——**建議後續**：ignore 規則加 `data_cache/**/.*.tmp`，或 publish helper 的 detect 排除 dotfile `*.tmp`（本批未改）。(b) 目錄 fsync 為 best-effort，Windows 略過，斷電後 rename 是否落盤無保證。(c) 並行 append 無鎖：兩行程同時讀改寫仍可能互蓋新列（不損壞檔案）；cron 為單行程。(d) 首次建檔權限固定 0o644，umask 更嚴時比一般 `to_parquet` 寬。
 - **禁止事項聲明**：未改任何 Parquet 資料檔、Schema、日期語意、公式、資料來源、Risk Cap、System Action、`scripts/*`、workflow；#1038 維持 Draft。
 - **QA 回修（2026-11-07，PR #1042 獨立 QA）**：**D1** 讀回驗證由容差比較改為精確比較——`assert_frame_equal(check_exact=True)`＋逐欄 dtype kind＋逐格型別類別（bool／int／float／str 不可互換）；良性差異白名單僅兩項：None↔NaN、df 端 object 欄讀回 dtype 變 float64／str（逐格型別與值仍須完全一致）；新增 +9e-6 相對、0.0→1e-9、float32 截斷、四捨五入、bool→int、int→float 六種竄改測試與 `check_exact`／型別層／唯讀檢查的突變（拿掉 `check_exact`→漂移測試與真實帳本往返皆轉紅）。**D2** 既有帳本 `not os.access(W_OK)` 時於建 tmp 前丟 `LedgerWriteError`（「帳本唯讀，已拒絕寫入」）；root 下 `os.access` 恆真屬已知限制，以注入測試涵蓋、真 `chmod 0444` 測試在 root 下 skip。**殘留風險補一行**：(e) hardlink 斷鏈——`os.replace` 會讓指向舊 inode 的其他硬連結仍指向舊內容、不再與帳本同步（本專案帳本無硬連結用法，未處理）。另已知：驗證嚴格後，若日後寫入列的欄位型別與既有列不同（例如 int 對 float），會 fail-closed 拒寫而非靜默改型別。獨立 QA（回修後）待做。
+
+### NUI2-GH-MEMORY-DATA-GATE｜2026-11-07 有效知識／資料資格收斂（P1 主線；補註）
+
+> 出處：既有 #1034 的 DEC-143/BACKLOG 草案，以及已合併 #1031/#1033 的研究與資料缺口證據；本段**只登記未完成工作，不授權新來源、公式、Schema、UI Layout、OneBrain runtime**。現有較舊同題待辦不得因本次補註重複啟動。
+
+| ID | Priority / 目前狀態 | 下一個可驗收完成條件 |
+|---|---|---|
+| `NUI2-GH-MEMORY-SUPERSEDE` | P1 OPEN（ChatGPT docs） | DEC-141～145 收斂 #1045、舊布局適用性 #1046 均須**本 head required CI／獨立 QA／正式合併**，再核對 #1027/#1030/#1034 剩餘 unique docs 與共享檔 diff；保留歷史但令唯一 Active 方向一致，不能把 PR Ready 當 Done |
+| `NUI2-LEGACY-DATA-QUALIFICATION` | P1 OPEN（ChatGPT 只讀研究→Claude 經 Gate 施工） | 依第一版 producer→canonical→calculation→UI2 feed→Digest coverage 逐欄列來源、日期/PIT、單位、缺值、算法資格、runtime 與負測；repo 無 adapter≠外部永無來源，未 live probe 不可稱可用 |
+| `NUI2-SHORTAGE-VERIFIED-EVIDENCE` | P1 OPEN（高風險語意 Gate） | 財務足跡只能標**疑似**缺貨；核實月營收缺值及 coverage 不得誤判無缺貨／官方訂單，不得未經授權改正式分數、權重、門檻 |
+| `NUI2-FIN-CHANGE-QUALIFICATION` | P1 OPEN（高風險公式 Gate） | 負測月／季缺腿 0→中性、財報跨期、現金流累計／單季、缺科目；先復驗資料口徑／修復需求，再另批施工 |
+| `NUI2-SOURCE-LIVE-PROBE-AND-FALLBACK` | P1 OPEN（只讀，必要新 API 再 Gate） | 已核准來源的可達性/授權/更新日/欄位/缺值/失敗備援逐項實測，無憑證勿猜，不擅自開新 API 或 Research Sheet |
+| `NUI2-EVIDENCE-COVERAGE-PREFLIGHT` | P1 OPEN（Schema/Runtime Gate） | required evidence manifest、完整正反證／失效原因、missing 與 omissions、Token 分包 partial 機制；只有真正 production caller＋覆蓋測試可宣稱 OneBrain 有完整 Evidence |
+
+**當前工程分流**：Python-only [Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) object-float exact scalar validation 交 Claude Code；不得與 ChatGPT docs PR 共改 `PROJECT_RULES`／`BACKLOG`／`HANDOFF`。#1038 PIT BLOCK 持續；#1041／#1042／#1043 已合併，不能再當未修 P0。下一主線是五頁有效 Layout/資料契約收斂後安排實際 UI 與 Evidence/Digest 接線，P2 技術債不插隊。
+
