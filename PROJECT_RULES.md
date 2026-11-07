@@ -1,5 +1,8 @@
 # PROJECT_RULES — Project AI Constitution v1.0（my-stock-dashboard）
 
+> 📌 **2026-11-06 客戶後續產品方向（見 DEC-142 原 Draft #1030／收斂 PR #1045）**：New UI2 下版目標採 **📊市場／🎯標的／💼持股／👤我的／🗂資料五頁**、桌機與手機頂部五頁導覽（手機可橫滑）、頂部 Active Sheet、右上帳號、Dark-only；**不再以 §30 四頁、👤我的完整資料健康度、桌機左 rail 或手機 ☰ Drawer 的舊版型作下一輪施工指令**。本檔舊條文保留作歷史與現行程式安全回歸基線；**新 Layout、登入／Sheet、JS_V4 替換、路由及瀏覽器／a11y 守衛須另有經核准的 390/1440 視覺契約與安全 Gate 才可改碼**。保留 Data State、缺值、來源/PIT、Risk Cap、System Action 與 Digest/Evidence 安全契約；此註不授權任何新程式施工。
+
+
 > **本檔是專案 AI「怎麼工作」的入口與索引**，依客戶 2026-10-16 裁示建立（`docs/DECISIONS.md` DEC-016）。
 > 治理**機制**參考基金 repo `my-Fund-dashboard` 的同名實作（只借結構與共通機制）；**未複製**基金專屬規格、文件位階或 Decision。股票領域規則一律來自本 repo 自己的證據（第 13 節）。
 > ⚠️ **provenance 揭露**：本檔由單一撰寫組撰寫，DEC 引用清單**待第二組獨立 evidence audit**（`CLAUDE.md` §-2 規則 6）；稽核通過後本註保留作 provenance。
