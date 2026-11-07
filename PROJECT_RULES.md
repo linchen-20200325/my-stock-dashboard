@@ -1101,3 +1101,11 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 4. **請示僅限真正 Gate**：可安全自主處理的工作先完成；工具缺失、權限不足、不可逆、高風險、付費、新資料來源、公式／Risk Cap、OneBrain 正式行為或 UI Layout 等已有客戶 Gate 才請示，且先附三方案比較和推薦，再請求最小必要操作。
 5. **證據與狀態**：workflow success ≠ 原生 PR required check success；舊 head 綠燈 ≠ 新 head 綠燈；metadata 自述 ≠ parquet 實測；未取得資料 ≠ 0／中性／安全。未驗證不得合併。
 6. **交付**：繁中精簡表格，指出推薦方案、待證據與唯一下一步；重要決策及執行狀態依既有五治理文件保存；Draft PR 不等於已進 main。
+
+
+## 第 33 節｜定期巡檢的靜默紀錄與長對話恢復（DEC-145；客戶 2026-11-07）
+
+- **以 GitHub 留下可恢復證據**：每次定期巡檢先實讀 main、PR/head/diff、CI/QA、branches、現行規格、BACKLOG、DECISIONS、HANDOFF、PROJECT_STATE；區分已完成／進行中／未開始／等待 Claude 回報／需裁示。若真實狀態或正式決策有重要變化，依現有安全流程在獨立 branch／PR 更新所需 checkpoint（HEAD 與 CI、驗收、責任人、阻塞、唯一下一步），不得只存在聊天，也不得直接推 main。
+- **預設靜默**：普通文書、例行查核、CI 全綠或舊阻塞尚未變化，不通知使用者；只有 **有可轉貼 Claude Code 的具體新工程提示語、真正需要客戶裁示的風險／阻塞、或長對話可能失去可恢復上下文時須提供交接**，才一次回報。不能假裝已把提示語交給 Claude，使用者自行轉貼並帶回回報。
+- **交接不中斷**：對話可能過長時，先核實 GitHub checkpoint 已保存，提供可複製的新對話接手提示語，包含 repository、最新查核依據、治理規則、已完成／未完成、待驗 PR、唯一下一步和 Claude 模型／Effort；GitHub 實況優先於交接文字。無法直接測量剩餘 token 或在使用者不互動時自動搬移聊天。
+- **既有風險 Gate 不變**：保留 DEC-144 三方案比較、minimum sufficient effort、獨立 QA、主線保護及未授權時不得改產品程式／Risk Cap／來源／schema／UI Layout。本節記錄工作流程，不是授權新產品功能。
