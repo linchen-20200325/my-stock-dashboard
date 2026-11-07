@@ -115,10 +115,33 @@ def _value_category(v) -> str:
     return type(v).__name__
 
 
+def _scalar_exactly_equal(x, y) -> bool:
+    """兩個**非空**純量是否精確相等(呼叫前已確認同型別類別、且皆非空)。**無任何容差。**
+
+    - float:`float(x) == float(y)`(以 Python float 比較,float32 截斷後的值因此被視為「不同」);
+      ±inf 必須同號(`inf == -inf` 為 False);**-0.0 與 0.0 視為相等**(`==` 語意:兩者
+      都是「零」,不是不同觀測;parquet 往返本就可能不保號,且記錄值的含義相同)。
+      NaN 不會進到這裡 —— 已由 `_is_null` 空值規則處理(NaN≡None≡pd.NA≡NaT)。
+    - int:`int(x) == int(y)`;bool:`bool(x) == bool(y)`;其餘(str…):`x == y`。
+    - numpy scalar 與 Python scalar 同類別(np.float64≡float、np.bool_≡bool、np.int64≡int)。
+    """
+    cat = _value_category(x)
+    if cat == 'float':
+        return float(x) == float(y)
+    if cat == 'int':
+        return int(x) == int(y)
+    if cat == 'bool':
+        return bool(x) == bool(y)
+    return bool(x == y)
+
+
 def _verify_roundtrip(chk: pd.DataFrame, df: pd.DataFrame) -> None:
     """讀回的暫存檔必須與準備寫入的 `df` **逐格精確相等**,否則 raise ValueError。
 
-    比「逐格相等」更嚴的三層(都不允許容差 —— 帳本是凍結紀錄,任何位元級漂移都是損壞):
+    四層(都不允許容差 —— 帳本是凍結紀錄,任何位元級漂移都是損壞):
+      0. **純量層**(`_scalar_exactly_equal`,在型別/空值驗證之後,對所有非空純量逐格比較):
+         版本無關 —— 不依賴 pandas `assert_frame_equal`(QA 回報 pandas 2.0.x 對 object 浮點欄
+         的 `check_exact` 無效,1e-9 漂移漏網)。第 3 層保留為縱深,不再是唯一防線。
       1. 列數 / 欄位集合與順序 / 唯一鍵集合一致。
       2. 型別不可互換:非 object 欄的 dtype kind 必須相同(bool/int/float 不可互換);
          每個非空格子的型別類別(bool / int / float / str)必須相同
@@ -148,6 +171,9 @@ def _verify_roundtrip(chk: pd.DataFrame, df: pd.DataFrame) -> None:
                 raise ValueError(f'欄 {c!r} 第 {i} 列空值不一致:{x!r} → {y!r}')
             if not nx and _value_category(x) != _value_category(y):
                 raise ValueError(f'欄 {c!r} 第 {i} 列型別改變:{type(x).__name__} → {type(y).__name__}')
+            # 純量層(獨立必經檢查,版本無關):不使用任何容差、不依賴 pandas 的實作。
+            if not nx and not _scalar_exactly_equal(x, y):
+                raise ValueError(f'欄 {c!r} 第 {i} 列數值改變:{x!r} → {y!r}')
 
     def _norm(x: pd.DataFrame) -> pd.DataFrame:
         # 只把非數值欄(字串 / object)轉 object 並讓 None≡NaN;bool/int/float 欄保持原生 dtype,
