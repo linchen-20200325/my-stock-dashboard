@@ -1028,3 +1028,9 @@ DEC-086 規則已於 main，本表已落地。
 
 **停止條件**：任何新 Layout、Risk Cap／投資公式／Source、Sheet OAuth/credential、不可逆寫入、OneBrain schema/runtime、正式資料發布 PIT 變更；及新 CI／QA 失敗、同檔競爭。每批完成→重新 GitHub Gate→推薦下一個最小安全 batch，非阻擋 P2 不自動開 Stage。建議 Claude #1044：Sonnet 5.5／High；ChatGPT Docs：Medium 與 targeted docs check，完整 required CI 仍不可跳過。
 
+## 2026-11-07 17:10 後續更正｜#1049 已合併（優先於上一個 checkpoint）
+
+- **最新已實查 main SHA**：`63d55badad8dea1b4de767afbd20d31314d46be8`（#1049 squash）；`PR #1049` 已 merged，**Issue #1044 已 closed**。上方較早快照所寫「#1044 OPEN／Claude 下一步 #1044」是當時事實，**現在已過期、不得重派**。#1049 合併後此 SHA 的 main workflow 目前未見 run，不宣稱 main CI success；#1049 原 head 的五個 PR CI jobs success。
+- **當前 docs 續接**：#1045／#1046／#1047 各自 head CI success，但仍缺 repo 規定的**非作者 QA**，不得自行合併；#1048 390／1440 五頁頂部導覽**仍 Draft／僅候選方案**，CI success 不是 Visual Fidelity PASS。#1027／#1030／#1034 舊 Draft 仍需 unique docs 核銷，#1038 PIT FAIL 仍不合併。
+- **風險提示**：#1048 若採雙列頂部導覽，現有手機 stale／unavailable 的 nav_margin 最低 162.5px、距 ≥160px 門檻只有 2.5px；要以真正 390px 瀏覽器測量證實不退化，不能降測試門檻或直接撤 JS_V4 安全守衛。
+- **下一步分工**：ChatGPT 優先讓 #1045～1047 取得真正非作者 QA、完成 GitHub 合併 Gate；產品方依既有 Visual Gate 確認五頁導航可施工的候選版型後，Claude Code 才做 UI Code。**此 HANDOFF 補註不是新 layout 核准，也不是新 Code 工作。**
