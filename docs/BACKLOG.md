@@ -1922,9 +1922,8 @@
 | `NUI2-TOPNAV-MOBILE-REAL-NOTE` | P3 OPEN（需 Decision／UI Gate 才可改畫面） | 來源 QA：手機 Real 補充說明（「僅台股與市場位階為真資料」）隱藏（沿用既有行為）；是否在手機顯示另案評估。 | 屬畫面結構異動，先出文字線框草稿再裁示（CLAUDE.md v3 §03-2 ①）；不在本批授權內。 |
 | `NUI2-TOPNAV-SOURCE-HASH-SCOPE` | P3 OPEN | 來源 QA：evidence `source_hash` 只涵蓋 `src/ui2`、`app_ui2.py`、`measure_viewport.py`，**不含** `shared/ui2_contract` 與 `src/services/ui2`，這兩處變動不會讓過期 evidence 轉紅。 | 評估把該兩目錄納入 hash 範圍（會使 4 份 JSON 需重生）。 |
 | `NUI2-TOPNAV-REAL-DEVICE-VERIFY` | P2 OPEN（NOT VERIFIED 項彙總） | iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset 皆未驗。 | 取得實機／雲端環境後逐項補驗；未驗前不得宣稱。 |
-| `NUI2-CLAUDEMD-L5-DRAWER-STALE` | P3 OPEN（待辦；**本批未改 CLAUDE.md**） | `CLAUDE.md` §8.2 L5 代表檔列（`src/ui/views/`／`src/ui2/` 等處）仍提 drawer／☰；Drawer／rail／JS_V4 已於 #1055 退役。 | 日後有任務觸碰該檔時，依 CLAUDE.md 修訂慣例（刪除線保留原文＋註記日期與決策者）另批更新。 |
 | `NUI2-DOCS-SUPERSEDE-DRAWER-SERIES` | P3 OPEN（待辦；**本批未改這些檔**） | `docs/vnext/NEWUI2_MOBILE_DRAWER_*` 等系列文件應標示「被 DEC-146＋#1055 取代」（現仍描述 Drawer／rail／JS_V4 為現行）。 | 於各檔開頭加取代註記，原文保留不刪。 |
-| `NUI2-GOV-1034-EXTRACT` | P1 OPEN（下一個唯一安全動作；docs-only） | #1034 治理段落抽取：從 main 另開分支只搬該 19 行；PROJECT_RULES §0.4 維持，原 §32「三方案 Gate」改 §33、原 §33「巡檢靜默」改 §34（main 的 §32＝對話風險預警）；移除「合併前未生效」字句；訂正 DEC-143／144／145 內「落盤:#1034 … 合併前不視為 main 生效」。 | 須最新 head CI＋非作者 QA；與其他 docs PR 勿同檔競爭。#1038 PIT FAIL 保持不合併。 |
+| `NUI2-GOV-1034-EXTRACT` | P1 OPEN（下一個唯一安全動作；docs-only） | #1034 治理段落抽取：從 main 另開分支只搬該 19 行；PROJECT_RULES §0.4 維持（§0.4 目前僅在 #1034，main 的 PROJECT_RULES 只有 §0.1–0.3），原 §32「三方案 Gate」改 §33、原 §33「巡檢靜默」改 §34（main 的 §32＝對話風險預警）；移除「合併前未生效」字句；訂正 DEC-143／144／145 內「落盤:#1034 … 合併前不視為 main 生效」。 | 須最新 head CI＋非作者 QA；與其他 docs PR 勿同檔競爭。#1038 PIT FAIL 保持不合併。 |
 | `NUI2-BRANCH-RETENTION-1107` | P3 OPEN（紀錄） | 依裁示：`docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107` 暫時全部保留、不建 archive tag（環境代理亦擋 ref 寫入）；`data`、`v2`、`claude/stock-dashboard-handoff-g9dtm0` 必留。 | 日後可建 tag 時再依 DEC-012 條件處理。 |
 
-**既有「五頁工程待施工」類條目**：`NUI2-GH-MEMORY-DATA-GATE` 段尾的更新註記已補「已由 #1055 完成」；DEC-146 授權內的「方案 A」偏離須如實註明為 **ChatGPT 建議、非使用者逐字裁示**（見 PROJECT_STATE §70.4）。
+**既有「五頁工程待施工」類條目**：`NUI2-GH-MEMORY-DATA-GATE` 段尾的更新註記已補「已由 #1055 完成」；「方案 A」須如實註明為 **ChatGPT 建議、非使用者逐字裁示**；QA 判定其在 DEC-146 授權內，使用者可推翻（見 PROJECT_STATE §70.4）。

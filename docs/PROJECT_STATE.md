@@ -1159,4 +1159,4 @@
 **NOT VERIFIED**
 - iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset。上列量測僅 Chromium headless，不得外推。
 
-**RECOMMENDATION／後續**：QA SHOULD-FIX 與文件待辦見 BACKLOG `NUI2-TOPNAV-*`、`NUI2-CLAUDEMD-L5-DRAWER-STALE`、`NUI2-DOCS-SUPERSEDE-DRAWER-SERIES`。下一個唯一安全動作見 HANDOFF 最末 Safe Handoff（#1034 治理段落抽取）。
+**RECOMMENDATION／後續**：QA SHOULD-FIX 與文件待辦見 BACKLOG `NUI2-TOPNAV-*`、`NUI2-DOCS-SUPERSEDE-DRAWER-SERIES`。下一個唯一安全動作見 HANDOFF 最末 Safe Handoff（#1034 治理段落抽取）。

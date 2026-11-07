@@ -3,7 +3,7 @@
 <!-- HANDOFF_ACTIVE_GATE:BEGIN -->
 ## 先讀這裡｜GitHub Resume Gate（2026-11-07；由 #1047 引入，合併後仍須重新 Gate）
 
-> **唯一用途：** 在長對話／換 Claude 或 ChatGPT session 時，先建立「哪裡能查事實」的**現況入口**。這一段是 `docs/HANDOFF.md` 內的可更新索引，**不是第二套 SSOT、不是永久狀態宣告**。本段**最後更新時**的 main = `9ca5441ec129043747a00b87b56597982cdb4a46`（#1051 merge；更早的建立基準為 `63d55bad`＝#1049）。**下次必須先查 LIVE GitHub**：main 完整 SHA／latest commits+diff、所有 Open/Draft PR head/base/diff/CI/mergeability、required QA/review threads、相關 branch。任何不一致先標記 STALE、修正再派工。**不可只信本段、Handoff 其他歷史章節、聊天摘要或 PR 自述。**
+> **唯一用途：** 在長對話／換 Claude 或 ChatGPT session 時，先建立「哪裡能查事實」的**現況入口**。這一段是 `docs/HANDOFF.md` 內的可更新索引，**不是第二套 SSOT、不是永久狀態宣告**。本段**最後更新時**的 main = `9ca5441ec129043747a00b87b56597982cdb4a46`（#1051 merge；更早的建立基準為 `63d55bad`＝#1049）。**下次必須先查 LIVE GitHub**：main 完整 SHA／latest commits+diff、所有 Open/Draft PR head/base/diff/CI/mergeability、required QA/review threads、相關 branch。任何不一致先標記 STALE、修正再派工。**不可只信本段、Handoff 其他歷史章節、聊天摘要或 PR 自述。** 〔已更新（#1055，`5bd4a7ea`）：main 已前進至 `5bd4a7ea`（#1047／#1052／#1053／#1055 已合併）；現行狀態見本檔最末「Safe Handoff（2026-11-07 晚｜New UI2 Batch 3…）」。本段其餘為當時記錄。〕
 >
 > **更新註記（2026-11-07 晚）**：本入口原寫於 PR #1047（尚未合併）。#1047 已併入最新 main 並改寫過期敘述；**若 #1047 仍未合併，新對話須明確讀 [#1047 的最新 PR head](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) `docs/HANDOFF.md` 開頭，確認 head／原生 CI 後才可引用**；合併後以 main 為準。其他衝突分支不能取代已合併 main。每次提交都會觸發新的 head CI，舊 head 的 CI 結果**不可沿用**。
 
@@ -13,7 +13,7 @@
 
 | 問題 | 先查 live 證據 | 目前可證實的結論（程式事實量測於 main `63d55bad...`；最新 main 見上） | 必須避免的錯誤 |
 |---|---|---|---|
-| 「頁面完成了嗎？」 | `shared/ui2_contract/pages.py::PAGE_IDS` + `src/ui2/views/__init__.py::VIEWS` + `src/ui2/shell/app.py` | **四頁 Preview 可路由**；不等於四頁所有功能/視覺都已完成；W-11 只有第一批 | 只看「線框 Draft」就回答「四頁還沒做」；或把空槽算正式功能 |
+| 「頁面完成了嗎？」 | `shared/ui2_contract/pages.py::PAGE_IDS` + `src/ui2/views/__init__.py::VIEWS` + `src/ui2/shell/app.py` | **四頁 Preview 可路由〔已更新（#1055，`5bd4a7ea`）：現為五頁＋頂部兩列導覽，🗂資料頁為 Capability 空殼；原文保留為當時記錄〕**；不等於四頁所有功能/視覺都已完成；W-11 只有第一批 | 只看「線框 Draft」就回答「四頁還沒做」；或把空槽算正式功能 |
 | 「五頁與頂部導覽完成了嗎？」 | 同上 + `src/ui2/shell/css.py` 的 `ui2_nav` media rules | **未完成（程式）**；目前手機 Drawer、桌機 rail；方向已由 DEC-146 核准、工程未施工；第五頁僅有文件（#1030 提案、DEC-146＋Gate 文件的核准方向） | 把新方向或 CI 綠的 docs PR 當已部署 〔已更新（2026-11-07 晚，#1055 合併 main `5bd4a7ea`）：**程式已完成**——五頁＋頂部兩列導覽已在 main，Drawer／rail／JS_V4 已退役；見本檔最末 Safe Handoff（Batch 3）。上列文字保留為當時記錄，有意識的更新，不是漏刪〕 |
 | 「資料/登入/AI 已接上嗎？」 | `src/services/ui2/real_feed.py`、`src/ui2/shell/app.py` 的 FAKE/Real Preview 分支、實際 OAuth/Sheet/Digest caller + tests | FAKE 預設，Real Preview 有限；不可宣稱完整正式接線 | 有 VM、帳戶占位、OneBrain 卡片就宣稱可用 |
 | 「工程修好了嗎？」 | main commit/merged PR + 對應測試/CI；Issue 狀態 | #1049 merged、#1044 closed；cron 資料發布路徑 #1035/#1036/#1037/#1042 merged（真實發布端到端 **NOT VERIFIED**）；#1038 PIT FAIL 仍 Draft、禁止合併（與 cron 發布路徑**獨立**） | 把舊 BACKLOG 的 OPEN 或舊 HANDOFF 的 next action 當新任務 |
@@ -32,7 +32,7 @@
 
 **設計衝突處理：** 2026-11-02～04 的四頁抽屜／左 rail 文件，是**現行 Preview 回歸基準／歷史產品版型**；2026-11-06 之後五頁頂部導覽是**後續設計目標**，不是已實作。先以最新客戶裁示＋正式 DEC 與 Active Contract 對照，再通過 Visual Gate 才能改 Code。**#1029** 舊市場／標的線框已關閉且未合併；不能把其 drawer/rail 純文字畫面當五頁施工依據。 〔已更新（#1055）：頂部五頁導覽已進 main；四頁抽屜／rail 文件現僅為歷史，並將由 BACKLOG `NUI2-DOCS-SUPERSEDE-DRAWER-SERIES` 標示被 DEC-146＋#1055 取代（尚未標示）。〕
 
-### 2. 當下 GitHub 物件清單（**時點快照，永遠須重取**；更新於 main `9ca5441e`）
+### 2. 當下 GitHub 物件清單（**時點快照，永遠須重取**；更新於 main `9ca5441e`） 〔已更新（#1055，`5bd4a7ea`）：main 已前進至 `5bd4a7ea`（#1047／#1052／#1053／#1055 已合併）；現行狀態見本檔最末「Safe Handoff（2026-11-07 晚｜New UI2 Batch 3…）」。本段其餘為當時記錄。〕
 
 | 物件 | 這次查到的狀態 | 不能誤判為 |
 |---|---|---|
@@ -51,7 +51,7 @@
 
 ### 3. 唯一安全接手工作與分工（2026-11-07 晚更新；舊版「補 QA 合併 #1045/#1046」「三案比較」已完成或失效）
 
-1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1030／#1027 獨有文件已由 #1053（`71ac2889`）保存、可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號尚未做；#1048 已被 DEC-146＋Gate 文件承接、可關閉；不要增加重複收斂 PR。
+1. **ChatGPT（非 Code）**：先重新取 GitHub Gate。#1045／#1046 已合併；**#1047（本文件）** 合併前須最新 head CI＋非作者 QA，不得以作者自驗代替。再逐檔核銷舊 Draft：#1030／#1027 獨有文件已由 #1053（`71ac2889`）保存、可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號尚未做；#1048 已被 DEC-146＋Gate 文件承接、可關閉；不要增加重複收斂 PR。 〔已更新（#1055，`5bd4a7ea`）：main 已前進至 `5bd4a7ea`（#1047／#1052／#1053／#1055 已合併）；現行狀態見本檔最末「Safe Handoff（2026-11-07 晚｜New UI2 Batch 3…）」。本段其餘為當時記錄。〕
 2. **產品視覺決策已完成**：DEC-146 核准「五頁頂部兩列導覽」方向、**不做臨時 B0 五頁抽屜**；三案比較已不需要。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**（距 ≥160px 約 2.5px）仍是施工風險，須以真瀏覽器量測證實不退化；不得放寬門檻或刪 JS_V4／focus／a11y／viewport regression。 〔已更新（#1055，`5bd4a7ea`）：162.5px 風險已以真 Chromium 量測解除——FAKE unavailable 最小首屏餘裕 169.4px、Real 175.8px（見最末 Batch 3 Safe Handoff）；JS_V4 已依零 JS 守衛＋原生鍵盤測試等價取代而退役，非「擅刪」。〕
 3. **Claude Code（只做真 Code）**：**五頁 UI2 工程尚未啟動**。施工須依 #1050 已入 main 的 Gate 文件（`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）最小批、同批交付完整可測的頂部導覽、未通過安全 Gate 不得合併；與 ChatGPT 文件 PR 勿改同檔。#1049／#1044 已結束、不可重做。（**DEC-147 分工更新已由 #1052（`d709d87b`）合併生效**：Claude Code 負責 CODE 施工、獨立 QA、CI、PR Merge、Branch 清理（有條件，DEC-012）、正式治理文件同步；ChatGPT 負責產品規劃／UI-UX／架構／投資語意／需求／Decision Gate。） 〔已更新（#1055，`5bd4a7ea`）：**五頁 UI2 工程已完成並合併**；本點「尚未啟動」為當時記錄、已過期；下一個唯一安全動作見最末 Batch 3 Safe Handoff。〕
 4. **資料及金融語意**：#1038 因 PIT 不合格**禁止合併**（獨立於 cron 發布路徑）；cron 發布路徑 #1035／#1036／#1037／#1042 雖已合併，**真實發布端到端仍 NOT VERIFIED**。完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
@@ -1112,8 +1112,8 @@ DEC-086 規則已於 main，本表已落地。
 | **部分完成** | 🗂資料頁只有空殼（Capability「尚未提供」），無資料健康度內容；帳號區只是占位；FAKE 預設、Real Preview 有限（沿用）；手機第一列為兩行（40px），線框為一行；手機 Real 補充說明（「僅台股與市場位階為真資料」）仍隱藏（沿用既有行為）。 |
 | **僅規格候選** | 「FAKE/Real 標示併入第一列」是 **ChatGPT 對 DEC-146 的最小版面修正建議（方案 A），非使用者逐字裁示**；獨立 QA 判定其在 DEC-146 授權內、未觸發 Gate STOP 條件（INFERENCE：此判定為 QA 解讀，若使用者另有意見以使用者為準）。 |
 | **阻塞／NOT VERIFIED** | iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset 皆 **NOT VERIFIED**（只有 Chromium 153 headless 量測）。#1038 PIT FAIL 仍 Draft、**禁止合併**；cron 資料發布路徑真實端到端 NOT VERIFIED。QA 之 SHOULD-FIX 已登入 BACKLOG（`NUI2-TOPNAV-*`，見該檔）。 |
-| **下一個唯一安全動作** | **#1034 治理段落抽取**（docs-only，從 main 另開分支，只搬該 19 行）：PROJECT_RULES §0.4 維持；原 §32「三方案 Gate」改編 **§33**、原 §33「巡檢靜默」改編 **§34**（main 的 §32＝對話風險預警，不動）；移除「合併前未生效」字句；並訂正 main 內 DEC-143／144／145 仍寫「落盤：#1034 … 合併前不視為 main 生效」之字樣（DECISIONS.md 的訂正須依該檔既有訂正慣例另批，**本同步批未動 DECISIONS.md／PROJECT_RULES.md**）。 |
+| **下一個唯一安全動作** | **#1034 治理段落抽取**（docs-only，從 main 另開分支，只搬該 19 行）：PROJECT_RULES §0.4 維持（§0.4 目前僅在 #1034，main 的 PROJECT_RULES 只有 §0.1–0.3）；原 §32「三方案 Gate」改編 **§33**、原 §33「巡檢靜默」改編 **§34**（main 的 §32＝對話風險預警，不動）；移除「合併前未生效」字句；並訂正 main 內 DEC-143／144／145 仍寫「落盤：#1034 … 合併前不視為 main 生效」之字樣（DECISIONS.md 的訂正須依該檔既有訂正慣例另批，**本同步批未動 DECISIONS.md／PROJECT_RULES.md**）。 |
 
 **分支處置（依裁示，FACT 以裁示為準）**：三個歷史分支 `docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107` **暫時全部保留、不建 archive tag**（環境代理亦擋 ref 寫入）；`data`、`v2`、`claude/stock-dashboard-handoff-g9dtm0` **必留**。
 
-**RECOMMENDATION**：不得把 Chromium headless 的綠燈寫成真機／無障礙已驗；任何降低 160px 首屏門檻、`p2_nav_margin_160`、或移除零 JS／原生鍵盤守衛的改動都須先走 Gate。CLAUDE.md §8.2 L5 代表檔仍提 drawer／☰ 為過期描述，已登 BACKLOG `NUI2-CLAUDEMD-L5-DRAWER-STALE`（本批未改 CLAUDE.md）。
+**RECOMMENDATION**：不得把 Chromium headless 的綠燈寫成真機／無障礙已驗；任何降低 160px 首屏門檻、`p2_nav_margin_160`、或移除零 JS／原生鍵盤守衛的改動都須先走 Gate。（已查 CLAUDE.md 對 drawer／☰／抽屜／JS_V4／rail 命中 0，無需處理，原先擬登之待辦已撤銷。）
