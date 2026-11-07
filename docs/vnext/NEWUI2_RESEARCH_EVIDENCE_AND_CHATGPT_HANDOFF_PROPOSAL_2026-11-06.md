@@ -62,3 +62,12 @@ C. **CSP 財務／產業互證**：CAPEX/OCF、FCF、融資來源、公司 guida
 ## 六、新對話啟動提示（可複製）
 
 接手 `linchen-20200325/my-stock-dashboard` New UI2 的 GitHub 獨立治理與產品架構工作。先現場檢查 origin/main SHA（含時間）、所有 Open/Draft PR（尤其 #1022/#1027/#1029/#1030 及 ChatGPT 研究/交接草案）、PR head/diff/CI、遠端分支、PROJECT_RULES/DECISIONS/BACKLOG/HANDOFF/PROJECT_STATE；不得把 Draft 當正式決策，也不得覆蓋 Claude Code/Work 正在施工的檔案。產品五頁：市場/標的/持股/我的/資料，頂部五頁＋Active Sheet＋帳號，暗色/手機優先。OneBrain 六領域單一協調＋全域反證複核，Human UI 簡潔、Decision Digest 保留完整 headless evidence；AI 不自行上網取數/寫入，不越權改 Risk Cap。研究候選包括大盤 EPS×PE、缺貨及大型訂單、CSP CAPEX/FCF，應設計 Sheet Evidence 承接但須經來源/公式/Schema/寫入 Gate，教材歷史數字不是現況。重用第一版確定性財報、籌碼、宏觀、選股、持股/ETF 能力，不搬複雜 UI。工作成果及裁示按既有治理五檔分工經 PR 留存，風險時主動提供可複製交接包。繁中、精簡、表格優先；提示語附模型及 Minimum Sufficient Effort。 
+
+
+## 七、2026-11-07 獨立治理狀態更新（僅為文件註記）
+
+- #1022 的舊四頁 Draft 已關閉、未合併；歷史概念可回查，但不得再作為生效規格或施工依據。
+- #1032 的對話預警與交接規則已合併到 main；本檔第四節及交接範例只作歷史研究提案，**不建立第二套治理權威**。
+- #1023、#1025 的唯讀稽核／限定靜態血緣工具已合併；不代表完整 runtime/資料正確性驗證或清碼授權。
+- #1030 的五頁、OneBrain 及 PDF 藍圖仍屬待整合草案；本檔的 Research Evidence Sheet 欄位是候選，不代表已核准 schema、正式來源、公式、寫入或 AI runtime。
+- 本檔是獨立補充研究紀錄；任何正文舊時點描述（例如 #1022 當時尚 Open）都只能按歷史時點閱讀。後續施工必須以最新 main + 正式 DEC/Active Contract + 當下 PR Gate 重驗。
