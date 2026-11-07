@@ -1,5 +1,53 @@
 # HANDOFF — 現行交接（my-stock-dashboard）
 
+<!-- HANDOFF_ACTIVE_GATE:BEGIN -->
+## 先讀這裡｜GitHub Resume Gate（2026-11-07，**待 #1047 合併**）
+
+> **唯一用途：** 在長對話／換 Claude 或 ChatGPT session 時，先建立「哪裡能查事實」的**現況入口**。這一段是 `docs/HANDOFF.md` 內的可更新索引，**不是第二套 SSOT、不是永久狀態宣告**。建立本段時的 main = `63d55badad8dea1b4de767afbd20d31314d46be8`（#1049 merge）。**下次必須先查 LIVE GitHub**：main 完整 SHA／latest commits+diff、所有 Open/Draft PR head/base/diff/CI/mergeability、required QA/review threads、相關 branch。任何不一致先標記 STALE、修正再派工。**不可只信本段、Handoff 其他歷史章節、聊天摘要或 PR 自述。**
+>
+> **這份入口尚在 PR #1047**，不在 main；若新對話看到的是舊 main，須明確讀 [#1047 的最新 PR head](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) `docs/HANDOFF.md` 開頭，**確認 head／原生 CI 後**才可引用。其他衝突分支不能取代已合併 main。提交本 checkpoint 會觸發新的 head CI；上次 head `68642056fa761fdf7b4480fefed41f5e51d80bca` 的 CI 結果**不可沿用**。
+
+### 1. 四種不同層次，不得再混淆
+
+| 層次 | 2026-11-07 查證事實（隨 main 改動需重驗） | 憑據 |
+|---|---|---|
+| **已合併程式** | New UI2 **四個 Preview 頁面** 📊市場／🎯標的／💼持股／👤我的，路由和 VIEWS 均為四頁；手機 ☰ Drawer + JS_V4、桌機固定 rail；不是五頁頂部導覽。| `shared/ui2_contract/pages.py` 的 `PAGE_IDS`、`src/ui2/views/__init__.py::VIEWS`、`src/ui2/shell/app.py::_render_nav`、`src/ui2/shell/css.py`；已合併 PR #998/#1000/#1001/#1019/#1020 |
+| **已合併部分完成** | 💼 持股 W-11 **批一版面／欄名／誠實空槽**已合併，不等於持股資料、Risk Cap、Action、正式 Auth/Sheet 接線完成；📊 OneBrain Outlook 仍是未啟用呈現槽，不等於 production OneBrain。 | #1028、`src/ui2/views/hold.py`、`src/ui2/views/market.py` |
+| **正式資料／能力接線** | `app_ui2` 當前是 **FAKE 預設**的 Preview；Real-data Preview 唯讀且有限，不是完整 production；正式 OAuth/Active Sheet、資料健康總覽、完整 Evidence→Digest coverage 尚未據此驗證。**已有 UI VM/空槽 ≠ 完整資料能力**。 | `src/ui2/shell/app.py`、`src/services/ui2/real_feed.py`、`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` |
+| **新版目標／待施工** | 使用者後來要求 **📊市場／🎯標的／💼持股／👤我的／🗂資料五頁**、**桌機和手機頂部五頁導航**、頂部 Active Sheet、右上帳號、Dark-only。**方向已提出，但第五頁、頂部導航尚未進 main；像素/互動 Visual Gate 尚未批准**。不得把文件草稿的圖當已實作。 | #1030（使用者方向的提案）、#1048（390/1440 視覺候選）、#1045（DEC-141～145 尚待正式合併） |
+
+**設計衝突處理：** 2026-11-02～04 的四頁抽屜／左 rail 文件，是**現行 Preview 回歸基準／歷史產品版型**；2026-11-06 之後五頁頂部導覽是**後續設計目標**，不是已實作。先以最新客戶裁示＋正式 DEC 與 Active Contract 對照，再通過 Visual Gate 才能改 Code。**#1029** 舊市場／標的線框已關閉且未合併；不能把其 drawer/rail 純文字畫面當五頁施工依據。
+
+### 2. 當下 GitHub 物件清單（**時點快照，永遠須重取**）
+
+| 物件 | 這次查到的狀態 | 不能誤判為 |
+|---|---|---|
+| **#1049／#1044** | #1049 squash **merged** main `63d55badad8dea1b4de767afbd20d31314d46be8`；Issue #1044 **closed**，pandas object float 精確驗證已交付 | **不得再次派 #1044**；不等於 #1038 PIT 或並行 append 無鎖已修 |
+| **#1045** | Ready，head `68d86d7b042ad41a3373a34a12d15e45e63a6791`，DEC-141～145 收斂；原 head 五項 CI success；缺真正非作者 QA | DEC-141～145 已在 main |
+| **#1046** | Ready，head `8288d2fa349a3bfa1f6d2ec4c9a7d01e5ed79b0b`，現行/歷史導覽適用性註記；原 head 五項 CI success；缺非作者 QA | 現行程式已換五頁 |
+| **#1047** | **本文件所屬 PR**，Ready；此 checkpoint 更新後 **head 必然變動，須動態讀 GitHub**，最新 CI/QA 待重新查；三個治理檔 | 本段已在 main 或上一個 head CI 可沿用 |
+| **#1048** | Draft，head `8fcf2a1fca64557b8508fe07e51e558cc7754cb4`，390／1440 頂部五頁**文字候選**；原 head CI success | Layout／Visual Fidelity 已核准或 UI 已施工 |
+| **#1027／#1030／#1034** | 舊版設計／治理 Draft，與共享 BACKLOG/HANDOFF/DECISIONS/PROJECT_RULES 有重疊或衝突；**各自獨特檔未核銷** | 直接依舊 head 合併、刪除或視為正式施工 SSOT |
+| **#1038** | 資料 PR Draft，**PIT FAIL**：2026-11-05 觀測列之 captured_at = 11/07，部分來源 as_of = 11/06；目前**NO MERGE** | CI 綠＝當時已可用的投資訊號／合法回測 |
+| **#1041／#1042／#1043** | 已合併：讀取 Fail-Closed、Parquet 原子寫入、遺留隱藏 `.tmp` ignore 防護 | 三項仍待第一次施工 |
+| **main CI** | `63d55bad...` 當輪查詢**未找到該 SHA 對應 workflow run**；#1049 的 PR head 五項 CI success。 | 把 PR head CI success 寫成 main post-merge success |
+
+### 3. 唯一安全接手工作與分工
+
+1. **ChatGPT（非 Code）**：先重新取 GitHub Gate，給 **#1045 → #1046 → #1047** 補真實非作者 QA／處理文件差異；每一個 PR 合併前再取最新 head/CI/threads/mergeability。**目前不能假稱作者自驗即獨立 QA，也不得繞過 Gate 合併**。成功後更新本現況入口並將已核銷的舊 Draft 逐項關閉；不要增加第六個重複收斂 PR。
+2. **產品視覺決策**：在保留既有四頁內容前提下，比較「沿用手機抽屜/桌機 rail + 第五頁」、「改頂部五頁」、「階段性導航」三案；#1048 的頂部雙列是**候選，不是已選定**。手機 390 的 existing stale/unavailable first-screen nav margin 最低 **162.5px**，距 ≥160px 約 2.5px，新增頁首高度會有退化風險；不得放寬門檻或刪 JS_V4/focus/a11y/viewport regression。
+3. **Claude Code（只做真 Code）**：目前**沒有已核准的新版五頁頂部導航施工包**，不可因 #1048 CI 綠就修改 Layout。通過 Visual/Data/Auth Gate 後才可給最小 UI shell／第五頁唯讀入口／測試批（≤3 項）；與 ChatGPT 文件 PR 勿改同檔。完成 #1049／#1044 的修復已結束、不能重做。
+4. **資料及金融語意**：#1038、完整 Evidence→Decision Digest、正式 Risk Cap／System Action／Auth/Sheet/source/Schema 與缺資料不得填 0 等守衛不因 UI 頁數修改而降低；未驗必標 `NOT VERIFIED`／無法判定。
+
+### 4. 新對話最低成本恢復程序（不讀千行歷史、不依賴聊天）
+
+先讀 **`CLAUDE.md` §-2／§-1.5、`PROCESS.md`、`PROJECT_RULES.md` §1／8／15／23／29／31／32** → 直接讀**本檔最前的本段** → 即時查 main/Open-Draft PR/CI/diff（上表僅索引），必要時讀 PR #1045/#1046/#1047/#1048 的**最新 head** → 對照 `docs/DECISIONS.md`（正式裁示）、`docs/BACKLOG.md`（未完成）、`docs/PROJECT_STATE.md`（穩定知識）和 New UI2 Active Contract；**只讀與本批有關的段落**，不要讓 250 KB 歷史 HANDOFF 或單一聊天摘要覆蓋程式事實。
+
+**硬停止**：同檔競爭、CI 失敗、非作者 QA 缺、未核准新 Layout/Auth/Source/Schema/投資公式/Risk Cap、不可逆操作；不能將 'pending' 轉為 'done'。**對話超長前先在已有 HANDOFF 頂部此區更新已驗快照／在原 PR 存 Remote checkpoint，再給可複製新對話提示語**。歷史尾部各段是**當時記錄**，任何先前『唯一下一步』都不具有現行優先權。
+
+<!-- HANDOFF_ACTIVE_GATE:END -->
+
+
 > **用途**：~~只寫「現在在哪、最近完成、blocker／Decision Required、下一安全接手點」，並指向其他三檔。~~ 短版交接：只寫 current active work、blocker、next safe point、必要的 main／PR／CI 狀態，並指向其他四檔（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）。**不是完成證明**（`PROJECT_RULES.md` 第 1.3 節）；接手時先依第 5 節重查 GitHub。
 > 本檔由 Constitution v1.0 治理 PR #864 建立（DEC-016）；~~本版隨 DEC-054（`CV1-DR-01` 裁示）治理 PR 一起合併（分支 `claude/stock-cv1-dr01`）。~~ ~~本版隨 `CV1-FU-01`（S1-6 合規指南對齊 DEC-054）PR 一起合併（分支 `claude/stock-cv1-fu01`；2026-10-16 更新）。~~ ~~**本版由對話收尾同步 PR 更新**（分支 `claude/stock-close-sync`；2026-10-17，客戶 2026-10-17T01:31Z「對話結束完整性檢查」；純文件同步）。最後一個功能／治理合併為 #866；本同步 PR 合併後 main 會前進，cron 亦會推進 tip —— **main tip 以 GitHub 為準**。~~ ~~**本版隨 #868（VN-00 Blueprint 批）合併**（分支 `claude/investment-inbox-product-design-m1lu7v`；2026-10-17，DEC-057；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 `BP-ERR-01` 第 4 輪文件修正 PR 合併**（同分支名，已重置到 main `f7c60cae` 後重做；2026-10-17，客戶授權，DEC-058；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 vNext 0.9 第一安全修復批（`SEC-1`）＋治理同步（DEC-060、`BP-ERR-01` 結案）PR 合併**（同分支名，已重置到 main `15bc173e` 後重做；2026-10-17，客戶授權）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 #870 後的收尾同步 PR 合併**（同分支名，基於 main `7b803b4f`；2026-10-18；docs-only：`SEC-1` 結案登記、DEC-059／DEC-060 狀態補證據）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#871 已合併，`d3425a91`；2026-10-18 更新）~~**本版隨 vNext 0.9 第二批地基修復 PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `d3425a91`；2026-10-18，客戶指派；產品 code commit `98118b3f`、`a6e500b2` ＋本文件同步）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#872 已合併，`c41ee3fb`；2026-10-18 更新）~~**本版隨 #872 後的收尾同步 PR 合併**（同分支名，基於 main `c41ee3fb`；2026-10-18；docs-only：`UIA-01`／`UIA-02`／`UIA-07` 結案登記）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#873 已合併，`6e71ec60`；其後 #874 `5cec364e` 合併 DEC-061）~~**本版隨 vNext 1.0 Decision Gate 收斂批 PR 合併**（同分支名，基於 main `5cec364e`；2026-10-18，客戶指派；docs-only，研究整理、不施工）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#875 已合併，其後 #876～#878；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B2` 登入持續性 PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `4a576b19`；2026-10-19；產品 code commits `23596359`、`1d169927`、`e7c2cba7`、`efd3d369` ＋本文件同步）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#879 已合併；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B2` 收尾同步 docs PR 合併**（同分支名，基於 main `cef52c2e`；2026-10-19；docs-only）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#880 已合併，`4ce2930b`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B3` `VN1-STORE` 研究 docs 批**（同分支名，基於 main `4ce2930b`；2026-10-19；docs-only，只研究、不實作）；PR 未開；合併後 main SHA 以 GitHub 為準。~~（#881 已合併，`8c4722f4`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` 最小 PoC PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `8c4722f4`；2026-10-19，DEC-063 授權；PoC code commits `f236507f`、`3edc0872` ＋文件 `402220d8` ＋本複稽核文件修正）；PR 待開；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#882 已合併，`a45c7405`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` PoC 收尾同步**（同分支名，基於 main `a45c7405`；2026-10-19；docs-only；未開 PR）。~~（#883 已合併，`72a970a6`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` 憑證規格 docs 批**（同分支名，基於 main `72a970a6`；2026-10-19；docs-only，DEC-064）；合併後 main SHA 以 GitHub 為準。~~（#884 已合併，`a6eaf72c`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` 客戶 GCP 手動設定回報＋驗證結果＋G3 調查結果的事實同步 docs 批**（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `a6a2819c`；2026-10-19；docs-only，無 code／workflow／政策變更）；合併後 main SHA 以 GitHub 為準。~~（其後 #886～#889 已合併；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` Production Wiring 批一起合併**（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `3f4bfbc7`；2026-10-20；code commits `67701562`、`ef905cf0`＋本文件同步）；合併後 main SHA 以 GitHub 為準。~~（#890 已合併，`56904662`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` Pre-Hardening 批**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `56904662` 後重做；2026-10-20；code＋本文件同步；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#891 已合併，`49009687`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` 空白分頁讀取修正**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `49009687` 後重做；2026-10-20；code＋本文件同步；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#892 已合併，`35f67c0c`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` Production Gate 盤點與客戶裁示固化（DEC-066）＋#892／reader smoke 同步**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `574ac784` 後重做；2026-10-20；docs-only＋workflow 一行註解，零行為變更；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#893 已合併，`8995729d`；2026-10-21 更新，有意識的變更，不是漏刪）**本版隨 `VN1-STORE` Environment wiring 批**（DEC-066 C Step 2；分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `8995729d` 後重做；2026-10-21；workflow 一行 `environment:`＋註解、測試守衛、本文件同步；~~未開 PR~~ PR #894（2026-10-21 更新，有意識的變更，不是漏刪））；合併後 main SHA 以 GitHub 為準。
 > **完整歷史**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（`1510f3f0`，約 5150 行；**未刪除**；其 current-state 行寫 main＝`fa26914b`，已過期、不含 #863）。本檔不搬歷史。
