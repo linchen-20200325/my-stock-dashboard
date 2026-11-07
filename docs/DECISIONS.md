@@ -7717,7 +7717,7 @@ Model：Claude Sonnet 5.5  Effort：Medium
 ### DEC-146｜五頁頂部導覽視覺方向核准；不做臨時五頁 Drawer B0（客戶 2026-11-07）
 
 - **客戶原文**：「我核准方案 B 作為五頁頂部導覽的視覺方向，不做臨時 B0 五頁抽屜。請將裁示寫入 GitHub，收斂正式線框與安全驗收條件，再安排 Claude Sonnet＋Medium 最小施工；未通過安全 Gate 不得合併。」
-- **核准的方案對映**：「方案 B」指本次 GPT 提出的**直接以頂部五頁為目標，先收斂線框、安全 Gate，再最小施工**；**不是** #1048 舊 §A 的 B（全擠手機單列）。獲核准的具體方向是原 #1048 的 A／A1：第一列 Active Sheet/帳號、第二列五頁主導覽，手機導航本身可橫滑，🗂資料第五，桌機不留 rail，手機不留 Drawer 作下一版正式導覽；Dark-only、Mobile-first。**不允許先將舊 Drawer/rail 做成五頁作臨時 B0 合併。**
+- **方案標籤／來源分界（ChatGPT 設計解讀，非客戶逐字）**：客戶**已明確確認**「方案 B 作為五頁頂部導覽的視覺方向」及「不做臨時 B0 五頁抽屜」（見上方客戶原文）。依本次對話中 GPT 所提供的流程比較，這裡的「方案 B」是**直接以正式頂部五頁為目標、先完成視覺與安全 Gate、再最小施工**，**不是** #1048 提案 §A 另列的「方案 B：手機所有內容擠單一列」。GPT **進一步將**客戶核准方向具體對映到 #1048 §A 的**方案 A（兩列）**：第一列 Active Sheet/帳號、第二列五頁導航、🗂資料第五，手機橫向捲動，桌機不留 rail，手機不留 Drawer；Dark-only、Mobile-first。客戶**沒有逐字使用「#1048 §A」或「A1」這些對映代號**；此處對映為 GPT 的設計詮釋，不得記成客戶明示逐字核准該代號或固定像素。**不允許先將舊 Drawer/rail 做成五頁作臨時 B0 合併。**
 - **實作授權邊界**：准許依上述設計收斂最小 UI2 五頁路由、🗂誠實 Preview 空殼、頂部雙列導覽及相依測試；施工/交付須遵循獨立正式 Visual/Safety Gate 文件 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`，同一完整可合併工程 PR 不得留下臨時五頁 Drawer。現行 `shared/ia_nav4` 舊 UI 契約不得直接擴充；現有資料/Action/JS/a11y 守衛不能偷刪或降級。
 - **硬限制**：新導航須真實 390×844／1440×900、Streamlit 1.56/1.59.2 測試；保住 `p2_nav_margin_160` ≥160px 與首屏 CTA，既有 JS_V4/focus/keyboard/inert/ESC 的等價守衛及有效 Evidence、正式 CI/QA。未通過真瀏覽器、安全、最新 head CI、獨立 QA 不得 merge，應回到設計 Gate 修正。核准的是**方向**，不是未實測的具體像素或已完成工程。
 - **不包含**：正式 Auth/Sheet 與持續登入、真資料健康度欄位/分母與來源、Digest/OneBrain runtime、Schema、新 API/財報與投資公式、Risk Cap/System Action、production switch 或 Old UI 刪除，均須各自 Gate；欠缺資料只能顯示誠實未接線／無法判定。
