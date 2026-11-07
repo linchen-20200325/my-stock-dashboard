@@ -7,6 +7,20 @@
 >
 > **這份入口尚在 PR #1047**，不在 main；若新對話看到的是舊 main，須明確讀 [#1047 的最新 PR head](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) `docs/HANDOFF.md` 開頭，**確認 head／原生 CI 後**才可引用。其他衝突分支不能取代已合併 main。提交本 checkpoint 會觸發新的 head CI；上次 head `68642056fa761fdf7b4480fefed41f5e51d80bca` 的 CI 結果**不可沿用**。
 
+### 0. 狀態誤判防止表（每次接手必跑，不可只讀 PR 標題）
+
+> 2026-11-07 使用者指出：對話交接把「頁面已實作」與「新五頁導航未施工」混為一談。**本次重新讀 main 程式核對**，以可執行檔案/路由/真實資料 caller 優先，文件僅說明意圖。此處記錄的是**當時驗證結果**，不是未來永遠有效的事實。
+
+| 問題 | 先查 live 證據 | 目前可證實的結論（main `63d55bad...`） | 必須避免的錯誤 |
+|---|---|---|---|
+| 「頁面完成了嗎？」 | `shared/ui2_contract/pages.py::PAGE_IDS` + `src/ui2/views/__init__.py::VIEWS` + `src/ui2/shell/app.py` | **四頁 Preview 可路由**；不等於四頁所有功能/視覺都已完成；W-11 只有第一批 | 只看「線框 Draft」就回答「四頁還沒做」；或把空槽算正式功能 |
+| 「五頁與頂部導覽完成了嗎？」 | 同上 + `src/ui2/shell/css.py` 的 `ui2_nav` media rules | **未完成**；目前手機 Drawer、桌機 rail；第五頁僅 #1030/#1048 文件 | 把新方向或 CI 綠的 docs PR 當已部署 |
+| 「資料/登入/AI 已接上嗎？」 | `src/services/ui2/real_feed.py`、`src/ui2/shell/app.py` 的 FAKE/Real Preview 分支、實際 OAuth/Sheet/Digest caller + tests | FAKE 預設，Real Preview 有限；不可宣稱完整正式接線 | 有 VM、帳戶占位、OneBrain 卡片就宣稱可用 |
+| 「工程修好了嗎？」 | main commit/merged PR + 對應測試/CI；Issue 狀態 | #1049 merged、#1044 closed；#1038 PIT FAIL 仍 Draft | 把舊 BACKLOG 的 OPEN 或舊 HANDOFF 的 next action 當新任務 |
+| 「可以合併嗎？」 | PR **最新 head** 的 CI/QA、非作者 QA、threads、mergeability、main diff | #1045/#1046/#1047 仍待非作者 QA；#1048 僅視覺提案 | 用作者自驗、舊 head CI、草稿 PR 的綠燈代替 Gate |
+
+**交接格式固定為「可驗證已完成／部分完成／僅規格候選／阻塞／下一個安全動作」五欄**；每項要有 `path::symbol` 或 PR/commit + `main/head SHA`，否則標 `UNVERIFIED`。新對話應先回答「目前哪四頁已在 Code、第五頁為何未完成」，再規劃新 UI，**不得重新設計或重派已合併的四頁**。任何 checkpoint SHA/PR 狀態變動後，上表僅是歷史，必須重新 Gate。不要宣稱能監控剩餘 token 百分比；當出現重複查找、互相矛盾、摘要截斷，先保存 GitHub checkpoint，再主動提供完整新對話提示語。
+
 ### 1. 四種不同層次，不得再混淆
 
 | 層次 | 2026-11-07 查證事實（隨 main 改動需重驗） | 憑據 |
