@@ -94,13 +94,114 @@ def load_signals(path: Optional[Path] = None) -> list[dict]:
         raise _ledger_error(p, _e) from _e
 
 
+class LedgerWriteError(RuntimeError):
+    """寫入新帳本失敗(寫暫存檔 / fsync / 驗證 / replace)。**正式檔位元組完全不變**,暫存檔已清。"""
+
+
+def _atomic_write_parquet(df: pd.DataFrame, target: Path) -> None:
+    """原子寫入:同目錄暫存檔 → fsync → 讀回驗證 → `os.replace` → (POSIX)fsync 父目錄。
+
+    為什麼這樣做:舊版直接 `df.to_parquet(正式路徑)`,寫到一半失敗(磁碟滿 / 被中斷)
+    會留下半個 parquet,而帳本是唯一的無 lookahead 樣本 → 歷史被毀(§1)。
+    `os.replace` 在同一檔案系統內是原子的:讀者永遠只看到「完整舊檔」或「完整新檔」。
+
+    - 目標先 `realpath` 解 symlink:維持既有行為(寫到 symlink 指向的檔、symlink 本身保留)。
+    - 暫存檔 `.{name}.{pid}.<random>.tmp` 與目標**同目錄**(跨檔案系統 replace 不原子)。
+    - 驗證失敗 / 任何例外 → `finally` 刪暫存檔,正式檔不動,丟 `LedgerWriteError`(`__cause__` 保留)。
+    - 權限:目標已存在 → `copymode` 沿用舊檔權限;首次建檔 → 0o644(mkstemp 預設 0o600,
+      與一般 `to_parquet` 新檔在 umask 022 下的 0o644 對齊)。
+
+    殘留風險(寫在這裡以免被讀成「已完全無風險」):
+    - 行程被 SIGKILL / 斷電時 `finally` 不會跑 → 可能殘留 `.signals.parquet.*.tmp` 孤兒
+      (**不影響正式檔**,但目前未被 .gitignore 忽略;見 BACKLOG `P0-FWD-STORE-ATOMIC-WRITE`)。
+    - 目錄 fsync 是 best-effort:Windows 無法對目錄 fsync(`os.name == 'nt'` 略過),
+      斷電後「replace 是否已落盤」在 Windows 上沒有保證。
+    - 並行 append 無鎖:兩個行程同時 read-modify-write 仍可能互相蓋掉對方的新列
+      (不會損壞檔案,但會丟一列)。cron 為單一行程,故本批不處理。
+    """
+    import shutil
+    import tempfile
+    from pandas.testing import assert_frame_equal
+
+    real = Path(os.path.realpath(target))
+    real.parent.mkdir(parents=True, exist_ok=True)
+    tmp: Optional[str] = None
+    try:
+        try:
+            fd, tmp = tempfile.mkstemp(dir=str(real.parent), prefix=f'.{real.name}.{os.getpid()}.',
+                                       suffix='.tmp')
+            try:
+                f = os.fdopen(fd, 'wb')
+            except BaseException:
+                os.close(fd)
+                raise
+            with f:
+                df.to_parquet(f, index=False)
+                f.flush()
+                os.fsync(f.fileno())
+            if real.exists():
+                shutil.copymode(real, tmp)
+            else:
+                os.chmod(tmp, 0o644)
+        except Exception as e:  # noqa: BLE001 — 包成明確例外,保留 __cause__
+            raise LedgerWriteError(
+                f'[macro_fwd_test_store] 寫入暫存檔失敗 {real}: {type(e).__name__}: {e} '
+                f'—— 未替換正式檔(原檔位元組不變)') from e
+        try:
+            chk = pd.read_parquet(tmp)
+            if len(chk) != len(df):
+                raise ValueError(f'列數 {len(chk)} != {len(df)}')
+            if list(chk.columns) != list(df.columns):
+                raise ValueError(f'欄位 {list(chk.columns)} != {list(df.columns)}')
+            if set(chk[MACRO_FWD_TEST_KEY].astype(str)) != set(df[MACRO_FWD_TEST_KEY].astype(str)):
+                raise ValueError('唯一鍵集合不一致')
+            # None 與 NaN 視為相等(arrow 字串欄讀回會把 None 變 NaN);其餘逐格必須相等。
+            def _norm(x: pd.DataFrame) -> pd.DataFrame:
+                x = x.reset_index(drop=True).astype(object)
+                return x.where(x.notna(), None)
+            assert_frame_equal(_norm(chk), _norm(df), check_dtype=False)
+        except Exception as e:  # noqa: BLE001
+            raise LedgerWriteError(
+                f'[macro_fwd_test_store] 新檔驗證失敗 {real}: {type(e).__name__}: {e} '
+                f'—— 未替換正式檔(原檔位元組不變)') from e
+        try:
+            os.replace(tmp, real)
+        except Exception as e:  # noqa: BLE001
+            raise LedgerWriteError(
+                f'[macro_fwd_test_store] os.replace 失敗 {real}: {type(e).__name__}: {e} '
+                f'—— 未替換正式檔(原檔位元組不變)') from e
+        tmp = None  # 已成為正式檔,不可再刪
+        # 目錄 fsync:讓 rename 本身落盤。Windows 無法開目錄做 fsync → 略過;失敗不回頭
+        # (replace 已完成,正式檔已是完整新檔),只 log。
+        if os.name != 'nt':
+            try:
+                dfd = os.open(str(real.parent), os.O_RDONLY)
+                try:
+                    os.fsync(dfd)
+                finally:
+                    os.close(dfd)
+            except OSError as e:
+                print(f'[macro_fwd_test_store] ⚠️ 父目錄 fsync 失敗(best-effort,已 replace){real.parent}: '
+                      f'{type(e).__name__}: {e}')
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
+            except OSError as e:  # 不吞原例外:只 log 孤兒位置
+                print(f'[macro_fwd_test_store] ⚠️ 暫存檔清理失敗(請人工刪除){tmp}: '
+                      f'{type(e).__name__}: {e}')
+
+
 def append_signals(rows: list[dict], path: Optional[Path] = None) -> int:
     """append 快照列,回「本次**實際新寫入**的列數」。
 
     同 `date` 已存在 → 保留既有那筆、跳過新列並 log(見模組 docstring);
-    全部被跳過時不重寫檔案、回 0。
+    全部被跳過時不重寫檔案、不建暫存檔、回 0。寫入為原子(見 `_atomic_write_parquet`)。
 
     Raises:
+        LedgerWriteError: 新檔寫入 / 驗證 / replace 失敗 → 正式檔不變、暫存檔已清。
         LedgerReadError: 既有帳本存在但讀不出來 → **fail-closed**,不寫入任何位元組
             (讀舊檔發生在任何寫入之前;見 `load_signals`)。
         ValueError: 列缺唯一鍵、同批內唯一鍵重複,或帶了 schema 外的欄位。
@@ -147,5 +248,5 @@ def append_signals(rows: list[dict], path: Optional[Path] = None) -> int:
 
     p = Path(path) if path else MACRO_FWD_TEST_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
-    _out.to_parquet(p, index=False)
+    _atomic_write_parquet(_out, p)
     return len(_new)

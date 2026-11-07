@@ -1882,3 +1882,12 @@
 - **未解（後續）**：`append_signals()` 寫入**非原子**（直接 `to_parquet(p)`，寫入中途失敗可能留下半檔）；本批未處理，建議後續改「同目錄暫存檔＋`os.replace`」。
 - **禁止事項聲明**：未改任何 Parquet 資料檔、`shared/macro_forward_test_schema.py`（Schema）、日期語意、公式、Risk Cap、投資訊號；#1038 維持 Draft、未修補歷史列。
 - **補修（2026-11-07，ChatGPT 靜態審查）**：`load_signals` 改以 `len(df)==0` 判空帳本、`None` 與「有列但缺唯一鍵／零欄」皆丟 `LedgerReadError`（`DataFrame.empty` 對 shape=(n,0) 也為 True，舊順序會把畸形表當空帳本）；新增注入測試與 M3 突變（改回 `df.empty` 先判斷→轉紅）。
+
+## P0-FWD-STORE-ATOMIC-WRITE（2026-11-07；補註，只追加；獨立 QA 待做）
+
+- **問題**：`append_signals()` 以 `_out.to_parquet(正式路徑)` 直接寫入；寫入中途失敗（磁碟滿／中斷）會留下半個 parquet，毀掉凍結帳本。`P0-FWD-STORE-FAILCLOSED` 段列的「未解：寫入非原子」**已由本段處理**。
+- **修法**（`src/data/macro/macro_fwd_test_store.py::_atomic_write_parquet`）：`realpath` 解 symlink（維持「寫入目標檔、symlink 保留」）→ 同目錄 `tempfile.mkstemp(.{name}.{pid}.*.tmp)` → 寫入＋`flush`＋`os.fsync` → `pd.read_parquet` 讀回驗證（列數／欄位順序／唯一鍵集合／逐格相等，None≡NaN）→ `os.replace` → POSIX 父目錄 `fsync`（best-effort）。任何失敗：`finally` 刪 tmp、正式檔位元組不變、丟 `LedgerWriteError`（保留 `__cause__`）。權限：既有檔 `copymode`；首次建檔 0o644。同日冪等路徑不建 tmp、不碰檔案。`load_signals`／`LedgerReadError` 未動。
+- **驗證邊界**：讀回驗證以真實 repo 帳本實測（曾抓到 None→NaN 的假陽性，已正規化）。
+- **證據**：`tests/test_macro_fwd_test_store_atomic_write.py`（26 項）；突變：① 改回直接 `to_parquet(p)`→13 failed；② 拿掉 finally 清理→12 failed；③ 拿掉驗證→5 failed；④ 拿掉 `os.replace`→由自動突變測試轉紅。獨立 QA 待做。
+- **殘留風險（open）**：(a) SIGKILL／斷電時 `finally` 不跑，可能殘留 `.signals.parquet.*.tmp` 孤兒（不影響正式檔）；實測該路徑**未被 ignore 規則涵蓋**，`scripts/publish_data_pr.py::detect`（`status -uall`）會視為 `??` 並納入 data PR——**建議後續**：ignore 規則加 `data_cache/**/.*.tmp`，或 publish helper 的 detect 排除 dotfile `*.tmp`（本批未改）。(b) 目錄 fsync 為 best-effort，Windows 略過，斷電後 rename 是否落盤無保證。(c) 並行 append 無鎖：兩行程同時讀改寫仍可能互蓋新列（不損壞檔案）；cron 為單行程。(d) 首次建檔權限固定 0o644，umask 更嚴時比一般 `to_parquet` 寬。
+- **禁止事項聲明**：未改任何 Parquet 資料檔、Schema、日期語意、公式、資料來源、Risk Cap、System Action、`scripts/*`、workflow；#1038 維持 Draft。
