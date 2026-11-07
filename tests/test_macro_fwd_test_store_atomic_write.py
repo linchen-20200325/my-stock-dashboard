@@ -442,7 +442,10 @@ _MUT_NO_VERIFY = [("            chk = pd.read_parquet(tmp)\n", "            chk 
 _MUT_NO_REPLACE = [("            os.replace(tmp, real)\n", "            shutil.copyfile(tmp, real)\n")]
 
 
-_MUT_NO_EXACT_ONLY = [("check_dtype=False, check_exact=True)", "check_dtype=False)")]
+# D6 之後純量層已是獨立必經檢查:單獨拿掉 check_exact 不再讓漂移漏網(縱深層被純量層覆蓋);
+# 因此 check_exact 的獨立價值改為「純量層也被拿掉時,它仍是最後一道防線」。
+_MUT_NO_EXACT_ONLY = [("check_dtype=False, check_exact=True)", "check_dtype=False)"),
+                      ("            if not nx and not _scalar_exactly_equal(x, y):", "            if False:")]
 _MUT_NO_TYPES = [("        if ka in 'biufcM' and ka != kb:", "        if False:"),
                  ("            if not nx and _value_category(x) != _value_category(y):", "            if False:")]
 _MUT_NO_EXACT_AND_TYPES = _MUT_NO_EXACT_ONLY + _MUT_NO_TYPES
@@ -511,3 +514,176 @@ class TestMutationsAreCaught:
 
     def test_m4_no_os_replace_is_caught_by_replace_failure(self, tmp_path, monkeypatch):
         assert _check_replace_fail(_load_mutant(_MUT_NO_REPLACE), tmp_path, monkeypatch) != []
+
+
+# ═════════════════════════════════════════════════════════════════════
+# D6 / Issue #1044 — 純量層(版本無關)的精確比較
+#   QA 回報 pandas 2.0.x 對 object 浮點欄 `assert_frame_equal(check_exact=True)` 無效(1e-9 漂移漏網)。
+#   以下所有案例都直接針對「df 端 object 欄」構造,並在另一組測試把 assert_frame_equal 整層
+#   monkeypatch 成 no-op,證明純量層(+空值/型別層)單獨就能擋下全部漂移 —— 這就是版本無關的證據。
+# ═════════════════════════════════════════════════════════════════════
+import numpy as np  # noqa: E402
+
+_X = 'x'
+
+
+def _vr_run(mod, d: Path, mp, orig, back, rd: str, noop_afe: bool):
+    """df 端 object 欄 `x`=[orig, orig],讀回端 `x`=[back, orig](dtype 由 rd 決定)。
+
+    回傳 ('rejected'|'accepted', 違規清單):違規 = 拒絕時正式檔/目錄被動過。
+    """
+    led = d / 'signals.parquet'
+    pd.DataFrame({MACRO_FWD_TEST_KEY: ['2026-08-16'], _X: [1.0]}).to_parquet(led, index=False)
+    before = _snapshot(d)
+    df = pd.DataFrame({MACRO_FWD_TEST_KEY: ['2026-08-17', '2026-08-18'],
+                       _X: pd.Series([orig, orig], dtype=object)})
+    real_read = pd.read_parquet
+
+    def _read(path, *a, **k):
+        out = real_read(path, *a, **k)
+        if str(path).endswith('.tmp'):
+            out = out.copy()
+            second = float('nan') if (rd == 'f8' and orig is pd.NA) else orig   # pd.NA 不能進 float64 欄
+            out[_X] = pd.Series([back, second], dtype='float64' if rd == 'f8' else object)
+        return out
+    mp.setattr(pd, 'read_parquet', _read)
+    if noop_afe:
+        mp.setattr('pandas.testing.assert_frame_equal', lambda *a, **k: None)
+    bad: list[str] = []
+    try:
+        mod._atomic_write_parquet(df, led)
+        outcome = 'accepted'
+    except mod.LedgerWriteError:
+        outcome = 'rejected'
+        if _snapshot(d) != before:
+            bad.append('拒絕時正式檔 sha256/mtime 或目錄被改動(含殘留 tmp)')
+    mp.undo()
+    return outcome, bad
+
+
+# (id, 原值, 讀回值, 讀回端 dtype) —— 一律「必須拒絕」
+_D6_REJECT = [
+    ('1.0->1.000000001', 1.0, 1.000000001, 'f8'),
+    ('0.0->1e-9', 0.0, 1e-9, 'f8'),
+    ('42.0->42.000001', 42.0, 42.000001, 'f8'),
+    ('round2', 1.23456789, float(round(1.23456789, 2)), 'f8'),
+    ('nextafter_up', 1.1, float(np.nextafter(1.1, np.inf)), 'f8'),
+    ('nextafter_down', 1.1, float(np.nextafter(1.1, -np.inf)), 'f8'),
+    ('float32_truncation', 0.1, float(np.float32(0.1)), 'f8'),
+    ('int->float', 3, 3.0, 'f8'),
+    ('int_precision_2**53+1', 2 ** 53 + 1, 2 ** 53, 'obj'),
+    ('bool->int', True, 1, 'obj'),
+    ('bool->float', True, 1.0, 'f8'),
+    ('str->number', '1', 1, 'obj'),
+    ('number->str', 1.0, '1.0', 'obj'),
+    ('nan_vs_zero', float('nan'), 0.0, 'f8'),
+    ('zero_vs_nan', 0.0, float('nan'), 'f8'),
+    ('none_vs_zero', None, 0.0, 'f8'),
+    ('inf->-inf', float('inf'), float('-inf'), 'f8'),
+    ('inf->big', float('inf'), 1e308, 'f8'),
+    ('big->inf', 1e308, float('inf'), 'f8'),
+    ('str_changed', 'abc', 'abd', 'obj'),
+]
+# 必須通過(良性白名單)
+_D6_ACCEPT = [
+    ('identical_float', 1.5, 1.5, 'f8'),
+    ('np.float64_vs_float', np.float64(1.5), 1.5, 'f8'),
+    ('float_vs_np.float64', 1.5, np.float64(1.5), 'obj'),
+    ('np.bool_vs_bool', np.bool_(True), True, 'obj'),
+    ('bool_vs_np.bool_', True, np.bool_(True), 'obj'),
+    ('np.int64_vs_int', np.int64(3), 3, 'obj'),
+    ('int_vs_np.int64', 3, np.int64(3), 'obj'),
+    ('None_vs_NaN', None, float('nan'), 'f8'),
+    ('NaN_vs_None', float('nan'), None, 'obj'),
+    ('pd.NA_vs_NaN', pd.NA, float('nan'), 'f8'),
+    ('NaN_vs_pd.NA', float('nan'), pd.NA, 'obj'),
+    ('+inf_same', float('inf'), float('inf'), 'f8'),
+    ('-inf_same', float('-inf'), float('-inf'), 'f8'),
+    ('neg_zero_equals_zero', 0.0, -0.0, 'f8'),
+    ('zero_equals_neg_zero', -0.0, 0.0, 'f8'),
+    ('same_str', 'abc', 'abc', 'obj'),
+    ('large_int_same', 2 ** 53 + 1, 2 ** 53 + 1, 'obj'),
+]
+
+
+class TestScalarLayerExactness:
+    @pytest.mark.parametrize('cid,orig,back,rd', _D6_REJECT, ids=[c[0] for c in _D6_REJECT])
+    def test_reject_with_pandas_layer_enabled(self, tmp_path, monkeypatch, cid, orig, back, rd):
+        out, bad = _vr_run(store, tmp_path, monkeypatch, orig, back, rd, noop_afe=False)
+        assert out == 'rejected' and bad == []
+
+    @pytest.mark.parametrize('cid,orig,back,rd', _D6_REJECT, ids=[c[0] for c in _D6_REJECT])
+    def test_reject_even_when_assert_frame_equal_is_noop(self, tmp_path, monkeypatch, cid, orig, back, rd):
+        """版本無關的證據:pandas 的 assert_frame_equal 層整個失效(模擬 pandas 2.0.x),仍全數擋下。"""
+        out, bad = _vr_run(store, tmp_path, monkeypatch, orig, back, rd, noop_afe=True)
+        assert out == 'rejected' and bad == []
+
+    @pytest.mark.parametrize('noop', [False, True])
+    @pytest.mark.parametrize('cid,orig,back,rd', _D6_ACCEPT, ids=[c[0] for c in _D6_ACCEPT])
+    def test_benign_equivalences_accepted(self, tmp_path, monkeypatch, cid, orig, back, rd, noop):
+        out, bad = _vr_run(store, tmp_path, monkeypatch, orig, back, rd, noop_afe=noop)
+        assert out == 'accepted', f'{cid} 被誤拒'
+
+    def test_untampered_object_float_column_passes(self, tmp_path):
+        """sanity:df 端 object 浮點欄、真實讀回端 float64、未竄改 → 通過(不誤殺)。"""
+        led = tmp_path / 'signals.parquet'
+        df = pd.DataFrame({MACRO_FWD_TEST_KEY: ['2026-08-17', '2026-08-18'],
+                           _X: pd.Series([0.1 + 0.2, None], dtype=object)})
+        store._atomic_write_parquet(df, led)
+        assert led.is_file() and _tmp_leftovers(tmp_path) == []
+
+    def test_scalar_helper_semantics(self):
+        f = store._scalar_exactly_equal
+        assert f(0.0, -0.0) and f(float('inf'), float('inf')) and not f(float('inf'), float('-inf'))
+        assert not f(1.0, np.nextafter(1.0, 2.0)) and f(np.float64(2.5), 2.5)
+        assert f(True, np.bool_(True)) and not f(True, False)
+        assert f(np.int64(7), 7) and not f(2 ** 53 + 1, 2 ** 53)
+        assert f('a', 'a') and not f('a', 'b')
+
+
+_D6_MUT_NO_SCALAR = [("            if not nx and not _scalar_exactly_equal(x, y):", "            if False:")]
+_D6_MUT_TOLERANCE = [("        return float(x) == float(y)",
+                      "        return __import__('math').isclose(float(x), float(y), rel_tol=1e-6, abs_tol=1e-9)")]
+_D6_MUT_NO_CATEGORY = [("            if not nx and _value_category(x) != _value_category(y):", "            if False:")]
+_D6_MUT_NAN_CONFLICT = [("            nx, ny = _is_null(x), _is_null(y)", "            nx, ny = (x is None), (y is None)")]
+
+
+def _slipped(mod, tmp_path, mp) -> set:
+    out_ids = set()
+    for n, (cid, orig, back, rd) in enumerate(_D6_REJECT):
+        d = tmp_path / str(n)
+        d.mkdir()
+        out, _ = _vr_run(mod, d, mp, orig, back, rd, noop_afe=True)
+        if out == 'accepted':
+            out_ids.add(cid)
+    return out_ids
+
+
+class TestScalarLayerMutations:
+    """D6 突變:拿掉/弱化純量層必須使上面的案例轉紅(此處的「紅」= 突變版沒擋下該擋的案例)。"""
+
+    def test_m1_remove_scalar_layer_float_drifts_slip_through_noop_afe(self, tmp_path, monkeypatch):
+        slipped = _slipped(_load_mutant(_D6_MUT_NO_SCALAR), tmp_path, monkeypatch)
+        for must in ('1.0->1.000000001', '0.0->1e-9', 'nextafter_up', 'nextafter_down',
+                     'float32_truncation', 'round2', 'int_precision_2**53+1', 'inf->big'):
+            assert must in slipped, f'拿掉純量層後 {must} 沒有漏網(守衛沒有獨立價值)'
+
+    def test_m2_tolerance_instead_of_equality_is_caught(self, tmp_path, monkeypatch):
+        slipped = _slipped(_load_mutant(_D6_MUT_TOLERANCE), tmp_path, monkeypatch)
+        assert {'1.0->1.000000001', '0.0->1e-9', 'nextafter_up', 'float32_truncation'} <= slipped
+
+    def test_m3_remove_category_check_is_caught(self, tmp_path, monkeypatch):
+        slipped = _slipped(_load_mutant(_D6_MUT_NO_CATEGORY), tmp_path, monkeypatch)
+        assert {'bool->int', 'bool->float', 'int->float'} <= slipped
+
+    def test_m4_nan_treated_as_conflict_breaks_none_nan_equivalence(self, tmp_path, monkeypatch):
+        mod = _load_mutant(_D6_MUT_NAN_CONFLICT)
+        wrongly_rejected = []
+        cases = [c for c in _D6_ACCEPT if 'NaN' in c[0] or 'NA' in c[0]]
+        for n, (cid, orig, back, rd) in enumerate(cases):
+            d = tmp_path / str(n)
+            d.mkdir()
+            out, _ = _vr_run(mod, d, monkeypatch, orig, back, rd, noop_afe=False)
+            if out == 'rejected':
+                wrongly_rejected.append(cid)
+        assert wrongly_rejected, '空值規則被弱化後,None↔NaN 正向案例應被誤拒(守衛才有意義)'
