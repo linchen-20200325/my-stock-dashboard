@@ -11,6 +11,7 @@
 | main | `08bf2b68e5cbd63005c75f5900530a9a37598769`，#1046：舊四頁／抽屜規格適用性註記 | 不代表新五頁程式已完成 |
 | DEC-141～145 | #1045 squash 合併至 main `848fd977ea79179c9f2e6f3fcd5395b8901824a7` | 不包含後續客戶 DEC-146 |
 | PIT scalar 守衛 | #1049 merged `63d55badad8dea1b4de767afbd20d31314d46be8`，修正 pandas 純量精度問題 | 不代表 #1038 的歷史觀測 PIT 資格通過 |
+| cron 資料發布路徑 | #1035（`8d95847f`，資料分支＋PR 發布）、#1036（`44b6f34e`，macro-history）、#1037（`1029078e`，sector-flow）、#1042（`27f42d18`，原子寫入修正）經 GitHub PR API 查證均已 merged | **真實發布端到端結果：NOT VERIFIED（本快照未驗證）**；不能用「PR 已合併」當作 cron 已實際成功發布。發布 PR 仍須正確觸發原生檢查、保留權限／人工合併 Gate，#1038 PIT 獨立阻塞不變 |
 | New UI2 現行 runtime | 依前次獨立讀碼與 Claude #1048 2026-11-07 唯讀前置評論：📊市場、🎯標的、💼持股、👤我的 四頁 Preview，可切 FAKE 場景；Real Preview 目前僅兩類有限資料；手機 Drawer／桌機 rail | 「五頁方向已裁示」≠正式五頁路由/View、完整資料/正式 Auth、完整 OneBrain 已接線；現輪未執行瀏覽器重測 |
 | 遠端分支清理 | GitHub 此輪掃描為 11 個分支（含 main），上一輪列出的七個無 open PR 舊工作分支已不在遠端 | 不能憑分支名稱保證剩餘分支可安全刪除 |
 
@@ -19,7 +20,7 @@
 | PR | 類型、Head 8 碼 | 當輪狀態 | 下一個必要行動／阻塞 |
 |---|---|---|---|
 | [#1050](https://github.com/linchen-20200325/my-stock-dashboard/pull/1050) | 文件：DEC-146 與正式五頁頂部兩列 Safety Gate；`b4ec40dd` | Open、non-Draft、mergeable；PR workflow **completed/success** | **缺獨立非作者 QA 與每一 required job/review 細項證據**；驗收後依 latest head 合併，方能正式施工 |
-| [#1047](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) | 治理 BACKLOG/HANDOFF/PROJECT_STATE；`1c8e1e68` | Open、non-Draft、mergeable；workflow completed/success | 修正 #1045/#1046 已合併及 #1044/#1049 已修等過期進度，核實 #1050 與本文，再獨立 QA/required CI 後合併 |
+| [#1047](https://github.com/linchen-20200325/my-stock-dashboard/pull/1047) | 治理 BACKLOG/HANDOFF/PROJECT_STATE；`1c8e1e68` | Open、non-Draft；當輪 connector mergeable=true，第二組 QA 指出其 GitHub `mergeable_state=behind`（需更新 main）；workflow completed/success | 修正 #1045/#1046 已合併及 #1044/#1049 已修等過期進度，核實 #1050 與本文，再獨立 QA/required CI 後合併 |
 | [#1048](https://github.com/linchen-20200325/my-stock-dashboard/pull/1048) | 舊五頁視覺提案；`8fcf2a1f` | **Draft**；workflow success | 2026-11-07 客戶已裁示**流程方案 B＝直接正式頂部五頁，不做臨時五頁 Drawer**；#1048 原視覺 A1 兩列對應 #1050。比對 unique design 成分後決定保留/關閉，不直接合併過期提案 |
 | [#1038](https://github.com/linchen-20200325/my-stock-dashboard/pull/1038) | macro-forward-test 資料發布；`9e7014c7` | **Draft**；workflow success | **PIT FAIL 未解除**：2026-11-05 observation_date 的 captured_at/source as_of 時間落後；需確認逐列原始來源與發佈資格，禁止以 CI 綠取代 PIT 證據，**NO MERGE** |
 | [#1034](https://github.com/linchen-20200325/my-stock-dashboard/pull/1034) | 舊治理同步 Draft；`fea34845` | Draft、mergeable=false，workflow success | DEC-143～145 已從其內容收斂至 #1045 main；餘下獨有文件逐項核銷，禁止直接 merge/刪 branch |
