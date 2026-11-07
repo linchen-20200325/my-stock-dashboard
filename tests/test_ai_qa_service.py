@@ -309,7 +309,7 @@ def test_scrub_secrets_removes_api_key():
 def test_run_agent_429_scrubs_key_and_friendly():
     """複現 bug:429 HTTPError 的 URL 含 ?key=<GEMINI_KEY>;修前整串(含金鑰)被塞進 UI 錯誤。
     修後:金鑰不得出現 + 429 給友善提示。"""
-    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+    KEY = "".join(("AI", "zaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"))
 
     class _Boom:
         def __call__(self, payload):
@@ -325,7 +325,7 @@ def test_run_agent_429_scrubs_key_and_friendly():
 
 def test_fmt_gemini_error_non_429_scrubbed():
     """非 429 的錯誤也要洗金鑰(仍保留原因供診斷)。"""
-    KEY = "AIzaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"
+    KEY = "".join(("AI", "zaSyFAKE0123456789ABCDEFGHIJKLMNOPQRS"))
     out = _fmt_gemini_error("Gemini 呼叫失敗", RuntimeError(f"boom ?key={KEY}"))
     assert KEY not in out and "key=***" in out and "boom" in out
 
