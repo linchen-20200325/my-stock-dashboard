@@ -4,7 +4,7 @@
 
 ## 一、責任邊界（不可互換）
 
-`Canonical Source Data → Deterministic Validity/Calculation → Evidence Registry (候選持久化/索引層) → Decision Digest（完整可追溯語意） + Human UI ViewModel（精簡顯示） → 單一 OneBrain 六領域按需分析 → Global Reviewer → System Action Authority / Risk Cap`
+`Canonical Source Data → Deterministic Validity/Calculation → Risk Cap / System Action Authority（既有唯一正式判定） → Complete Evidence（候選索引層） → [Decision Digest（完整可追溯） + Human UI ViewModel（精簡顯示）] → OneBrain 六領域唯讀分析 → Global Reviewer（只讀解釋，不回寫正式判定）`
 
 - **Source Data**：來源只負責取用、清理、標準化、可追溯與時間同步；L0/L2 原有核准公式不改。
 - **Evidence Registry**：此層在 repo 內尚無已確認 production 實作；不等於 `RULE_ID_ALLOWLIST`。可先做 immutable `EvidenceSnapshot`＋stable `evidence_id` 規格，不預設必須新建資料庫或跨 repo schema。
@@ -21,7 +21,7 @@
 | `metric_id`, `value`, `unit`, `period_kind` | canonical 語意、數值含 true 0、單位及 point/quarter/TTM/forward 等 |
 | `observation_date`, `period_start`, `period_end`, `fetched_at` | 完整分離資料日、期間與拉取時刻，避免錯期；timestamp 帶 timezone |
 | `source_id`, `source_locator`, `source_tier`, `source_version` | 一手/第三方/推論；URL/文件/發布日期，不保存 secret |
-| `data_status`, `reason_code`, `coverage`, `freshness` | 觀測成功 / missing / stale / unavailable / not_verified / proxy / not_applicable；`reason_code` 可追溯。不得用 missing→0/neutral/safe |
+| `data_status`, `reason_code`, `coverage`, `freshness` | `data_status` 僅沿用現行五態 OK / Missing / Stale / Unavailable / Not Evaluated；`proxy`／`not_verified`／`not_applicable` 不得新增成第六態，須依正式契約另以 capability、source qualification、reason_code 或適用性欄位揭露。不得用 missing→0/neutral/safe |
 | `calc_rule_id`, `calc_version`, `assumptions`, `dependencies` | 取樣/衍生/公式版本、時間對齊和依賴證據 ID；保留受限性 |
 | `claim_id`, `claim_status`, `supports_claim` | 已確認事實／有限代理／研究假設，並標對正反結論的證據支持方向 |
 | `contradicts_evidence_ids`, `limitation_codes` | 反證／限制來源，不能以缺資料當反證為 0 |
@@ -63,3 +63,9 @@
 3. 需客戶授權新 schema/模型語意/production caller/資料來源/Token 成本後，另開 High effort 工程 PR，targeted + full QA + mutation + CI。任何正式 Risk Cap／唯一行動權威都不在本 Draft 施工範圍。
 
 **仍未完成**：真實資料 API live probe、FinMind 現金流口徑核對、production Evidence Registry、Digest 接線、正反證校驗與全域 OneBrain 實際運行。
+
+
+## 七、2026-11-07 草案一致性修正（不是新 Schema 核准）
+
+- 修正原研究箭頭讓 Global Reviewer 看似可把 AI 輸出再送進 Risk Cap／System Action Authority 的誤讀；正式風控與唯一操作權威必須先由確定性邏輯決定，AI 只讀並解釋。
+- 候選 `data_status` 遵守現行五態；代理、未驗證、適用性與接線能力不得偷換成新狀態。其精確欄位仍需 Existing Registry/Digest mapping、Decision Gate、獨立 QA；本 PR 不授權 production 變更。
