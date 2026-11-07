@@ -464,23 +464,24 @@ def primary_slot_html(twii_card: CardVM | None) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════
-# DEC-137：手機抽屜／桌機 rail 的帳戶摘要（固定占位；J-6 採 B＝Capability 軸）
+# DEC-146：頂部導覽第一列（Active Sheet 狀態＋帳號入口狀態；固定占位）
 # ════════════════════════════════════════════════════════════════════
-#: 標題與原因句（統一施工規格 §7；原因句沿用既有字樣家族）。
-DRAWER_ACCOUNT_TITLE = "Google 帳號"
-DRAWER_ACCOUNT_BUTTON = "Google 登入"
-DRAWER_ACCOUNT_REASON = "登入與 Sheet 操作尚未開放"
-DRAWER_ACCOUNT_MORE = "完整設定在 👤 我的"
+TOP_SHEET_LABEL = "Active Sheet"
+TOP_ACCOUNT_LABEL = "帳號"
 
 
-def drawer_account_html() -> str:
-    """抽屜／rail 帳戶摘要：**零輸入、固定占位**（⛔ 讀 `ui2_account`／`ui2_dev`／query；⛔ 宣稱已登入／未登入）。
+def top_status_row_html(banner_text: str | None = None, banner_note: str = "", *, note_hidden_on_mobile: bool = False) -> str:
+    """頂部第一列：Active Sheet 狀態｜資料模式標示（FAKE 示意資料／Real-data Preview；DEC-146 方案 A 併入）｜帳號入口狀態。
 
-    `⬜ 尚未提供` 屬 **Capability 軸**（DEC-124／DEC-130；⛔ 放進 Data State「狀態」欄、⛔ 第六態）；
-    登入鈕 disabled（`aria-disabled`、非 button 元素、不可觸發）。DEC-129 的「⬜ 尚未登入」字面待正式 auth contract。
-    """
+    Active Sheet／帳號：**零輸入、固定占位**（⛔ 讀 `ui2_account`／`ui2_dev`／query／session；⛔ 宣稱已登入／未登入／已選 Sheet）。
+    `⬜ 尚未提供` 屬 **Capability 軸**（DEC-124／DEC-130；功能尚未接線）；不是按鈕、不可聚焦、不可觸發（正式 Auth／Sheet 契約之前）。
+    模式標示＝既有 `banner_html`（文字契約 `PREVIEW_BANNER_*`／`REAL_PREVIEW_BANNER_*` 不變；`role=note`），只是位置從頁首獨立一行
+    併入本列（省下一個容器與其間距）。桌機（≥769px）本列單行（Sheet｜標示｜帳號）；手機本列固定分兩行
+    （標示一行、Sheet／帳號一行；CSS 以固定高度讓位），⛔ 截斷或隱藏標示文字。"""
     chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
-    btn = cta_html(CtaVM(DRAWER_ACCOUNT_BUTTON, enabled=False, disabled_reason=DRAWER_ACCOUNT_REASON))
-    return ('<div class="ui2-drawer-acct" data-ui2-drawer-account="1" data-axis="capability" data-state="not_provided">'
-            f'<div class="ui2-drawer-acct__title">{escape(DRAWER_ACCOUNT_TITLE)}</div>{chip}{btn}'
-            f'<div class="ui2-drawer-acct__more">{escape(DRAWER_ACCOUNT_MORE)}</div></div>')
+    mode = (f'<span class="ui2-top1__mode" data-ui2-top-item="mode">'
+            f'{banner_html(banner_text, banner_note, note_hidden_on_mobile=note_hidden_on_mobile)}</span>') if banner_text else ""
+    return ('<div class="ui2-top1" data-ui2-top="status" data-axis="capability" data-state="not_provided">'
+            f'<span class="ui2-top1__item" data-ui2-top-item="sheet">{escape(TOP_SHEET_LABEL)} {chip}</span>'
+            f'{mode}'
+            f'<span class="ui2-top1__item" data-ui2-top-item="account">{escape(TOP_ACCOUNT_LABEL)} {chip}</span></div>')
