@@ -1011,3 +1011,20 @@ DEC-086 規則已於 main，本表已落地。
 - **殘留／注意**：被 SIGKILL 時可能留下 `data_cache/macro_forward_test/.signals.parquet.*.tmp`，**目前會被 publish helper 當未追蹤檔納入 data PR**（後續 BACKLOG 建議忽略 dotfile tmp）；若見到請直接刪除該 tmp，**不要**動 `signals.parquet`。並行 append 無鎖。
 - 未動：Parquet 資料、Schema、日期語意、公式、Risk Cap、`scripts/*`、workflow。
 - QA 回修（2026-11-07）：讀回驗證改精確比較（`check_exact=True`＋型別層，禁微小漂移）；既有帳本唯讀時於建 tmp 前拒寫（`LedgerWriteError`）。若 cron 因「型別改變」類驗證失敗而紅燈＝新列欄位型別與既有列不一致，**不要放寬驗證**，先修寫入端型別。詳見 BACKLOG `P0-FWD-STORE-ATOMIC-WRITE`。
+
+## 2026-11-07｜GitHub 獨立治理可恢復接手點（本段優先於上方歷史 Handoff）
+
+> **快照**：建立本文檔案時 main `76abd16039e52b90079eb5e17d88641747f00897`；主分支隨時會變，下次先重新查 SHA／Open-Draft PR head/diff／CI/QA／branches。**本補註 PR 尚未合併，不能把它當 main 完成事實。**
+
+| 範圍 | 本次已驗事實／唯一安全接續 |
+|---|---|
+| 已入 main | #1041 Fail-Closed、#1042 Parquet 原子寫入、#1043 忽略孤兒 hidden `.tmp`、#1031 Research Evidence 草案、#1033 supersession/data-gap 稽核；舊 Handoff「原子寫入尚未修」「暫存檔不受 ignore」屬歷史，**不能再當最新** |
+| 開放中的工程與資料 | #1044（Claude Code Python exact object-float 修復，Issue OPEN，沒有驗到對應 PR）；#1038（PIT FAIL，Draft，不得合併） |
+| 本輪文件收斂 | #1045（DEC-141～145 從 Draft 逐字收斂，CI/QA pending）；#1046（PROJECT_RULES + 兩份導航契約 2026-11-06 新五頁方向註記，CI/QA pending）；本 docs PR 只更新有效知識、Backlog 與本接手點 |
+| 舊 Draft 未結案 | #1027 W-11 線框及三份共享治理檔；#1030 五頁藍圖／PDF／六領域研究與共有 docs；#1034 專案記憶/資料資格 docs，三份都有與新 main 的治理檔差異，須**逐檔核銷**，不可直接舊 base merge 也不可因部分遷移便關閉 |
+| 正式產品方向 | 五頁（📊市場／🎯標的／💼持股／👤我的／🗂資料）＋桌手機頂部導航/Active Sheet/右上帳號/Dark-only；六領域協調 OneBrain＋全域反證，Human UI 簡潔／完整 Digest 分離；**目前 runtime 仍非五頁，正式 Layout/Auth/JS/Schema/AI 接線另待 Gate** |
+| **下一個唯一安全動作（ChatGPT）** | 檢查 #1045／#1046 最新 head 的完整 CI 與非作者 QA；可安全合併才依序合併。再對 #1034 的 `PROJECT_RULES §0.4`、其餘 #1030/#1027 獨立文件逐一核銷，依 scope guard 優先五頁 Layout Gate，禁止把技術債當主線 |
+| **下一個唯一安全動作（Claude Code）** | 依 Issue #1044 只改 `src/data/macro/macro_fwd_test_store.py` + targeted tests，跑必要 CI／QA，提交獨立 PR，不自行 merge；若 #1044 不可重現，只提交可驗證反證，勿憑空修改 |
+
+**停止條件**：任何新 Layout、Risk Cap／投資公式／Source、Sheet OAuth/credential、不可逆寫入、OneBrain schema/runtime、正式資料發布 PIT 變更；及新 CI／QA 失敗、同檔競爭。每批完成→重新 GitHub Gate→推薦下一個最小安全 batch，非阻擋 P2 不自動開 Stage。建議 Claude #1044：Sonnet 5.5／High；ChatGPT Docs：Medium 與 targeted docs check，完整 required CI 仍不可跳過。
+
