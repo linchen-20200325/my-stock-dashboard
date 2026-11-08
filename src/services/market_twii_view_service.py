@@ -37,6 +37,10 @@ class TwiiTrendView:
         stale_reason: 過期原因（原樣轉述 L1）；沒有則 ""。
         age_days: 距今天數（L1 判定）；None ＝ 未提供。
         upstream_error: 上游最後一次錯誤（`metadata.last_error`，原樣轉述）；沒有則 ""。
+        upstream_state: 最近一次抓取的三態（B2／DEC-148；`""`／`NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED`），
+            由 L0 `shared.upstream_state.classify_upstream` 統一判定。與 `is_stale`（資料新鮮度）、`upstream_error`
+            （原樣 last_error）**各自獨立**；`""` ＝ 沒有上游問題。attrs 缺此欄但有 `upstream_error`（舊快取讀取路徑）→
+            由 `upstream_error` 單獨判定（純標記字串 → UNDETERMINED，不預設成功）。
         error: `ok=False` 時的原因；`ok=True` 則 ""。
         failed: True ＝ 讀取時丟了**例外**（系統真出錯，L5 可標紅）；False 的 `ok=False` ＝ 檔不存在／壞檔／缺欄／空
             （「讀不到」，L5 標灰）。v3 §02 灰紅分離。
@@ -52,9 +56,18 @@ class TwiiTrendView:
     stale_reason: str = ""
     age_days: int | None = None
     upstream_error: str = ""
+    upstream_state: str = ""
     error: str = ""
     failed: bool = False
     source: str = TWII_SOURCE_TEXT
+
+    def __post_init__(self) -> None:
+        # B2(DEC-148):有 upstream_error 但沒帶 upstream_state(舊讀取路徑／直接建構)→ 由 last_error 單獨判定
+        # (純空抓取標記 → UNDETERMINED,不預設成功;其他錯誤字串 → FETCH_FAILED)。判定規則只在 L0 一處。
+        if not self.upstream_state and self.upstream_error:
+            from shared.upstream_state import classify_upstream, upstream_state_value
+            object.__setattr__(self, "upstream_state",
+                               upstream_state_value(classify_upstream(self.upstream_error)[0]))
 
 
 def _iso(v) -> str | None:
@@ -85,6 +98,8 @@ def get_twii_trend_view(n_trading_days: int) -> TwiiTrendView:
     _tail = _s.tail(n_trading_days)
     _is_stale = _attrs.get("is_stale")
     _age = _attrs.get("age_days")
+    _up_err = str(_attrs.get("upstream_error") or "")
+    _up_state = str(_attrs.get("upstream_state") or "")       # 缺 → TwiiTrendView.__post_init__ 由 upstream_error 判定
     return TwiiTrendView(
         ok=True,
         xs=tuple(_iso(_i) or "" for _i in _tail.index),
@@ -94,5 +109,6 @@ def get_twii_trend_view(n_trading_days: int) -> TwiiTrendView:
         is_stale=(bool(_is_stale) if _is_stale is not None else None),
         stale_reason=str(_attrs.get("stale_reason") or ""),
         age_days=(int(_age) if isinstance(_age, (int, float)) and not isinstance(_age, bool) else None),
-        upstream_error=str(_attrs.get("upstream_error") or ""),
+        upstream_error=_up_err,
+        upstream_state=_up_state,
     )

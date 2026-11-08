@@ -49,12 +49,13 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
             print(f"[ui2.real_feed] 台股快取上游最近一次錯誤（只進 log）：{v.upstream_error}")
         if v.error:
             print(f"[ui2.real_feed] 台股讀取說明（只進 log）：{v.error}")
+        # B2(DEC-148):三態由 L3 service(TwiiTrendView,經 L0 `shared.upstream_state` 統一判定)給出;feed 只拷貝。
         fact = TwiiFact(
             ok=bool(v.ok), close=tuple(v.close), as_of=v.as_of, is_stale=v.is_stale,
             stale_reason=str(v.stale_reason or ""), age_days=v.age_days,
-            has_upstream_error=bool(v.upstream_error),
+            has_upstream_error=(v.upstream_state == "FETCH_FAILED"),
             error_type=_type_of_service_error(v.error) if v.failed else "",
-            failed=bool(v.failed), source=str(v.source))
+            failed=bool(v.failed), source=str(v.source), upstream_state=v.upstream_state)
         validate_twii_fact(fact)                # 讀取期驗契約：違反 → 本事實 Unavailable，另一事實照常
         return fact, ""
     except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句

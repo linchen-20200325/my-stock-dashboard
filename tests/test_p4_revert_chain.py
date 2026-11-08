@@ -221,6 +221,11 @@ def _rel(file_path) -> str:
 
 def p4_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 Phase 4 P4-1 之前的寫法（無 pair 則原樣；只套一次）。"""
+    # 📌 B2 空抓取三態消費端一致性（DEC-148，2026-11-08；有意識的接鏈，⛔ 不是漏改）：B2 動了 `macro_cache_reader.py`
+    #   （被 Z40／Z63／C1／D2 等舊鏈的基底 sha 管）與 `_market_blocks.py`（被 P4／UIM 的基底 sha 管）⇒ 最新的那一批最先換回
+    #   （鏈頭再往前接一節；只套一次；⛔ 不動本表與 `P4_BASE_SHA`）。
+    from tests.test_b2_consumer_revert_chain import b2_revert_for
+    code = b2_revert_for(file_path, code)
     # 📌 D3 空抓取三態（2026-11-08；有意識的接鏈，⛔ 不是漏改）：本批在 `scripts/update_macro_history.py` 加了
     #   FetchOutcome 標記與 update_one 的 additive metadata 欄（被 Z40／C1 等舊鏈的基底 sha 管）⇒ 最新的那一批最先換回
     #   （鏈頭再往前接一節；只套一次；⛔ 不動本表與 `P4_BASE_SHA`）。

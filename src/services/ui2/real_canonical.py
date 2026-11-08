@@ -43,6 +43,7 @@ from typing import Any
 from shared.allocation_decision import REGIME_LABEL
 from shared import regime_arbiter as RA
 from shared.ui2_contract.models import PageVM
+from shared.upstream_state import UPSTREAM_TEXT_FETCH_FAILED, upstream_state_text as _upstream_state_text
 from shared.ui2_contract.pages import (
     MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
     SCENARIO_REAL,
@@ -108,6 +109,9 @@ class TwiiFact:
     error_type: str            # failed=True 時的例外型別名；其餘 ""
     failed: bool
     source: str
+    #: B2（DEC-148）：最近一次抓取三態 ""／NO_NEW_DATA／FETCH_FAILED／UNDETERMINED（L0 `shared.upstream_state` 判定）。
+    #: 與 `is_stale`（新鮮度）、`has_upstream_error`（＝FETCH_FAILED）各自獨立；`""` 且 has_upstream_error → 沿用舊讀法（失敗句）。
+    upstream_state: str = ""
 
     def __post_init__(self) -> None:
         if self.error_type and not _ERR_CODE_RE.match(self.error_type):
@@ -182,7 +186,7 @@ PREVIEW_NO_REFRESH_NOTE = "註：上句的「按更新」指正式網站；這�
 PREVIEW_NO_REFRESH_SHORT = "這裡不提供更新，所以這一格維持尚未載入"
 
 _TWII_MISSING_TEXT = "加權指數歷史快取讀不到（檔案不存在、壞檔、缺欄或內容為空）"
-_UPSTREAM_ERROR_TEXT = "上游最近一次抓取失敗"
+_UPSTREAM_ERROR_TEXT = UPSTREAM_TEXT_FETCH_FAILED     # 舊名保留（FETCH_FAILED 句）；三態文案 SSOT 在 L0 `shared.upstream_state`
 
 
 def _error_text(what: str, code: str) -> str:
@@ -210,6 +214,8 @@ def validate_twii_fact(t: TwiiFact) -> None:
         raise RealFeedContractError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
     if t.ok and t.failed:
         raise RealFeedContractError("台股：ok=True 與 failed=True 矛盾")
+    if t.upstream_state not in ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED"):
+        raise RealFeedContractError(f"台股：upstream_state 不是三態之一：{t.upstream_state!r}")
     if t.ok:
         if not t.close:
             raise RealFeedContractError("台股：ok=True 但沒有收盤值")
@@ -255,7 +261,9 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
             return {**base, "state": "unavailable", "reason": _error_text("台股加權指數", t.error_type or "Exception")}
         return {**base, "missing_kind": "not_fetched", "reason": _TWII_MISSING_TEXT}
     last = t.close[-1]
-    notes = [x for x in (t.stale_reason, _UPSTREAM_ERROR_TEXT if t.has_upstream_error else "") if x]
+    # B2：依三態分流文案；⛔ 不再把所有空抓取都稱為「抓取失敗」。upstream_state 為空但 has_upstream_error（舊事實）→ 失敗句。
+    _up_text = _upstream_state_text(t.upstream_state) or (_UPSTREAM_ERROR_TEXT if t.has_upstream_error else "")
+    notes = [x for x in (t.stale_reason, _up_text) if x]
     spec = {**base, "value": f"{last:,.2f}"}
     if t.is_stale is True:
         return {**spec, "state": "stale", "stale_days": t.age_days, "reason": "；".join(notes) or None}

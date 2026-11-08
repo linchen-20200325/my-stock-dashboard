@@ -226,6 +226,9 @@ def check_inputs_fresh(cache_dir: Path = _CACHE, *, today=None) -> list:
       1. 新鮮度判定過期(`is_stale`)→ 不可用 —— 不論 `last_error` 寫什麼;
       2. `last_error` **完全等於** `shared.staleness.EMPTY_FETCH_MARKER`(「抓取結果為空」,
          寫入端 `update_macro_history.update_one` 用同一個常數)且**不過期** → 可用;
+         ⚠️ **B2(2026-11-08,DEC-148)收窄**:標記還須配 `fetch_outcome == NO_NEW_DATA`(有成功且無新觀測的正面證據)
+         才放行;`FETCH_FAILED`、`UNDETERMINED`、以及舊 metadata 缺 `fetch_outcome` 的純標記一律**不放行**
+         (標記不再單獨蘊含「沒新資料」)。DL-f1-s6 原文保留,上面兩條是它的前提、B2 是再收窄;
       3. 其他任何非空 `last_error` → 不可用(含「抓取結果為空；既有檔 sanity 不過,待重建」
          這種複合字串)。**只認完全相等**:不去空白、不比前綴、不比包含 ——
          寬鬆比對會把「既有檔已知不合格」一起放過。
@@ -260,15 +263,16 @@ def check_inputs_fresh(cache_dir: Path = _CACHE, *, today=None) -> list:
         DL-f1-s7 依 EF15M01 實測(2026-07 資料最晚 08-27 上架)更正後,08-27 當下 6 月
         尚未「落後 1 期」。過期就擋的規則本身不變,變的是「多久算過期」的量尺。
     """
-    from shared.staleness import EMPTY_FETCH_MARKER
+    from shared.upstream_state import gate_allows
     from src.data.macro.macro_cache_reader import compute_cache_staleness
 
     bad = []
     for _name in _REQUIRED_DATASETS:
         _st = compute_cache_staleness(_name, cache_dir=cache_dir, today=today)
-        _err = _st["upstream_error"]
-        # 判定 1:過期一律擋;判定 2/3:沒過期時,只有「完全等於」標記的空抓取才放行。
-        if _st["is_stale"] or (_err and _err != EMPTY_FETCH_MARKER):
+        # 判定 1:過期一律擋;判定 2/3:沒過期時,只有「無上游問題」或「標記＋fetch_outcome=NO_NEW_DATA」才放行
+        # (B2／DEC-148:FETCH_FAILED／UNDETERMINED／舊 metadata 缺 fetch_outcome 的純標記 → 一律擋;
+        #  三態由 L0 `shared.upstream_state.classify_upstream` 統一判定,見 `macro_cache_reader.compute_cache_staleness`)。
+        if _st["is_stale"] or not gate_allows(_st["upstream_state"]):
             bad.append(_st)
     return bad
 
@@ -300,12 +304,18 @@ def main() -> None:
     if stale:
         from shared.staleness import EMPTY_FETCH_MARKER
         # DL-f1-s6 起「沒過期、純因錯誤字串被擋」也會進來 —— 那一種不得寫成「判為過期」。
+        # B2:未過期、純因上游狀態被擋時,依三態講對原因(FETCH_FAILED≠UNDETERMINED;⛔ 不寫成「判為過期」)
+        _why_by_state = {
+            "FETCH_FAILED": "資料未過期,擋下的原因是上游自陳錯誤（最近一次抓取失敗）",
+            "UNDETERMINED": "資料未過期,擋下的原因是最近一次抓取結果無法判定（證據不足,不放行;舊 metadata 缺 fetch_outcome 亦同）",
+        }
         _lines = "\n".join(
             f"  - {s['dataset']}:"
             + ((s['reason'] or '判為過期') if s["is_stale"]
-               else "資料未過期,擋下的原因是上游自陳錯誤")
+               else _why_by_state.get(s.get("upstream_state"), "資料未過期,擋下的原因是上游自陳錯誤"))
             + (f"（metadata.last_error={s['upstream_error']!r}）"
                if s["upstream_error"] else "")
+            + (f"（fetch_outcome={s['fetch_outcome']}）" if s.get("fetch_outcome") else "")
             for s in stale
         )
         raise SystemExit(
@@ -313,7 +323,7 @@ def main() -> None:
             f"{_lines}\n"
             "  修法:先讓 scripts/update_macro_history.py 在部署環境成功寫入上述資料集,"
             "確認資料不再過期、且 data_cache/metadata.json 的 last_error 為 null"
-            f" 或恰為 {EMPTY_FETCH_MARKER!r}(該輪沒抓到新列)後再跑本 script。\n"
+            f" 或恰為 {EMPTY_FETCH_MARKER!r} 且 fetch_outcome 為 NO_NEW_DATA(該輪抓取成功、來源無新列)後再跑本 script。\n"
             "  ⚠️ 不要改門檻或加旁路來繞過這道檢查 —— 那只是把過期資料換個方式吃進來。"
         )
     twii = pd.read_parquet(_CACHE / "twii_ohlcv.parquet")

@@ -878,7 +878,8 @@ def step0_inventory(cache_dir: Path, args) -> dict:
             print(f"  {'dataset':<20}{'last_updated':<14}{'rows':>8}   last_error")
             for k, v in (meta.get("datasets") or {}).items():
                 print(f"  {k:<20}{str(v.get('last_updated')):<14}"
-                      f"{int(v.get('row_count') or 0):>8}   {v.get('last_error') or '-'}")
+                      f"{int(v.get('row_count') or 0):>8}   {v.get('last_error') or '-'}"
+                      + (f"  [fetch_outcome={v['fetch_outcome']}]" if v.get("fetch_outcome") else ""))  # B2:空抓取三態
         except Exception as e:  # noqa: BLE001
             print(f"  [WARN] 解析失敗：{type(e).__name__}: {e}")
     else:
