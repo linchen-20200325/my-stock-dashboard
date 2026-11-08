@@ -115,6 +115,9 @@ def compute_cache_staleness(
           "age_days":       int | None,  # as_of 距 today 幾個日曆天(僅日頻有意義)
           "periods_behind": int | None,  # 月頻:落後幾個發布期(≥1 = 真的漏了整期)
           "upstream_error": str | None,  # metadata 自陳的 `last_error`
+          "upstream_state": str,         # B2:上游抓取狀態 "" / NO_NEW_DATA / FETCH_FAILED / UNDETERMINED
+          "fetch_outcome":  str | None,  # B2:metadata 原樣的 `fetch_outcome`(舊 metadata 無此欄 → None)
+          "fetch_evidence": str,         # B2:metadata 原樣的 `fetch_evidence`(已洗過;沒有 → "")
           "meta_last_updated": str | None,
         }
 
@@ -129,12 +132,22 @@ def compute_cache_staleness(
     _today = today or _dt.date.today()
     out = {"dataset": dataset, "is_stale": True, "reason": None, "as_of": None,
            "age_days": None, "periods_behind": None,
-           "upstream_error": None, "meta_last_updated": None}
+           "upstream_error": None, "meta_last_updated": None,
+           "upstream_state": "", "fetch_outcome": None, "fetch_evidence": ""}
 
     _meta = read_cache_metadata(cache_dir)
     _entry = (_meta.get("datasets") or {}).get(dataset) or {}
     out["upstream_error"] = _entry.get("last_error")
     out["meta_last_updated"] = _entry.get("last_updated")
+    # B2(DEC-148):三態折成「上游狀態」由 L0 `shared.upstream_state` 統一判定(last_error／fetch_outcome／freshness 三者各自
+    # 表達自己的語意、不互相取代;本欄只描述「最近一次抓取」,⛔ 不蘊含資料新鮮,也不改 as_of／is_stale)。
+    # 舊 metadata 缺 fetch_outcome → 純標記字串視為 UNDETERMINED(不預設成功)。
+    from shared.fetch_outcome import META_EVIDENCE_KEY, META_OUTCOME_KEY
+    from shared.upstream_state import classify_upstream, upstream_state_value
+    out["fetch_outcome"] = _entry.get(META_OUTCOME_KEY)
+    _state, _ev = classify_upstream(out["upstream_error"], out["fetch_outcome"], _entry.get(META_EVIDENCE_KEY))
+    out["upstream_state"] = upstream_state_value(_state)
+    out["fetch_evidence"] = _ev
 
     _cad = CACHE_DATASET_CADENCE.get(dataset)
     if _cad is None:
@@ -205,12 +218,18 @@ def _attach_staleness(series, dataset: str, *, cache_dir: Path, df=None, today=N
         series.attrs["as_of"] = _st["as_of"]
         series.attrs["age_days"] = _st["age_days"]
         series.attrs["upstream_error"] = _st["upstream_error"]
+        if _st["upstream_state"]:          # B2:只在有上游問題時才加(無問題時 attrs 形狀與 B2 前逐字相同)
+            series.attrs["upstream_state"] = _st["upstream_state"]
+            if _st["fetch_evidence"]:
+                series.attrs["fetch_evidence"] = _st["fetch_evidence"]
     except Exception:  # noqa: BLE001 — 極舊 pandas 無 .attrs;不影響資料本身
         pass
     if _st["is_stale"] or _st["upstream_error"]:
         print(f"[macro_cache_reader] ⚠️ {dataset} 判為過期/上游有錯:"
               f"{_st['reason'] or '—'}"
               + (f";metadata.last_error={_st['upstream_error']!r}"
+                 f";上游狀態={_st['upstream_state'] or '—'}"
+                 + (f"({_st['fetch_evidence']})" if _st["fetch_evidence"] else "")
                  if _st["upstream_error"] else ""))
     return series
 

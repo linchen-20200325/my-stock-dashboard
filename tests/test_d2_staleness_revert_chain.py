@@ -44,6 +44,11 @@ def _rel(file_path) -> str:
 
 def d2stale_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`(或 repo 相對路徑)與原始碼,換回 D2 守衛之前的寫法(無 pair 則原樣;只套一次)。"""
+    # 📌 D3 B2 空抓取三態消費端一致性(DEC-148,2026-11-08;有意識的接鏈,⛔ 不是漏改):B2 也改了 `macro_cache_reader.py`
+    #   (在 D2 守衛之後)⇒ 本節自己的基底 sha 守衛要先把較新的 B2 換回(比照 `c1_revert_for` 開頭先呼叫 `c2a_revert_for`;
+    #   只套一次、冪等;⛔ 不動本表與 D2STALE_BASE_SHA、不放寬任何斷言)。
+    from tests.test_b2_consumer_revert_chain import b2_revert_for
+    code = b2_revert_for(file_path, code)
     rel = _rel(file_path)
     pairs = D2STALE_REVERT_PAIRS.get(rel, ())
     if not pairs:

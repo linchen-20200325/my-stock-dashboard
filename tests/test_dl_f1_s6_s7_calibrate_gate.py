@@ -92,8 +92,18 @@ def _write_meta(tmp_path, datasets: dict):
 
 
 def _meta(error_by_name: dict) -> dict:
-    return {n: {"name": n, "last_updated": None, "row_count": 1,
-                "last_error": error_by_name.get(n)} for n in _REQUIRED}
+    # B2(DEC-148):純「抓取結果為空」標記要被放行,須帶 cron 寫的 fetch_outcome=NO_NEW_DATA(有成功且無新觀測的正面證據);
+    # 缺 fetch_outcome 的舊 metadata → UNDETERMINED → 不放行(見 tests/test_b2_consumer_consistency.py)。
+    # 這裡讓「標記」代表 B1 之後 cron 實際寫出的形狀;複合字串／其他錯誤字串不附(它們不是空抓取)。
+    out = {}
+    for n in _REQUIRED:
+        err = error_by_name.get(n)
+        d = {"name": n, "last_updated": None, "row_count": 1, "last_error": err}
+        if err is not None and err == S.EMPTY_FETCH_MARKER:
+            d["fetch_outcome"] = "NO_NEW_DATA"
+            d["fetch_evidence"] = "FinMind: HTTP 200, status 200, data=[]"
+        out[n] = d
+    return out
 
 
 def _meta_all(error) -> dict:
@@ -104,10 +114,15 @@ def _blocked(tmp_path, today) -> list:
     return [b["dataset"] for b in _gate().check_inputs_fresh(tmp_path, today=today)]
 
 
-def _empty_fetcher(needs_token: bool):
+def _empty_fetcher(needs_token: bool, tag: bool = False):
+    def _df():
+        if not tag:
+            return pd.DataFrame()
+        from shared.fetch_outcome import FetchOutcome, tag_outcome
+        return tag_outcome(pd.DataFrame(), FetchOutcome.NO_NEW_DATA, "test: HTTP 200, data=[]")
     if needs_token:
-        return lambda start, end, token: pd.DataFrame()
-    return lambda start, end: pd.DataFrame()
+        return lambda start, end, token: _df()
+    return lambda start, end: _df()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -240,8 +255,9 @@ class TestMarkerSharedByWriterAndReader:
         monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
         for name in _REQUIRED:
             _needs_token = umh.FETCHERS[name][1]
+            # B2:cron 的 fetcher 在「有正面證據的空抓取」會標 NO_NEW_DATA;未標記的空表＝UNDETERMINED＝不放行(另有測試)
             monkeypatch.setitem(umh.FETCHERS, name,
-                                (_empty_fetcher(_needs_token), _needs_token))
+                                (_empty_fetcher(_needs_token, tag=True), _needs_token))
         metadata = {n: umh.update_one(n, self._TODAY, False, 1, "tok") for n in _REQUIRED}
         assert {m["last_error"] for m in metadata.values()} == {EMPTY_FETCH_MARKER}, metadata
         _write_meta(tmp_path, metadata)
