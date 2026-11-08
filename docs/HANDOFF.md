@@ -1159,3 +1159,18 @@ DEC-086 規則已於 main，本表已落地。
 **分支處置（依裁示，FACT 以裁示為準）**：三個歷史分支 `docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107` **暫時全部保留、不建 archive tag**（環境代理亦擋 ref 寫入）；`data`、`v2`、`claude/stock-dashboard-handoff-g9dtm0` **必留**。
 
 **RECOMMENDATION**：不得把 Chromium headless 的綠燈寫成真機／無障礙已驗；任何降低 160px 首屏門檻、`p2_nav_margin_160`、或移除零 JS／原生鍵盤守衛的改動都須先走 Gate。（已查 CLAUDE.md 對 drawer／☰／抽屜／JS_V4／rail 命中 0，無需處理，原先擬登之待辦已撤銷。）
+
+
+## 2026-11-08｜DEC-153 客戶新裁示接手點（合併本 docs PR 後生效；GitHub 實況優先）
+
+> **先重新 GitHub Verification Gate**：main SHA、Open/Draft PR head/diff、CI／非作者 QA、branches。舊段「C4-D 待合併」已因 #1077 squash 入 main 而過期；保留歷史段不刪改。完整裁示見 `docs/DECISIONS.md` DEC-153，正式待辦見 BACKLOG `NUI2-DEC153`／`NUI2-C4`。
+
+| 欄位 | 最新接手事實／安全方向 |
+|---|---|
+| 已完成 | main `c5846b770bdc176954edad486f92fe93e61e73c7`，#1075／#1076／#1077 已合併；#1077 head `a708b001` 原生 CI Run 42474547644 success（時點快照） |
+| Open PR | #1038 PIT Draft **NO MERGE**；#1034 治理 Draft 待核銷；本 DEC-153 文件批新 PR 未完成前不得寫成已合併 |
+| FinMind | 優先安全查看已有 Secrets（**不得揭露內容**）；無合法可用憑證則 C4-D-real 保持 blocked；年月欄位與公告時點真實驗證 NOT VERIFIED |
+| C4 未驗證月份鍵 | 客戶選 B：未驗證時不得 STEADY／STRONG，**僅於原有 PARTIAL 條件合法成立時最高 5 分**；不存在有效證據仍 fail-closed；需獨立 PR／負測／QA／最新 head CI |
+| 缺值→綜合排名／徽章 | 客戶選 B：將分數與資格拆開、先做三案比較和影響量化。無既有明確授權時**不擅改正式 composite／percentile／通知／forward_test 排名資格** |
+| 下一步 | Claude Code 先確認本 DEC-153 docs PR 合併 Gate，然後 A（安全來源預檢與下游負測研究）→ B（C4 未驗證上限）→ C（缺值資格矩陣及 Decision Gate）。每批作者≠QA、最新 head CI、squash merge 和文件同步 |
+| 不可動 | 新權重／門檻／固定封頂、PIT、Risk Cap、OneBrain runtime／Layout、資料發布、#1038、保留分支、非必要憑證／費用；真實部署未驗不得稱 PASS |
