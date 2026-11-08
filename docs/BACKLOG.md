@@ -2010,6 +2010,8 @@
 
 **NOT VERIFIED**：真實 FinMind／OpenAPI、真實公告時點與 10 天延遲是否貼近、通知實際發送、forward_test cron／gsheet 實跑、Streamlit 畫面實際顯示。
 
-**B. C4-D（plumbing）狀態**：**實作完成但尚未合併**（commit `a958849`，branch `c4d-local`，將與本文件同一 PR），待非作者 QA／CI／merge。內容：批次長表在來源提供時多帶 revenue_year／revenue_month（不由 date 補、單欄不帶）；契約新增 `source_month_key_verified` 與 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`（`shared/monthly_revenue_month_key.py`），全市場路徑 STRONG 恆 0，直到真實資料驗證＋客戶裁示才翻；date≠ym 改以 ym 為鍵、不再 FAIL_CLOSED 但 verified=False（單股真實形狀下 FAIL_CLOSED→STEADY／PARTIAL，仍不 STRONG；合成 4000 檔該形狀 C4 變動 2610、tier 819）。TWSE／TPEx OpenAPI 批次僅 1 列快照故未 plumb。**以上為施工組自測，QA 結果待補。**
+**B. C4-D（plumbing）狀態**：~~**實作完成但尚未合併**（commit `a958849`，branch `c4d-local`，將與本文件同一 PR），待非作者 QA／CI／merge。~~（2026-11-08 已更新：C4-D 非作者 QA 通過（無必修），待 PR／CI／merge；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-152）**實作完成，C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。**（commit `a958849`，branch `c4d-local`）內容：批次長表在來源提供時多帶 revenue_year／revenue_month（不由 date 補、單欄不帶）；契約新增 `source_month_key_verified` 與 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`（`shared/monthly_revenue_month_key.py`），全市場路徑 STRONG 恆 0，直到真實資料驗證＋客戶裁示才翻；date≠ym 改以 ym 為鍵、不再 FAIL_CLOSED 但 verified=False（單股真實形狀下 FAIL_CLOSED→STEADY／PARTIAL，仍不 STRONG；合成 4000 檔該形狀 C4 變動 2610、tier 819）。TWSE／TPEx OpenAPI 批次僅 1 列快照故未 plumb。**以上為施工組自測，QA 結果待補。**
 
 **C. 新增 Decision Gate 候選（皆未裁示，AI 不得自改）**：①「缺貨缺值在綜合排序／徽章被當 0」（發現 1）；②「候選池視窗與 C4 視窗不一致」（發現 3）；③「SHORTAGE 版本標記」（發現 6）。**C4-D-real 仍 blocked**：需合法 token 環境；是否授權 `request_credential` 待客戶決定。
+
+- **Decision Gate 候選｜C4-D 後單股『date≠ym、ym 齊全』的 STEADY 連續性建立在未驗證 ym 上**（客戶未裁示，AI 不自改）：C4-D 後單股真實形狀（FinMind date≠ym、ym 齊全）由修前 FAIL_CLOSED（0 分）變為最高 STEADY（12）／PARTIAL，仍無 STRONG；QA 建議 `verified=False` 時最多 PARTIAL，但這會同時改動既有 date-only 行為，須客戶裁示。另：護欄靠 caller 傳 `source_month_key_verified`（預設 True），**非結構性阻擋**；批次路徑唯一呼叫點 `_candidate_pool` 傳 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`。　C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。
