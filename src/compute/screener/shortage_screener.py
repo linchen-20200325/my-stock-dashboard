@@ -93,6 +93,16 @@ class ShortageScore:
     reasons: list[str] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
     version: str = SHORTAGE_VERSION
+    # ── DEC-149 Phase 3B（2026-11-08）schema-additive：缺值 vs 真 0 分的旗標 ──────────────
+    # 「ok」＝該分項**沒有**走進本檔既有的「資料不足 → 0 分」分支（定義逐字取自各 _score_* 的資料不足
+    # 判斷，**不是**新的「有效／獨立」資格或門檻）。只是旗標：⛔ 不改任何分數、權重、tier 門檻。
+    # None＝舊建構（呼叫端沒給）＝「未評估」，⛔ 不等於 False（缺值）。
+    n_signals_ok: int | None = None
+    c1_ok: bool | None = None
+    c2_ok: bool | None = None
+    c3_ok: bool | None = None
+    c4_ok: bool | None = None
+    miss_reason: str = ""             # 缺值原因（短字串；全部 ok 或未評估 → ""）
 
     @property
     def reason_text(self) -> str:
@@ -111,6 +121,15 @@ class ShortageScore:
             "④月營收": round(self.c4_revenue_yoy, 1),
             "理由": self.reason_text,
             "_tier": self.tier,
+            # DEC-149 Phase 3B additive：舊 consumer 讀既有鍵不受影響；缺貨分數 0.0 可能是
+            # 「真 0 分」或「該項缺值」→ 看下列旗標區分（⛔ 不改分數數值）。
+            "有效訊號數": self.n_signals_ok,
+            "缺值原因": self.miss_reason,
+            "_n_signals_ok": self.n_signals_ok,
+            "_c1_ok": self.c1_ok,
+            "_c2_ok": self.c2_ok,
+            "_c3_ok": self.c3_ok,
+            "_c4_ok": self.c4_ok,
         }
 
 
@@ -363,6 +382,36 @@ def _score_revenue_yoy(yoy_last3: Any) -> tuple[float, str, dict]:
 
 
 # ════════════════════════════════════════════════════════════════
+# 有效旗標（DEC-149 Phase 3B）—— 只讀各分項既有的「資料不足」判斷,不新增任何有效定義
+# ════════════════════════════════════════════════════════════════
+def _signal_flags(cl_na: bool, m1: dict, m2: dict, m3: dict, m4: dict) -> tuple[
+        tuple[bool, bool, bool, bool], str]:
+    """回 ((c1_ok, c2_ok, c3_ok, c4_ok), miss_reason)。ok＝未走進該分項的『資料不足』0 分分支。
+
+    逐項對應既有判斷（⛔ 不得改成別的定義）：
+      C1 _score_contract_liab：t 期合約負債存在（非 cl_na）且 YoY／QoQ 至少算得出一個
+         （兩者皆 None ＝ 既有的「基期不足無法比較」資料不足分支）
+      C2 _score_gross_margin：gm_t／gm_t1／gm_t4 皆有
+      C3 _score_inventory_days：dio_t 與 dio_t1 皆有（dio_t4 缺不算資料不足,既有行為）
+      C4 _score_revenue_yoy：有效月數 ≥ 2
+    """
+    c1 = (not cl_na) and (m1.get("cl_yoy") is not None or m1.get("cl_qoq") is not None)
+    c2 = all(m2.get(k) is not None for k in ("gm_t", "gm_t1", "gm_t4"))
+    c3 = m3.get("dio_t") is not None and m3.get("dio_t1") is not None
+    c4 = sum(1 for y in (m4.get("rev_yoy_last3") or []) if y is not None) >= 2
+    miss: list[str] = []
+    if not c1:
+        miss.append("①合約負債無科目" if cl_na else "①合約負債基期不足")
+    if not c2:
+        miss.append("②毛利率資料不足")
+    if not c3:
+        miss.append("③存貨天數資料不足")
+    if not c4:
+        miss.append("④月營收有效月數<2")
+    return (c1, c2, c3, c4), "、".join(miss)
+
+
+# ════════════════════════════════════════════════════════════════
 # 分級
 # ════════════════════════════════════════════════════════════════
 def _tier_from_total(total: float) -> str:
@@ -423,12 +472,24 @@ def score_shortage(stock: Any) -> ShortageScore:
     # t-1 / t-4 是用「list 位置」取的(連續序列才等價)。
     metrics = {**m1, **m2, **m3, **m4, "n_quarters": n_q,
                "quarter_aligned": omap is not None}
+
+    # DEC-149 Phase 3B：四項全缺（n_signals_ok == 0）→ 無法評估,不進正式排名。
+    # 重用 TIER_INSUFFICIENT（「資料不足」＝無法評估,語意吻合；`_rankable` 與 L3 `_RANKABLE_TIERS`
+    # 本來就不含它 → 排除邏輯與診斷列分流不需另開 tier）。此時 total 必為 0.0（四項皆走資料不足 0 分分支）,
+    # 分數數值照舊不動；與「資料完整、四項真低分」（n_ok=4,仍是 TIER_WEAK 且在榜）靠旗標區分。
+    (f1, f2, f3, f4), miss_reason = _signal_flags(cl_na, m1, m2, m3, m4)
+    n_ok = int(f1) + int(f2) + int(f3) + int(f4)
+    if n_ok == 0:
+        tier = TIER_INSUFFICIENT
+        reasons.append("四項缺貨訊號皆缺值，無法評估（資料不足，不是 0 分）")
     return ShortageScore(
         stock_id=stock_id, name=name, total=total, tier=tier,
         tier_icon=TIER_ICONS.get(tier, ""),
         c1_contract_liab=c1, c2_gross_margin=c2,
         c3_inventory_days=c3, c4_revenue_yoy=c4,
         cl_na=cl_na, reasons=reasons, metrics=metrics,
+        n_signals_ok=n_ok, c1_ok=f1, c2_ok=f2, c3_ok=f3, c4_ok=f4,
+        miss_reason=miss_reason,
     )
 
 
@@ -439,6 +500,9 @@ def _na_result(stock_id: str, name: str, tier: str, reason: str) -> ShortageScor
         c1_contract_liab=0.0, c2_gross_margin=0.0,
         c3_inventory_days=0.0, c4_revenue_yoy=0.0,
         cl_na=False, reasons=[reason], metrics={},
+        # DEC-149 Phase 3B：四項都沒評估（輸入錯誤／金融股／季數不足）→ 旗標全 False、n=0
+        n_signals_ok=0, c1_ok=False, c2_ok=False, c3_ok=False, c4_ok=False,
+        miss_reason=reason,
     )
 
 
