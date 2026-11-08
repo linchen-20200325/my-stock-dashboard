@@ -1161,3 +1161,11 @@
 - iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset。上列量測僅 Chromium headless，不得外推。
 
 **RECOMMENDATION／後續**：QA SHOULD-FIX 與文件待辦見 BACKLOG `NUI2-TOPNAV-*`、`NUI2-DOCS-SUPERSEDE-DRAWER-SERIES`。下一個唯一安全動作見 HANDOFF 最末 Safe Handoff（#1034 治理段落抽取）。
+
+
+### 70.5 C4 月營收月份契約現況（2026-11-08；DEC-151／DEC-152；以 GitHub 為準）
+
+- **FACT**：C4 月份資料契約（#1075，`228e976`）與評分修復（#1076，`556b335`）已在 main，各有非作者 QA 與最新 head 原生 CI 全綠。缺月／不連續不再被壓縮成「連續加速」。
+- **現況限制**：全市場批次路徑尚未傳遞可信月份鍵，故**全市場 STRONG 暫時為 0**——這是 fail-closed 過渡狀態（客戶 DEC-152 裁示 3），**不是長期正確排名結果**。合成 3000 檔（seed 20261108，不代表真實比例）顯示 STRONG 963→0、前 50 名換 10 檔（單股路徑換 1 檔）。半邊批次失敗標整池 FAIL_CLOSED 為既有行為，客戶裁示維持。
+- **NOT VERIFIED**：FinMind `TaiwanStockMonthRevenue` 之 `revenue_year`／`revenue_month` 欄位語意與「`date` 可能不同於營收所屬月」僅為客戶轉述（ChatGPT 查閱官方文件），本 repo 沙箱無法連 FinMind、未獨立核實；公告時點資格未驗證；真實資料恢復情形未驗證。
+- **RECOMMENDATION／後續**：C4-D（以既有欄位傳遞可信月份鍵、回溯相容）→ C4-D-real（需合法 token 環境，blocked）；Batch C 整合驗證進行中。詳見 BACKLOG `NUI2-C4`、HANDOFF 最新接手點、DECISIONS DEC-152。未授權新權重／門檻／封頂／新排名例外。
