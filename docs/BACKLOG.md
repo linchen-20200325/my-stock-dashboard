@@ -2033,11 +2033,11 @@
 
 #### NUI2-DEC153 執行結果補註（2026-11-08；AI 整理，**非客戶裁示、非客戶逐字**；決策者 AI 總管（事實更新）；不新增 ID）
 
-> GitHub 為準：main `35c08d2`；#1075～#1078 已 merge；#1038 Draft **NO MERGE**；#1034 Draft 待核銷。Batch B 在待開 PR（commit `93904d0`＋`964f717`），**不得寫成已 merge**。
+> GitHub 為準：~~main `35c08d2`；#1075～#1078 已 merge；Batch B 在待開 PR（commit `93904d0`＋`964f717`），不得寫成已 merge。~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）現行：main `b01db69`；#1075～#1079 已 merge；#1038 Draft **NO MERGE**；#1034 Draft 待核銷。
 
 **Batch A｜C4-D-real（FinMind 預檢，唯讀）＝BLOCKED**：沙箱 env 無 FinMind token、repo 無 secrets.toml／.env、無任何真實或錄製的 FinMind 月營收樣本；`date` 與 `revenue_year/month` 語意目前只有程式假設與客戶轉述（ChatGPT 查閱官方文件），非官方證據，**NOT VERIFIED**。`FINMIND_TOKEN` 只以 GitHub Actions `secrets.FINMIND_TOKEN` 存在於 14 支 workflow（`pr-check.yml` 用字面 ci-test-token，非真 secret），皆會寫入／推播／推分支，不適合當取樣載體；`probe_tw_sources.yml` 為 workflow_dispatch 只印 log，但目前無 MonthRevenue 項。**合法取樣選項（只列、未執行、需客戶授權）**：A 客戶自取少量非敏感欄位貼回；B 新增一次性 workflow_dispatch 探針（PR＋CI）；C 在既有 probe 加一項；D `request_credential`（新增憑證＋網路放行）。`BATCH_SOURCE_MONTH_KEY_VERIFIED` 維持 False，全市場 STRONG 維持 0。
 
-**Batch B｜C4 未驗證月份鍵上限（實作完成＋非作者 QA 通過，待 PR／CI／merge）**：`_score_revenue_yoy` 新增 `key_unverified`（契約非 OK／目標月未定／`month_key_verified` 非 True／`target_date_eligible` 非全 True）→ 不得 STEADY／STRONG，僅走既有 PARTIAL(5)／動能不足(0)；有效值＜2 資料不足（`c4_ok` False，不硬給 5）；FAIL_CLOSED 不變；metrics 新增 `rev_c4_key_unverified`。非作者 QA：1,679,616 組窮舉對 `c5846b7` 0 違規（新分數只降不升，降分 8,343 組全在未驗證時，12→5 為 8,334、20→5 為 9）、6/7 突變轉紅（1 等價）、c4b 6 個舊測試僅調整預期值未放寬。合成 432 檔（不代表真實市場）：C4 12→5 96 檔、強缺貨→中度 24 檔、中度→不明顯 24 檔、前 50 名換 8 檔；已驗證單股路徑不變；全市場批次最高 5；單股 date==ym 且來源可信仍可 STRONG；單股 date≠ym 最高 5。
+**Batch B｜C4 未驗證月份鍵上限（~~實作完成＋非作者 QA 通過，待 PR／CI／merge~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）**已合併 #1079，squash `b01db69`**）**：`_score_revenue_yoy` 新增 `key_unverified`（契約非 OK／目標月未定／`month_key_verified` 非 True／`target_date_eligible` 非全 True）→ 不得 STEADY／STRONG，僅走既有 PARTIAL(5)／動能不足(0)；有效值＜2 資料不足（`c4_ok` False，不硬給 5）；FAIL_CLOSED 不變；metrics 新增 `rev_c4_key_unverified`。非作者 QA：1,679,616 組窮舉對 `c5846b7` 0 違規（新分數只降不升，降分 8,343 組全在未驗證時，12→5 為 8,334、20→5 為 9）、6/7 突變轉紅（1 等價）、c4b 6 個舊測試僅調整預期值未放寬。合成 432 檔（不代表真實市場）：C4 12→5 96 檔、強缺貨→中度 24 檔、中度→不明顯 24 檔、前 50 名換 8 檔；已驗證單股路徑不變；全市場批次最高 5；單股 date==ym 且來源可信仍可 STRONG；單股 date≠ym 最高 5。
 - **待客戶確認的詮釋點（AI 不自行裁決）**：未驗證且有效值全部＞門檻時給 5 分（現行實作，字面「不得 STEADY／STRONG、最高 5」）vs 嚴格讀「僅符合既有 PARTIAL 條件（任一＞門檻且非全部＞門檻）」則為 0 分。**副作用**：全市場批次 C4 最高 5，「3/3 皆強」與「僅 1 月強」同分，C4 失去區分力。
 
 **Batch C｜缺貨缺值與綜合排序研究（唯讀；單組結論未經第二組驗證；合成資料不代表真實市場）**：

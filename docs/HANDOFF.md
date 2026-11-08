@@ -1182,8 +1182,8 @@ DEC-086 規則已於 main，本表已落地。
 
 | 欄位 | 內容 |
 |---|---|
-| GitHub 事實 | main `35c08d2`；#1075～#1078 已 merge；#1038 Draft **NO MERGE**；#1034 Draft 待核銷。Batch B（C4 未驗證月份鍵上限）在**待開 PR**（commit `93904d0`＋`964f717`）：實作完成＋非作者 QA 通過，**待 PR／CI／merge，尚未合併** |
+| GitHub 事實 | ~~main `35c08d2`；Batch B 在待開 PR，待 PR／CI／merge，尚未合併~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）現行：main `b01db69`；#1075～#1079 已 merge；Batch B（C4 未驗證月份鍵上限）已由 #1079 squash 合併；#1038 Draft **NO MERGE**；#1034 Draft 待核銷 |
 | Batch A | C4-D-real **BLOCKED**：無 token、無真實／錄製樣本；FinMind 欄位語意 **NOT VERIFIED**；`BATCH_SOURCE_MONTH_KEY_VERIFIED` 維持 False，全市場 STRONG 維持 0，**不得宣稱恢復** |
 | Batch C | 唯讀研究（單組、合成資料）：推薦 A 先行（只診斷／文案／追溯）、B 的資格規則進 Decision Gate；不建議任何數值門檻 |
-| **下一個唯一安全接手點** | Batch B PR 合併後，等客戶對以下裁示：(1) C4-D-real 取樣路徑授權（A 客戶自取貼回／B 一次性 workflow_dispatch 探針／C 既有 probe 加一項／D `request_credential`）；(2) Batch B 詮釋點（未驗證且有效值全部＞門檻給 5 分 vs 嚴格讀為 0 分；副作用：批次 C4 最高 5、失去區分力）；(3) 缺貨缺值 Gate（G1／G2／G3 與凍結 cohort 版本標記）；(4) 候選池視窗與 C4 目標月視窗不一致；(5) `SHORTAGE_VERSION` 未版本化 |
+| **下一個唯一安全接手點** | ~~Batch B PR 合併後，等客戶對以下裁示：（舊列）~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）現行：**等客戶裁示**：(1) C4 未驗證且有效值全部＞門檻時給 5 分或 0 分的詮釋（副作用：全市場批次 C4 最高 5、失去區分力）；(2) C4-D-real 取樣授權路徑 A（客戶自取貼回）／B（一次性 workflow_dispatch 探針）／C（既有 probe 加一項）／D（`request_credential`）；(3) 缺貨缺值 Gate G1／G2／G3 與凍結 cohort 版本標記；(4) 候選池視窗與 C4 目標月視窗不一致、`SHORTAGE_VERSION` 未版本化。**重申**：不得宣稱全市場 STRONG 恢復（`BATCH_SOURCE_MONTH_KEY_VERIFIED` 仍 False）；#1038 PIT Draft **NO MERGE**；#1034 治理 Draft 待核銷。 |
 | 不可動 | 依 DEC-153 不變：新權重／門檻／固定封頂、PIT、Risk Cap、OneBrain runtime／Layout、資料發布、#1038、保留分支 |
