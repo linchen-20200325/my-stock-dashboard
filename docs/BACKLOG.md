@@ -2000,7 +2000,7 @@
 
 | # | 等級 | 內容 | 處置 |
 |---|---|---|---|
-| 1 | 建議；**Decision Gate 候選（投資語意，AI 不得自改）** | 下游把缺值當 0 分：`src/services/fundamental_screener_service.py` 約 389／397 行 `shortage_map` 只取「缺貨分數」，丟掉 `_c4_ok`／`有效訊號數`／`缺值原因`；n_ok=1 的列總分 0，composite 給「缺貨分 50」，`format_shortage_badge('不明顯')` 顯示「缺貨弱」，推播同；凍結流程 `get_ranked_picks` 同源（forward_test 入選名單受影響）；畫面不顯示缺值原因。 | 登記為「缺貨缺值在綜合排序／徽章被當 0」；影響綜合排序語意，需客戶裁示 |
+| 1 | ~~建議；**Decision Gate 候選（投資語意，AI 不得自改）**~~（2026-11-08 已於 DEC-153 裁示（方向 B），見 NUI2-DEC153；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-153） | 下游把缺值當 0 分：`src/services/fundamental_screener_service.py` 約 389／397 行 `shortage_map` 只取「缺貨分數」，丟掉 `_c4_ok`／`有效訊號數`／`缺值原因`；n_ok=1 的列總分 0，composite 給「缺貨分 50」，`format_shortage_badge('不明顯')` 顯示「缺貨弱」，推播同；凍結流程 `get_ranked_picks` 同源（forward_test 入選名單受影響）；畫面不顯示缺值原因。 | 登記為「缺貨缺值在綜合排序／徽章被當 0」；影響綜合排序語意，需客戶裁示 |
 | 2 | 已知限制→C4-D | 全市場批次路徑 `_batch_finmind` 丟 revenue_year／month，STRONG 恆 0；同股走存活池 C4=20、走批次 C4=12，跨路徑排名不可比，列內無路徑標記。 | C4-D 處理 plumbing |
 | 3 | 建議；Decision Gate 候選 | `_candidate_pool` 用 `classify_trend(yoy_last3)`（末 3 列）篩選，C4 用固定目標三月，視窗不一致。 | 登記為「候選池視窗與 C4 視窗不一致」 |
 | 4 | **NOT VERIFIED，若成立嚴重** | FinMind `date` 語意；若為次月 1 日，C4-D 之前單股契約會 `date_vs_revenue_ym_conflict` 全 FAIL_CLOSED（fail loud）。 | 待 C4-D-real |
@@ -2012,9 +2012,9 @@
 
 **B. C4-D（plumbing）狀態**：~~**實作完成但尚未合併**（commit `a958849`，branch `c4d-local`，將與本文件同一 PR），待非作者 QA／CI／merge。~~（2026-11-08 已更新：C4-D 非作者 QA 通過（無必修），待 PR／CI／merge；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-152）**實作完成，C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。**（commit `a958849`，branch `c4d-local`）內容：批次長表在來源提供時多帶 revenue_year／revenue_month（不由 date 補、單欄不帶）；契約新增 `source_month_key_verified` 與 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`（`shared/monthly_revenue_month_key.py`），全市場路徑 STRONG 恆 0，直到真實資料驗證＋客戶裁示才翻；date≠ym 改以 ym 為鍵、不再 FAIL_CLOSED 但 verified=False（單股真實形狀下 FAIL_CLOSED→STEADY／PARTIAL，仍不 STRONG；合成 4000 檔該形狀 C4 變動 2610、tier 819）。TWSE／TPEx OpenAPI 批次僅 1 列快照故未 plumb。**以上為施工組自測，QA 結果待補。**
 
-**C. 新增 Decision Gate 候選（皆未裁示，AI 不得自改）**：①「缺貨缺值在綜合排序／徽章被當 0」（發現 1）；②「候選池視窗與 C4 視窗不一致」（發現 3）；③「SHORTAGE 版本標記」（發現 6）。**C4-D-real 仍 blocked**：需合法 token 環境；是否授權 `request_credential` 待客戶決定。
+~~**C. 新增 Decision Gate 候選（皆未裁示，AI 不得自改）**~~（2026-11-08 已於 DEC-153 裁示（方向 B），見 NUI2-DEC153；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-153）（①缺貨缺值方向 B 已裁示，其具體資格規則仍待 Gate，見 Batch C 研究；②③仍未裁示）：①「缺貨缺值在綜合排序／徽章被當 0」（發現 1）；②「候選池視窗與 C4 視窗不一致」（發現 3）；③「SHORTAGE 版本標記」（發現 6）。**C4-D-real 仍 blocked**：需合法 token 環境；是否授權 `request_credential` 待客戶決定。
 
-- **Decision Gate 候選｜C4-D 後單股『date≠ym、ym 齊全』的 STEADY 連續性建立在未驗證 ym 上**（客戶未裁示，AI 不自改）：C4-D 後單股真實形狀（FinMind date≠ym、ym 齊全）由修前 FAIL_CLOSED（0 分）變為最高 STEADY（12）／PARTIAL，仍無 STRONG；QA 建議 `verified=False` 時最多 PARTIAL，但這會同時改動既有 date-only 行為，須客戶裁示。另：護欄靠 caller 傳 `source_month_key_verified`（預設 True），**非結構性阻擋**；批次路徑唯一呼叫點 `_candidate_pool` 傳 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`。　C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。
+- **Decision Gate 候選｜C4-D 後單股『date≠ym、ym 齊全』的 STEADY 連續性建立在未驗證 ym 上**~~（客戶未裁示，AI 不自改）~~（2026-11-08 已於 DEC-153 裁示（方向 B），見 NUI2-DEC153；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-153）（DEC-153 方向 B：未驗證不得 STEADY／STRONG；實作見 Batch B，待 PR）：C4-D 後單股真實形狀（FinMind date≠ym、ym 齊全）由修前 FAIL_CLOSED（0 分）變為最高 STEADY（12）／PARTIAL，仍無 STRONG；QA 建議 `verified=False` 時最多 PARTIAL，但這會同時改動既有 date-only 行為，須客戶裁示。另：護欄靠 caller 傳 `source_month_key_verified`（預設 True），**非結構性阻擋**；批次路徑唯一呼叫點 `_candidate_pool` 傳 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`。　C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。
 
 
 ### NUI2-DEC153｜2026-11-08 客戶第五輪後續裁示：資料資格與排名風險（本列補註，DEC-153）
@@ -2030,3 +2030,21 @@
 
 - **Batch 建議**：A 獨立研究／Secrets 安全預檢；B C4 上限最小修復（獨立 QA、最新 head 原生 CI）；C 缺值資格／分數矩陣與下游差異，**未授權正式排名改動先 Gate**。每個安全 batch 最多三項；不得因方向核准而假設新公式與資料來源已核准。
 - **未完成**：真實 FinMind、公告時點、Cloud／cron、真實排名結果 NOT VERIFIED；DEC-150 未解的獨立性／研究清單／財報有效月門檻／`diff_failed`／畫面分母與線框均保留原狀。
+
+#### NUI2-DEC153 執行結果補註（2026-11-08；AI 整理，**非客戶裁示、非客戶逐字**；決策者 AI 總管（事實更新）；不新增 ID）
+
+> GitHub 為準：main `35c08d2`；#1075～#1078 已 merge；#1038 Draft **NO MERGE**；#1034 Draft 待核銷。Batch B 在待開 PR（commit `93904d0`＋`964f717`），**不得寫成已 merge**。
+
+**Batch A｜C4-D-real（FinMind 預檢，唯讀）＝BLOCKED**：沙箱 env 無 FinMind token、repo 無 secrets.toml／.env、無任何真實或錄製的 FinMind 月營收樣本；`date` 與 `revenue_year/month` 語意目前只有程式假設與客戶轉述（ChatGPT 查閱官方文件），非官方證據，**NOT VERIFIED**。`FINMIND_TOKEN` 只以 GitHub Actions `secrets.FINMIND_TOKEN` 存在於 14 支 workflow（`pr-check.yml` 用字面 ci-test-token，非真 secret），皆會寫入／推播／推分支，不適合當取樣載體；`probe_tw_sources.yml` 為 workflow_dispatch 只印 log，但目前無 MonthRevenue 項。**合法取樣選項（只列、未執行、需客戶授權）**：A 客戶自取少量非敏感欄位貼回；B 新增一次性 workflow_dispatch 探針（PR＋CI）；C 在既有 probe 加一項；D `request_credential`（新增憑證＋網路放行）。`BATCH_SOURCE_MONTH_KEY_VERIFIED` 維持 False，全市場 STRONG 維持 0。
+
+**Batch B｜C4 未驗證月份鍵上限（實作完成＋非作者 QA 通過，待 PR／CI／merge）**：`_score_revenue_yoy` 新增 `key_unverified`（契約非 OK／目標月未定／`month_key_verified` 非 True／`target_date_eligible` 非全 True）→ 不得 STEADY／STRONG，僅走既有 PARTIAL(5)／動能不足(0)；有效值＜2 資料不足（`c4_ok` False，不硬給 5）；FAIL_CLOSED 不變；metrics 新增 `rev_c4_key_unverified`。非作者 QA：1,679,616 組窮舉對 `c5846b7` 0 違規（新分數只降不升，降分 8,343 組全在未驗證時，12→5 為 8,334、20→5 為 9）、6/7 突變轉紅（1 等價）、c4b 6 個舊測試僅調整預期值未放寬。合成 432 檔（不代表真實市場）：C4 12→5 96 檔、強缺貨→中度 24 檔、中度→不明顯 24 檔、前 50 名換 8 檔；已驗證單股路徑不變；全市場批次最高 5；單股 date==ym 且來源可信仍可 STRONG；單股 date≠ym 最高 5。
+- **待客戶確認的詮釋點（AI 不自行裁決）**：未驗證且有效值全部＞門檻時給 5 分（現行實作，字面「不得 STEADY／STRONG、最高 5」）vs 嚴格讀「僅符合既有 PARTIAL 條件（任一＞門檻且非全部＞門檻）」則為 0 分。**副作用**：全市場批次 C4 最高 5，「3/3 皆強」與「僅 1 月強」同分，C4 失去區分力。
+
+**Batch C｜缺貨缺值與綜合排序研究（唯讀；單組結論未經第二組驗證；合成資料不代表真實市場）**：
+- 現況：main 已含 DEC-149 Phase 3B，n_ok=0 已降 `TIER_INSUFFICIENT`、不進 `_RANKABLE_TIERS`；仍成立的問題只剩 n_ok=1～3 部分缺值：缺項在 total 記 0 → 整檔 `TIER_WEAK`；「缺貨分數」→ `shortage_map`（`fundamental_screener_service.py` 約 L389）原樣進 `_percentile_scores`（約 L325）→ composite；`n_signals_ok`／`c*_ok` 只在 `to_row` 輸出，`src/services` 內無 consumer；徽章 `format_shortage_badge` 只吃 tier（`signal_message.py:67`），推播第二行可出現「缺貨弱」；forward_test `PICK_SNAPSHOT_HEADERS` 只含 cohort／stock_id／name／entry_price／factors／frozen_at，缺貨分／n_ok／tier 皆未凍結。
+- 六類待遇：①n_ok=4 真低分；②部分證據；③n_ok=0 已排除；④抓取失敗（C4 FAIL_CLOSED；C1～C3 仍計→同②）；⑤未深掃不計；⑥月份鍵未驗證。
+- 三方案：A 只診斷／文案／追溯（零排名變動、可立即做）；B 保留原始分數＋資格獨立傳遞（正式排名 vs 研究候選分流，規則須 Decision Gate）；C 重建（最大、不建議）。研究推薦 A 先行、B 的資格規則進 Decision Gate。
+- Gate 選項（待客戶裁示，**不建議任何數值門檻**）：G1 現狀＋文案揭露；G2 n_ok≥3 才入百分位、其餘入研究候選；G3 僅 n_ok=4 入正式排名（合成 45→22）。
+- 可安全施工（不改排名）：徽章／推播文案加註「部分證據 n/4」、`shortage_by_code` 旁路顯示 n_ok／miss_reason、note 揭露、負測、forward_test 追溯欄（schema-additive，但須先確認不破壞既有 sheet／parquet 讀取，**NOT VERIFIED**）。**須 Decision Gate**：新排名資格、百分位分母、有效因子數門檻、權重重配、推播正式行動、研究清單新 enum、凍結 cohort 版本策略。未授權事項照 DEC-153 不變。
+
+**待客戶事項彙整**：(1) C4-D-real 取樣路徑授權（A／B／C／D）；(2) Batch B 詮釋點（5 分 vs 0 分）；(3) 缺貨缺值 Gate（G1／G2／G3 與凍結版本標記）；(4) 候選池視窗與 C4 目標月視窗不一致（Batch C 先前發現 #3）；(5) `SHORTAGE_VERSION` 未版本化。
