@@ -45,6 +45,7 @@ from shared.shortage_screen_thresholds import (
 )
 
 _RANKABLE_TIERS = (TIER_STRONG, TIER_MID, TIER_WEAK)
+from shared.monthly_revenue_month_key import BATCH_SOURCE_MONTH_KEY_VERIFIED
 from shared.ttls import TTL_1DAY
 from src.compute.health.monthly_revenue_calc import classify_trend, compute_yoy_mom
 from src.compute.health.monthly_revenue_month_contract import (
@@ -128,7 +129,9 @@ def _candidate_pool(batch_df: pd.DataFrame, *, max_n: int) -> list[dict]:
     out: list[dict] = []
     _as_of = _as_of_today()
     for _sid, _grp in batch_df.groupby("stock_id"):
-        _stats = compute_yoy_mom(_grp, as_of=_as_of)
+        # DEC-152:批次表的 revenue_year/month 未經真實資料驗證 → 契約公告時點資格維持 NOT VERIFIED(全市場 STRONG 不恢復)
+        _stats = compute_yoy_mom(_grp, as_of=_as_of,
+                                 source_month_key_verified=BATCH_SOURCE_MONTH_KEY_VERIFIED)
         if classify_trend(_stats) not in ("up", "strong_up"):
             continue
         _yoy3 = _stats.get("yoy_last3") or []

@@ -228,16 +228,21 @@ def test_unparseable_month_and_key_conflict_fail_closed():
     only_date.loc[3, "date"] = pd.NaT       # 只有 date 且有列無法解析:不得退回位置推月份
     c1 = REAL.compute_month_contract(only_date, as_of=A(2026, 10, 15))
     assert c1["contract_status"] == REAL.STATUS_FAIL_CLOSED
+    # DEC-152 C4-D(有意識的預期變化,不是放寬):date 與 revenue_year/month 不一致**不再**直接 FAIL_CLOSED(客戶指出
+    # date 與營收月份本來就可能不同);以 revenue_year/month 為月份鍵。單列被改成別的月 → 該月與既有月重複 → 仍 FAIL_CLOSED。
     conflict = df.copy()
-    conflict["revenue_month"] = conflict["revenue_month"].where(conflict.index != 4, 12)  # 與 date 不一致
+    conflict["revenue_month"] = conflict["revenue_month"].where(conflict.index != 4, 12)  # 與 date 不一致,且與 2025-12 重複
     c2 = REAL.compute_month_contract(conflict, as_of=A(2026, 10, 15))
-    assert c2["contract_status"] == REAL.STATUS_FAIL_CLOSED and REAL.FAIL_KEY_CONFLICT in c2["contract_fail_reasons"]
+    assert c2["contract_status"] == REAL.STATUS_FAIL_CLOSED
+    assert REAL.FAIL_DUPLICATE_MONTH in c2["contract_fail_reasons"] or REAL.FAIL_MONTH_ORDER in c2["contract_fail_reasons"]
     assert c2["target_date_eligible"] == [None] * 3
-    # date 與 ym 若系統性差一個月(FinMind 若以公布月為 date 就會是這種)→ 同樣 fail-closed,不默默修正
+    # date 與 ym 系統性差一個月(FinMind 若以公布月為 date 就會是這種)→ 以 ym 為月份鍵、不 FAIL、但『未驗證』(不默默修正、不冒充已驗證)
     shifted = df.copy()
     shifted["date"] = shifted["date"] + pd.offsets.MonthBegin(1)
     c3 = REAL.compute_month_contract(shifted, as_of=A(2026, 10, 15))
-    assert c3["contract_status"] == REAL.STATUS_FAIL_CLOSED and REAL.FAIL_KEY_CONFLICT in c3["contract_fail_reasons"]
+    assert c3["contract_status"] == REAL.STATUS_OK and c3["month_key_source"] == REAL.SRC_REVENUE_YM
+    assert c3["month_key_verified"] is False and c3["target_date_eligible"] == [None] * 3
+    assert c3["yoy_target_months"] == ["2026-07", "2026-08", "2026-09"] and c3["yoy_months"][-1] == "2026-09"
 
 
 def test_single_valid_month_and_openapi_single_month_not_three():

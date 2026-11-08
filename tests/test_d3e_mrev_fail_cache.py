@@ -643,7 +643,7 @@ def _check_finmind_multi_stock_batch_kept(mod, w: _World, n_stocks: int) -> None
             and df["stock_id"].nunique() == n_stocks and len(df) == n_stocks * 19), \
         "FinMind 多檔全市場批次不再被整批丟棄（修前：兩檔以上恆落到 OpenAPI 單月快照）"
     assert w.calls["twse"] == 0 and w.calls["tpex"] == 0, "FinMind 有資料 → 不走 OpenAPI"
-    assert list(df.columns) == ["stock_id", "date", "revenue"]
+    assert list(df.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"]  # DEC-152 C4-D 預期變化:來源(_fm_batch_frame)有 revenue_year/month → 批次表多帶這兩欄(additive);欄名/順序仍精確釘住
     assert df.equals(df.sort_values(["stock_id", "date"]).reset_index(drop=True))
 
 
@@ -653,7 +653,7 @@ def _check_all_rows_dropped_keeps_columns(mod, w: _World) -> None:
     frame["revenue"] = float("nan")
     w.fm_batch = frame
     out = mod._batch_finmind(18)
-    assert out.empty and list(out.columns) == ["stock_id", "date", "revenue"], \
+    assert out.empty and list(out.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"], \
         "樣本取首檔前要先擋空表（否則 .iloc[0] 拋錯 → 回無欄空表）"
     assert out.attrs["source"] == "FinMind:TaiwanStockMonthRevenue:batch(all-market)"
 
@@ -1160,7 +1160,7 @@ class TestD2f21FinmindBatchSample:
         """「樣本違反 → 整批棄用」照舊（§1）：首檔有負營收 → 整批回空、改走 OpenAPI。"""
         world.fm_batch = _fm_batch_frame(["1001", "1002"], bad=("1001", 5))
         out = MR._batch_finmind(18)
-        assert out.empty and list(out.columns) == ["stock_id", "date", "revenue"]
+        assert out.empty and list(out.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"]  # DEC-152 C4-D 預期變化:來源(_fm_batch_frame)有 revenue_year/month → 批次表多帶這兩欄(additive);欄名/順序仍精確釘住
         assert "batch 樣本 schema 違反 → 整批棄用" in capsys.readouterr().out
         world.recover()
         df = MR.fetch_batch_monthly_revenue()

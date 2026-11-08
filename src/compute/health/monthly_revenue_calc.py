@@ -41,13 +41,16 @@ TREND_LABELS = {
 
 
 def compute_yoy_mom(df_stock: pd.DataFrame, *, as_of: Any = None,
-                    upstream_failed: bool = False) -> dict[str, Any]:
+                    upstream_failed: bool = False,
+                    source_month_key_verified: bool = True) -> dict[str, Any]:
     """對單股月營收序列計算近 3 月 YoY + 末月 MoM(+ DEC-151 Batch A 月份資料契約,additive)。
 
     Args:
         df_stock: DataFrame with [date, revenue(, revenue_year, revenue_month)],按 date 升冪排序
         as_of: 回溯基準日(可注入;None → 契約的目標月/公告時點資格為 NOT VERIFIED,不讀時鐘)
         upstream_failed: L1 判定上游確定抓取失敗 → 契約 FAIL_CLOSED(舊欄位照舊)
+        source_month_key_verified: revenue_year/month 欄來源是否已經真實資料驗證(DEC-152 護欄;預設 True ＝ 修前行為;
+            全市場批次路徑傳 False → 契約月份鍵/公告時點資格 NOT VERIFIED,舊欄位與任何分數規則不受影響)
 
     Returns:
         dict: {
@@ -61,7 +64,8 @@ def compute_yoy_mom(df_stock: pd.DataFrame, *, as_of: Any = None,
             date_eligibility …。**舊欄位的值與格式一字不變**;契約欄位不影響任何分數。
         }
     """
-    _contract = compute_month_contract(df_stock, as_of=as_of, upstream_failed=upstream_failed)
+    _contract = compute_month_contract(df_stock, as_of=as_of, upstream_failed=upstream_failed,
+                                      source_month_key_verified=source_month_key_verified)
     if df_stock is None or df_stock.empty or "revenue" not in df_stock.columns:
         return {"last_date": None, "last_revenue": None, "yoy_last3": [],
                 "mom_last": None, "months_available": 0, **_contract}
