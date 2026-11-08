@@ -1,0 +1,48 @@
+name: Probe FinMind MonthRevenue (Manual, read-only)
+
+# DEC-152/153/154:一次性手動唯讀探針,取少量 TaiwanStockMonthRevenue 樣本供欄位語意判讀。
+# 僅 workflow_dispatch;無 schedule/push/pull_request。不寫資料、不 commit/push、不推播、不上傳 artifact。
+# FINMIND_TOKEN 只傳給最後的執行步驟;空字串時腳本 exit 2 並印 NOT VERIFIED。
+on:
+  workflow_dispatch:
+    inputs:
+      stock_ids:
+        description: '股票代號(逗號分隔,最多 5 檔)'
+        required: false
+        default: '2330,2317,2454'
+      months:
+        description: '回看月數(1~12)'
+        required: false
+        default: '6'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-finmind-monthrev
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Probe FinMind MonthRevenue
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROBE_STOCK_IDS: ${{ inputs.stock_ids }}
+          PROBE_MONTHS: ${{ inputs.months }}
+        run: python scripts/probe_finmind_monthrev.py
