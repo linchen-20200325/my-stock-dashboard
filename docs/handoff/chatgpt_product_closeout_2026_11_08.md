@@ -1,6 +1,8 @@
 # ChatGPT 完整產品交接快照｜台股 AI 戰情室（2026-11-08）
 > **狀態：交接索引／時點快照，非新 Decision、非新規格、非新施工授權。** 本文件為換 ChatGPT 對話而建；不可凌駕 CLAUDE.md、PROCESS.md、PROJECT_RULES.md、已合併 DECISIONS 或正式 UI 契約。**接手時先查即時 GitHub，不可將這份快照的 PR 狀態當最新。** 本檔獨立於共用 BACKLOG／HANDOFF，避免與 Claude Code 施工衝突。
 
+> **2026-11-09 合併後補正（本 PR 仍為 Draft，未進 main；以最新 GitHub 實況為準）**：此檔 A/F/G 節中的 #1083／#1084「Draft」與 main `412d15b` 只是 **2026-11-08 時點快照，已過時**；#1083、#1084、#1086 已在 main，五步驟 Old UI First 治理 #1087 已 squash merge，main 實查 `5eb3ee9e0e506dc97c643a188ade21e69d4a754a`；`PROJECT_RULES.md` 已有正式入口與 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`。#1089 AppTest 失敗已按 Streamlit 版本漂移結案：CI 1.59.2 兩項 PASS，舊沙箱 1.67.0 超出 `requirements.txt` 的 `<1.60.0`；無 production UI2 修改。當時 Open PR：#1088 資料自動發布、#1085 本交接、#1038 PIT **NO MERGE**、#1034 舊治理衝突。**本補正不是新增裁示／實作授權，也不宣稱五頁真資料全接線、FinMind 月份／公告時點已驗、Risk Cap／OneBrain runtime 已完成。** 下一對話必須重查 main/head/CI/QA，不可把本段當永久現況。
+
 ## A. GitHub Verification Gate（快照）
 - repo：`linchen-20200325/my-stock-dashboard`；main：`412d15bec6d478f48654e2a275e2ac542bd07484`（#1082，DEC-154）。
 - 目前 Open Draft：#1083（G1 缺貨證據資格呈現，head `691eaa3`）；#1084（FinMind 一次性手動唯讀探針，head `eb2e20a`）；#1034（舊治理文件待逐項核銷）；#1038（macro-forward-test PIT 失格，**NO MERGE**）。
