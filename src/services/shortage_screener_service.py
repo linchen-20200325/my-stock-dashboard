@@ -47,6 +47,11 @@ from shared.shortage_screen_thresholds import (
 _RANKABLE_TIERS = (TIER_STRONG, TIER_MID, TIER_WEAK)
 from shared.ttls import TTL_1DAY
 from src.compute.health.monthly_revenue_calc import classify_trend, compute_yoy_mom
+from src.compute.health.monthly_revenue_month_contract import (
+    MONTH_CONTRACT_KEY,
+    extract_month_contract,
+    mark_upstream_failed,
+)
 from src.compute.screener.shortage_screener import rank_shortage
 from src.data.stock.monthly_revenue_fetcher import (
     fetch_batch_monthly_revenue,
@@ -106,16 +111,24 @@ def _is_finance(stock_id: str) -> bool:
     return str(stock_id).startswith(("28", "58"))
 
 
+def _as_of_today():
+    """月份資料契約的回溯基準日 = 台灣今天(DEC-151 Batch A;L3 取時鐘後注入 L2,L2 不讀時鐘)。"""
+    from shared.macro_compute import tw_now
+    return tw_now().date()
+
+
 def _candidate_pool(batch_df: pd.DataFrame, *, max_n: int) -> list[dict]:
     """全市場月營收 batch → 「營收動能向上」候選池（依末月 YoY 由高到低，取前 max_n）。
 
-    每筆:{stock_id, revenue_yoy_last3, last_yoy}。只保留 classify_trend ∈ {up, strong_up}。
+    每筆:{stock_id, revenue_yoy_last3, last_yoy, revenue_month_contract}。只保留 classify_trend ∈ {up, strong_up}。
+    `revenue_month_contract`(DEC-151 Batch A):月份資料契約,本批只透傳、不影響候選池篩選與排序。
     """
     if batch_df is None or batch_df.empty or "stock_id" not in batch_df.columns:
         return []
     out: list[dict] = []
+    _as_of = _as_of_today()
     for _sid, _grp in batch_df.groupby("stock_id"):
-        _stats = compute_yoy_mom(_grp)
+        _stats = compute_yoy_mom(_grp, as_of=_as_of)
         if classify_trend(_stats) not in ("up", "strong_up"):
             continue
         _yoy3 = _stats.get("yoy_last3") or []
@@ -124,6 +137,7 @@ def _candidate_pool(batch_df: pd.DataFrame, *, max_n: int) -> list[dict]:
             "stock_id": str(_sid),
             "revenue_yoy_last3": _yoy3,
             "last_yoy": _last if _last is not None else float("-inf"),
+            MONTH_CONTRACT_KEY: extract_month_contract(_stats),
         })
     out.sort(key=lambda c: c["last_yoy"], reverse=True)
     return out[:max_n]
@@ -165,20 +179,27 @@ def _score_and_diagnose(pairs: list[tuple[str, list | None]], *,
     failed（D2-f30）：傳 list 進來 → 季報或月營收是 L1 確定抓取失敗的股號各寫一筆（回傳不變）。
     """
     stocks: list[dict] = []
-    for _sid, _yoy3 in pairs:
+    for _pair in pairs:
+        _sid, _yoy3 = _pair[0], _pair[1]
+        _contract = _pair[2] if len(_pair) > 2 else None   # DEC-151 Batch A:候選池路徑隨 pair 帶入月份契約
         _frame, _q_failed = _with_status(fetch_quarterly_shortage_frame, _sid)
         _m_failed = False
         if _yoy3 is None:
             _mrev, _m_failed = _with_status(fetch_monthly_revenue, _sid, months=18)
-            _yoy3 = (compute_yoy_mom(_mrev).get("yoy_last3", [])
+            _stats = compute_yoy_mom(_mrev, as_of=_as_of_today(), upstream_failed=_m_failed)
+            _yoy3 = (_stats.get("yoy_last3", [])
                      if _mrev is not None and not _mrev.empty else [])
-        stocks.append({
+            _contract = extract_month_contract(_stats)
+        _stock = {
             "stock_id": _sid,
             "name": "",
             "is_finance": _is_finance(_sid),
             "quarters": _frame,
             "revenue_yoy_last3": _yoy3,
-        })
+        }
+        if _contract is not None:   # 透傳月份資料契約(本批 C4 不使用,Batch B 才用;缺 → 舊輸入 = UNDETERMINED)
+            _stock[MONTH_CONTRACT_KEY] = _contract
+        stocks.append(_stock)
         if failed is not None and (_q_failed or _m_failed):
             failed.append(_sid)
     _scored = rank_shortage(stocks, include_na=True)
@@ -241,7 +262,12 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
         return _empty
 
     _pool = _candidate_pool(_batch, max_n=max_scan)
-    _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
+    if _batch_failed:   # DEC-151 Batch A:全市場月營收是確定失敗(含半邊表)→ 契約 FAIL_CLOSED,不推定成功
+        for _c in _pool:
+            if isinstance(_c, dict) and MONTH_CONTRACT_KEY in _c:
+                _c[MONTH_CONTRACT_KEY] = mark_upstream_failed(_c[MONTH_CONTRACT_KEY])
+    _pairs = [(c["stock_id"], c["revenue_yoy_last3"], c[MONTH_CONTRACT_KEY]) if MONTH_CONTRACT_KEY in c
+              else (c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
     _deep_failed2: list[str] = []   # D2-f30(② 的逐檔深掃同理)
     _rows, _note = _score_and_diagnose(_pairs, failed=_deep_failed2)
     _result = (_rows, {

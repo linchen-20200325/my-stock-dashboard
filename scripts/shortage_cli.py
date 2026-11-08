@@ -36,7 +36,11 @@ if _ROOT not in sys.path:
 # 靜音 streamlit「No runtime found」cache 警告（CLI 無 streamlit runtime，屬正常）
 logging.getLogger("streamlit").setLevel(logging.ERROR)
 
-from src.compute.health.monthly_revenue_calc import compute_yoy_mom  # noqa: E402
+from src.compute.health.monthly_revenue_calc import (  # noqa: E402
+    MONTH_CONTRACT_KEY,
+    compute_yoy_mom,
+    extract_month_contract,
+)
 from src.compute.screener.shortage_screener import (  # noqa: E402
     ShortageScore,
     rank_shortage,
@@ -65,7 +69,10 @@ def build_stock_input(stock_id: str) -> dict:
                 "quarters": [], "revenue_yoy_last3": []}
     _frame = fetch_quarterly_shortage_frame(sid)
     _mrev = fetch_monthly_revenue(sid, months=18)
-    _yoy3 = (compute_yoy_mom(_mrev).get("yoy_last3", [])
+    # DEC-151 Batch A:as_of = 台灣今天(CLI 取時鐘後注入 L2);月份資料契約只透傳,本批 C4 不使用
+    from shared.macro_compute import tw_now
+    _stats = compute_yoy_mom(_mrev, as_of=tw_now().date())
+    _yoy3 = (_stats.get("yoy_last3", [])
              if _mrev is not None and not _mrev.empty else [])
     return {
         "stock_id": sid,
@@ -73,6 +80,7 @@ def build_stock_input(stock_id: str) -> dict:
         "is_finance": False,
         "quarters": _frame,
         "revenue_yoy_last3": _yoy3,
+        MONTH_CONTRACT_KEY: extract_month_contract(_stats),
     }
 
 
