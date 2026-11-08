@@ -1134,7 +1134,7 @@
 
 ### 70.2 稽核發現與完成限制
 - `shortage_screener` 四種財務足跡僅是**疑似缺貨**，非官方確認大單；收入缺值曾見分項 0 及其他項仍 rankable。 `fin_trend_score` 月／季缺腿有 0→中性風險，`fin_health_diff` 與現金流單季／累計口徑仍須獨立負測試。這些是**待複驗稽核線索**，不是本批核准修改投資公式。
-  📌 **2026-11-08 更新（DEC-149）**：客戶已核准方向——`fin_trend_score` 維持 65%／35% 原始權重不重配、必要資料不足不產正式綜合評級；缺貨排名採至少兩項有效獨立證據資格、四項全缺排除正式排名並保留「無法評估」診斷、證據不完整的強缺貨訊號先研究降級或封頂（具體封頂分數、有效／獨立定義細節、新權重等尚未裁定）；施工分批見 BACKLOG／HANDOFF，目前僅 docs、未施工。
+  📌 **2026-11-08 更新（DEC-149）**：客戶已核准方向——`fin_trend_score` 維持 65%／35% 原始權重不重配、必要資料不足不產正式綜合評級；缺貨排名採至少兩項有效獨立證據資格、四項全缺排除正式排名並保留「無法評估」診斷、證據不完整的強缺貨訊號先研究降級或封頂（具體封頂分數、有效／獨立定義細節、新權重等尚未裁定）；施工分批見 BACKLOG／HANDOFF，~~目前僅 docs、未施工~~（2026-11-08 已更新：三批已 squash 合併：#1067（D3 B2，main `fb37488`）、#1068（財報缺值資格，main `db82a20`）、#1069（缺貨 Phase 3B，main `234c5f4`），皆最新 head 原生 CI 全綠、各有非作者 QA，發布端到端仍 NOT VERIFIED；餘項待客戶裁示，見 BACKLOG `NUI2-FIN-CHANGE-QUALIFICATION`／`NUI2-SHORTAGE-VERIFIED-EVIDENCE`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新））。
 - 第一版到 UI2 的真實 API 成功率、資料流、source/as_of、授權與完整 Digest coverage **未實測完成**；勿把 `NOT_VERIFIED` 或 `N0~N4` 稽核分組升格為正式 Data State 第六態。
 - 已落 main 的 #1041 帳本 Fail-Closed、#1042 Parquet 原子寫入與 #1043 孤兒暫存檔 ignore，是資料保存安全修復；**#1038 仍因 PIT（2026-11-05 資料列引用較晚的 as_of）不得合併**。pandas 舊版 object 浮點精確比對已由 #1049 合併（Issue #1044 closed）。讀到 BACKLOG/HANDOFF 舊段「非原子／孤兒 tmp 未 ignore」時，以 GitHub 真實合併證據為準。
 
