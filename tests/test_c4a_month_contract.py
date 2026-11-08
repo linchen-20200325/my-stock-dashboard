@@ -1,6 +1,6 @@
 """tests/test_c4a_month_contract.py — DEC-151 Batch A:月營收『月份資料契約』(producer 端,additive)。
 
-守衛的事:
+守衛的事(⚠️ ④『本批不改 C4 分數』只描述 Batch A;Batch B〔tests/test_c4b_revenue_scoring.py〕已依 DEC-151 改 C4 計分,④ 現只保證 C1–C3 與 tier 邏輯不受契約鍵影響):
   ① 舊欄位 parity:`compute_yoy_mom` 的舊 5 個欄位與修前逐值相同(20000 組固定種子對照修前凍結複本);
   ② 契約行為:連續/缺中間/缺末/缺首/跳月/缺基期/日期無法驗證/重複/錯亂/單月/OpenAPI 單月/上游失敗/
      未到公告時點/as_of 回溯/真 0 YoY/舊 caller UNDETERMINED;
@@ -408,8 +408,14 @@ def test_legacy_fields_parity_20000_seeded():
     assert n_exc < 20000
 
 
-# ───────────────────────── 本批不改 C4 分數、透傳接線 ─────────────────────────
-def test_c4_score_unchanged_with_or_without_contract():
+# ───────────────────────── Batch B 後:契約鍵不影響 C1–C3、透傳接線 ─────────────────────────
+def test_c1_c3_unchanged_with_or_without_contract():
+    """(原 test_c4_score_unchanged_with_or_without_contract;Batch B 起 C4 依契約評分,故只守 C1–C3 不變。)
+
+    語意變更理由:Batch A 時 shortage_screener 不讀契約,『有/無契約鍵結果逐值相同』成立;Batch B 依 DEC-151
+    讓 C4 讀契約(缺契約=UNDETERMINED 不得逐月加速),C4 分數本來就會因契約而不同 → 該斷言對 C4 失效。
+    C1–C3 仍須與契約鍵無關。
+    """
     from src.compute.screener.shortage_screener import score_shortage
     q = [{"label": f"2026Q{i}", "revenue": 1000, "gross_profit": 300, "cogs": 700,
           "contract_liab": 100 + i, "inventory": 200 - i} for i in range(1, 6)]
@@ -417,7 +423,9 @@ def test_c4_score_unchanged_with_or_without_contract():
         base = {"stock_id": "9999", "name": "t", "is_finance": False, "quarters": q, "revenue_yoy_last3": yoy}
         c = REAL.compute_month_contract(mk(span("2025-01", "2026-09")), as_of=A(2026, 10, 15))
         with_c = {**base, REAL.MONTH_CONTRACT_KEY: c}
-        assert score_shortage(base).to_row() == score_shortage(with_c).to_row()
+        a, b = score_shortage(base), score_shortage(with_c)
+        assert (a.c1_contract_liab, a.c2_gross_margin, a.c3_inventory_days) == \
+            (b.c1_contract_liab, b.c2_gross_margin, b.c3_inventory_days)
 
 
 def test_candidate_pool_passes_contract_and_selection_unchanged():

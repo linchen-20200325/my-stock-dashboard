@@ -4,7 +4,8 @@
 本批**只做**已核准且可由既有程式定義判定的最小修正：
   · score_shortage / ShortageScore / to_row 新增 n_signals_ok、c1_ok~c4_ok、miss_reason（schema-additive）；
   · n_signals_ok == 0 → 重用 TIER_INSUFFICIENT（無法評估）,不進正式排名,rank_shortage(include_na=True) 可查診斷。
-⛔ 不測也不實作：『至少兩項有效獨立』資格、任何封頂、C4『valid 壓縮』計分語意（屬未裁定,另待客戶）。
+⛔ 不測也不實作：『至少兩項有效獨立』資格、任何封頂。
+（C4『valid 壓縮』計分語意已於 DEC-151 裁示並由 Batch B 修復,測試見 tests/test_c4b_revenue_scoring.py。）
 全部合成資料,零網路。
 """
 from __future__ import annotations
@@ -23,7 +24,7 @@ from src.compute.screener.shortage_screener import (
     score_shortage,
     to_rows,
 )
-from tests.test_shortage_screener import _q, _strong_quarters, _strong_stock
+from tests.test_shortage_screener import _q, _strong_quarters, _strong_stock, _verified_contract
 
 _OLD_ROW_KEYS = ("代碼", "名稱", "缺貨分數", "訊號強度", "①合約負債", "②毛利率",
                  "③存貨天數", "④月營收", "理由", "_tier")
@@ -33,7 +34,9 @@ _YOY_OK = [16.0, 18.0, 22.0]
 def _stock(quarters=None, yoy=_YOY_OK, sid="2330"):
     return {"stock_id": sid, "name": "x", "is_finance": False,
             "quarters": quarters if quarters is not None else _strong_quarters(),
-            "revenue_yoy_last3": yoy}
+            "revenue_yoy_last3": yoy,
+            # DEC-151 Batch B：C4 要有『已驗證』月份契約才可能發逐月加速(舊輸入無契約 = UNDETERMINED)
+            "revenue_month_contract": _verified_contract(yoy)}
 
 
 def _null(quarters, *keys):
@@ -110,7 +113,9 @@ def test_monthly_revenue_missing_others_complete():
     with_rev = score_shortage(_stock())
     r = score_shortage(_stock(yoy=[None, None, 20.0]))        # 只有 1 個有效月 → C4 既有資料不足分支
     assert r.c4_ok is False and (r.c1_ok, r.c2_ok, r.c3_ok) == (True, True, True)
-    assert r.n_signals_ok == 3 and "④月營收有效月數<2" in r.miss_reason
+    # DEC-151 Batch B 語意變更:帶契約且目標月缺值時,缺值原因改誠實寫『缺月/不連續(有值k/3)』
+    # (無契約的舊輸入仍是『④月營收有效月數<2』,見 test_c4b_revenue_scoring.py)
+    assert r.n_signals_ok == 3 and "④月營收缺月/不連續(有值1/3)" in r.miss_reason
     assert (r.c1_contract_liab, r.c2_gross_margin, r.c3_inventory_days) == (
         with_rev.c1_contract_liab, with_rev.c2_gross_margin, with_rev.c3_inventory_days)
     assert r.c4_revenue_yoy == 0.0 and r.total == with_rev.total - with_rev.c4_revenue_yoy
