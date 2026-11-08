@@ -52,10 +52,33 @@ def _strong_quarters():
     ]
 
 
+def _verified_contract(yoy3, *, eligible=True):
+    """DEC-151 Batch B：手建『契約 OK、3 個目標月連續、公告時點資格已驗證』的月份契約(欄位同 Batch A producer)。
+
+    這是『可以發逐月加速』的合法證據組;golden 強缺貨夾具必須帶它——無契約的舊輸入(連續性/日期資格
+    UNDETERMINED)依 DEC-151 不得判逐月加速(見 tests/test_c4b_revenue_scoring.py)。
+    """
+    ok = [v is not None for v in yoy3]
+    return {
+        "contract_version": 1, "contract_status": "OK", "contract_fail_reasons": [], "as_of": "2026-10-15",
+        "month_key_source": "revenue_year_month", "month_key_verified": True,
+        "yoy_months": ["2026-07", "2026-08", "2026-09"], "yoy_months_contiguous": True,
+        "yoy_target_months": ["2026-07", "2026-08", "2026-09"],
+        "yoy_target3": list(yoy3), "yoy_missing_reasons": [None if o else "no_observation" for o in ok],
+        "target_observed": ok, "target_base_valid": ok, "target_yoy_computable": ok,
+        "target_date_eligible": [eligible] * 3, "date_eligibility": "VERIFIED_BY_SSOT_LAG",
+        "date_eligibility_reasons": [], "excluded_not_yet_due_months": [], "yoy_last3_matches_target": True,
+    }
+
+
 def _strong_stock(**over):
     base = {"stock_id": "2330", "name": "台積電", "is_finance": False,
-            "quarters": _strong_quarters(), "revenue_yoy_last3": [16.0, 18.0, 22.0]}
+            "quarters": _strong_quarters(), "revenue_yoy_last3": [16.0, 18.0, 22.0],
+            "revenue_month_contract": _verified_contract([16.0, 18.0, 22.0])}
     base.update(over)
+    if "revenue_yoy_last3" in over and "revenue_month_contract" not in over:
+        # 夾具覆寫 YoY 時,契約同步(『月份證據完整且已驗證』的 YoY 序列);要測無契約/壞契約請明傳 revenue_month_contract
+        base["revenue_month_contract"] = _verified_contract(over["revenue_yoy_last3"])
     return base
 
 

@@ -39,6 +39,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # ── SSOT：訊號邊界值（重用既有）+ 本篩選器權重/分級（新）─────────────
+from src.compute.health.monthly_revenue_month_contract import (
+    MONTH_CONTRACT_KEY,
+    STATUS_FAIL_CLOSED,
+    STATUS_OK,
+    TARGET_MONTHS,
+    legacy_undetermined_contract,
+)
 from shared.signal_thresholds import (
     CL_GROWTH_YOY_PCT,
     CL_SURGE_YOY_PCT,
@@ -357,28 +364,162 @@ def _score_inventory_days(quarters: Any, omap: dict[int, int] | None) -> tuple[f
 
 
 # ════════════════════════════════════════════════════════════════
-# ④ 月營收 YoY 連續成長（20）
+# ④ 月營收 YoY 連續成長（20）  —— DEC-151 Batch B：依『月份資料契約』評分
 # ════════════════════════════════════════════════════════════════
-def _score_revenue_yoy(yoy_last3: Any) -> tuple[float, str, dict]:
-    raw = yoy_last3 if isinstance(yoy_last3, list) else []
-    valid = [y for y in (_num(v) for v in raw) if y is not None]
-    metrics = {"rev_yoy_last3": [_num(v) for v in raw]}
+# 客戶裁示(DEC-151):C4 採最近三個完整且到公告時點的日曆月、可信月份鍵、保留缺值位置;
+# 不連續不得判逐月加速,可依既有部分達標規則評分但不得虛構證據。
+# 修前 bug:`valid = [非 None]` 把缺值壓縮掉 → `[20,None,40]` 被當成連續兩月『逐月加速』。
+# 現行:固定 3 個『位置』(契約 yoy_target3;缺值保留 None),五項獨立欄位各自判定,**不壓成單一布林**。
+# 只重用既有分支與既有常數(STRONG/STEADY/PARTIAL 分數、SHORTAGE_REVENUE_YOY_MIN_PCT),不新增分數/門檻/權重。
+_BASIS_TARGET = "target3"        # 評分輸入 = 契約的固定 3 個目標月 YoY(yoy_target3)
+_BASIS_LEGACY = "legacy_last3"   # 無目標月(as_of 缺/舊輸入)→ 退回舊 revenue_yoy_last3 的 3 個位置
+_FLAGS3 = ("target_observed", "target_base_valid", "target_yoy_computable")
 
-    if len(valid) < 2:
-        return 0.0, "⚪月營收 YoY：資料不足", metrics
+
+def _as3(x: Any) -> list:
+    """任意輸入 → 長度 3 的 list(不足左補 None、過長取最後 3、非 list → 全 None)。保留位置,不壓縮。"""
+    if not isinstance(x, (list, tuple)):
+        return [None] * TARGET_MONTHS
+    _l = list(x)[-TARGET_MONTHS:]
+    return [None] * (TARGET_MONTHS - len(_l)) + _l
+
+
+def _labels_consecutive(labels: list) -> bool:
+    """3 個 'YYYY-MM' 是否為連續日曆月(任一為 None/無法解析 → False;跨年 12→01 正確)。"""
+    try:
+        _idx = [int(m[:4]) * 12 + int(m[5:7]) - 1 for m in labels]
+    except (TypeError, ValueError, IndexError):
+        return False
+    return all(b - a == 1 for a, b in zip(_idx, _idx[1:]))
+
+
+def _c4_result(score: float, reason: str, metrics: dict, *, ok: bool, miss: str = "") -> tuple[float, str, dict]:
+    metrics["rev_c4_ok"] = ok
+    metrics["rev_c4_miss"] = "" if ok else miss
+    return score, reason, metrics
+
+
+def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str, dict]:
+    """C4 評分。`contract`＝DEC-151 Batch A 月份資料契約(缺 → 舊輸入 UNDETERMINED,**不得**判逐月加速)。
+
+    判定用契約五項獨立欄位(連續性/觀測/基期/可算/公告時點),缺值保留位置:
+      FAIL_CLOSED               → 資料不足(0 分,c4_ok=False),不是真 0 分
+      STRONG(逐月加速)          → 契約 OK 且 3 目標月皆『觀測+基期有效+可算』、連續、3 月公告時點資格皆 True、
+                                  嚴格遞增、皆 > 門檻;任一為 None(NOT VERIFIED)/False/缺月 → 禁止
+      STEADY(皆>門檻)           → 3 個位置皆有值、連續(舊輸入連續性 UNDETERMINED 亦允許但註記)、皆 > 門檻
+      PARTIAL / 動能不足 / 資料不足 → 有缺月或不連續:有效值(保留位置)≥2 且任一>門檻 → PARTIAL;
+                                  ≥2 皆≤門檻 → 動能不足;<2 → 資料不足。**不給 STEADY/STRONG**,不補值、不把缺月當 0
+    真 0% / 負 YoY 是有效值(0.0 / 負數),與 missing(None)嚴格區分。
+    """
+    c = contract if isinstance(contract, dict) and "contract_status" in contract \
+        else legacy_undetermined_contract()
+    status = c.get("contract_status")
+    legacy = [_num(v) for v in (yoy_last3 if isinstance(yoy_last3, list) else [])]
+    metrics: dict[str, Any] = {
+        "rev_yoy_last3": list(legacy),          # 舊 key 保留(舊 consumer / CLI 讀它)
+        "rev_c4_contract_status": status,
+        "rev_c4_basis": "none",
+        "rev_yoy_scored": [None] * TARGET_MONTHS,
+        "rev_target_months": [None] * TARGET_MONTHS,
+        "rev_missing_reasons": [None] * TARGET_MONTHS,
+        "rev_contiguous": None,
+        "rev_date_eligible": [None] * TARGET_MONTHS,
+        "rev_strong_blocked_by": [],
+    }
+
+    if status == STATUS_FAIL_CLOSED:
+        _why = ",".join(str(r) for r in (c.get("contract_fail_reasons") or [])) or "未註明"
+        return _c4_result(0.0, f"⚪月營收 YoY：資料不足（月份契約 FAIL_CLOSED：{_why}）", metrics, ok=False,
+                          miss=f"④月營收月份契約FAIL_CLOSED({_why})")
+
+    # ── 評分輸入:優先『固定 3 個目標月』(保留位置);目標月未定(as_of 缺/舊輸入)→ 退回舊 3 位置 ──
+    _tm = _as3(c.get("yoy_target_months"))
+    use_target = status == STATUS_OK and all(m is not None for m in _tm)
+    if use_target:
+        basis, labels = _BASIS_TARGET, _tm
+        raw3 = [_num(v) for v in _as3(c.get("yoy_target3"))]
+        contiguous: bool | None = _labels_consecutive(labels)
+        elig = _as3(c.get("target_date_eligible"))
+        reasons3 = _as3(c.get("yoy_missing_reasons"))
+        flags = [_as3(c.get(k)) for k in _FLAGS3]
+        # 值存在但契約明說『該月未觀測/基期無效/不可算』(False)→ 視為不可用(fail-closed,不信不一致的值)
+        vals = [None if (raw3[i] is not None and any(f[i] is False for f in flags)) else raw3[i]
+                for i in range(TARGET_MONTHS)]
+        flags_all_true = all(f[i] is True for f in flags for i in range(TARGET_MONTHS))
+    else:
+        basis = _BASIS_LEGACY
+        _ym = _as3(c.get("yoy_months")) if status == STATUS_OK else [None] * TARGET_MONTHS
+        labels = _ym
+        vals = _as3(legacy)
+        contiguous = c.get("yoy_months_contiguous") if status == STATUS_OK else None  # 舊輸入 = UNDETERMINED
+        elig = [None] * TARGET_MONTHS            # 沒有目標月 → 公告時點資格一律 NOT VERIFIED
+        reasons3 = [None] * TARGET_MONTHS
+        flags_all_true = False
+    metrics.update({"rev_c4_basis": basis, "rev_yoy_scored": list(vals), "rev_target_months": list(labels),
+                    "rev_missing_reasons": list(reasons3), "rev_contiguous": contiguous,
+                    "rev_date_eligible": list(elig)})
 
     _min = SHORTAGE_REVENUE_YOY_MIN_PCT
-    all_above = all(y > _min for y in valid)
-    increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
-    _last = valid[-1]
+    idx_valid = [i for i, v in enumerate(vals) if v is not None]
+    valid = [vals[i] for i in idx_valid]
+    n_missing = TARGET_MONTHS - len(valid)
 
-    if all_above and increasing:
-        return SHORTAGE_REV_STRONG_SCORE, f"🟢月營收 YoY 逐月加速（末月{_last:+.0f}%）", metrics
-    if all_above:
-        return SHORTAGE_REV_STEADY_SCORE, f"🟡月營收 YoY 皆>{_min:.0f}%（末月{_last:+.0f}%）", metrics
+    def _pos(i: int) -> str:
+        return labels[i] if labels[i] else f"第{i + 1}位"
+
+    _missing_desc = "、".join(f"{_pos(i)}" + (f"({reasons3[i]})" if reasons3[i] else "")
+                              for i in range(TARGET_MONTHS) if vals[i] is None)
+
+    if len(valid) < 2:
+        _miss = (f"④月營收缺月/不連續(有值{len(valid)}/{TARGET_MONTHS})" if basis == _BASIS_TARGET and n_missing
+                 else "④月營收有效月數<2")
+        _tail = f"（缺：{_missing_desc}）" if n_missing and basis == _BASIS_TARGET else ""
+        return _c4_result(0.0, f"⚪月營收 YoY：資料不足{_tail}", metrics, ok=False, miss=_miss)
+
+    _last = valid[-1]
+    all_above = all(y > _min for y in valid)
+
+    # ── 3 個位置皆有值 ───────────────────────────────────────────────
+    if n_missing == 0 and contiguous is not False:
+        increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
+        if all_above:
+            blockers: list[str] = []
+            if status != STATUS_OK:          # 無月份契約(舊輸入/UNDETERMINED):連續性與日期資格皆 NOT VERIFIED
+                blockers.append(f"契約{status}(連續性與日期資格 NOT VERIFIED)")
+            else:
+                if basis != _BASIS_TARGET:
+                    blockers.append("目標月未定")
+                if basis == _BASIS_TARGET and not flags_all_true:
+                    blockers.append("觀測/基期/可算未全確認")
+                if c.get("yoy_months_contiguous") is not True:
+                    blockers.append("連續性未確認")
+                if not all(e is True for e in elig):
+                    blockers.append("日期資格 NOT VERIFIED" if any(e is None for e in elig) else "日期資格未通過")
+            metrics["rev_strong_blocked_by"] = blockers if increasing else []
+            if increasing and not blockers:
+                return _c4_result(SHORTAGE_REV_STRONG_SCORE, f"🟢月營收 YoY 逐月加速（末月{_last:+.0f}%）",
+                                  metrics, ok=True)
+            _note = ""
+            if increasing and blockers:
+                _note = f"；未判定加速：{'、'.join(blockers)}"
+            elif contiguous is None:
+                _note = "；月份連續性未驗證"
+            return _c4_result(SHORTAGE_REV_STEADY_SCORE, f"🟡月營收 YoY 皆>{_min:.0f}%（末月{_last:+.0f}%{_note}）",
+                              metrics, ok=True)
+        if any(y > _min for y in valid):
+            return _c4_result(SHORTAGE_REV_PARTIAL_SCORE, f"🟡月營收 YoY 部分達標（末月{_last:+.0f}%）",
+                              metrics, ok=True)
+        return _c4_result(0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics, ok=True)
+
+    # ── 有缺月 / 不連續:不得 STEADY/STRONG;僅依既有『部分達標』『動能不足』規則,不補值 ──
+    metrics["rev_strong_blocked_by"] = ["缺月" if n_missing else "不連續"]
+    _gap = (f"缺：{_missing_desc}" if n_missing else "月份不連續")
     if any(y > _min for y in valid):
-        return SHORTAGE_REV_PARTIAL_SCORE, f"🟡月營收 YoY 部分達標（末月{_last:+.0f}%）", metrics
-    return 0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics
+        return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,
+                          f"🟡月營收 YoY 部分達標（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",
+                          metrics, ok=True)
+    return _c4_result(0.0, f"🔴月營收 YoY 動能不足（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",
+                      metrics, ok=True)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -393,12 +534,15 @@ def _signal_flags(cl_na: bool, m1: dict, m2: dict, m3: dict, m4: dict) -> tuple[
          （兩者皆 None ＝ 既有的「基期不足無法比較」資料不足分支）
       C2 _score_gross_margin：gm_t／gm_t1／gm_t4 皆有
       C3 _score_inventory_days：dio_t 與 dio_t1 皆有（dio_t4 缺不算資料不足,既有行為）
-      C4 _score_revenue_yoy：有效月數 ≥ 2
+      C4 _score_revenue_yoy：沒走進『資料不足』分支＝契約非 FAIL_CLOSED 且『保留位置』的有效月數 ≥ 2
+         （DEC-151 Batch B：由 `_score_revenue_yoy` 回報 `rev_c4_ok`；舊手建 m4 沒有該鍵時退回舊算法）
     """
     c1 = (not cl_na) and (m1.get("cl_yoy") is not None or m1.get("cl_qoq") is not None)
     c2 = all(m2.get(k) is not None for k in ("gm_t", "gm_t1", "gm_t4"))
     c3 = m3.get("dio_t") is not None and m3.get("dio_t1") is not None
-    c4 = sum(1 for y in (m4.get("rev_yoy_last3") or []) if y is not None) >= 2
+    c4 = m4.get("rev_c4_ok")
+    if c4 is None:   # 舊手建 m4(無 Batch B 鍵)→ 舊算法
+        c4 = sum(1 for y in (m4.get("rev_yoy_last3") or []) if y is not None) >= 2
     miss: list[str] = []
     if not c1:
         miss.append("①合約負債無科目" if cl_na else "①合約負債基期不足")
@@ -407,7 +551,7 @@ def _signal_flags(cl_na: bool, m1: dict, m2: dict, m3: dict, m4: dict) -> tuple[
     if not c3:
         miss.append("③存貨天數資料不足")
     if not c4:
-        miss.append("④月營收有效月數<2")
+        miss.append(m4.get("rev_c4_miss") or "④月營收有效月數<2")
     return (c1, c2, c3, c4), "、".join(miss)
 
 
@@ -457,7 +601,8 @@ def score_shortage(stock: Any) -> ShortageScore:
     c1, cl_na, r1, m1 = _score_contract_liab(quarters, omap)
     c2, r2, m2 = _score_gross_margin(quarters, omap)
     c3, r3, m3 = _score_inventory_days(quarters, omap)
-    c4, r4, m4 = _score_revenue_yoy(stock.get("revenue_yoy_last3"))
+    c4, r4, m4 = _score_revenue_yoy(stock.get("revenue_yoy_last3"),
+                                     stock.get(MONTH_CONTRACT_KEY))
 
     total = c1 + c2 + c3 + c4
     tier = _tier_from_total(total)
