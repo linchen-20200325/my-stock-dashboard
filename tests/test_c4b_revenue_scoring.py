@@ -116,12 +116,12 @@ def check_gap_middle_not_strong_or_steady(M):
 
 
 def check_date_eligibility_blocks_strong(M):
-    """日期資格 None(NOT VERIFIED,date-only 月份鍵)→ 禁 STRONG;其餘照既有規則 → STEADY。
+    """日期資格 None(NOT VERIFIED,date-only 月份鍵)→ 禁 STRONG;DEC-153 起連 STEADY 也禁,最高既有 PARTIAL(5)。
     資格 False(未到公告時點)→ 該月值視為缺值(見 check_not_yet_due_is_missing)。"""
     y = [16.0, 18.0, 22.0]
     for elig in ([None, None, None], [True, None, True]):
         r = c4(M, y, hand(y, target_date_eligible=elig))
-        assert r.c4_revenue_yoy == STEADY and r.c4_revenue_yoy != STRONG, (elig, r.reasons)
+        assert r.c4_revenue_yoy == PARTIAL and r.c4_revenue_yoy not in (STRONG, STEADY), (elig, r.reasons)
         assert all("逐月加速" not in x for x in r.reasons)
     check_not_yet_due_is_missing(M)
 
@@ -286,10 +286,10 @@ def test_date_eligibility_none_and_false_block_strong():
 
 
 def test_date_only_month_key_blocks_strong_end_to_end():
-    """全市場路徑(batch 只有 date 欄,月份語意 NOT VERIFIED)→ eligible 全 None → 即使遞增也只 STEADY。"""
+    """全市場路徑(batch 只有 date 欄,月份語意 NOT VERIFIED)→ eligible 全 None → 即使遞增也只 PARTIAL(DEC-153)。"""
     r = c4_from_df(REAL, producer_df([16.0, 18.0, 22.0], ym=False))
     assert r.metrics["rev_date_eligible"] == [None, None, None]
-    assert r.c4_revenue_yoy == STEADY and r.c4_ok is True
+    assert r.c4_revenue_yoy == PARTIAL and r.c4_ok is True
     assert "NOT VERIFIED" in r.reason_text
     assert "rev_strong_blocked_by" in r.metrics and r.metrics["rev_strong_blocked_by"]
 
@@ -348,7 +348,7 @@ def test_contract_ok_but_as_of_missing_blocks_strong():
     y3, con = real_inputs(df, as_of=None)
     assert con["yoy_target_months"] == [None] * 3
     r = REAL.score_shortage(stock(y3, con))
-    assert r.c4_revenue_yoy == STEADY and "目標月未定" in r.reason_text
+    assert r.c4_revenue_yoy == PARTIAL and "目標月未定" in r.reason_text
 
 
 def test_value_present_but_flag_false_is_not_used():
@@ -558,14 +558,14 @@ def test_future_jump_row_does_not_launder_unverified_months():
     assert r.c4_revenue_yoy == PARTIAL
     # (ii) 月份鍵未驗證(date-only)+ 未來跳月列 → 資格 None,不得 STRONG
     r = c4_from_df(REAL, _with_future_jump_row([16.0, 18.0, 22.0], ym=False))
-    assert r.c4_revenue_yoy == STEADY
+    assert r.c4_revenue_yoy == PARTIAL
     # (iii) 手建:目標月標籤不連續(即使舊欄位 contiguous=True 也不得放行)→ 缺位置語意不成立,不得 STRONG/STEADY
     y = [16.0, 18.0, 22.0]
     r = c4(REAL, y, hand(y, yoy_target_months=["2026-07", "2026-09", "2026-10"], yoy_months_contiguous=True))
     assert r.c4_revenue_yoy not in (STRONG, STEADY)
     # (iv) 手建:舊 yoy_months_contiguous=True、但某月資格 None → 仍不得 STRONG
     r = c4(REAL, y, hand(y, target_date_eligible=[True, None, True], yoy_months_contiguous=True))
-    assert r.c4_revenue_yoy == STEADY
+    assert r.c4_revenue_yoy == PARTIAL
 
 
 def test_cli_prints_scored_target3_with_missing_not_zero():
@@ -596,10 +596,11 @@ def _load_mutant(old: str, new: str):
 
 MUTANTS = {
     # (a) 把 None 壓縮回去:缺月不再擋 3 位置分支(valid 變成只含非 None 的 2 個值)
-    "compress_none": ("if n_missing == 0 and contiguous is True:",
-                      "if contiguous is True:", check_gap_middle_not_strong_or_steady),
+    "compress_none": ("if n_missing == 0 and contiguous is True and not key_unverified:",
+                      "if contiguous is True and not key_unverified:", check_gap_middle_not_strong_or_steady),
     # (b) 忽略 date_eligible:公告時點資格不再阻擋 STRONG
-    "ignore_date_eligible": ("if not all(e is True for e in elig):", "if False:",
+    "ignore_date_eligible": ("        if not all(e is True for e in elig):\n            key_unverified.append(",
+                             "        if False:\n            key_unverified.append(",
                              check_date_eligibility_blocks_strong),
     # (c) 缺月仍給 STEADY:缺月分支改回傳 STEADY 分
     "gap_gets_steady": ("return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,\n                          f\"🟡月營收 YoY 部分達標（{len(valid)}",

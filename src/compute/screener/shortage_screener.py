@@ -411,6 +411,8 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
       PARTIAL / 動能不足 / 資料不足 → 有缺月或不連續:有效值(保留位置)≥2 且任一>門檻 → PARTIAL;
                                   ≥2 皆≤門檻 → 動能不足;<2 → 資料不足。**不給 STEADY/STRONG**,不補值、不把缺月當 0
     真 0% / 負 YoY 是有效值(0.0 / 負數),與 missing(None)嚴格區分。
+    DEC-153(客戶 2026-11-08):月份鍵『未驗證』(契約 month_key_verified 非 True／資格非全 True／legacy／as_of 缺)
+    → 不得 STEADY/STRONG,最高既有 PARTIAL;有效值皆≤門檻仍『動能不足』0,<2 仍『資料不足』(c4_ok=False)。
     """
     c = contract if isinstance(contract, dict) and "contract_status" in contract \
         else legacy_undetermined_contract()
@@ -429,6 +431,7 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
     }
 
     if status == STATUS_FAIL_CLOSED:
+        metrics["rev_c4_key_unverified"] = [f"契約{status}"]   # 提前 return 也要有該 key(一致 schema)
         _why = ",".join(str(r) for r in (c.get("contract_fail_reasons") or [])) or "未註明"
         return _c4_result(0.0, f"⚪月營收 YoY：資料不足（月份契約 FAIL_CLOSED：{_why}）", metrics, ok=False,
                           miss=f"④月營收月份契約FAIL_CLOSED({_why})")
@@ -476,6 +479,23 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
     _missing_desc = "、".join(f"{_pos(i)}" + (f"({reasons3[i]})" if reasons3[i] else "")
                               for i in range(TARGET_MONTHS) if vals[i] is None)
 
+    # ── DEC-153(客戶 2026-11-08 裁示):月份鍵『未驗證』→ C4 不得 STEADY/STRONG ──────────────
+    # 『已驗證』= 契約 OK + 目標月已定 + month_key_verified 為 True + 3 個目標月公告時點資格皆 True。
+    # 任一不成立(legacy/UNDETERMINED、as_of 缺、date≠ym、全市場批次來源標記未驗證、資格 None/False)
+    # → 只可走下方既有 PARTIAL(5)/動能不足(0);資料不足分支(有效值<2)已於上方先處理,不硬給 5 分。
+    # 不新增分數/門檻/封頂,只重用既有分支與常數。
+    key_unverified: list[str] = []
+    if status != STATUS_OK:
+        key_unverified.append(f"契約{status}")
+    else:
+        if basis != _BASIS_TARGET:
+            key_unverified.append("目標月未定")
+        if c.get("month_key_verified") is not True:
+            key_unverified.append("月份鍵未驗證")
+        if not all(e is True for e in elig):
+            key_unverified.append("日期資格 NOT VERIFIED" if any(e is None for e in elig) else "日期資格未通過")
+    metrics["rev_c4_key_unverified"] = list(key_unverified)
+
     if len(valid) < 2:
         _miss = (f"④月營收缺月/不連續(有值{len(valid)}/{TARGET_MONTHS})" if basis == _BASIS_TARGET and n_missing
                  else "④月營收有效月數<2")
@@ -488,7 +508,7 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
     # ── 3 個位置皆有值 ───────────────────────────────────────────────
     # 逐月/皆>門檻（STEADY、STRONG）需『連續性已驗證為 True』;連續性 None(UNDETERMINED,舊輸入)
     # 與 False 一樣只能走下方保守分支(最多 PARTIAL),不得因未驗證而給 STEADY。
-    if n_missing == 0 and contiguous is True:
+    if n_missing == 0 and contiguous is True and not key_unverified:
         increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
         if all_above:
             blockers: list[str] = []
@@ -518,8 +538,15 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
         return _c4_result(0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics, ok=True)
 
     # ── 有缺月 / 不連續:不得 STEADY/STRONG;僅依既有『部分達標』『動能不足』規則,不補值 ──
-    metrics["rev_strong_blocked_by"] = ["缺月" if n_missing else ("不連續" if contiguous is False else "連續性未驗證")]
+    _blk = "缺月" if n_missing else ("不連續" if contiguous is False else
+                                      ("月份鍵未驗證" if key_unverified and contiguous is True else "連續性未驗證"))
+    metrics["rev_strong_blocked_by"] = [_blk] + (["、".join(key_unverified)] if key_unverified and _blk != "月份鍵未驗證" else [])
     _gap = (f"缺：{_missing_desc}" if n_missing else ("月份不連續" if contiguous is False else "連續性未驗證"))
+    _gives_partial = any(y > _min for y in valid)
+    if key_unverified:   # 誠實標註:不寫『逐月加速』『皆>x%』;『最高部分達標』只在實際給 5 分時出現
+        _cap = "，最高部分達標" if _gives_partial else ""
+        _gap = (f"月份鍵未驗證（{'、'.join(key_unverified)}）{_cap}" if _blk == "月份鍵未驗證"
+                else f"{_gap}；月份鍵未驗證（{'、'.join(key_unverified)}）{_cap}")
     if any(y > _min for y in valid):
         return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,
                           f"🟡月營收 YoY 部分達標（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",
