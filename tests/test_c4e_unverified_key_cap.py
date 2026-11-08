@@ -477,7 +477,8 @@ def test_downstream_consumers_schema_unchanged():
     """消費者契約:to_row 鍵集合不變(forward_test 凍結讀『缺貨分數』欄/通知讀『_tier』);C4 只多 metrics 鍵(additive)。"""
     row = REAL.score_shortage(stock(INC)).to_row()
     assert set(row) == {"代碼", "名稱", "缺貨分數", "訊號強度", "①合約負債", "②毛利率", "③存貨天數", "④月營收", "理由",
-                        "_tier", "有效訊號數", "缺值原因", "_n_signals_ok", "_c1_ok", "_c2_ok", "_c3_ok", "_c4_ok"}
+                        "_tier", "有效訊號數", "缺值原因", "_n_signals_ok", "_c1_ok", "_c2_ok", "_c3_ok", "_c4_ok",
+                        "資料資格", "_evidence_status"}   # DEC-154 G1:只增兩個顯示追溯欄,原鍵一個不少
     m = REAL.score_shortage(stock(INC)).metrics
     assert "rev_yoy_last3" in m and "rev_c4_ok" in m and "rev_c4_key_unverified" in m   # 舊 key 保留
 

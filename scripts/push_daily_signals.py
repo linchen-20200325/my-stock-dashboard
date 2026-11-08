@@ -210,7 +210,9 @@ def main(argv=None) -> int:
         if _trend_df is not None and not _trend_df.empty:
             for _r in _trend_df.to_dict("records"):
                 _trend_by[str(_r.get("stock_id"))] = _r
-        _short_by = {str(_r.get("代碼")): _r.get("_tier") for _r in (_shortage_rows or [])}
+        # DEC-154 G1:旁路帶 n_ok(資料資格),徽章據此在部分證據時不下確定「缺貨弱」;舊 row 無 n_ok → None → 舊行為
+        _short_by = {str(_r.get("代碼")): {"tier": _r.get("_tier"), "n_ok": _r.get("_n_signals_ok")}
+                     for _r in (_shortage_rows or [])}
         _msg = format_signal_message(_picks, _tech, as_of=_as_of,
                                      trend_by_code=_trend_by, shortage_by_code=_short_by,
                                      chip_by_code=_chip_by)
