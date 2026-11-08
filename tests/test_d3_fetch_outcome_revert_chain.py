@@ -48,9 +48,14 @@ D3_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
           '{d.get(\'status\')}")\n'),
          '            return pd.DataFrame()\n'),
         (('        if df.empty:\n'
-          '            # D3:正面證據 = HTTP 200 ＋ status 200 ＋ 回應明確帶 `data: []`。缺 `data` 鍵（或型別不是 list）= 證據不足。\n'
-          '            if isinstance(d.get("data"), list):\n'
+          '            # D3:正面證據 = HTTP 200 ＋ status 200 ＋ 回應明確帶**長度為 0 的** `data: []`。\n'
+          '            # 缺 `data` 鍵、型別不是 list、或 list 非空但解析後 df 仍為空（例 `data=[{}]` 壞資料）= 證據不足。\n'
+          '            _data = d.get("data")\n'
+          '            if isinstance(_data, list) and len(_data) == 0:\n'
           '                return _tag(df, _FO.NO_NEW_DATA, f"FinMind {dataset}: HTTP 200, status 200, data=[]")\n'
+          '            if isinstance(_data, list):\n'
+          '                return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但 data 有 {len(_data)} '
+          '筆、解析後無資料列")\n'
           '            return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但回應無 data 清單")\n'),
          ''),
         ('        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"FinMind {dataset}: exception {type(e).__name__}")\n',
@@ -134,9 +139,10 @@ D3_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
         ('                    _errs.append("resource CSV 解析後無有效列")\n',
          ''),
         (('                if _df.empty:\n'
-          '                    # D3:正面證據 = CSV HTTP 200 且整份解析出有效列(PMI ∈ [20, 80])，只是沒有落在 [start, end] 的月份\n'
-          '                    return _tag(_df, _FO.NO_NEW_DATA,\n'
-          '                                "data.gov.tw 6100: CSV 解析成功,請求窗口內無新月份")\n'),
+          '                    # D3(QA 修正):`_parse_pmi_csv_full` 對解析不了的列靜默略過、不暴露原始列數,\n'
+          '                    # 無從確認「沒有新月份」不是「新月份被略過」⇒ 證據不足,只能 UNDETERMINED(不標 NO_NEW_DATA)。\n'
+          '                    return _tag(_df, _FO.UNDETERMINED,\n'
+          '                                "data.gov.tw 6100: CSV 解析出歷史列,窗口內 0 列,但 parser 略過列數無從核對")\n'),
          ''),
         ('            _errs.append(f"例外 {type(_e_outer).__name__}")\n',
          ''),

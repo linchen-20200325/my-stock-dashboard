@@ -183,9 +183,13 @@ def _finmind_get(dataset: str, data_id: str, start: str, end: str,
         df = pd.DataFrame(d.get("data", []))
         print(f"[FinMind/{dataset}] ✅ {len(df)} rows ({start}~{end})")
         if df.empty:
-            # D3:正面證據 = HTTP 200 ＋ status 200 ＋ 回應明確帶 `data: []`。缺 `data` 鍵（或型別不是 list）= 證據不足。
-            if isinstance(d.get("data"), list):
+            # D3:正面證據 = HTTP 200 ＋ status 200 ＋ 回應明確帶**長度為 0 的** `data: []`。
+            # 缺 `data` 鍵、型別不是 list、或 list 非空但解析後 df 仍為空（例 `data=[{}]` 壞資料）= 證據不足。
+            _data = d.get("data")
+            if isinstance(_data, list) and len(_data) == 0:
                 return _tag(df, _FO.NO_NEW_DATA, f"FinMind {dataset}: HTTP 200, status 200, data=[]")
+            if isinstance(_data, list):
+                return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但 data 有 {len(_data)} 筆、解析後無資料列")
             return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但回應無 data 清單")
         return df
     except Exception as e:
@@ -928,9 +932,10 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                 _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
                 print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
                 if _df.empty:
-                    # D3:正面證據 = CSV HTTP 200 且整份解析出有效列(PMI ∈ [20, 80])，只是沒有落在 [start, end] 的月份
-                    return _tag(_df, _FO.NO_NEW_DATA,
-                                "data.gov.tw 6100: CSV 解析成功,請求窗口內無新月份")
+                    # D3(QA 修正):`_parse_pmi_csv_full` 對解析不了的列靜默略過、不暴露原始列數,
+                    # 無從確認「沒有新月份」不是「新月份被略過」⇒ 證據不足,只能 UNDETERMINED(不標 NO_NEW_DATA)。
+                    return _tag(_df, _FO.UNDETERMINED,
+                                "data.gov.tw 6100: CSV 解析出歷史列,窗口內 0 列,但 parser 略過列數無從核對")
                 # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
                 if not _df.empty:
                     _df["source"] = "data.gov.tw:dataset:6100"

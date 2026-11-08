@@ -517,7 +517,8 @@ def assess_state(files: dict[str, bytes], new_rows: dict[str, int | None], today
     if undetermined:
         oc_parts.append(f"無法判定（空抓取、證據不足，非失敗亦非確認無新資料）：{sorted(undetermined)}")
     if oc_parts:
-        keep_base = bool(failures or suspect or weekend_h)
+        # 「本次有新列」是 parquet 的事實，與空抓取分流並存，不得被蓋掉；其餘 base（無新資料／無法判定）對空抓取不成立才丟
+        keep_base = bool(failures or suspect or weekend_h or (bool(known_new) and sum(known_new) > 0 and s2.startswith("無（本次有新列")))
         s2 = "；".join(([s2] if keep_base else []) + oc_parts)
     return {"failure": s1, "holiday": s2, "stale": stale}
 

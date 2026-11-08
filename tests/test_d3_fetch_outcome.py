@@ -140,6 +140,17 @@ class TestFinmindGet:
         df = _finmind(monkeypatch, _Resp(200, {"status": 200}))
         assert df.empty and _oc(df) is UNDET
 
+    @pytest.mark.parametrize("data", [[{}], [{}, {}], None])
+    def test_bad_data_is_never_no_new_data(self, monkeypatch, data):
+        """`data=[{}]`（非空 list 但解析後 df.empty）等壞資料 ⇒ 證據不足 UNDETERMINED，不可標 NO_NEW_DATA。"""
+        body = {"status": 200} if data is None else {"status": 200, "data": data}
+        df = _finmind(monkeypatch, _Resp(200, body))
+        assert df.empty and _oc(df) is UNDET
+
+    def test_data_of_wrong_type_that_cannot_build_a_frame_is_fetch_failed(self, monkeypatch):
+        df = _finmind(monkeypatch, _Resp(200, {"status": 200, "data": {"a": 1}}))
+        assert df.empty and _oc(df) is FAILED
+
     def test_non_empty_result_is_not_tagged(self, monkeypatch):
         df = _finmind(monkeypatch, _Resp(200, {"status": 200, "data": [{"date": "2026-11-06", "v": 1}]}))
         assert len(df) == 1 and "fetch_outcome" not in df.attrs
@@ -294,9 +305,10 @@ def _pmi_ok(url, **k):
 
 
 class TestTwPmi:
-    def test_csv_parsed_but_no_month_in_window_is_no_new_data(self, monkeypatch):
+    def test_csv_parsed_but_no_month_in_window_is_only_undetermined(self, monkeypatch):
+        """parser 靜默略過無法解析的列、不暴露原始列數 ⇒ 窗口內 0 列證據不足，不標 NO_NEW_DATA（QA 修正）。"""
         df = _pmi(monkeypatch, _pmi_ok)
-        assert df.empty and _oc(df) is NO_NEW
+        assert df.empty and _oc(df) is UNDET
 
     def test_rows_in_window_untagged(self, monkeypatch):
         df = _pmi(monkeypatch, _pmi_ok, start=dt.date(2026, 6, 1))
@@ -458,6 +470,16 @@ class TestPrWording:
     def test_weekend_today_does_not_turn_undetermined_into_holiday_or_success(self):
         st = _state({"c": _ds(outcome="UNDETERMINED")}, today="2026-11-07")     # 週六
         assert "休市" not in st["holiday"] and "無法判定" in st["holiday"]
+
+    def test_new_rows_sentence_is_kept_alongside_outcome_wording(self):
+        """本次有新列（new_rows>0、無休市旗標）+ NO_NEW_DATA／UNDETERMINED：保留『本次有新列』那句，不被蓋掉。"""
+        st = _state({"b": _ds(outcome="NO_NEW_DATA"), "c": _ds(outcome="UNDETERMINED")},
+                    new_rows={"data_cache/x.parquet": 3})
+        assert "本次有新列" in st["holiday"] and "['b']" in st["holiday"] and "['c']" in st["holiday"]
+
+    def test_no_new_rows_base_sentence_is_dropped_for_empty_fetch(self):
+        st = _state({"c": _ds(outcome="UNDETERMINED")}, new_rows={"data_cache/x.parquet": 0})
+        assert "且無錯誤" not in st["holiday"]
 
     def test_legacy_metadata_without_outcome_is_unchanged(self):
         st = _state({"a": _ds(outcome=None)})
