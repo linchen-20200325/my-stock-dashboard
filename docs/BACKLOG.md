@@ -2038,7 +2038,7 @@
 **Batch A｜C4-D-real（FinMind 預檢，唯讀）＝BLOCKED**：沙箱 env 無 FinMind token、repo 無 secrets.toml／.env、無任何真實或錄製的 FinMind 月營收樣本；`date` 與 `revenue_year/month` 語意目前只有程式假設與客戶轉述（ChatGPT 查閱官方文件），非官方證據，**NOT VERIFIED**。`FINMIND_TOKEN` 只以 GitHub Actions `secrets.FINMIND_TOKEN` 存在於 14 支 workflow（`pr-check.yml` 用字面 ci-test-token，非真 secret），皆會寫入／推播／推分支，不適合當取樣載體；`probe_tw_sources.yml` 為 workflow_dispatch 只印 log，但目前無 MonthRevenue 項。**合法取樣選項（只列、未執行、需客戶授權）**：A 客戶自取少量非敏感欄位貼回；B 新增一次性 workflow_dispatch 探針（PR＋CI）；C 在既有 probe 加一項；D `request_credential`（新增憑證＋網路放行）。`BATCH_SOURCE_MONTH_KEY_VERIFIED` 維持 False，全市場 STRONG 維持 0。
 
 **Batch B｜C4 未驗證月份鍵上限（~~實作完成＋非作者 QA 通過，待 PR／CI／merge~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）**已合併 #1079，squash `b01db69`**）**：`_score_revenue_yoy` 新增 `key_unverified`（契約非 OK／目標月未定／`month_key_verified` 非 True／`target_date_eligible` 非全 True）→ 不得 STEADY／STRONG，僅走既有 PARTIAL(5)／動能不足(0)；有效值＜2 資料不足（`c4_ok` False，不硬給 5）；FAIL_CLOSED 不變；metrics 新增 `rev_c4_key_unverified`。非作者 QA：1,679,616 組窮舉對 `c5846b7` 0 違規（新分數只降不升，降分 8,343 組全在未驗證時，12→5 為 8,334、20→5 為 9）、6/7 突變轉紅（1 等價）、c4b 6 個舊測試僅調整預期值未放寬。合成 432 檔（不代表真實市場）：C4 12→5 96 檔、強缺貨→中度 24 檔、中度→不明顯 24 檔、前 50 名換 8 檔；已驗證單股路徑不變；全市場批次最高 5；單股 date==ym 且來源可信仍可 STRONG；單股 date≠ym 最高 5。
-- **待客戶確認的詮釋點（AI 不自行裁決）**：未驗證且有效值全部＞門檻時給 5 分（現行實作，字面「不得 STEADY／STRONG、最高 5」）vs 嚴格讀「僅符合既有 PARTIAL 條件（任一＞門檻且非全部＞門檻）」則為 0 分。**副作用**：全市場批次 C4 最高 5，「3/3 皆強」與「僅 1 月強」同分，C4 失去區分力。
+- ~~**待客戶確認的詮釋點（AI 不自行裁決）**：未驗證且有效值全部＞門檻時給 5 分（現行實作，字面「不得 STEADY／STRONG、最高 5」）vs 嚴格讀「僅符合既有 PARTIAL 條件（任一＞門檻且非全部＞門檻）」則為 0 分。**副作用**：全市場批次 C4 最高 5，「3/3 皆強」與「僅 1 月強」同分，C4 失去區分力。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）
 
 **Batch C｜缺貨缺值與綜合排序研究（唯讀；單組結論未經第二組驗證；合成資料不代表真實市場）**：
 - 現況：main 已含 DEC-149 Phase 3B，n_ok=0 已降 `TIER_INSUFFICIENT`、不進 `_RANKABLE_TIERS`；仍成立的問題只剩 n_ok=1～3 部分缺值：缺項在 total 記 0 → 整檔 `TIER_WEAK`；「缺貨分數」→ `shortage_map`（`fundamental_screener_service.py` 約 L389）原樣進 `_percentile_scores`（約 L325）→ composite；`n_signals_ok`／`c*_ok` 只在 `to_row` 輸出，`src/services` 內無 consumer；徽章 `format_shortage_badge` 只吃 tier（`signal_message.py:67`），推播第二行可出現「缺貨弱」；forward_test `PICK_SNAPSHOT_HEADERS` 只含 cohort／stock_id／name／entry_price／factors／frozen_at，缺貨分／n_ok／tier 皆未凍結。
@@ -2047,7 +2047,7 @@
 - Gate 選項（待客戶裁示，**不建議任何數值門檻**）：G1 現狀＋文案揭露；G2 n_ok≥3 才入百分位、其餘入研究候選；G3 僅 n_ok=4 入正式排名（合成 45→22）。
 - 可安全施工（不改排名）：徽章／推播文案加註「部分證據 n/4」、`shortage_by_code` 旁路顯示 n_ok／miss_reason、note 揭露、負測、forward_test 追溯欄（schema-additive，但須先確認不破壞既有 sheet／parquet 讀取，**NOT VERIFIED**）。**須 Decision Gate**：新排名資格、百分位分母、有效因子數門檻、權重重配、推播正式行動、研究清單新 enum、凍結 cohort 版本策略。未授權事項照 DEC-153 不變。
 
-**待客戶事項彙整**：(1) C4-D-real 取樣路徑授權（A／B／C／D）；(2) Batch B 詮釋點（5 分 vs 0 分）；(3) 缺貨缺值 Gate（G1／G2／G3 與凍結版本標記）；(4) 候選池視窗與 C4 目標月視窗不一致（Batch C 先前發現 #3）；(5) `SHORTAGE_VERSION` 未版本化。
+~~**待客戶事項彙整**：(1) C4-D-real 取樣路徑授權（A／B／C／D）；(2) Batch B 詮釋點（5 分 vs 0 分）；(3) 缺貨缺值 Gate（G1／G2／G3 與凍結版本標記）；(4) 候選池視窗與 C4 目標月視窗不一致（Batch C 先前發現 #3）；(5) `SHORTAGE_VERSION` 未版本化。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）現行待客戶事項見本檔 `NUI2-DEC154` 執行結果補註。
 
 
 ### NUI2-DEC154｜2026-11-08 客戶確認的四項續行方向（DEC-154；不取代原待辦）
@@ -2063,5 +2063,19 @@
 | 候選池視窗 vs C4 | **優先唯讀研究** | 以缺月、未到期、重複月、年月跨年負測量化末三列與三目標日曆月的漏選／誤選；不改正式 `_candidate_pool` 准入 |
 | SHORTAGE_VERSION | **設計研究** | 先稽核現有版本標示、凍結與 PIT 可追溯，提出 additive／不改歷史 cohort 的方案；無 Schema Gate 不施工 |
 
-- **時點確認**：#1081 已 squash 合併 main `72bc5caf`，#1080 已關閉、branch 保留；#1038 PIT Draft NO MERGE，#1034 治理 Draft 待核銷。此 docs PR 待獨立 QA／CI／合併，**不能因文件存在即宣稱工程完成**。
-- **下一個唯一安全接手點**：先合併 DEC-154 治理文件 Gate；再設計 FinMind 手動唯讀探針、G1 最小診斷與視窗研究，分開 PR；真實來源驗證、STRONG 恢復、正式排名修復仍 NOT VERIFIED／未授權。
+- **時點確認**：#1081 已 squash 合併 main `72bc5caf`，#1080 已關閉、branch 保留；#1038 PIT Draft NO MERGE，#1034 治理 Draft 待核銷。~~此 docs PR 待獨立 QA／CI／合併，**不能因文件存在即宣稱工程完成**。~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）
+- ~~**下一個唯一安全接手點**：先合併 DEC-154 治理文件 Gate；再設計 FinMind 手動唯讀探針、G1 最小診斷與視窗研究，分開 PR；真實來源驗證、STRONG 恢復、正式排名修復仍 NOT VERIFIED／未授權。~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）現行見 HANDOFF 最新接手點。
+
+#### NUI2-DEC154 執行結果補註（2026-11-08；AI 整理，**非客戶裁示、非客戶逐字**；決策者 AI 總管（事實更新）；不新增 ID）
+
+> GitHub 為準：main `476529d`；已合併 #1082（DEC-154 文件，`412d15b`）、#1083（G1，`b6a20b6`，head `691eaa3`）、#1084（FinMind 唯讀探針，`476529d`，head `eb2e20a`）；皆原生 CI 全綠且有非作者 QA。#1038 NO MERGE、#1034 待核銷、歷史分支保留。完整內容見 DECISIONS DEC-154 ③。
+
+| 項目 | 狀態 | 剩餘／下一步 |
+|---|---|---|
+| G1 缺貨資料資格顯示 | **已合併 #1083**；排名／百分位／composite／權重逐位元不變（QA 獨立 parity）；forward_test 不帶新欄 | 待 Gate：G2／G3、n_ok=1～3 低分是否進正式百分位、`get_ranked_picks` 輸出追溯欄、`N_SIGNALS_TOTAL=4` 移 SSOT |
+| FinMind 探針 | **已合併 #1084；合併≠執行，尚未執行**（`run_workflow` 403，無權限由整合觸發） | 需客戶／repo 擁有者在 Actions 頁手動 Run workflow；跑完只讀日誌；**不得翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`**；status≠200 即 NOT VERIFIED；守衛為正則，約 6 類繞過變體（防呆層，不宣稱無法繞過），建議日後改 yaml 結構白名單 |
+| C4 | DEC-154 保留 5 分（含全高值，missing 不保底） | 全市場 STRONG 恢復＝真實樣本驗證＋客戶裁示；**不得宣稱已恢復** |
+| 候選池視窗 vs C4 | 唯讀研究完成（單組、合成） | 先 A（meta 診斷差異數，不改池）；改池視窗＝Decision Gate（合成池 −26%、改排名、歷史 cohort 不可比） |
+| SHORTAGE_VERSION | 設計完成（未施工） | 偏好 meta＋側檔 `freeze_meta`（加性、不動 picks schema）；Sheet 不能攜帶版本欄；升版與位置為 Decision Gate |
+
+**待客戶事項（精簡）**：(1) 探針手動執行或其他取樣授權；(2) G2／G3 與 n_ok=1～3 是否進正式百分位；(3) 候選池視窗改為目標月？(4) SHORTAGE_VERSION 位置與升版；(5) C4 全市場 STRONG 恢復條件。

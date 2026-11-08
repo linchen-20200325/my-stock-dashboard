@@ -1185,21 +1185,33 @@ DEC-086 規則已於 main，本表已落地。
 | GitHub 事實 | ~~main `35c08d2`；Batch B 在待開 PR，待 PR／CI／merge，尚未合併~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）現行：main `b01db69`；#1075～#1079 已 merge；Batch B（C4 未驗證月份鍵上限）已由 #1079 squash 合併；#1038 Draft **NO MERGE**；#1034 Draft 待核銷 |
 | Batch A | C4-D-real **BLOCKED**：無 token、無真實／錄製樣本；FinMind 欄位語意 **NOT VERIFIED**；`BATCH_SOURCE_MONTH_KEY_VERIFIED` 維持 False，全市場 STRONG 維持 0，**不得宣稱恢復** |
 | Batch C | 唯讀研究（單組、合成資料）：推薦 A 先行（只診斷／文案／追溯）、B 的資格規則進 Decision Gate；不建議任何數值門檻 |
-| **下一個唯一安全接手點** | ~~Batch B PR 合併後，等客戶對以下裁示：（舊列）~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）現行：**等客戶裁示**：(1) C4 未驗證且有效值全部＞門檻時給 5 分或 0 分的詮釋（副作用：全市場批次 C4 最高 5、失去區分力）；(2) C4-D-real 取樣授權路徑 A（客戶自取貼回）／B（一次性 workflow_dispatch 探針）／C（既有 probe 加一項）／D（`request_credential`）；(3) 缺貨缺值 Gate G1／G2／G3 與凍結 cohort 版本標記；(4) 候選池視窗與 C4 目標月視窗不一致、`SHORTAGE_VERSION` 未版本化。**重申**：不得宣稱全市場 STRONG 恢復（`BATCH_SOURCE_MONTH_KEY_VERIFIED` 仍 False）；#1038 PIT Draft **NO MERGE**；#1034 治理 Draft 待核銷。 |
+| **下一個唯一安全接手點** | ~~Batch B PR 合併後，等客戶對以下裁示：（舊列）~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）~~現行：**等客戶裁示**：(1) C4 未驗證且有效值全部＞門檻時給 5 分或 0 分的詮釋（副作用：全市場批次 C4 最高 5、失去區分力）；(2) C4-D-real 取樣授權路徑 A（客戶自取貼回）／B（一次性 workflow_dispatch 探針）／C（既有 probe 加一項）／D（`request_credential`）；(3) 缺貨缺值 Gate G1／G2／G3 與凍結 cohort 版本標記；(4) 候選池視窗與 C4 目標月視窗不一致、`SHORTAGE_VERSION` 未版本化。**重申**：不得宣稱全市場 STRONG 恢復（`BATCH_SOURCE_MONTH_KEY_VERIFIED` 仍 False）；#1038 PIT Draft **NO MERGE**；#1034 治理 Draft 待核銷。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154） |
 | 不可動 | 依 DEC-153 不變：新權重／門檻／固定封頂、PIT、Risk Cap、OneBrain runtime／Layout、資料發布、#1038、保留分支 |
 
 
-## Safe Handoff｜DEC-154 2026-11-08 客戶四項續行核准（此 docs PR 合併後為現行，GitHub 實況優先）
+## Safe Handoff｜DEC-154 2026-11-08 客戶四項續行核准（~~此 docs PR 合併後為現行~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154），GitHub 實況優先）
 
 > **最優先重新 GitHub Gate**；此前「等待客戶 C4 5 vs 0／FinMind A-B-C-D／G1-G2-G3／候選視窗」已由本次客戶回覆「同意」更新。正式核准邊界見 DECISIONS DEC-154；未完工程見 BACKLOG `NUI2-DEC154`。
 
 | 項目 | 事實與唯一安全工作 |
 |---|---|
-| 時點 main | `72bc5caf542cf5333c8b8153b9c5d649c634da86`（#1081 已合併；下一次重新實查） |
-| PR | #1080 closed 未 merge；#1038 PIT Draft **NO MERGE**；#1034 舊治理 Draft 待核銷；本 DEC-154 文件 PR 尚未合併前不得宣稱 main 生效 |
+| 時點 main | ~~`72bc5caf542cf5333c8b8153b9c5d649c634da86`（#1081 已合併；下一次重新實查）~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154） 現行 main `476529d` |
+| PR | ~~#1080 closed 未 merge；#1038 PIT Draft **NO MERGE**；#1034 舊治理 Draft 待核銷；本 DEC-154 文件 PR 尚未合併前不得宣稱 main 生效~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154） 現行：#1038 PIT Draft **NO MERGE**；#1034 待核銷 |
 | C4 | DEC-153 未驗證月份鍵最高 5；客戶同意保留 #1079 既有全高值、具合法有效觀測時給 5 行為；沒有有效證據不得硬給 5，也不開未驗證 STRONG／STEADY |
 | FinMind | 核准新建一次性、手動、唯讀 `workflow_dispatch` 探針；不改正式 cron／push／通知，優先使用現有安全 Secrets；無合法憑證即停止執行；真實日期語意、公告時點、PIT **NOT VERIFIED** |
 | G1 | 可做原始分數＋資格診斷與文案追溯、負測；**正式 composite／percentile／排名／權重與 Risk Cap 不變**；G2／G3 研究候選未獲施工授權 |
 | 候選視窗及 SHORTAGE_VERSION | 候選池視窗先做唯讀可重現研究；版本標記先設計不寫入凍結歷史或新 Schema |
-| 下一步 | Gate 合併 DEC-154 docs → FinMind 探針最小安全 PR → G1 最小診斷 PR → 候選視窗研究及版本設計（最多 3 安全項／批） |
+| 下一步 | ~~Gate 合併 DEC-154 docs → FinMind 探針最小安全 PR → G1 最小診斷 PR → 候選視窗研究及版本設計（最多 3 安全項／批）~~（2026-11-08 已更新：此 docs PR 即 #1082，已 squash 合併 `412d15b`；後續 #1083、#1084 亦已合併，main `476529d`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154） 現行見下方「DEC-154 執行結果接手點」 |
 | 停手 | 新來源／付費／憑證洩漏、正式排名或投資公式、PIT／凍結 cohort、Risk Cap、UI2 Layout／OneBrain runtime、#1038、保留分支；作者≠QA，最新 head 原生 CI，squash merge，文件同步 |
+
+
+## 2026-11-08｜DEC-154 執行結果接手點（AI 總管事實更新；GitHub 實況優先；上文原文保留）
+
+> AI 整理，非客戶裁示。完整內容見 DECISIONS DEC-154 ③、BACKLOG `NUI2-DEC154` 執行結果補註。
+
+| 欄位 | 內容 |
+|---|---|
+| GitHub 事實 | main `476529d`；#1082（`412d15b`）、#1083（G1，`b6a20b6`）、#1084（探針，`476529d`）已合併，原生 CI 全綠、非作者 QA 通過；#1038 **NO MERGE**；#1034 待核銷；歷史分支保留 |
+| 探針 | **合併≠執行；尚未執行**（`run_workflow` 403）。secret 是否存在、方案能否取 `TaiwanStockMonthRevenue` 仍 NOT VERIFIED |
+| **下一個唯一安全接手點** | **等客戶**：在 GitHub Actions 頁手動 Run `probe_finmind_monthrev`（預設輸入即可）或授權其他合法取樣途徑，並裁示 G2／G3 與 n_ok=1～3 是否進正式百分位、候選池視窗是否改目標月、`SHORTAGE_VERSION` 位置與升版。跑完只讀日誌，**不得據此翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`**；**不得宣稱全市場 STRONG 恢復**（恢復條件＝真實樣本驗證＋客戶裁示） |
+| 不可動 | 依 DEC-153／154 不變：新權重／門檻／固定封頂、PIT、Risk Cap、OneBrain runtime／Layout、資料發布、#1038、保留分支 |
