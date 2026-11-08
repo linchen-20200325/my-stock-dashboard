@@ -312,8 +312,8 @@ def _render_fin_trend_section(stock_list: list[str], *,
         '**月權重高**因月營收 10 日公布（先行指標），季財報 45 天遞延（落後但見獲利品質）。'
         '近 3 季財報快照不足時自動補抓本季快照。'
         '**「轉機」欄** = 用同一份季財報快照判本業虧轉盈(🌟)/盈轉虧(⚠️),零額外抓取。'
-        '**月營收與季快照皆缺 → 標「⚪ 無法評分」**(分數 0.0 只是預設值,不是「持平」),'
-        '不進 5 段計數也不參與排序(§1)。'
+        '**月營收或季財報缺任一腿 → 標「⚪ 無法形成正式綜合評級」**(缺的那腿 0.0 只是預設值,不是「持平」;'
+        '有效分項僅供診斷),不進 5 段計數也不參與排序(§1)。'
     )
 
     # v18.223：auto_run 模式移除手動按鈕；slider 保留以利使用者觀察/調整權重
@@ -428,10 +428,13 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
     而 0.0 正好落在「➖ 中性」帶(±0.5)正中央 —— 沒資料被講成「持平」,還進 KPI 計數
     與排序。改用 `scorability.split_trend_rows` 把這種列切出來標「⚪ 無法評分」,
     數值欄一律 `—`,不進 5 段判定計數、排在表尾。
+    2026-11-08(客戶 DEC-150):資格由「任一腿有效」改為「月營收腿**與**季財報腿皆有效」才形成正式綜合評級;
+    只缺一腿的列同樣切到「無法形成正式綜合評級」,有效腿的分項仍顯示(缺的那腿 `—（缺）`),備註標「非完整評級」。
     """
     if not rows:
         return
-    from src.compute.screener.scorability import split_trend_rows
+    from src.compute.screener.scorability import (
+        split_trend_rows, trend_rating_status, trend_sub_texts)
     _scorable, _unscorable = split_trend_rows(rows)
 
     cnt = {k: 0 for k in _TREND_SORT_ORDER}
@@ -445,16 +448,20 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
     cols[3].metric('📈 進步', cnt.get('up', 0))
     cols[4].metric('🚀 強進步', cnt.get('strong_up', 0))
     cols[5].metric('⚪ 無法評分', len(_unscorable),
-                   help='月營收與季財報快照皆缺 → 分數 0.0 只是預設值,'
-                        '不代表「持平」;已排除於左側 5 段計數與排序之外(§1)')
+                   help='月營收或季財報任一腿無有效資料 → 缺的那腿 0.0 只是預設值,'
+                        '不代表「持平」,不形成正式綜合評級;已排除於左側 5 段計數與排序之外(§1)')
     st_mod.caption(f'↑ 上列＝月營收動能 × 季財報「**混合**」趨勢分(月 65% / 季 35%),'
-                   f'分母為**可評分的 {len(_scorable)} 檔**(共 {len(rows)} 檔)。　'
+                   f'分母為**月營收與季財報兩腿皆有效、可形成正式綜合評級的 {len(_scorable)} 檔**(共 {len(rows)} 檔)。　'
                    '↓ 下列＝**純季財報體質** verdict(只看季度,不混月營收)——'
                    '兩者可能相反(月強但季退),分開看才不會漏掉「財報體質在惡化」。')
     if _unscorable:
+        def _unscorable_tag(r) -> str:
+            _legs = trend_rating_status(r).missing_legs_text if isinstance(r, dict) else ''
+            return f"{r.get('sid', '?') if isinstance(r, dict) else '?'}（{_legs or '資料格式不正'}）"
         st_mod.warning(
-            f'⚪ {len(_unscorable)} 檔無法評分(月營收與季快照皆缺,非「中性」):'
-            + '、'.join(str(r.get('sid', '?')) for r in _unscorable))
+            f'⚪ {len(_unscorable)} 檔無法形成正式綜合評級(月營收或季財報缺任一腿,非「中性」;'
+            f'有效分項僅供診斷、不是完整評級):'
+            + '、'.join(_unscorable_tag(r) for r in _unscorable))
 
     # v19.164 稽核補回:純季財報 verdict 計數(組合層「幾檔財報體質在惡化」一眼看)
     _finv = {k: 0 for k in _FIN_VERDICT_LABEL}
@@ -514,18 +521,28 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
         st_mod.error(f'⚠️ **本業盈轉虧雷股**：{", ".join(_break)}')
 
     def _trend_row(r: dict) -> dict:
-        """一列的表格 cell。§1:無法評分 → 判定/分數欄一律 `—`,不印 0.00。"""
+        """一列的表格 cell。§1:無法形成正式綜合評級 → 判定/綜合分數欄 `—`,不印 0.00;
+        有效腿的分項仍顯示(缺的那腿 `—（缺）`),備註標「非完整評級」(DEC-150)。"""
         _bad = id(r) in _unscorable_ids
+        _note = r['note'].strip().rstrip(';') if r['note'] else ''
+        _mon_cell, _fin_cell = (f"{r['mon_sub']:.2f}", f"{r['fin_sub']:.2f}")   # v19.174:改吃中性 key
+        if _bad:
+            _st = trend_rating_status(r)
+            _mon_cell, _fin_cell = trend_sub_texts(r)
+            _why = f"{_st.missing_legs_text}:{_st.reason_text}"
+            if _st.partial:
+                _why += "(非完整評級,有效分項僅供診斷)"
+            _note = f"{_note}; {_why}" if _note else _why
         return {
             '代碼': r['sid'],
-            '判定(月+季)': '⚪ 無法評分' if _bad else r['label'],
+            '判定(月+季)': '⚪ 無法形成正式綜合評級' if _bad else r['label'],
             '季財報體質': _FIN_VERDICT_LABEL.get(_fin_verdict_code(r), '—'),  # 純季度 verdict(補回)
             '轉機': r.get('turn_icon') or '—',
             '綜合分數': _UNSCORABLE_CELL if _bad else f"{r['score']:.2f}",
-            '月營收分': _UNSCORABLE_CELL if _bad else f"{r['mon_sub']:.2f}",
-            '季財報分': _UNSCORABLE_CELL if _bad else f"{r['fin_sub']:.2f}",  # v19.174:改吃中性 key
+            '月營收分': _mon_cell,
+            '季財報分': _fin_cell,
             '季別': _quarter_cell(r),
-            '備註': r['note'].strip().rstrip(';') if r['note'] else '',
+            '備註': _note,
         }
 
     df = pd.DataFrame([_trend_row(r) for r in rows_sorted])

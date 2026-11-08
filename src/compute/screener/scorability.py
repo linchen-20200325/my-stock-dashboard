@@ -187,6 +187,7 @@ def summarize_candidates(
 # `compute_trend_score` 對「月營收缺 + 季快照不足」一律回 score=0.0 → 落在
 # 「➖ 中性」帶（±0.5）正中央，與「真的持平」完全無法區分（§1 假分數參與排序）。
 # 下面兩支純函式讓消費端能把這種列標成「⚪ 無法評分」並排除於計數/排序之外。
+# 📌 2026-11-08（客戶 DEC-150）：資格由「任一腿有效」改為「**兩腿皆有效**」才可評分（見 is_trend_scorable）。
 
 def trend_row_evidence(row: dict) -> tuple[int, int]:
     """回 (有 YoY 的月份數, 季快照數)；欄位缺 / 型別不對 → 0（保守視為無證據）。"""
@@ -205,6 +206,11 @@ def trend_row_evidence(row: dict) -> tuple[int, int]:
         _n_cmp = _diff_compared_count(_dv)
         if _n_cmp is not None and _n_cmp == 0:
             _s = 0.0
+    # 2026-11-08（客戶 DEC-150 核准的 QA 補洞）：`compute_one_stock_trend` 算 diff_verdict 時若拋例外，
+    # 會留下 `diff_failed=True`（verdict 為 None）。此時「近兩季能不能比」無從查證 → 保守判無證據，
+    # **不得**退回只看 n_snapshots（那會把「比較失敗」當成「有 2 季快照」）。
+    elif _s >= 2 and _dv is None and (row or {}).get("diff_failed") is True:
+        _s = 0.0
     return int(_m), int(_s)
 
 
@@ -223,13 +229,16 @@ def is_trend_scorable(
     min_months: int = TREND_MIN_REVENUE_MONTHS,
     min_snapshots: int = TREND_MIN_FIN_SNAPSHOTS,
 ) -> bool:
-    """這一列的趨勢分數是否有任何真實輸入撐著。
+    """這一列是否可形成**正式雙頻率綜合評級**（月營收腿 **且** 季財報腿皆有真實輸入）。
 
-    月營收 ≥ min_months 個月有 YoY **或** 季快照 ≥ min_snapshots 季（可 diff）
-    → 可評分；兩者皆缺 → 無法評分（分數 0.0 純屬預設值，不可當「中性」用）。
+    2026-11-08（客戶 DEC-150 核准：「財報缺任一必要腿不產正式綜合評級」）：
+    原為 OR（任一腿有效即可評分）→ 改為 AND。逐腿「有效」的定義**一字未動**：
+      月營收腿：≥ min_months 個月有 YoY（SSOT `TREND_MIN_REVENUE_MONTHS`）
+      季財報腿：≥ min_snapshots 季且近兩季確實比得出指標（SSOT `TREND_MIN_FIN_SNAPSHOTS`）
+    任一腿無效 → 該腿的 0.0 是預設值（缺值不是持平），65/35 權重又不重配 → 合分不可當結論。
     """
     _m, _s = trend_row_evidence(row)
-    return _m >= int(min_months) or _s >= int(min_snapshots)
+    return _m >= int(min_months) and _s >= int(min_snapshots)
 
 
 def split_trend_rows(rows, **kwargs) -> tuple[list[dict], list[dict]]:
@@ -258,15 +267,15 @@ _MISSING_SUB_TEXT = "—（缺）"
 class TrendRatingStatus:
     """一列財報趨勢的資料資格與可追溯缺值原因（不含任何分數，分數仍在 row 內）。"""
 
-    scorable: bool          # 沿用 is_trend_scorable：至少一腿有真實輸入
+    scorable: bool          # 兩腿皆有效（`is_trend_scorable`）→ 才可產正式綜合評級
     monthly_ok: bool
     fin_ok: bool
     reason_text: str        # 缺的那幾腿各自的原因；兩腿皆足 → ""
 
     @property
     def partial(self) -> bool:
-        """可評分但只有單腿（另一腿的 0 是缺值不是持平；權重未重配）。"""
-        return self.scorable and not (self.monthly_ok and self.fin_ok)
+        """不可形成正式評級，但有一腿有效：該腿分項可「僅供診斷」顯示（另一腿的 0 是缺值不是持平）。"""
+        return (not self.scorable) and (self.monthly_ok or self.fin_ok)
 
     @property
     def missing_legs(self) -> tuple[str, ...]:
@@ -278,13 +287,19 @@ class TrendRatingStatus:
         return tuple(out)
 
     @property
+    def missing_legs_text(self) -> str:
+        """『缺月營收腿』／『缺季財報腿』／『缺月營收腿、季財報腿』；兩腿皆足 → ""。"""
+        legs = self.missing_legs
+        return ("缺" + "、".join(f"{l}腿" for l in legs)) if legs else ""
+
+    @property
     def unscorable_label(self) -> str:
-        """不可評分時給畫面的一行（文案風格同組合 Tab 的『⚪ 無法評分』）。"""
-        return f"⚪ 無法評分（{self.reason_text}）"
+        """不可形成正式評級時給畫面的一行：『⚪ 無法形成正式綜合評級（缺 X 腿：原因）』。"""
+        return f"⚪ 無法形成正式綜合評級（{self.missing_legs_text}：{self.reason_text}）"
 
 
 def trend_rating_status(row: dict) -> TrendRatingStatus:
-    """單列的資格判定：沿用 `is_trend_scorable`＋逐腿原因。"""
+    """單列的資格判定：沿用 `is_trend_scorable`（兩腿皆須有效）＋逐腿原因。"""
     _m, _s = trend_row_evidence(row)
     monthly_ok = _m >= int(TREND_MIN_REVENUE_MONTHS)
     fin_ok = _s >= int(TREND_MIN_FIN_SNAPSHOTS)
@@ -300,7 +315,10 @@ def trend_rating_status(row: dict) -> TrendRatingStatus:
         if _fd.get("reason") == "bad_input":
             reasons.append("季財報快照格式不正")
         elif _n_raw >= int(TREND_MIN_FIN_SNAPSHOTS) and _s == 0:
-            reasons.append(f"季快照 {int(_n_raw)} 期但無可比較指標（空或格式不完整）")
+            if (row or {}).get("diff_failed") is True:
+                reasons.append(f"季快照 {int(_n_raw)} 期但近兩季比較失敗（保守視為無證據）")
+            else:
+                reasons.append(f"季快照 {int(_n_raw)} 期但無可比較指標（空或格式不完整）")
         else:
             reasons.append(f"季快照僅 {int(_n_raw)} 期，至少需 {int(TREND_MIN_FIN_SNAPSHOTS)} 期")
     return TrendRatingStatus(
@@ -323,17 +341,25 @@ def trend_sub_texts(row: dict) -> tuple[str, str]:
 
 
 def trend_prompt_line(row: dict) -> str:
-    """給 AI prompt 的一行：不可評分 → 明說資料不足、不給分數；單腿 → 註明非完整雙頻率評級。"""
+    """給 AI prompt 的一行。
+
+    兩腿皆有效 → 正式綜合評級（標籤＋合分，格式與舊版逐字相同）。
+    任一腿無效 → **不送標籤與合分**，明說無法形成正式綜合評級；僅附有效分項供診斷，
+    且註明不得當成已確認結論（客戶 DEC-150）。
+    """
     st = trend_rating_status(row)
-    if not st.scorable:
-        return f"財報趨勢資料不足，無法形成綜合評級（{st.reason_text}）"
     mon_txt, fin_txt = trend_sub_texts(row)
+    if not st.scorable:
+        line = f"財報趨勢資料不足（{st.missing_legs_text}；{st.reason_text}），無法形成正式綜合評級；"
+        if st.partial:
+            diag = "、".join(
+                f"{name} {txt}" for name, txt, ok in
+                (("月分", mon_txt, st.monthly_ok), ("季分", fin_txt, st.fin_ok)) if ok)
+            line += (f"僅供診斷：有效分項 {diag}（缺的分項是缺值不是持平，權重未重配）——"
+                     f"非完整雙頻率評級，不得作為已確認結論")
+        else:
+            line += "無有效分項可供診斷，請勿推論財報趨勢"
+        return line
     _score = _as_float((row or {}).get("score")) or 0.0
-    line = (f"財報趨勢分數(月+季 65/35)={(row or {}).get('label', '—')} "
-            f"(合分 {_score:+.2f},月分 {mon_txt.replace('—（缺）', '缺')}/"
-            f"季分 {fin_txt.replace('—（缺）', '缺')})")
-    if st.partial:
-        line += (f" ⚠️僅含{'、'.join(l for l in (_LEG_MONTHLY, _LEG_FIN) if l not in st.missing_legs)}，"
-                 f"缺{'、'.join(st.missing_legs)}（{st.reason_text}；缺的分項是缺值不是持平，權重未重配）"
-                 f"——非完整雙頻率綜合評級")
-    return line
+    return (f"財報趨勢分數(月+季 65/35)={(row or {}).get('label', '—')} "
+            f"(合分 {_score:+.2f},月分 {mon_txt}/季分 {fin_txt})")

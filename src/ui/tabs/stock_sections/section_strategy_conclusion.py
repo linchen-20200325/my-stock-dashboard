@@ -188,9 +188,10 @@ def render_strategy_conclusion_section(
             analyze_financial_health=analyze_financial_health,
             list_snapshots=_ls_snap, load_snapshot=_ld_snap, save_snapshot=_sv_snap,
         )
-        # 2026-11-08(客戶核准「必要資料不足不得產生正式綜合評級」):資格走 SSOT
-        #   `scorability.trend_rating_status`(與組合 Tab 同一個 is_trend_scorable、不新增門檻)。
-        #   不可評分 → 不顯示合分／標籤、不用中性色,改「⚪ 無法評分（原因）」;單腿 → 照舊算分但明註非完整雙頻率評級。
+        # 2026-11-08(客戶核准「必要資料不足不得產生正式綜合評級」；DEC-150 再核准「缺任一必要腿不產正式綜合評級」):
+        #   資格走 SSOT `scorability.trend_rating_status`(月營收腿＋季財報腿**皆有效**才可評級、不新增門檻)。
+        #   任一腿無效 → 不顯示合分／標籤、不用中性色,改「⚪ 無法形成正式綜合評級（缺X腿：原因）」;
+        #   有效腿的分項仍顯示並標「非完整評級」(權重 65/35 不重配,缺的分項是缺值不是持平)。
         from src.compute.screener.scorability import trend_rating_status, trend_sub_texts
         _tr_st = trend_rating_status(_fin_row)
         _fin_score = float(_fin_row.get('score', 0.0))
@@ -214,15 +215,16 @@ def render_strategy_conclusion_section(
             _head_html = (f'<span style="font-size:13px;font-weight:700;color:{TRAFFIC_NEUTRAL};">'
                           f'{_tr_st.unscorable_label}</span>')
             _fin_color = TRAFFIC_NEUTRAL
-            _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
-                           '資料不足,不形成綜合評級(上列分項僅供追溯,不是投資結論)</div>')
+            if _tr_st.partial:
+                _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
+                               '⚠️ 非完整評級:上列有效分項僅供診斷,缺的分項是缺值不是持平,'
+                               '權重未重配,不是投資結論</div>')
+            else:
+                _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
+                               '資料不足,不形成綜合評級(上列分項僅供追溯,不是投資結論)</div>')
         else:
             _head_html = (f'<span style="font-size:13px;font-weight:700;color:{_fin_color};">'
                           f'{_fin_label}（合分 {_fin_score:+.2f}）</span>')
-            if _tr_st.partial:
-                _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
-                               f'⚠️ 缺{"、".join(_tr_st.missing_legs)}({_tr_st.reason_text});'
-                               '缺的分項是缺值不是持平,權重未重配,非完整雙頻率綜合評級</div>')
         st.markdown(
             f'<div style="background:#0d1117;border-left:3px solid {_fin_color};'
             f'padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
