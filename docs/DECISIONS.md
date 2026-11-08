@@ -7897,3 +7897,18 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **下一批（③命名，詳 BACKLOG）**：**C4-D**（plumbing：以既有 `revenue_year`／`revenue_month` 傳遞可信月份鍵，全市場批次路徑最小 schema 擴充、回溯相容）；**C4-D-real**（blocked：需合法 token 環境取少量真實樣本）；**Batch C 整合驗證**（進行中）。
 - **未授權（不得擅自）**：新權重／門檻／封頂分數、改 C1～C3、新獨立性公式、Risk Cap、OneBrain runtime、新來源／API、UI 版面、改排程、PIT 改動、虛構公告日。沿用 DEC-147 流程（作者≠QA、最新 head 原生 CI、squash merge＋文件同步）；最多三項安全工作同時進行。
 - **證據限制**：引文區塊為唯一逐字；FinMind 欄位證據為客戶轉述之二手資訊，未經本 repo 驗證；#1076 數字為合成資料實測，非真實市場；發布端到端與 Cloud 部署仍 NOT VERIFIED。
+
+
+### DEC-153｜FinMind 真實取樣安全 Gate、缺貨資格與分數分離研究、未驗證年月鍵 C4 上限（客戶 2026-11-08）
+
+- **來源／決策者**：客戶直接訊息（2026-11-08；D）；此段為文件 PR 草稿，**合併 main 前不得宣稱正式生效**。
+- **客戶逐字裁示（原樣引用）**：
+  > 我核准台股 AI 戰情室下一階段方向：1. FinMind 真實取樣選 B；2. 缺貨缺值處理選 B；3. 未驗證年月鍵 C4 評分資格選 B。請先重新做 GitHub Verification Gate，將本次裁示與研究／施工邊界寫入正式 DECISIONS、BACKLOG、HANDOFF，並提供 Claude Code 完整分批施工提示語（含三方案比較、非作者 QA、最新 head CI、Risk Cap／PIT 停手條件）。未核准的新來源、權重、門檻或重大排名公式不得擅改。
+- **選項的現場定義（非客戶逐字，源自此前提供的選單）**：
+  1. FinMind **B**：**優先檢查既有 Secrets**；沒有合法且可安全使用的憑證時停在真實資料驗證 Gate，不在對話／PR／log 中索取或洩漏 token，不自動開新 API／付費方案。此核准**不代表**合法 token 已存在、亦不代表准許 production 寫入。
+  2. 缺貨缺值 **B**：**分離資料資格與原始分數，先量化正式排名／徽章／推播／forward_test 影響，再分批修復**。資料不足、來源失敗、未評估、合法真 0 必須區分；**不核准**重配權重、任意重排正式榜單、修改 `SCREENER_MIN_FACTOR_COVERAGE_RATIO`、新增中性分數／門檻、固定強缺貨封頂或繞過 Risk Cap。若既有正式規則不足以確定下游改動的正確行為，需提出量化證據和 Decision Gate，先不寫正式排名。
+  3. 未驗證年月鍵 C4 **B**：**最高只能 PARTIAL（既有 5 分）且必須符合既有 PARTIAL 條件**；不能因 `date≠ym`、未驗證 `source_month_key_verified` 或舊 caller 就取得 STEADY（12 分）／STRONG（20 分）；有 2 個合法有效月份且符合原有部分達標條件才可得既有 PARTIAL，否則依既有資格分流為無法評估／合法動能不足；缺值不可充當真 0。不得把此上限擴張為所有缺少其他證據時的一律 5 分。日期及公告時點不可信時仍依原 fail-closed Gate，不可繞過。
+- **研究／工程分批**：A：純資料契約／資格與下游呼叫鏈研究、三方案比較與真實來源安全預檢；B：在現有授權內修 C4 未驗證年月鍵不得 STEADY/STRONG，補含 `date≠ym`、完整與不完整、legacy、部分達標、PIT、真 0 的負測；C：綜合排序缺值資格與分數分離先產出影響矩陣／fixture，合法且可證實的純診斷與資格傳遞可提小 PR，正式排序／百分位／分母／通知或 forward_test 行為需先檢查既有授權，無明確規格進 Gate。
+- **三案比較要求**：A 只補診斷不改排名；B 資格／分數分離並研究候選分流（優先）；C 重建計分與加權（未授權）。列正確性、PIT、排名差異、風險、速度、Token、回退路徑。客戶選 B 是方向，不是對新數值規則的授權。
+- **驗收／禁令**：GitHub Gate（main SHA、Open/Draft、head/diff、CI／QA、branches）→ 每批獨立 PR → 作者≠QA、負測與必要整合測試 → **最新 head 原生 CI** success → review threads／branch protection → squash merge → BACKLOG／HANDOFF 同步。禁止改 Risk Cap、PIT／凍結歷史帳本、正式 Layout、OneBrain runtime、未核准來源、權重、門檻、強缺貨固定封頂，禁止覆寫或自行合併 #1038；#1034 舊治理 Draft 須核銷。三條歷史保留分支不刪。
+- **事實與限制（ChatGPT 2026-11-08 GitHub 查核）**：main `c5846b770bdc176954edad486f92fe93e61e73c7`（#1077 已合併）、Open #1034／#1038；#1077 head `a708b001c27b1ffb077bdd445c5bfce52b63b42e` 原生 run 42474547644 success。 `fundamental_screener_service.py` 的 `shortage_map` 目前只傳缺貨分數，下游缺值誤判已有可重現程式線索但**真實市場影響 NOT VERIFIED**；FinMind 真實欄位與公告時點仍 NOT VERIFIED。
