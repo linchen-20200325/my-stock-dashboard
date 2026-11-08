@@ -7747,3 +7747,27 @@ Model：Claude Sonnet 5.5  Effort：Medium
   5. **作者≠QA**：施工組與獨立 QA 組分離；QA 結論須由非作者的獨立組產出並可追溯（PR 描述／評論）。ChatGPT 審閱意見可作輸入，但不取代 repo 要求的獨立 QA；Claude Code 總管不得自驗自己動手寫的內容（`CLAUDE.md` §-2）。
   6. **仍須停止並請使用者裁示**：新 Layout／欄位／動線；付費；權限；不可逆操作（刪生產資料、清單外刪分支、production switch、舊 UI 實體刪除）；新資料來源／公式／Risk Cap／OneBrain 正式行為；文件無法證明已核准的範圍。#1038 的 PIT 阻塞維持：未通過來源時間與資料資格驗證前禁止合併。不強制合併過時 Draft；同一時間最多三項安全工作。
 - **決策者**：使用者｜**日期**：2026-11-07｜**來源**：使用者對話訊息（D）｜**狀態**：進 main 前屬本 docs PR 待合併內容，不得宣稱已生效於 main。
+
+
+### DEC-148｜D1 以實際來源觀測日判斷新鮮度、D3 空抓取三態分類（客戶 2026-11-08）
+
+- **客戶逐字裁示**（來源：使用者對話訊息，2026-11-08；原樣引用，不得改字）：
+  > 我正式核准 D1 以實際來源觀測日判斷新鮮度、D3 採 NO_NEW_DATA／FETCH_FAILED／UNDETERMINED 三態分類。請依最新 GitHub 狀態更新 Claude Code 提示語，分批施工並遵守資料語意及安全 Gate。
+- **決策者**：使用者（客戶）｜**日期**：2026-11-08｜**來源**：使用者對話訊息（客戶直接裁示）。本裁示把 BACKLOG `NUI2-DATA-1054-REVIEW` 中原記為「ChatGPT 建議、提案待客戶直接確認」的 D1／D3 轉為**客戶已核准**。
+- **授權範圍**（以下為依客戶裁示與 D1／D3 提案整理的資料語意，授權僅限 D1／D3 的資料語意與**必要最小施工**）：
+  1. **D1（新鮮度以實際來源觀測日判斷）**：
+     - 新鮮度取**可信的實際來源觀測日**；cron 執行時間、`fetched_at`、`cached_at`、`metadata.updated_at` 只代表各自的時間，**不得覆蓋資料觀測日**。
+     - UI「資料日」只顯示**可信來源觀測日**。
+     - 缺可信資料日／資料日晚於合法決策時點／來源時點矛盾 → **不得判 fresh**，須誠實降級並**保留診斷原因**。
+     - **保留 `SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS` 現行門檻**（不改數值）。
+  2. **D3（空抓取三態分類）**：
+     - `NO_NEW_DATA`：有**正面證據**證明請求與來源讀取成功，且在可確認範圍內無新觀測；**不是失敗，也不保證舊資料 fresh**。
+     - `FETCH_FAILED`：明確的網路／API／認證／解析／欄位驗證錯誤；**保留錯誤證據**。
+     - `UNDETERMINED`：空回應或證據不足；採保守處理，**不得以週末推論成功**。
+     - 三態與 freshness **分離**、**不取代 Last Good 觀測日**、**不把空抓取寫成 0／neutral**、**不吞例外**。
+- **未授權**（維持需另行裁示）：新資料來源；任意修改新鮮度門檻；投資公式；Risk Cap；OneBrain runtime；正式 UI Layout；付費或不可逆操作；**不得擴充到其他資料契約**。
+- **施工順序與流程**：Batch A（D1）→ Batch B（D3）→ Batch C（財報跨期 `src/compute/health/fin_trend_score.py` 與產業缺貨 `shortage_screener` 資料資格**唯讀稽核**，**不改正式分數**）。D1／D3 **分開工程 PR**。每批：GitHub Gate → 最小施工 → targeted tests → 非作者獨立 QA → 最新 head 原生 CI → squash merge → 文件同步。涉及正式公式／權重／排名資格／Risk Cap 變更時**必須停止並走 Decision Gate**。
+- **與既有決策的關係（引用，不改寫）**：
+  - **DEC-143**：第一版資料資格審查為前置 Gate（有程式≠已驗證可用；缺資料不得以 0／neutral／safe 代替；`fin_trend_score` 缺腿以 0 分形成「中性」、`shortage_screener` 缺值計 0 分仍 rankable 等為**稽核風險**）。本裁示僅授權 D1／D3 與 Batch C 的**唯讀**稽核，DEC-143 其餘 Gate 維持；不自動核准新來源、公式或 OneBrain runtime。
+  - **DEC-147**：Claude Code 負責施工、獨立 QA、PR Merge、Branch 清理與正式治理文件同步；自主 merge 前置條件、作者≠QA、「仍須停止並請使用者裁示」清單、「同一時間最多三項安全工作」均**原樣適用**於本裁示的 Batch A／B／C。本裁示是**在其框架內**對 D1／D3 的資料語意核准，不放寬 DEC-147 任何條件。
+- **證據限制**：本條為客戶裁示的入庫紀錄；「授權範圍」逐點為依提案整理，非客戶逐字（逐字僅上方引文）。**實作狀態**：本條僅 docs；Batch A／B／C 尚未施工；發布端到端與 Cloud 部署仍 NOT VERIFIED。

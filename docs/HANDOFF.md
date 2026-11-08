@@ -74,8 +74,10 @@
 - **#1038**：維持 **Draft／NO MERGE**。PIT 阻塞：缺逐列來源發布時間；新列 date=11-05 但 inst／li 腿 as_of=11-06；有 `date_source=backfill_from_captured_at` 回填列；需 Decision Gate、逐列來源證據、`load_signals` 壞檔 fail-closed、非作者 QA。
 - **#1059 已合併**（BACKLOG 稽核結論與 D1/D2/D3 登記）。
 - **D2 已修並合併 #1060**（main `a7ae283`）：`compute_cache_staleness` 對 `as_of>today` 回 `is_stale=True`；6 個新測試、突變驗證、還原鏈（`tests/test_d2_staleness_revert_chain.py` 並接入 p4 鏈）、非作者 QA 兩輪、CI 全綠。**D2 後續（另案）**：(a) 檔頭「`load_tw_pmi_history` 未接線」過期註解被 z40／z63／c1 revert-pair 測試釘死，改註解須同步其還原鏈；(b) `_leg_series`（`load_extreme_risk_legs`）對未來日期同型缺陷未修；(c) 畫面端 `age_days` 負值顯示「距今 -3 天」為外觀問題。
-- **D1／D3＝提案，待客戶直接確認**：ChatGPT 建議裁示（D1 以來源觀測日判板塊資金潮汐新鮮度，cron `updated_at` 不可冒充資料日；D3 空抓取分 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 並要求判定證據）**不是客戶逐字裁示**。正式施工（改資料契約／新鮮度門檻／新增狀態 enum）暫停。
-- **下一個唯一安全工作**：D1／D3 **唯讀盤點**（呼叫端、來源日期與時間戳欄位、現有狀態 enum），等客戶確認語意；不改程式。
+- ~~**D1／D3＝提案，待客戶直接確認**：ChatGPT 建議裁示（D1 以來源觀測日判板塊資金潮汐新鮮度，cron `updated_at` 不可冒充資料日；D3 空抓取分 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 並要求判定證據）**不是客戶逐字裁示**。正式施工（改資料契約／新鮮度門檻／新增狀態 enum）暫停。~~（2026-11-08 已被取代：客戶已直接核准；有意識的更新，不是漏刪；決策者 客戶）
+- **D1／D3＝客戶已於 2026-11-08 核准（DEC-148）**：D1 以可信實際來源觀測日判新鮮度（cron 時間／`fetched_at`／`cached_at`／`metadata.updated_at` 不得冒充資料日；保留 `SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS`）；D3 採 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 三態（與 freshness 分離）。未授權新來源／改門檻／投資公式／Risk Cap／OneBrain runtime／正式 UI Layout。
+- ~~**下一個唯一安全工作**：D1／D3 **唯讀盤點**（呼叫端、來源日期與時間戳欄位、現有狀態 enum），等客戶確認語意；不改程式。~~（2026-11-08 已被取代：客戶已核准 D1／D3；有意識的更新，不是漏刪；決策者 客戶）
+- **下一個唯一安全工作（現行）**：Batch A（D1）→ Batch B（D3）→ Batch C（`fin_trend_score`／`shortage_screener` 資料資格唯讀稽核，不改正式分數）；D1／D3 分開工程 PR；各批 GitHub Gate → 最小施工 → targeted tests → 非作者獨立 QA → 最新 head 原生 CI → squash merge → 文件同步；涉及正式公式／權重／排名資格／Risk Cap 變更須停止走 Decision Gate（DEC-148／DEC-147）。
 - 三個歷史分支全部保留（見 BACKLOG `NUI2-BRANCH-RETENTION-1107`）。
 
 
