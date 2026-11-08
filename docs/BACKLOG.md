@@ -2015,3 +2015,18 @@
 **C. 新增 Decision Gate 候選（皆未裁示，AI 不得自改）**：①「缺貨缺值在綜合排序／徽章被當 0」（發現 1）；②「候選池視窗與 C4 視窗不一致」（發現 3）；③「SHORTAGE 版本標記」（發現 6）。**C4-D-real 仍 blocked**：需合法 token 環境；是否授權 `request_credential` 待客戶決定。
 
 - **Decision Gate 候選｜C4-D 後單股『date≠ym、ym 齊全』的 STEADY 連續性建立在未驗證 ym 上**（客戶未裁示，AI 不自改）：C4-D 後單股真實形狀（FinMind date≠ym、ym 齊全）由修前 FAIL_CLOSED（0 分）變為最高 STEADY（12）／PARTIAL，仍無 STRONG；QA 建議 `verified=False` 時最多 PARTIAL，但這會同時改動既有 date-only 行為，須客戶裁示。另：護欄靠 caller 傳 `source_month_key_verified`（預設 True），**非結構性阻擋**；批次路徑唯一呼叫點 `_candidate_pool` 傳 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`。　C4-D 非作者 QA 通過（無必修；7 突變轉紅、1 存活已補測試）；**QA 通過不等於已合併**，仍待 PR／CI／merge。
+
+
+### NUI2-DEC153｜2026-11-08 客戶第五輪後續裁示：資料資格與排名風險（本列補註，DEC-153）
+
+> 來源：客戶直接核准「FinMind B／缺貨缺值 B／未驗證年月鍵 C4 B」，正式逐字見 DECISIONS DEC-153；不取代既有 `NUI2-C4`、`NUI2-SHORTAGE-VERIFIED-EVIDENCE`、`NUI2-FIN-CHANGE-QUALIFICATION`，本節只建立追溯索引。合併前為 docs Draft。
+
+| 子項 | 狀態 | 已核准／下一安全工作 | 停手條件 |
+|---|---|---|---|
+| C4-D-real FinMind 真實取樣 | blocked-on-credential（先盤點既有 Secret，可唯讀研究） | 只使用現存合法、安全配置，最小取樣驗證 `revenue_year/month` 與 `date` 及公告時點；無合法 token 即停止、不索取聊天明文 | 新 token／新來源／費用／production 寫入或無法追溯 PIT |
+| C4 月份鍵未驗證上限 | open，**可依 DEC-153 分批施工** | 原有 PARTIAL 達標條件成立且資料合法時最高既有 5 分；其餘 fail-closed／合法動能不足；`date≠ym`／legacy／True vs False、真 0、發布時點負測；不得讓未驗證升 STEADY／STRONG | 新權重、門檻、放寬公告時點／PIT、改 C1～C3 |
+| 缺貨缺值 vs 綜合分數／徽章／通知 | open，研究優先；有授權明確的 additive 資格欄位可另 PR | `fundamental_screener_service` `shortage_map` 只取分數的既有線索；做三案比較、真 0／missing／FETCH_FAILED／未評估分類，量化 composite／百分位／ranked_picks／徽章／推播差異；先驗證再分批施工 | 改正式排名、百分位公式、coverage 門檻或新研究 enum 而無明確既有授權需客戶 Decision Gate |
+| 舊治理 Draft／PIT | 原狀保留 | #1034 對照治理文字抽取核銷，#1038 PIT NO MERGE；保留三個歷史分支、data、v2 | 不得混入本輪工程 PR／未經授權合併或清理 |
+
+- **Batch 建議**：A 獨立研究／Secrets 安全預檢；B C4 上限最小修復（獨立 QA、最新 head 原生 CI）；C 缺值資格／分數矩陣與下游差異，**未授權正式排名改動先 Gate**。每個安全 batch 最多三項；不得因方向核准而假設新公式與資料來源已核准。
+- **未完成**：真實 FinMind、公告時點、Cloud／cron、真實排名結果 NOT VERIFIED；DEC-150 未解的獨立性／研究清單／財報有效月門檻／`diff_failed`／畫面分母與線框均保留原狀。
