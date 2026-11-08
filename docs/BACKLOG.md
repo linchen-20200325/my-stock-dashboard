@@ -2048,3 +2048,20 @@
 - 可安全施工（不改排名）：徽章／推播文案加註「部分證據 n/4」、`shortage_by_code` 旁路顯示 n_ok／miss_reason、note 揭露、負測、forward_test 追溯欄（schema-additive，但須先確認不破壞既有 sheet／parquet 讀取，**NOT VERIFIED**）。**須 Decision Gate**：新排名資格、百分位分母、有效因子數門檻、權重重配、推播正式行動、研究清單新 enum、凍結 cohort 版本策略。未授權事項照 DEC-153 不變。
 
 **待客戶事項彙整**：(1) C4-D-real 取樣路徑授權（A／B／C／D）；(2) Batch B 詮釋點（5 分 vs 0 分）；(3) 缺貨缺值 Gate（G1／G2／G3 與凍結版本標記）；(4) 候選池視窗與 C4 目標月視窗不一致（Batch C 先前發現 #3）；(5) `SHORTAGE_VERSION` 未版本化。
+
+
+### NUI2-DEC154｜2026-11-08 客戶確認的四項續行方向（DEC-154；不取代原待辦）
+
+> 用戶對 ChatGPT 四項建議答「同意」，完整採納的範圍及非逐字選項定義見 DECISIONS DEC-154；此列只作**狀態更新和未完成工作索引**，禁止清空 DEC-153／NUI2-C4 原始歷史紀錄。
+
+| 待辦 | 狀態 | 授權邊界／下一步 |
+|---|---|---|
+| C4 未驗證月份鍵 5 分 | **方向已核准；#1079 已合併** | 未驗證但有效且合法的全高值依現行行為最高 5；其他情境需符合原有有效資料與 PARTIAL／fail-closed 分流，不增加新權重／門檻；補負測核對（若現有已充分不得重做） |
+| FinMind C4-D-real | **B 一次性探針已核准，真實取樣仍 BLOCKED／NOT VERIFIED** | 先安全稽核既有 Secret 是否可使用；設計單獨 `workflow_dispatch` **唯讀、手動、最少回傳、禁止推播／push／發布**；新 PR 安全 Gate 後由已授權者手動觸發；無合法 Token 不執行。月份與公告日實際證據未驗前 `BATCH_SOURCE_MONTH_KEY_VERIFIED=False` 不變 |
+| 缺貨缺值 G1 | **已核准診斷先行；實作待辦** | 先在既有欄位與既有消費端顯示 n/4 與 missing／未評估／fetch failed 的可追溯診斷；保留原始分數，**不動正式排名、百分位、因子分母、權重、通知正式行動**；驗證徽章／推播不能把未知稱「缺貨弱」；需要新欄位／Schema／排名規則先 Gate |
+| G2／G3 | **未核准施工，研究候選** | 證據獨立性（不同經濟機制）及漏掉早期成長股風險尚未驗證，不採 n_ok≥3 或 4 作正式硬門檻 |
+| 候選池視窗 vs C4 | **優先唯讀研究** | 以缺月、未到期、重複月、年月跨年負測量化末三列與三目標日曆月的漏選／誤選；不改正式 `_candidate_pool` 准入 |
+| SHORTAGE_VERSION | **設計研究** | 先稽核現有版本標示、凍結與 PIT 可追溯，提出 additive／不改歷史 cohort 的方案；無 Schema Gate 不施工 |
+
+- **時點確認**：#1081 已 squash 合併 main `72bc5caf`，#1080 已關閉、branch 保留；#1038 PIT Draft NO MERGE，#1034 治理 Draft 待核銷。此 docs PR 待獨立 QA／CI／合併，**不能因文件存在即宣稱工程完成**。
+- **下一個唯一安全接手點**：先合併 DEC-154 治理文件 Gate；再設計 FinMind 手動唯讀探針、G1 最小診斷與視窗研究，分開 PR；真實來源驗證、STRONG 恢復、正式排名修復仍 NOT VERIFIED／未授權。
