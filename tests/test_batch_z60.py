@@ -891,7 +891,11 @@ class TestOldFilesUntouched:
     #   只動 `src/ui/tabs/stock_sections/section_strategy_conclusion.py`（單股橫幅：任一腿無效 → 「⚪ 無法形成正式綜合評級（缺X腿：原因）」，有效腿分項標「非完整評級」）與
     #   `src/ui/tabs/tab_stock_grp.py`（組合 Tab：單腿列改歸「無法形成正式綜合評級」，警語／說明文案涵蓋缺任一腿，有效腿分項仍顯示；版面結構、欄位數、區塊數不變）。
     #   其餘 89 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
-    _BASE_DIGEST = "d7f44d19cb6d1ee11764c4d955ed8598f92f805a76a171adb7422ae458ee845c"
+    # ~~"d7f44d19cb6d1ee11764c4d955ed8598f92f805a76a171adb7422ae458ee845c"~~（FIN-A 首版後，至 700145d 仍成立）
+    # 📌 FIN-A QA 回修（2026-11-08，非作者 QA 有條件通過後，AI 總管指派，⛔ 不是漏改）：只動 `src/ui/tabs/tab_stock_grp.py`（「🛠️ 逐檔細節」標題行改走 `_detail_headline`，
+    #   不具資格列不再印標籤／合分）、`src/ui/tabs/stock_sections/section_strategy_conclusion.py`（橫幅 HTML 原樣抽成純函式 `build_fin_trend_banner_html` 以便行為測試，輸出不變）、
+    #   `src/ui/tabs/tab_stock.py`（AI prompt 財報趨勢一行抽成 `_fin_trend_ai_line`，內容不變）。其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
+    _BASE_DIGEST = "c929874893e6413a0c5c76ae68de924e058de5b50608006276414f497e878bc6"
 
     def test_no_diff_against_base(self):
         import hashlib

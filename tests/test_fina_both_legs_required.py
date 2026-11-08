@@ -250,61 +250,162 @@ class TestParityThreeConsumers:
         assert "可形成正式綜合評級的 1 檔" in caption
 
 
-# ═══ ③ 突變 ══════════════════════════════════════════════════
+# ═══ ③ 突變（真正改寫被測原始碼；見 tests/_fina_mutants.py）═══════════════
+from tests._fina_mutants import REPO, load_mutant, load_real  # noqa: E402
+
+_SCOR = "src/compute/screener/scorability.py"
+_BANNER = "src/ui/tabs/stock_sections/section_strategy_conclusion.py"
+_GRP = "src/ui/tabs/tab_stock_grp.py"
+_TAB = "src/ui/tabs/tab_stock.py"
+
+
+def _single_leg_row(monkeypatch) -> dict:
+    return _row(monkeypatch, rev=_rev_df(True), snaps=[], sid="B")
+
+
+def _check_scorability(mod, monkeypatch) -> None:
+    """guard 契約：單腿列不具資格、AI 行不送標籤／合分。對 mod（真碼或突變碼）斷言。"""
+    row = _single_leg_row(monkeypatch)
+    assert not mod.is_trend_scorable(row)
+    assert not mod.trend_rating_status(row).scorable
+    line = mod.trend_prompt_line(row)
+    assert line.startswith("財報趨勢資料不足") and "合分" not in line and row["label"] not in line
+    assert not mod.split_trend_rows([row])[0]
+
+
 class TestMutations:
-    def test_mutation_back_to_OR_turns_red(self, monkeypatch):
-        """突變：把 is_trend_scorable 改回舊的 OR → 單腿列被放行 → 本批核心斷言必須失敗。"""
-        row = _row(monkeypatch, rev=_rev_df(True), snaps=[], sid="B")
-        assert not is_trend_scorable(row)
-        _m, _s = trend_row_evidence(row)
-        or_rule = lambda r, **k: (lambda ms: ms[0] >= 1 or ms[1] >= 2)(trend_row_evidence(r))  # noqa: E731
-        monkeypatch.setattr(sc, "is_trend_scorable", or_rule)
-        with pytest.raises(AssertionError):
-            assert not sc.trend_rating_status(row).scorable
-        with pytest.raises(AssertionError):
-            assert sc.trend_prompt_line(row).startswith("財報趨勢資料不足")
-        with pytest.raises(AssertionError):
-            ok, bad = sc.split_trend_rows([row])
-            assert not ok
+    def test_real_code_passes_guard_contract(self, monkeypatch):
+        _check_scorability(load_real(_SCOR), monkeypatch)
 
-    def test_mutation_prompt_line_leaking_score_turns_red(self, monkeypatch):
-        """突變：prompt 在不具資格時又送出合分／標籤 → 斷言必須失敗。"""
-        row = _row(monkeypatch, rev=None, snaps=[_FAIL, _PASS], sid="C")
-        good = sc.trend_prompt_line(row)
-        assert "合分" not in good
-        leaked = f"財報趨勢分數(月+季 65/35)={row['label']} (合分 {row['score']:+.2f})"
-        monkeypatch.setattr(sc, "trend_prompt_line", lambda r: leaked)
+    @pytest.mark.parametrize("old,new", [
+        ("return _m >= int(min_months) and _s >= int(min_snapshots)",
+         "return _m >= int(min_months) or _s >= int(min_snapshots)"),                       # AND→OR
+        ("    if not st.scorable:\n        line = f", "    if False:\n        line = f"),     # AI 行不擋
+    ])
+    def test_mutating_scorability_turns_red(self, monkeypatch, old, new):
+        mut = load_mutant(_SCOR, old, new)
         with pytest.raises(AssertionError):
-            assert "合分" not in sc.trend_prompt_line(row)
+            _check_scorability(mut, monkeypatch)
 
-    def test_mutation_diff_failed_guard_removed_turns_red(self, monkeypatch):
-        """突變：拿掉 diff_failed 保守規則（等同舊行為）→ 例外情境的季腿又被當有效。"""
+    def test_mutating_diff_failed_guard_turns_red(self, monkeypatch):
         import src.compute.health as H
         monkeypatch.setattr(H, "diff_fin_health",
                             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
         row = _row(monkeypatch, rev=_rev_df(True), snaps=[_PASS, _PASS])
-        assert not is_trend_scorable(row)
-        row_mut = dict(row)
-        row_mut.pop("diff_failed")                      # 等同拿掉旗標／規則
-        with pytest.raises(AssertionError):
-            assert not is_trend_scorable(row_mut)
 
-    def test_mutation_empty_dict_rule_removed_turns_red(self, monkeypatch):
+        def check(mod):
+            assert not mod.is_trend_scorable(row)
+        check(load_real(_SCOR))
+        mut = load_mutant(_SCOR, 'elif _s >= 2 and _dv is None and (row or {}).get("diff_failed") is True:',
+                          "elif False:")
+        with pytest.raises(AssertionError):
+            check(mut)
+
+    def test_mutating_empty_dict_rule_turns_red(self, monkeypatch):
         row = _row(monkeypatch, rev=_rev_df(True), snaps=[{}, {}])
-        assert not is_trend_scorable(row)
-        row_mut = dict(row)
-        row_mut.pop("diff_verdict")
-        with pytest.raises(AssertionError):
-            assert not is_trend_scorable(row_mut)
 
-    def test_mutation_combo_cell_ignoring_status_turns_red(self, monkeypatch):
-        """突變：組合 Tab 表格若不依資格（永遠印 label）→ parity 斷言必須失敗。"""
-        row = _row(monkeypatch, rev=_rev_df(True), snaps=[], sid="B")
-        table, _ = _combo_table_rows([row])
-        assert table[0]["判定(月+季)"].startswith("⚪ 無法形成正式綜合評級")
-        mutated_cell = row["label"]
+        def check(mod):
+            assert not mod.is_trend_scorable(row)
+        check(load_real(_SCOR))
+        mut = load_mutant(_SCOR, "if _n_cmp is not None and _n_cmp == 0:", "if False:")
         with pytest.raises(AssertionError):
-            assert mutated_cell.startswith("⚪ 無法形成正式綜合評級")
+            check(mut)
+
+    def test_mutating_single_tab_banner_branch_turns_red(self, monkeypatch):
+        """QA 突變 1：橫幅 `if not _tr_st.scorable` 分支改 `if False` → 單腿列洩漏標籤＋合分，測試必須紅。"""
+        row = _single_leg_row(monkeypatch)
+
+        def check(mod):
+            html = mod.build_fin_trend_banner_html(row)
+            assert "⚪ 無法形成正式綜合評級（缺季財報腿" in html
+            assert "合分" not in html and row["label"] not in html
+            assert "非完整評級" in html
+        check(load_real(_BANNER))
+        mut = load_mutant(_BANNER, "    if not _tr_st.scorable:\n        _head_html", "    if False:\n        _head_html")
+        with pytest.raises(AssertionError):
+            check(mut)
+
+    def test_mutating_ai_line_to_always_send_score_turns_red(self, monkeypatch):
+        """QA 突變 2：AI 行永遠送標籤＋合分 → 測試必須紅。"""
+        row = _single_leg_row(monkeypatch)
+
+        def check(mod):
+            line = mod._fin_trend_ai_line(row)
+            assert line.startswith("財報趨勢資料不足") and "合分" not in line and row["label"] not in line
+        check(load_real(_TAB))
+        mut = load_mutant(
+            _TAB, "    return trend_prompt_line(fin_row)",
+            "    return f\"財報趨勢分數(月+季 65/35)={fin_row.get('label')} (合分 {fin_row.get('score', 0):+.2f})\"")
+        with pytest.raises(AssertionError):
+            check(mut)
+
+    def test_ai_call_site_uses_helper_not_a_bypass(self):
+        """接線：render_tab_stock 的 AI 段必須經 `_fin_trend_ai_line`（不得直送 label／score）。"""
+        txt = (REPO / _TAB).read_text(encoding="utf-8")
+        i = txt.index("compute_one_stock_trend as _cost_ai")
+        blk = txt[i: i + 2500]
+        assert "_fund_str2.append(_fin_trend_ai_line(_fin_row_ai))" in blk
+        assert "_fin_row_ai['score']" not in blk and "_fin_row_ai.get('score'" not in blk
+        assert "_fin_row_ai.get('label'" not in blk
+
+    def test_single_tab_calls_banner_helper(self):
+        txt = (REPO / _BANNER).read_text(encoding="utf-8")
+        assert "st.markdown(build_fin_trend_banner_html(_fin_row), unsafe_allow_html=True)" in txt
+
+    def test_mutating_detail_headline_turns_red(self, monkeypatch):
+        """逐檔細節 expander 的標題行：不具資格列不得洩漏標籤／合分。"""
+        row = _single_leg_row(monkeypatch)
+
+        def check(mod):
+            h = mod._detail_headline(row)
+            assert "⚪ 無法形成正式綜合評級（缺季財報腿" in h and "非完整評級" in h
+            assert "合分" not in h and row["label"] not in h
+        check(load_real(_GRP))
+        mut = load_mutant(_GRP, "    if _st.scorable:\n        return f\"**{r['sid']}**：{r['label']}",
+                          "    if True:\n        return f\"**{r['sid']}**：{r['label']}")
+        with pytest.raises(AssertionError):
+            check(mut)
+
+    def test_mutating_combo_cell_turns_red(self, monkeypatch):
+        """組合主表判定欄不看資格 → parity 必須紅（真跑突變後的 `_render_fin_trend_table`）。"""
+        row = _single_leg_row(monkeypatch)
+
+        def check(mod):
+            st_mod = MagicMock()
+            st_mod.columns.side_effect = lambda n: [MagicMock() for _ in range(n)]
+            cap = []
+            st_mod.dataframe.side_effect = lambda df, **k: cap.append(df)
+            mod._render_fin_trend_table([row], pd, st_mod, "202611")
+            assert cap[0].to_dict("records")[0]["判定(月+季)"].startswith("⚪ 無法形成正式綜合評級")
+        check(load_real(_GRP))
+        mut = load_mutant(_GRP, "'判定(月+季)': '⚪ 無法形成正式綜合評級' if _bad else r['label'],",
+                          "'判定(月+季)': r['label'],")
+        with pytest.raises(AssertionError):
+            check(mut)
+
+
+# ═══ ②b parity：主表 vs 逐檔細節 expander ═════════════════════════
+class TestDetailExpanderParity:
+    @pytest.mark.parametrize("name", list(_PARITY))
+    def test_main_table_and_expander_agree(self, monkeypatch, name):
+        from src.ui.tabs.tab_stock_grp import _detail_headline
+        c = _PARITY[name]
+        rev = {"up": _rev_df(True), "flat": _rev_df(False), None: None}[c["rev"]]
+        row = _row(monkeypatch, rev=rev, snaps=c["snaps"], sid="9999")
+        table, st_mod = _combo_table_rows([row])
+        main_cell = table[0]["判定(月+季)"]
+        head = _detail_headline(row)
+        # 同一資格：expander 與主表一致；真的跑 render 後 expander 內 markdown 也是這一行
+        assert (not main_cell.startswith("⚪")) == (not trend_rating_status(row).missing_legs)
+        md = " ".join(str(c_.args[0]) for c_ in st_mod.markdown.call_args_list)
+        assert head in md
+        if main_cell.startswith("⚪"):
+            for text in (head, md):
+                assert f"合分 {row['score']:.2f}" not in text
+            assert row["label"] not in head
+            assert table[0]["綜合分數"] == "—"
+        else:
+            assert head == f"**9999**：{row['label']}（合分 {row['score']:.2f}）"
 
 
 # ═══ ④ 前後差異證據（固定合成 fixture，非績效）════════════════════

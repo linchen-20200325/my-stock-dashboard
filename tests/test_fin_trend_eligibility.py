@@ -207,8 +207,10 @@ def _fin_block(text: str) -> str:
 
 class TestWiring:
     def test_single_tab_uses_shared_status(self):
-        blk = _fin_block(_SEC.read_text(encoding="utf-8"))
-        assert "trend_rating_status" in blk and "unscorable_label" in blk
+        # DEC-150 QA 回修：橫幅 HTML 抽成 `build_fin_trend_banner_html`（同檔，行為測試見 test_fina_both_legs_required）
+        txt = _SEC.read_text(encoding="utf-8")
+        assert "trend_rating_status" in txt and "unscorable_label" in txt
+        assert "build_fin_trend_banner_html(_fin_row)" in _fin_block(txt)
 
     def test_ai_prompt_uses_shared_line(self):
         txt = _TAB.read_text(encoding="utf-8")
@@ -231,23 +233,29 @@ class TestWiring:
         assert "split_trend_rows" in g and "⚪ 無法評分" in g
 
     def test_mutation_removing_guard_turns_red(self, monkeypatch):
-        """突變：把 is_trend_scorable 換成『永遠可評分』，兩腿皆缺的列必須被測試抓到。"""
+        """突變：改寫 `is_trend_scorable` 原始碼為『永遠可評分』，兩腿皆缺的列必須被測試抓到。
+
+        （QA 回修：原版 monkeypatch 一個必然失敗的 lambda；現在改寫被測碼本身後 exec。）"""
+        from tests._fina_mutants import load_mutant
         row = _row(monkeypatch, rev=None, snaps={})
-        assert not trend_rating_status(row).scorable
-        monkeypatch.setattr(sc, "is_trend_scorable", lambda *a, **k: True)
-        # 突變後共用資格層放行 → 本批的核心斷言（兩腿皆缺不得可評分）必須失敗
+
+        def check(mod):
+            assert not mod.trend_rating_status(row).scorable
+            assert mod.trend_prompt_line(row).startswith("財報趨勢資料不足")
+        check(sc)
+        mut = load_mutant("src/compute/screener/scorability.py",
+                          "return _m >= int(min_months) and _s >= int(min_snapshots)", "return True")
         with pytest.raises(AssertionError):
-            assert not sc.trend_rating_status(row).scorable
-        with pytest.raises(AssertionError):
-            assert sc.trend_prompt_line(row).startswith("財報趨勢資料不足")
+            check(mut)
 
     def test_mutation_empty_dict_rule_removed_turns_red(self, monkeypatch):
-        """突變：拿掉『有效快照需有可比較指標』→ 空 dict 又被當證據（舊缺陷重現）。
+        """突變：改寫原始碼拿掉『有效快照需有可比較指標』→ 空 dict 又被當證據（舊缺陷重現）。
 
         DEC-150：月腿須有效（rev=up），否則兩腿規則本身就擋下，看不出空 dict 規則有沒有被拿掉。"""
+        from tests._fina_mutants import load_mutant
         row = _row(monkeypatch, rev=_rev_df(True), snaps={"202610": {}, "202611": {}})
         assert not is_trend_scorable(row)
-        row_mut = dict(row)
-        row_mut.pop("diff_verdict")                              # 等同拿掉可比較指標資訊
+        mut = load_mutant("src/compute/screener/scorability.py",
+                          "if _n_cmp is not None and _n_cmp == 0:", "if False:")
         with pytest.raises(AssertionError):
-            assert not is_trend_scorable(row_mut)
+            assert not mut.is_trend_scorable(row)

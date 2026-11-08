@@ -412,6 +412,17 @@ def _fin_verdict_code(r: dict) -> str:
     return 'first_snapshot' if trend_row_evidence(r)[1] >= 1 else 'no_snapshot'
 
 
+def _detail_headline(r: dict) -> str:
+    """『🛠️ 逐檔細節』每檔標題行。DEC-150：不具資格列不得印標籤／合分，與主表同一套資格(`trend_rating_status`)。"""
+    from src.compute.screener.scorability import trend_rating_status, trend_sub_texts
+    _st = trend_rating_status(r)
+    if _st.scorable:
+        return f"**{r['sid']}**：{r['label']}（合分 {r['score']:.2f}）"
+    _mon, _fin = trend_sub_texts(r)
+    _tail = f"（非完整評級,有效分項僅供診斷:月分 {_mon}／季分 {_fin}）" if _st.partial else ""
+    return f"**{r['sid']}**：{_st.unscorable_label}{_tail}"
+
+
 def _fmt_quarter(yyyymm: str) -> str:
     """202503 → 2025Q1（季底月份對應季）；格式不符回原字串。"""
     s = str(yyyymm or '').strip()
@@ -581,7 +592,7 @@ def _render_fin_trend_table(rows: list[dict], pd, st_mod, yyyymm_curr: str = '')
 
     with st_mod.expander('🛠️ 逐檔細節（分子分數推導）', expanded=False):
         for r in rows_sorted:
-            st_mod.markdown(f"**{r['sid']}**：{r['label']}（合分 {r['score']:.2f}）")
+            st_mod.markdown(_detail_headline(r))
             st_mod.json({
                 'monthly_detail': r.get('mon_detail', {}),
                 'fin_detail': r.get('fin_detail', {}),   # v19.174:改吃中性 key
