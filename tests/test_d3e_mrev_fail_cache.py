@@ -187,11 +187,18 @@ def _assert_c4_fail_closed_only(got, want, *, same_score: bool):
     (g_rows, g_meta), (w_rows, w_meta) = got, want
     assert g_meta == w_meta
     assert len(g_rows) == len(w_rows) and g_rows
-    _c4_keys = {"缺貨分數", "④月營收", "理由", "有效訊號數", "缺值原因", "_n_signals_ok", "_c4_ok"}
+    _c4_keys = {"缺貨分數", "④月營收", "理由", "有效訊號數", "缺值原因", "_n_signals_ok", "_c4_ok",
+                "資料資格", "_evidence_status"}   # DEC-154 G1：兩個顯示追溯欄由 n_ok／C4 派生，下方單獨斷言其值
     for g, w in zip(g_rows, w_rows):
         assert {k: v for k, v in g.items() if k not in _c4_keys} == {k: v for k, v in w.items() if k not in _c4_keys}
         assert g["④月營收"] == 0.0 and g["_c4_ok"] is False
         assert "FAIL_CLOSED(upstream_fetch_failed)" in g["缺值原因"]
+        # DEC-154 G1 新鍵：資料資格須與 n_ok／C4 FAIL_CLOSED 一致（來源失敗要被點名，不得寫成完整證據）
+        _n = g["_n_signals_ok"]
+        assert g["_evidence_status"] == ("none" if _n == 0 else "partial")
+        assert g["資料資格"].startswith(f"部分有效證據 {_n}/4" if _n else "無法評估 0/4")
+        assert "來源失敗" in g["資料資格"] and "FAIL_CLOSED(upstream_fetch_failed)" in g["資料資格"]
+        assert "證據完整" not in g["資料資格"]
         assert g["理由"].split("；")[:3] == w["理由"].split("；")[:3]          # ①②③ 理由逐字相同
         assert "資料不足" in g["理由"].split("；")[3] and "FAIL_CLOSED" in g["理由"].split("；")[3]
         if same_score:

@@ -81,6 +81,62 @@ from shared.shortage_screen_thresholds import (
 _logger = _sh_log.getLogger(__name__)
 
 
+
+# ════════════════════════════════════════════════════════════════
+# 資料資格顯示（DEC-154 G1，純顯示層）—— 原始分數與資料資格分離
+# ════════════════════════════════════════════════════════════════
+# ⛔ 本區只產生「顯示用文字／狀態鍵」：不進 total、tier、composite、百分位、排序，也不是新的排名資格。
+# 分母 4＝四個缺貨訊號（C1~C4）；n_ok 由 `_signal_flags` 既有判斷而來，本區不重新定義「有效」。
+N_SIGNALS_TOTAL = 4
+EVID_UNASSESSED = "unassessed"   # 舊 row／舊建構：沒有資料資格資訊（≠ 缺值）
+EVID_NONE = "none"               # n_ok=0：無法評估（資料不足，不是 0 分）
+EVID_PARTIAL = "partial"         # n_ok=1~3：部分有效證據
+EVID_FULL = "full"               # n_ok=4：證據完整（此時低分才是確定的「弱」）
+#: 該檔沒有任何缺貨列（未被深掃，或 n_ok=0 被排除於正式列）→ 推播／畫面共用字樣。
+SHORTAGE_NO_ROW_TEXT = "缺貨：無評估資料"
+
+
+def _n_ok_or_none(n_ok: Any) -> int | None:
+    """n_ok → 0~4 的 int；None／NaN／bool／非數字／越界 → None（不猜）。"""
+    if n_ok is None or isinstance(n_ok, bool):
+        return None
+    try:
+        f = float(n_ok)
+    except (TypeError, ValueError):
+        return None
+    if f != f or f != int(f) or not (0 <= int(f) <= N_SIGNALS_TOTAL):
+        return None
+    return int(f)
+
+
+def evidence_status(n_ok: Any) -> str:
+    """n_ok → EVID_*。"""
+    n = _n_ok_or_none(n_ok)
+    if n is None:
+        return EVID_UNASSESSED
+    if n == 0:
+        return EVID_NONE
+    return EVID_FULL if n == N_SIGNALS_TOTAL else EVID_PARTIAL
+
+
+def evidence_text(n_ok: Any, miss_reason: str = "", *, source_failed: bool = False,
+                  key_unverified: bool = False) -> str:
+    """資料資格白話字樣（純顯示）。真 0（有資料的低分）與 None（缺值）在此可辨識。"""
+    st = evidence_status(n_ok)
+    if st == EVID_UNASSESSED:
+        return "資料資格未記錄（舊資料或未評估）"
+    n = _n_ok_or_none(n_ok)
+    _mr = str(miss_reason or "").strip()
+    _fail = "（含來源失敗，非真實低分）" if source_failed else ""
+    if st == EVID_NONE:
+        return f"無法評估 0/{N_SIGNALS_TOTAL}（資料不足，不是 0 分）" + (f"：{_mr}" if _mr else "") + _fail
+    if st == EVID_FULL:
+        return (f"證據完整 {n}/{N_SIGNALS_TOTAL}"
+                + ("；④月份鍵未驗證（月營收項上限 5 分）" if key_unverified else ""))
+    return (f"部分有效證據 {n}/{N_SIGNALS_TOTAL}（缺值項不是 0 分）" + (f"；缺：{_mr}" if _mr else "")
+            + ("；④月份鍵未驗證（月營收項上限 5 分）" if key_unverified else "") + _fail)
+
+
 # ════════════════════════════════════════════════════════════════
 # 輸出模型
 # ════════════════════════════════════════════════════════════════
@@ -118,11 +174,17 @@ class ShortageScore:
 
     def to_row(self) -> dict[str, Any]:
         """→ 供 DataFrame / UI 表格用的一列。"""
+        _st = evidence_status(self.n_signals_ok)
+        _strength = f"{self.tier_icon} {self.tier}"
+        if self.tier == TIER_WEAK and _st == EVID_PARTIAL:
+            # DEC-154 G1：部分證據下的低分不是確定的「弱」→ 顯示層不下確定判斷（_tier 與分數不動）。
+            _strength = f"{self.tier_icon} {self.tier}（部分證據 {self.n_signals_ok}/{N_SIGNALS_TOTAL}，非確定）"
+        _m = self.metrics or {}
         return {
             "代碼": self.stock_id,
             "名稱": self.name,
             "缺貨分數": round(self.total, 1),
-            "訊號強度": f"{self.tier_icon} {self.tier}",
+            "訊號強度": _strength,
             "①合約負債": round(self.c1_contract_liab, 1),
             "②毛利率": round(self.c2_gross_margin, 1),
             "③存貨天數": round(self.c3_inventory_days, 1),
@@ -138,6 +200,13 @@ class ShortageScore:
             "_c2_ok": self.c2_ok,
             "_c3_ok": self.c3_ok,
             "_c4_ok": self.c4_ok,
+            # DEC-154 G1 additive（純顯示追溯欄；⛔ 不進 composite／百分位／排序）
+            "資料資格": evidence_text(
+                self.n_signals_ok, self.miss_reason,
+                source_failed=(_m.get("rev_c4_contract_status") == STATUS_FAIL_CLOSED
+                               and self.c4_ok is False),
+                key_unverified=bool(self.c4_ok is True and _m.get("rev_c4_key_unverified"))),
+            "_evidence_status": _st,
         }
 
 

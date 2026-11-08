@@ -18,6 +18,13 @@ from __future__ import annotations
 import math
 
 from shared.shortage_screen_thresholds import TIER_MID, TIER_STRONG, TIER_WEAK
+from src.compute.screener.shortage_screener import (
+    EVID_NONE,
+    EVID_PARTIAL,
+    N_SIGNALS_TOTAL,
+    SHORTAGE_NO_ROW_TEXT,
+    evidence_status,
+)
 
 # 財報趨勢門檻:近 5 季 favorable_count / favorable_of 比例(§3.3 命名常數,非 inline magic)。
 # favorable = 毛利率↑ / 營益率↑ / 負債比↓ / 營收YoY↑ 中「方向為佳」的個數。
@@ -64,9 +71,31 @@ def format_fundamental_trend(trend: dict | None) -> str:
     return "➡️財報持平"
 
 
-def format_shortage_badge(tier) -> str:
-    """缺貨 tier(強缺貨/中度/不明顯…)→ 徽章(缺貨強/中/弱);資料不足/不適用/缺 → ''。"""
-    return _SHORTAGE_LABEL.get(str(tier).strip(), "") if tier else ""
+def format_shortage_badge(tier, n_ok=None) -> str:
+    """缺貨 tier(強缺貨/中度/不明顯…)→ 徽章(缺貨強/中/弱);資料不足/不適用/缺 → ''。
+
+    DEC-154 G1（向下相容擴充）：`tier` 也可傳 dict `{"tier","n_ok",...}`(推播旁路);`n_ok` 為
+    有效訊號數(0~4)。n_ok=0 → ''(無法評估,不印徽章);n_ok=1~3 → 標「部分證據 n/4」,且 tier=不明顯
+    時**不寫「缺貨弱」**(缺值項不是低分,不下確定判斷);n_ok=4 或未提供(舊呼叫) → 與修前逐字相同。
+    ⛔ 純顯示:不改 tier、分數、排名。
+    """
+    if isinstance(tier, dict):
+        n_ok = tier.get("n_ok", n_ok)
+        tier = tier.get("tier")
+    if not tier:
+        return ""
+    _label = _SHORTAGE_LABEL.get(str(tier).strip(), "")
+    if not _label:
+        return ""
+    _st = evidence_status(n_ok)
+    if _st == EVID_NONE:
+        return ""
+    if _st == EVID_PARTIAL:
+        _n = int(float(n_ok))
+        if str(tier).strip() == TIER_WEAK:
+            return f"缺貨：部分證據 {_n}/{N_SIGNALS_TOTAL}"
+        return f"{_label}（部分證據 {_n}/{N_SIGNALS_TOTAL}）"
+    return _label
 
 
 def format_chip_line(chip: dict | None) -> str:
@@ -153,6 +182,8 @@ def format_signal_message(picks: list[dict], tech_by_code: dict, *,
         # 行2:技術面 + 缺貨徽章
         _tech = format_technical_line(snap)
         _short = format_shortage_badge(shortage_by_code.get(code))
+        if not _short and shortage_by_code and code not in shortage_by_code:
+            _short = SHORTAGE_NO_ROW_TEXT   # DEC-154 G1:勾了缺貨但此檔無列(未深掃/無法評估)→ 明講,不靜默
         lines.append("  " + (f"{_tech} · {_short}" if _short else _tech))
         # 行3:籌碼(法人流向 + 大戶比例);兩者皆缺 → 不印(§1 不佔行)
         _chip = format_chip_line(chip_by_code.get(code))
