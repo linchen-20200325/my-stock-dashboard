@@ -198,6 +198,28 @@ def test_date_differs_from_ym_is_not_fail_closed():
     contract_ok_unverified_when_date_differs(MC)
 
 
+def partial_disagreement_not_verified(M):
+    df = stock_df()                                            # date 與 ym 逐列一致
+    df.loc[df.index[5], "date"] = df.loc[df.index[5], "date"] + pd.DateOffset(months=1)   # 只有 1 列不一致
+    c = M.compute_month_contract(df, as_of=ASOF)
+    assert c["contract_status"] == "OK" and c["month_key_date_agrees"] is False
+    assert c["month_key_verified"] is False and c["target_date_eligible"] == [None] * 3
+
+
+def test_partial_row_disagreement_is_not_agree_nor_verified():
+    partial_disagreement_not_verified(MC)
+
+
+def test_mutation_agrees_all_to_any_turns_red():
+    """M8:逐列『全部一致』被改成『任一列一致』→ 部分列不一致會被誤判已驗證。"""
+    src = pathlib.Path(MC.__file__).read_text(encoding="utf-8")
+    old = "_agrees = (all(d is not None and k is not None and d == k"
+    assert src.count(old) == 1
+    mut = _load(src.replace(old, "_agrees = (any(d is not None and k is not None and d == k"), "_c4d_mut_m8", MC.__file__)
+    with pytest.raises(AssertionError):
+        partial_disagreement_not_verified(mut)
+
+
 def test_irregular_date_vs_ym_offsets_still_use_ym_key():
     df = stock_df(date_shift=1)
     df.loc[df.index[-1], "date"] = pd.Timestamp("2026-10-10")        # 公布日落在不同日,仍同為『公布月』序
