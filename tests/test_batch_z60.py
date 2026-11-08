@@ -881,7 +881,12 @@ class TestOldFilesUntouched:
     #   的 `_ia_view_find()`（依 session 旗標 `_nav4_legacy` 分流：legacy → 原 `render_page_find()`（一字不變）、新版模式 →
     #   `render_page_target()`）與 `_ia_view_nav4` 的一行註解（移除「標的頁第二層選擇」的敘述）。舊 UI 的 tabs/etf/pages/render
     #   其餘 90 檔一個字都沒動；舊 7 頁籤的程式碼路徑未變。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "90e86196c19ae06ebc8a7c41e2f2519a935bab8f58a2399173ffa4f399eebad0"
+    # ~~"90e86196c19ae06ebc8a7c41e2f2519a935bab8f58a2399173ffa4f399eebad0"~~（UI-T 後，至 bda43f3 仍成立）
+    # 📌 FIN-TREND 資格統一（2026-11-08，客戶核准「財報維持65%／35%原始權重，必要資料不足不得產生正式綜合評級」；核准過的舊檔改動，⛔ 不是漏改）：
+    #   只動 `src/ui/tabs/stock_sections/section_strategy_conclusion.py`（單股財報趨勢橫幅：不可評分改顯示「⚪ 無法評分（原因）」、單腿註明非完整評級）與
+    #   `src/ui/tabs/tab_stock.py`（AI prompt 財報趨勢一行改走共用 `trend_prompt_line`，並把 `except: pass` 改為 log）。其餘 89 檔一個字都沒動。
+    #   指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
+    _BASE_DIGEST = "a2fac6674872dada8a15ad9e6aa4ec291a9d3aec72bb50eda18d3fda1da4d50f"
 
     def test_no_diff_against_base(self):
         import hashlib

@@ -188,6 +188,11 @@ def render_strategy_conclusion_section(
             analyze_financial_health=analyze_financial_health,
             list_snapshots=_ls_snap, load_snapshot=_ld_snap, save_snapshot=_sv_snap,
         )
+        # 2026-11-08(客戶核准「必要資料不足不得產生正式綜合評級」):資格走 SSOT
+        #   `scorability.trend_rating_status`(與組合 Tab 同一個 is_trend_scorable、不新增門檻)。
+        #   不可評分 → 不顯示合分／標籤、不用中性色,改「⚪ 無法評分（原因）」;單腿 → 照舊算分但明註非完整雙頻率評級。
+        from src.compute.screener.scorability import trend_rating_status, trend_sub_texts
+        _tr_st = trend_rating_status(_fin_row)
         _fin_score = float(_fin_row.get('score', 0.0))
         _fin_label = _fin_row.get('label', '—')
         _fin_code = _fin_row.get('label_code', 'error')
@@ -197,8 +202,7 @@ def render_strategy_conclusion_section(
             'down': TRAFFIC_YELLOW, 'strong_down': TRAFFIC_RED,
             'error': TRAFFIC_NEUTRAL,
         }.get(_fin_code, TRAFFIC_NEUTRAL)
-        _mon_sub = float(_fin_row.get('mon_sub', 0.0))
-        _fin_sub = float(_fin_row.get('fin_sub', 0.0))   # v19.174:改吃中性 key
+        _mon_txt, _fin_sub_txt = trend_sub_texts(_fin_row)   # 缺的那腿顯示「—（缺）」,有效分項保留
         _snap_ym = _fin_row.get('snap_ym') or '—'
         _snap_stale = _fin_row.get('snap_stale')
         _fresh_tag = ('🟢 最新' if _snap_stale is False
@@ -206,12 +210,25 @@ def render_strategy_conclusion_section(
         _fin_note = (_fin_row.get('note') or '').strip().rstrip(';')
         _note_line = (f'<div style="font-size:11px;color:#8b949e;margin-top:3px;">⚠️ {_fin_note}</div>'
                       if _fin_note else '')
+        if not _tr_st.scorable:
+            _head_html = (f'<span style="font-size:13px;font-weight:700;color:{TRAFFIC_NEUTRAL};">'
+                          f'{_tr_st.unscorable_label}</span>')
+            _fin_color = TRAFFIC_NEUTRAL
+            _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
+                           '資料不足,不形成綜合評級(上列分項僅供追溯,不是投資結論)</div>')
+        else:
+            _head_html = (f'<span style="font-size:13px;font-weight:700;color:{_fin_color};">'
+                          f'{_fin_label}（合分 {_fin_score:+.2f}）</span>')
+            if _tr_st.partial:
+                _note_line += ('<div style="font-size:11px;color:#8b949e;margin-top:3px;">'
+                               f'⚠️ 缺{"、".join(_tr_st.missing_legs)}({_tr_st.reason_text});'
+                               '缺的分項是缺值不是持平,權重未重配,非完整雙頻率綜合評級</div>')
         st.markdown(
             f'<div style="background:#0d1117;border-left:3px solid {_fin_color};'
             f'padding:7px 12px;border-radius:0 6px 6px 0;margin:4px 0;">'
             f'<span style="font-size:11px;color:#8b949e;">📊 財報趨勢分數合議（月+季 65/35）</span>　'
-            f'<span style="font-size:13px;font-weight:700;color:{_fin_color};">{_fin_label}（合分 {_fin_score:+.2f}）</span>'
-            f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_sub:+.2f} · 季分 {_fin_sub:+.2f} · 快照 {_snap_ym} {_fresh_tag}</span>'
+            f'{_head_html}'
+            f'<span style="font-size:11px;color:#8b949e;margin-left:8px;">月分 {_mon_txt} · 季分 {_fin_sub_txt} · 快照 {_snap_ym} {_fresh_tag}</span>'
             f'{_note_line}'
             f'</div>', unsafe_allow_html=True
         )
