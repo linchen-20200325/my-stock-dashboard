@@ -799,9 +799,10 @@ def render_chart_fold(fold: ChartFold) -> None:
                 st.markdown(_text)
 
 
-def _asof_chip(updated_at: Any) -> Any:
-    """資料日 chip（`MM/DD`）；`updated_at` 不是 `YYYY-MM-DD…` ⇒ `⬜ 資料日未提供`（⛔ 猜一個日期）。"""
-    _s = str(updated_at or "").strip()[:10]
+def _asof_chip(observation_date: Any) -> Any:
+    """資料日 chip（`MM/DD`）；吃 L1 可信**觀測日**（D1，DEC-148；~~原吃 `updated_at`＝cron 執行日~~ 有意識的修改，⛔ 不是漏刪）。
+    不是 `YYYY-MM-DD…` ⇒ `⬜ 資料日未提供`（⛔ 猜一個日期、⛔ 以執行時間頂替）。"""
+    _s = str(observation_date or "").strip()[:10]
     try:
         _d = datetime.strptime(_s, "%Y-%m-%d").date()
     except ValueError:
@@ -811,7 +812,7 @@ def _asof_chip(updated_at: Any) -> Any:
 
 def industry_chips(flow: Any, rows: Sequence[RankRow], *, fetched_at: datetime | None, aged: bool) -> list[Any]:
     """Primary header 的 chip：資料日、抓取時間、窗口、（過期才有）過期、（有缺值才有）覆蓋。每個事實外露層最多一次。"""
-    _chips: list[Any] = [_asof_chip(getattr(flow, "updated_at", ""))]
+    _chips: list[Any] = [_asof_chip(getattr(flow, "observation_date", ""))]
     if fetched_at is not None:
         _chips.append(cp.meta_chip("retrieved_at", fetched_at.astimezone(TAIPEI).strftime("%H:%M")))
     _chips.append(cp.meta_chip("window", f"近 {WINDOW_X} 日"))
@@ -948,7 +949,7 @@ def basis_industry(flow: Any) -> Basis:
     _tp = "是" if flow.tpex_complete is True else ("否（僅含上市）" if flow.tpex_complete is False else "⬜ 未提供（僅含上市）")
     return Basis(
         sources="三大法人資金流快取（板塊資金潮汐）；產業分類用官方產業別",
-        as_of=(flow.updated_at or "⬜ 未提供"),
+        as_of=(flow.observation_date or "⬜ 未提供（資料日未知）"),   # D1：資料日只取可信觀測日（~~flow.updated_at＝執行時間~~）
         rule=(f"近 {WINDOW_X} 個交易日累計淨流入與動能變化 → 漲潮／輪動／退潮／觀望；"
               f"交易日不足者標「資料不足」。本表不做綜合強弱分數。{ZONE1_NO_TREND_NOTE}"),
         missing=("基本面成長、相對強弱（價格）、估值：尚未建置"

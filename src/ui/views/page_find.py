@@ -1388,9 +1388,13 @@ class SectorFlowReadout:
     insufficient: tuple[str, ...] = ()
     quadrant_counts: tuple[tuple[str, int], ...] = ()
     reason: str = ""
+    #: `updated_at`／`meta_updated_at` ＝ 排程（cron）**執行**時間，⛔ 不是資料日（D1，DEC-148：向後相容保留鍵，語意註明）。
     updated_at: str = ""
     meta_updated_at: str = ""
     stale_reason: str = ""
+    #: D1（DEC-148，additive）：可信的**資料觀測日** `YYYY-MM-DD`（L1 `metadata.last_updated`）；
+    #: 缺／無法解析／晚於今日／矛盾 ⇒ `""`（⛔ 不以 `updated_at` 頂替；畫面誠實顯示「資料日未提供」）。
+    observation_date: str = ""
     n_days: str = ""
     error: str = ""
     #: 批 Z39（Q-z26=A）：L2 標 `unavailable`（窗口內缺值、不補 0、不畫）的板塊名。
@@ -1475,6 +1479,7 @@ def load_sector_flow(session: Mapping[str, Any], *,
         quadrant_counts=_quadrant_counts(_sectors),
         updated_at=str(_view.get("updated_at") or ""),
         meta_updated_at=str(_view.get("meta_updated_at") or ""),
+        observation_date=str(_view.get("observation_date") or ""),   # D1：資料日只取可信觀測日
         stale_reason=str(_view.get("stale_reason") or ""),
         n_days=str(_view.get("n_trading_days_used") or ""),
         unavailable=_unav,
@@ -1965,8 +1970,11 @@ def build_sector_flow_card(flow: SectorFlowReadout
         discriminative=not flow.stale,
     )
     _facts: list[tuple[str, str]] = []
+    # D1（DEC-148，有意識的修改，⛔ 不是漏刪）：~~("快取更新於", flow.updated_at)~~ —— `updated_at` 是 cron 執行時間，
+    #   舊標籤讓人讀成資料日。→ 維持顯示該時戳，但標為「排程更新於」（執行時間，不是資料日；⛔ 不新增 facts 列，
+    #   資料日由 header chip／Basis.as_of 吃 `observation_date` 顯示）。
     if flow.updated_at:
-        _facts.append(("快取更新於", flow.updated_at))
+        _facts.append(("排程更新於", flow.updated_at))
     if flow.n_days:
         _facts.append(("採用交易日", f"{flow.n_days} 天"))
     if flow.insufficient:
@@ -1998,9 +2006,9 @@ def build_sector_flow_card(flow: SectorFlowReadout
     elif _state == UI_DEGRADED:
         _note = Note(
             now=FLOW_STALE_NOW,
-            why=(f"盤後凍結任務的更新時戳距今已超過門檻"
+            why=(f"資料觀測日距今已超過門檻或無法判定"
                  f"（{flow.stale_reason or '上游沒有給原因'}；"
-                 f"metadata 時戳 {flow.meta_updated_at or '未知'}）—— "
+                 f"排程執行時戳 {flow.meta_updated_at or '未知'}，不是資料日）—— "
                  "圖照畫，但別拿它當今天的資金流向讀"),
             where=("等當日盤後的「Update Sector Flow」排程跑完；"
                    f"重複{press(ACTION_LOAD_MAP_LABEL)}不會讓快照變新"))

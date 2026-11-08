@@ -59,8 +59,11 @@ def test_reader_normal(monkeypatch, tmp_path):
         "updated_at": "2026-08-10T23:39:52+00:00", "window_size": 20,
         "n_trading_days_used": 20, "sectors": _sample_sectors(),
     }), encoding="utf-8")
+    # D1(DEC-148):新鮮度改看資料觀測日 `last_updated`,夾具補上(= 排程執行時間的台北日期,與真實 cron 一致)。
+    _upd = datetime.now(timezone.utc) - timedelta(hours=6)
     (tmp_path / "metadata.json").write_text(json.dumps({
-        "updated_at": _iso(datetime.now(timezone.utc) - timedelta(hours=6)),
+        "updated_at": _iso(_upd),
+        "last_updated": (_upd + timedelta(hours=8)).date().isoformat(),
     }), encoding="utf-8")
     (tmp_path / "ticker_sector.json").write_text(json.dumps({
         "2330": "半導體業", "2317": "其他電子業",
@@ -91,8 +94,11 @@ def test_reader_stale(monkeypatch, tmp_path):
     # metadata 明顯超過門檻(門檻 + 5 天前)
     old = datetime.now(timezone.utc) - timedelta(
         days=SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS + 5)
-    (tmp_path / "metadata.json").write_text(json.dumps({"updated_at": _iso(old)}),
-                                            encoding="utf-8")
+    # D1(DEC-148):觀測日同樣超過門檻(updated_at 與 last_updated 同步變舊)。
+    (tmp_path / "metadata.json").write_text(json.dumps({
+        "updated_at": _iso(old),
+        "last_updated": (old + timedelta(hours=8)).date().isoformat()}),
+        encoding="utf-8")
     v = R.read_sector_flow_cache()
     assert v["ok"] is True          # 仍回資料(過期不等於缺)
     assert v["is_stale"] is True
