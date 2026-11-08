@@ -278,8 +278,8 @@ def test_no_new_threshold_constants_in_source():
     seg = src[src.index("DEC-153(客戶"):src.index("# 有效旗標（DEC-149")]
     assert "SHORTAGE_REV_" in seg
     import re
-    assert not re.findall(r"(?<![\w.\[])\d+\.\d+(?![\w])", seg.split("key_unverified: list[str] = []")[1]
-                          .split("increasing =")[0]), "未驗證判定區不得出現數字常數"
+    det = seg.split("key_unverified: list[str] = []")[1].split("if len(valid) < 2:")[0]
+    assert not re.findall(r"(?<![\w.\[])\d+\.\d+(?![\w])", det), "未驗證判定區不得出現數字常數"
 
 
 # ───────────────────────── 突變(≥4,必須轉紅;原碼綠) ─────────────────────────
@@ -480,3 +480,25 @@ def test_downstream_consumers_schema_unchanged():
                         "_tier", "有效訊號數", "缺值原因", "_n_signals_ok", "_c1_ok", "_c2_ok", "_c3_ok", "_c4_ok"}
     m = REAL.score_shortage(stock(INC)).metrics
     assert "rev_yoy_last3" in m and "rev_c4_ok" in m and "rev_c4_key_unverified" in m   # 舊 key 保留
+
+
+# ───────────────────────── QA 追加(A)(B) ─────────────────────────
+@pytest.mark.parametrize("y", [[1.0, None, None], [None, None, None], [40.0, None, None]])
+def test_metrics_key_present_on_insufficient_and_fail_closed(y):
+    r = run(REAL, y)                       # legacy → 資料不足提前 return
+    assert r.c4_ok is False and "rev_c4_key_unverified" in r.metrics and r.metrics["rev_c4_key_unverified"]
+    r = run_df(REAL, mk_df(y), source_month_key_verified=False)
+    assert r.c4_ok is False and r.metrics["rev_c4_key_unverified"]
+    st = compute_yoy_mom(mk_df(INC), as_of=ASOF, upstream_failed=True)
+    r = REAL.score_shortage(stock(INC, MC.extract_month_contract(st)))
+    assert r.c4_ok is False and r.metrics["rev_c4_key_unverified"]          # FAIL_CLOSED
+
+
+def test_cap_wording_only_when_five_points_given():
+    low = [5.0, 6.0, 7.0]
+    for r in (run(REAL, low), run_df(REAL, mk_df(low), source_month_key_verified=False),
+              run(REAL, low, hand(low, month_key_verified=False))):
+        assert r.c4_revenue_yoy == 0.0 and "動能不足" in r.reason_text
+        assert "最高部分達標" not in r.reason_text and "未驗證" in r.reason_text, r.reason_text
+    for r in (run(REAL, INC), run(REAL, MIX), run_df(REAL, mk_df(MIX), source_month_key_verified=False)):
+        assert r.c4_revenue_yoy == PARTIAL and "最高部分達標" in r.reason_text, r.reason_text
