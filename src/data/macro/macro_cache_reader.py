@@ -12,8 +12,7 @@
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
 - `load_tw_pmi_history(cache_dir) -> DataFrame | None`:讀 tw_pmi.parquet 原樣回傳(批 Z63,
-  供 L2 `dated_inputs.extract_pmi_prev` 取「前一資料月官方值」;
-  已接線:`services/risk_cap_apply.py`、`services/macro_engine_inputs.py`)
+  供 L2 `dated_inputs.extract_pmi_prev` 取「前一資料月官方值」;未接線)
 - `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
 - `read_cache_metadata(cache_dir) -> dict`:讀 `data_cache/metadata.json`(cron 的自陳狀態)
 - `compute_cache_staleness(dataset, ...) -> dict`:單一 parquet 的年齡判定(§1 誠實預設)
