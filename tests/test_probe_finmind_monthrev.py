@@ -88,6 +88,24 @@ def wf_violations(text: str) -> list[str]:
     ms = re.search(r"stock_ids:[\s\S]*?default:\s*'([^']*)'", code)
     if not ms or len([x for x in ms.group(1).split(",") if x.strip()]) > 5:
         v.append("stock_ids 預設缺或 > 5 檔")
+    # —— 補強(安全審查)——
+    if len(re.findall(r"secrets", code, re.I)) != 1:
+        v.append("『secrets』字樣全檔必須恰出現 1 次(secrets.FINMIND_TOKEN)")
+    if re.search(r"secrets\s*\[|secrets\s*\.\s*\*|toJSON|github\s*\.\s*token|GITHUB_TOKEN|\$\{\{\s*secrets\s*\}\}", code, re.I):
+        v.append("含 secrets[...]/toJSON/github.token/GITHUB_TOKEN")
+    if len(re.findall(r"\$\{\{\s*secrets\.FINMIND_TOKEN\s*\}\}", code)) != 1:
+        v.append("secret 引用形式必須恰為 `${{ secrets.FINMIND_TOKEN }}` 一次")
+    if re.search(r"continue-on-error", code):
+        v.append("含 continue-on-error")
+    uses = re.findall(r"^\s+-?\s*uses:\s*(\S+)", code, re.M)
+    if set(uses) - {"actions/checkout@v4", "actions/setup-python@v5"} or len(uses) != 2:
+        v.append(f"uses 白名單違反 {uses}")
+    if not re.search(r"actions/checkout@v4\s*\n\s+with:\s*\n\s+persist-credentials:\s*false", code):
+        v.append("checkout 缺 persist-credentials: false")
+    # inputs 只允許出現在 env 區塊的 PROBE_*;不得出現在 with:/其他位置
+    for mi in re.finditer(r"^(.*)\$\{\{\s*inputs\.[^}]*\}\}", code, re.M):
+        if not re.match(r"^\s+PROBE_[A-Z_]+:\s*$", mi.group(1)):
+            v.append("inputs 只能出現在 env 的 PROBE_* 值")
     return v
 
 
@@ -106,6 +124,18 @@ _WF_MUTS = {
         "      - name: Install deps\n", "      - name: Install deps\n        env:\n          X: ${{ secrets.FINMIND_TOKEN }}\n"),
     "加 set -x": lambda t: t.replace("run: pip install -r requirements.txt", "run: set -x"),
     "months 預設 99": lambda t: t.replace("default: '6'", "default: '99'"),
+    "secrets 字樣出現第二次": lambda t: t.replace("      - name: Install deps\n", "      - name: Install deps\n        env:\n          Y: ${{secrets.FINMIND_TOKEN}}\n"),
+    "secrets 空白變化": lambda t: t.replace("${{ secrets.FINMIND_TOKEN }}", "${{ secrets . FINMIND_TOKEN }}"),
+    "secrets 括號": lambda t: t.replace("${{ secrets.FINMIND_TOKEN }}", "${{ secrets['FINMIND_TOKEN'] }}"),
+    "toJSON": lambda t: t.replace("run: pip install -r requirements.txt", "run: echo ${{ toJSON(env) }}"),
+    "github.token": lambda t: t.replace("          PROBE_MONTHS:", "          T: ${{ github.token }}\n          PROBE_MONTHS:"),
+    "GITHUB_TOKEN 注入": lambda t: t.replace("          PROBE_MONTHS:", "          GITHUB_TOKEN: x\n          PROBE_MONTHS:"),
+    "continue-on-error": lambda t: t.replace("    timeout-minutes: 10", "    timeout-minutes: 10\n    continue-on-error: true"),
+    "第三方 action": lambda t: t.replace("actions/setup-python@v5", "evil/setup-python@v5"),
+    "action 版本漂移": lambda t: t.replace("actions/setup-python@v5", "actions/setup-python@main"),
+    "inputs 進 with": lambda t: t.replace("python-version: '3.11'", "python-version: ${{ inputs.months }}"),
+    "inputs 進非 PROBE env": lambda t: t.replace("PROBE_MONTHS: ${{ inputs.months }}", "OTHER: ${{ inputs.months }}"),
+    "拿掉 persist-credentials": lambda t: t.replace("          persist-credentials: false\n", "          fetch-depth: 1\n"),
     "timeout 60": lambda t: t.replace("timeout-minutes: 10", "timeout-minutes: 60"),
 }
 
@@ -230,17 +260,27 @@ def test_token_only_in_bearer_header_never_in_output():
     assert FAKE_TOKEN not in out and "Authorization" not in out
 
 
-def test_token_echoed_by_api_msg_is_redacted():
-    echo = {"status": 401, "msg": f"bad token {FAKE_TOKEN} Bearer {FAKE_TOKEN}"}
-    rc, out = _run(_load(), _fake(echo))
-    assert FAKE_TOKEN not in out and "***" in out
+@pytest.mark.parametrize("variant", [
+    FAKE_TOKEN, FAKE_TOKEN.lower(), FAKE_TOKEN.upper(),
+    __import__("urllib.parse").parse.quote(FAKE_TOKEN, safe=""), FAKE_TOKEN[::-1], f"Bearer {FAKE_TOKEN}",
+    "x" * 5000 + FAKE_TOKEN,
+])
+def test_api_msg_body_never_printed(variant):
+    rc, out = _run(_load(), _fake({"status": 401, "msg": f"bad token {variant}"}))
+    assert variant not in out and FAKE_TOKEN not in out and "bad token" not in out
+    assert "msg_len=" in out and "api_status=401" in out
+
+
+def test_msg_len_capped_200():
+    rc, out = _run(_load(), _fake({"status": 401, "msg": "y" * 5000}))
+    assert "msg_len=200" in out
 
 
 def test_exception_path_redacted():
     rc, out = _run(_load(), _fake(RuntimeError(f"conn failed Authorization: Bearer {FAKE_TOKEN} url?t={FAKE_TOKEN}")))
     assert rc == 1 and FAKE_TOKEN not in out and "RuntimeError" in out
-    rc, out = _run(_load(), _fake(_Resp.__new__(_Resp) and ValueError(FAKE_TOKEN)))
-    assert FAKE_TOKEN not in out
+    rc, out = _run(_load(), _fake(ValueError(FAKE_TOKEN.lower() + "x" * 900)))
+    assert FAKE_TOKEN.lower() not in out and "ValueError" in out and "x" * 50 not in out
 
 
 def test_input_truncation_and_validation():
@@ -285,7 +325,7 @@ def test_mutation_no_token_continues():
 def test_mutation_redaction_removed_leaks():
     mod = _load(_mutate("        return _BEARER_RE.sub(\"Bearer ***\", s)", "        return s"))
     mod2 = _load(_mutate("            s = s.replace(sec, \"***\")", "            pass"))
-    rc, out = _run(mod2, _fake({"status": 401, "msg": f"x {FAKE_TOKEN}"}))
+    rc, out = _run(mod2, _fake(_ok([_row(FAKE_TOKEN, 2026, 5)])))
     assert FAKE_TOKEN in out   # 突變版洩漏 → 真實版的 test_token_echoed_* 會紅
     assert mod is not None
 
@@ -304,6 +344,12 @@ def test_mutation_header_dumped():
     src = _mutate('    emit(f"== FinMind {DATASET}', '    emit(f"{os.environ}")\n    emit(f"== FinMind {DATASET}')
     code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
     assert "os.environ" in code.replace("env = os.environ if env is None else env", "")  # 守衛條件成立 → 真實版 static 測試會紅
+
+
+def test_mutation_msg_printed_again():
+    mod = _load(_mutate("msg_len={len(res['msg'])}(內文不輸出)", "msg={res['msg']}"))
+    rc, out = _run(mod, _fake({"status": 401, "msg": "bad token BODY"}))
+    assert "BODY" in out   # 突變版印出 msg 內文 → 真實版 test_api_msg_body_never_printed 會紅
 
 
 def test_mutation_truncation_removed():

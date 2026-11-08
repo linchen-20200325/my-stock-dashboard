@@ -152,12 +152,12 @@ def fetch_rows(stock_id: str, months: int, token: str, http_get, today: date | N
         out["http"] = getattr(r, "status_code", None)
         body = r.json()
         out["api_status"] = body.get("status")
-        out["msg"] = str(body.get("msg", ""))
+        out["msg"] = str(body.get("msg", ""))[:200]
         if out["api_status"] == 200 and out["http"] in (None, 200):
             data = body.get("data") or []
             out["rows"] = [x for x in data if isinstance(x, dict)]
     except Exception as e:  # noqa: BLE001 — 例外只回型別+(遮蔽後)訊息,由 caller 遮蔽輸出
-        out["error"] = f"{type(e).__name__}: {e}"
+        out["error"] = f"{type(e).__name__}: {str(e)[:200]}"
     return out
 
 
@@ -186,9 +186,10 @@ def run(env=None, http_get=None, out=print, today: date | None = None) -> int:
     for sid in ids:
         emit(f"--- {sid} ---")
         res = fetch_rows(sid, months, token, http_get, today)
-        emit(f"HTTP={res['http']} api_status={res['api_status']} msg={res['msg']!r}")
+        # msg/例外內文不印(無法保證任意變體回聲 token 皆被遮蔽):只印 status 與內文長度
+        emit(f"HTTP={res['http']} api_status={res['api_status']} msg_len={len(res['msg'])}(內文不輸出)")
         if res["error"]:
-            emit(f"❌ 例外 {res['error']}")
+            emit(f"❌ 例外 {str(res['error']).split(':', 1)[0][:60]}(內文不輸出)")
             failed += 1
             continue
         if res["api_status"] != 200:
@@ -205,8 +206,8 @@ def run(env=None, http_get=None, out=print, today: date | None = None) -> int:
         emit(f"單調性: date 遞增={a['date_mono']}  (year,month) 遞增={a['ym_mono']}")
         for i, r in enumerate(res["rows"]):
             rev = r.get("revenue") if i < SHOW_REVENUE_ROWS else "(略)"
-            emit(f"  date={r.get('date')} revenue_year={r.get('revenue_year')} "
-                 f"revenue_month={r.get('revenue_month')} revenue={rev}")
+            emit(f"  date={str(r.get('date'))[:40]} revenue_year={str(r.get('revenue_year'))[:40]} "
+                 f"revenue_month={str(r.get('revenue_month'))[:40]} revenue={str(rev)[:40]}")
     emit("== NOT VERIFIED 清單(本探針不下結論) ==")
     emit("1. 公告時點:FinMind 不提供逐列公告日,無法由此證實")
     emit("2. date 語意是否等於公布月:僅報告上列觀察到的關係,不下結論")
