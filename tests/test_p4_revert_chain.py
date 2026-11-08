@@ -221,6 +221,11 @@ def _rel(file_path) -> str:
 
 def p4_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 Phase 4 P4-1 之前的寫法（無 pair 則原樣；只套一次）。"""
+    # 📌 D2 未來日期守衛（2026-11-08；有意識的接鏈，⛔ 不是漏改）：本批在 `macro_cache_reader.compute_cache_staleness`
+    #   加了一段守衛（被 Z40／Z63／C1 等舊鏈的基底 sha 管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；
+    #   ⛔ 不動本表與 `P4_BASE_SHA`）。
+    from tests.test_d2_staleness_revert_chain import d2stale_revert_for
+    code = d2stale_revert_for(file_path, code)
     rel = _rel(file_path)
     pairs = P4_REVERT_PAIRS.get(rel, ())
     if not pairs:

@@ -153,6 +153,15 @@ def compute_cache_staleness(
     out["as_of"] = _as_of
     out["age_days"] = (_today - _as_of).days
 
+    # D2:資料觀測日晚於 today(未來日期)→ 無法判定新鮮度。
+    # 可能是系統時鐘錯、上游日期壞或資料被污染;絕不能落到下方「age ≤ 門檻 → fresh」
+    # (負的 age_days 永遠 ≤ 門檻,月頻 periods_behind 也 ≤ 0)而被當成最新鮮。
+    # §1 判不出來 → 視為過期;as_of / age_days(負值)照實保留供診斷,日頻與月頻同一出口。
+    if _as_of > _today:
+        out["reason"] = (f"{dataset} 資料日 {_as_of} 晚於今日 {_today},無法判定新鮮度"
+                         f"(時鐘或上游日期異常)→ 視為過期(§1 不假設新鮮)")
+        return out
+
     if _cadence == "monthly":
         _behind, _overdue = monthly_release_status(
             _as_of, indicator=_indicator, today=_today)
