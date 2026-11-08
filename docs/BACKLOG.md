@@ -1987,3 +1987,29 @@
 | **Batch C 整合驗證** | **進行中**（結果待補） | 依 DEC-151 原規劃：端到端負測與對照（`[20,30,40]`／`[20,None,40]`／`[20,30,None]`／`[None,30,40]`／缺整列月份）、非作者 QA、CI Gate。 | 結果未出，不得宣稱完成。 |
 
 不得擅自：新權重／門檻／封頂、改 C1～C3、新獨立性公式、Risk Cap、OneBrain runtime、新來源、UI 版面、改排程、PIT 改動、虛構公告日。最多三項安全工作同時進行；每批仍須最新 GitHub Gate。
+
+
+#### NUI2-C4 補註｜Batch C 整合驗證結論與 C4-D 實作狀態（2026-11-08；只追加，不新增 DEC、不新增 ID）
+
+> ~~上表「Batch C 整合驗證｜進行中（結果待補）」~~（2026-11-08 已更新：Batch C 整合驗證結論與 C4-D 實作狀態已登記，見 BACKLOG `NUI2-C4`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-152）
+> 來源＝AI 整理（③）。**證據限制**：Batch C 為 main `556b335` 上的唯讀驗證，**單組驗證、無第二組、沙箱無 FinMind**。
+
+**A. Batch C 結論**：契約五項在 C4 評分內保持獨立，找不到缺月被當連續加速的路徑；真 0%／負 YoY 與缺值分得開；forward_test 凍結欄位（cohort／stock_id／name／entry_price／factors／frozen_at）不含缺貨分數、格式未變；全 repo 無程式依賴「有效月數<2」字串。
+
+**發現（只登記，不修）**：
+
+| # | 等級 | 內容 | 處置 |
+|---|---|---|---|
+| 1 | 建議；**Decision Gate 候選（投資語意，AI 不得自改）** | 下游把缺值當 0 分：`src/services/fundamental_screener_service.py` 約 389／397 行 `shortage_map` 只取「缺貨分數」，丟掉 `_c4_ok`／`有效訊號數`／`缺值原因`；n_ok=1 的列總分 0，composite 給「缺貨分 50」，`format_shortage_badge('不明顯')` 顯示「缺貨弱」，推播同；凍結流程 `get_ranked_picks` 同源（forward_test 入選名單受影響）；畫面不顯示缺值原因。 | 登記為「缺貨缺值在綜合排序／徽章被當 0」；影響綜合排序語意，需客戶裁示 |
+| 2 | 已知限制→C4-D | 全市場批次路徑 `_batch_finmind` 丟 revenue_year／month，STRONG 恆 0；同股走存活池 C4=20、走批次 C4=12，跨路徑排名不可比，列內無路徑標記。 | C4-D 處理 plumbing |
+| 3 | 建議；Decision Gate 候選 | `_candidate_pool` 用 `classify_trend(yoy_last3)`（末 3 列）篩選，C4 用固定目標三月，視窗不一致。 | 登記為「候選池視窗與 C4 視窗不一致」 |
+| 4 | **NOT VERIFIED，若成立嚴重** | FinMind `date` 語意；若為次月 1 日，C4-D 之前單股契約會 `date_vs_revenue_ym_conflict` 全 FAIL_CLOSED（fail loud）。 | 待 C4-D-real |
+| 5 | 低 | 單股 OpenAPI 備援 ym 由 date 衍生，`month_key_verified` 自證（僅 1 列，無分數影響）。 | 登記 |
+| 6 | 低；Decision Gate 候選 | `SHORTAGE_VERSION` 仍 `shortage_screen_v1`，凍結資料無版本欄，Batch B 前後 cohort 只能靠 frozen_at 區分。 | 登記為「SHORTAGE 版本標記」 |
+| 7 | 低 | 文案：批次候選池 0 檔 note「資料不足 0 檔」原因其實是快照無年增率；miss_reason 不分「無資料」與「缺月」。 | 登記 |
+
+**NOT VERIFIED**：真實 FinMind／OpenAPI、真實公告時點與 10 天延遲是否貼近、通知實際發送、forward_test cron／gsheet 實跑、Streamlit 畫面實際顯示。
+
+**B. C4-D（plumbing）狀態**：**實作完成但尚未合併**（commit `a958849`，branch `c4d-local`，將與本文件同一 PR），待非作者 QA／CI／merge。內容：批次長表在來源提供時多帶 revenue_year／revenue_month（不由 date 補、單欄不帶）；契約新增 `source_month_key_verified` 與 SSOT `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`（`shared/monthly_revenue_month_key.py`），全市場路徑 STRONG 恆 0，直到真實資料驗證＋客戶裁示才翻；date≠ym 改以 ym 為鍵、不再 FAIL_CLOSED 但 verified=False（單股真實形狀下 FAIL_CLOSED→STEADY／PARTIAL，仍不 STRONG；合成 4000 檔該形狀 C4 變動 2610、tier 819）。TWSE／TPEx OpenAPI 批次僅 1 列快照故未 plumb。**以上為施工組自測，QA 結果待補。**
+
+**C. 新增 Decision Gate 候選（皆未裁示，AI 不得自改）**：①「缺貨缺值在綜合排序／徽章被當 0」（發現 1）；②「候選池視窗與 C4 視窗不一致」（發現 3）；③「SHORTAGE 版本標記」（發現 6）。**C4-D-real 仍 blocked**：需合法 token 環境；是否授權 `request_credential` 待客戶決定。

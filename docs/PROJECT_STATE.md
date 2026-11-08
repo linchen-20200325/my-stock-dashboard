@@ -1169,3 +1169,5 @@
 - **現況限制**：全市場批次路徑尚未傳遞可信月份鍵，故**全市場 STRONG 暫時為 0**——這是 fail-closed 過渡狀態（客戶 DEC-152 裁示 3），**不是長期正確排名結果**。合成 3000 檔（seed 20261108，不代表真實比例）顯示 STRONG 963→0、前 50 名換 10 檔（單股路徑換 1 檔）。半邊批次失敗標整池 FAIL_CLOSED 為既有行為，客戶裁示維持。
 - **NOT VERIFIED**：FinMind `TaiwanStockMonthRevenue` 之 `revenue_year`／`revenue_month` 欄位語意與「`date` 可能不同於營收所屬月」僅為客戶轉述（ChatGPT 查閱官方文件），本 repo 沙箱無法連 FinMind、未獨立核實；公告時點資格未驗證；真實資料恢復情形未驗證。
 - **RECOMMENDATION／後續**：C4-D（以既有欄位傳遞可信月份鍵、回溯相容）→ C4-D-real（需合法 token 環境，blocked）；Batch C 整合驗證進行中。詳見 BACKLOG `NUI2-C4`、HANDOFF 最新接手點、DECISIONS DEC-152。未授權新權重／門檻／封頂／新排名例外。
+
+- **2026-11-08 補（Batch C／C4-D）**：Batch C 唯讀驗證（單組、無第二組、沙箱無 FinMind）未發現缺月被當連續加速的路徑；但下游 `fundamental_screener_service` 把缺貨缺值當 0 分入綜合排序／徽章（Decision Gate 候選，需客戶裁示，未修）。C4-D（批次長表帶 revenue_year／month、`BATCH_SOURCE_MONTH_KEY_VERIFIED=False`）已實作於 `c4d-local`（`a958849`），**尚未 QA／合併**；全市場 STRONG 仍恆 0，不得宣稱恢復。細節見 BACKLOG `NUI2-C4`。
