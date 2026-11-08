@@ -77,7 +77,12 @@
 - ~~**D1／D3＝提案，待客戶直接確認**：ChatGPT 建議裁示（D1 以來源觀測日判板塊資金潮汐新鮮度，cron `updated_at` 不可冒充資料日；D3 空抓取分 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 並要求判定證據）**不是客戶逐字裁示**。正式施工（改資料契約／新鮮度門檻／新增狀態 enum）暫停。~~（2026-11-08 已被取代：客戶已直接核准；有意識的更新，不是漏刪；決策者 客戶）
 - **D1／D3＝客戶已於 2026-11-08 核准（DEC-148）**：D1 以可信實際來源觀測日判新鮮度（cron 時間／`fetched_at`／`cached_at`／`metadata.updated_at` 不得冒充資料日；保留 `SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS`）；D3 採 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 三態（與 freshness 分離）。未授權新來源／改門檻／投資公式／Risk Cap／OneBrain runtime／正式 UI Layout。
 - ~~**下一個唯一安全工作**：D1／D3 **唯讀盤點**（呼叫端、來源日期與時間戳欄位、現有狀態 enum），等客戶確認語意；不改程式。~~（2026-11-08 已被取代：客戶已核准 D1／D3；有意識的更新，不是漏刪；決策者 客戶）
-- **下一個唯一安全工作（現行）**：Batch A（D1）→ Batch B（D3）→ Batch C（`fin_trend_score`／`shortage_screener` 資料資格唯讀稽核，不改正式分數）；D1／D3 分開工程 PR；各批 GitHub Gate → 最小施工 → targeted tests → 非作者獨立 QA → 最新 head 原生 CI → squash merge → 文件同步；涉及正式公式／權重／排名資格／Risk Cap 變更須停止走 Decision Gate（DEC-148／DEC-147）。
+~~**下一個唯一安全工作（現行）**：Batch A（D1）→ Batch B（D3）→ Batch C（`fin_trend_score`／`shortage_screener` 資料資格唯讀稽核，不改正式分數）；D1／D3 分開工程 PR；各批 GitHub Gate → 最小施工 → targeted tests → 非作者獨立 QA → 最新 head 原生 CI → squash merge → 文件同步；涉及正式公式／權重／排名資格／Risk Cap 變更須停止走 Decision Gate（DEC-148／DEC-147）。~~（2026-11-08 已被取代：D1 已合併、D3 B1 進行中、Batch C 稽核完成；有意識的更新，不是漏刪；決策者 AI 總管（事實更新））
+- **已合併 #1062（DEC-148）、#1063（D1，main `178615e`）**：板塊資金新鮮度改取 `metadata.last_updated` 觀測日，cron `updated_at` 不再冒充資料日，門檻 4 日不變；舊版 `tab_sector_flow.py` 未動（仍顯示執行時間標籤，改動須客戶核准並更新 z60 指紋，待辦）。
+- **進行中 #1064（D3 B1，Draft，CI 進行中，勿視為已合併）**。D3 B2（consumer／UI：`macro_cache_reader`、`real_canonical`、`_market_blocks`、`calibrate_health_weights.check_inputs_fresh` 對 `FETCH_FAILED` 不放行）待辦。
+- **Batch C 稽核已完成（唯讀，未改任何正式分數；單組 grep、未經第二組驗證，詳見 BACKLOG「NUI2-DATA-D1D3C｜進度註記」）**：`fin_trend_score` 缺值回 0.0 仍進加權；單股 Tab（`section_strategy_conclusion.py`）與 AI prompt（`tab_stock.py`）無 `is_trend_scorable` guard；`shortage_screener` 缺值記 0 分、無 coverage 門檻、`to_row()` 缺值與真 0 不可分。
+- **下一個唯一安全工作（現行）**：#1064 合併後 B2 設計（先盤點 consumer、提最小方案與負測）；其後排序 Batch C「純技術錯誤」修復（單股 Tab／AI prompt 套用既有 `is_trend_scorable`；`to_row` additive 欄位須先查 forward_test 凍結 schema）。**需客戶裁示**：Batch C 涉及公式／權重／排名資格的項目（半缺不重配權、空快照算證據、無 coverage 門檻、全缺仍入榜）。
+- 狀態：三個歷史分支保留；#1038 維持 **Draft／NO MERGE**；#1034 維持 **Draft**。
 - 三個歷史分支全部保留（見 BACKLOG `NUI2-BRANCH-RETENTION-1107`）。
 
 
