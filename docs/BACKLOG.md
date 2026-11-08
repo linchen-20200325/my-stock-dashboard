@@ -1908,5 +1908,22 @@
 
 **當前工程分流**：〔更新註記 2026-11-07 晚：[Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) 已由 #1049（`63d55bad`）合併、Issue 已關閉，不得重派；以下為原文〕Python-only [Issue #1044](https://github.com/linchen-20200325/my-stock-dashboard/issues/1044) object-float exact scalar validation 交 Claude Code；不得與 ChatGPT docs PR 共改 `PROJECT_RULES`／`BACKLOG`／`HANDOFF`。#1038 PIT BLOCK 持續；#1041／#1042／#1043 已合併，不能再當未修 P0。下一主線是五頁有效 Layout/資料契約收斂後安排實際 UI 與 Evidence/Digest 接線，P2 技術債不插隊。
 
-**2026-11-07 晚更新註記**：(1) DEC-146（#1050，`67a7cea5`）已核准五頁頂部兩列導覽方向、不做臨時 B0 五頁抽屜，施工依 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`，**工程尚未啟動**；(2) #1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為**歷史量測時點快照**（非第二套 SSOT）；(3) cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，**真實發布端到端 NOT VERIFIED**，與 #1038 PIT 阻塞（禁止合併）**獨立**。
+**2026-11-07 晚更新註記**：(1) DEC-146（#1050，`67a7cea5`）已核准五頁頂部兩列導覽方向、不做臨時 B0 五頁抽屜，施工依 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`，**工程尚未啟動**〔已更新（2026-11-07 晚）：**已由 #1055 完成並合併**（main `5bd4a7ea`），見下方 `NUI2-TOPNAV-*` 段；此處保留當時記錄〕；(2) #1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為**歷史量測時點快照**（非第二套 SSOT）；(3) cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，**真實發布端到端 NOT VERIFIED**，與 #1038 PIT 阻塞（禁止合併）**獨立**。
 
+### NUI2-TOPNAV｜五頁頂部導覽 Batch 3（#1055，main `5bd4a7ea`）完成與獨立 QA SHOULD-FIX 登記（2026-11-07 晚；補註，只追加）
+
+> 狀態：五頁＋頂部兩列導覽**已合併**（head `da2dfb34`；獨立 QA 與原生 CI 五項全綠；Chromium 153 實測 390×844 最小首屏餘裕 169.4px／Real 175.8px）。以下僅登記 QA 的 SHOULD-FIX 與文件待辦；**不新增 DEC**（沒有新使用者裁示）；**一律不得以降低既有門檻（≥160px、`p2_nav_margin_160`、ui2-browser 測試數門檻）來通過**。真機／WebKit／VoiceOver／TalkBack／Streamlit Cloud CSP／safe-area **仍 NOT VERIFIED**。
+
+| ID | Priority / 狀態 | 來源 QA／內容 | 建議（RECOMMENDATION，非裁示） |
+|---|---|---|---|
+| `NUI2-TOPNAV-VIEWPORT-HARNESS-GAP` | P2 OPEN | 來源 QA：`tests/ui2_viewport/measure_viewport.py::evaluate` 單獨**無法抓**「FAKE/Real 標示被外層容器截斷」與「標示消失」（突變 M2／M7 僅由 browser 測項補位）。 | 找不到 `.ui2-banner`／`.ui2-top1` 即判紅；並量 `.ui2-top1__mode` 的 `scrollWidth > clientWidth`。⚠️ 修改該檔會改變 evidence `source_hash`，需連帶重生 4 份 viewport JSON。 |
+| `NUI2-TOPNAV-BROWSER-TEST-MARGIN` | P3 OPEN | 來源 QA：ui2-browser 測試數目前 41，`.github/workflows/pr-check.yml` CI 門檻 ≥40，**只剩 1 的餘裕**，日後刪／合併一項即紅。 | 新增測試為先；若需調整門檻須走 Gate，**不得為過關而降門檻**。 |
+| `NUI2-TOPNAV-320-LAST-ITEM-MARGIN` | P3 OPEN | 來源 QA：320 寬第 5 項右緣僅 **0.3px** 餘裕。 | 於第二列最右加 `padding-right`／`scroll-padding`；**不得動 `p2_nav_margin_160`**。 |
+| `NUI2-TOPNAV-MOBILE-REAL-NOTE` | P3 OPEN（需 Decision／UI Gate 才可改畫面） | 來源 QA：手機 Real 補充說明（「僅台股與市場位階為真資料」）隱藏（沿用既有行為）；是否在手機顯示另案評估。 | 屬畫面結構異動，先出文字線框草稿再裁示（CLAUDE.md v3 §03-2 ①）；不在本批授權內。 |
+| `NUI2-TOPNAV-SOURCE-HASH-SCOPE` | P3 OPEN | 來源 QA：evidence `source_hash` 只涵蓋 `src/ui2`、`app_ui2.py`、`measure_viewport.py`，**不含** `shared/ui2_contract` 與 `src/services/ui2`，這兩處變動不會讓過期 evidence 轉紅。 | 評估把該兩目錄納入 hash 範圍（會使 4 份 JSON 需重生）。 |
+| `NUI2-TOPNAV-REAL-DEVICE-VERIFY` | P2 OPEN（NOT VERIFIED 項彙總） | iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset 皆未驗。 | 取得實機／雲端環境後逐項補驗；未驗前不得宣稱。 |
+| `NUI2-DOCS-SUPERSEDE-DRAWER-SERIES` | P3 OPEN（待辦；**本批未改這些檔**） | `docs/vnext/NEWUI2_MOBILE_DRAWER_*` 等系列文件應標示「被 DEC-146＋#1055 取代」（現仍描述 Drawer／rail／JS_V4 為現行）。 | 於各檔開頭加取代註記，原文保留不刪。 |
+| `NUI2-GOV-1034-EXTRACT` | P1 OPEN（下一個唯一安全動作；docs-only） | #1034 治理段落抽取：從 main 另開分支只搬該 19 行；PROJECT_RULES §0.4 維持（§0.4 目前僅在 #1034，main 的 PROJECT_RULES 只有 §0.1–0.3），原 §32「三方案 Gate」改 §33、原 §33「巡檢靜默」改 §34（main 的 §32＝對話風險預警）；移除「合併前未生效」字句；訂正 DEC-143／144／145 內「落盤:#1034 … 合併前不視為 main 生效」。 | 須最新 head CI＋非作者 QA；與其他 docs PR 勿同檔競爭。#1038 PIT FAIL 保持不合併。 |
+| `NUI2-BRANCH-RETENTION-1107` | P3 OPEN（紀錄） | 依裁示：`docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107` 暫時全部保留、不建 archive tag（環境代理亦擋 ref 寫入）；`data`、`v2`、`claude/stock-dashboard-handoff-g9dtm0` 必留。 | 日後可建 tag 時再依 DEC-012 條件處理。 |
+
+**既有「五頁工程待施工」類條目**：`NUI2-GH-MEMORY-DATA-GATE` 段尾的更新註記已補「已由 #1055 完成」；「方案 A」須如實註明為 **ChatGPT 建議、非使用者逐字裁示**；QA 判定其在 DEC-146 授權內，使用者可推翻（見 PROJECT_STATE §70.4）。

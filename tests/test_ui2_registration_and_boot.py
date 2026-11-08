@@ -12,7 +12,7 @@ import textwrap
 
 import pytest
 
-from shared.ui2_contract.pages import PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS
+from shared.ui2_contract.pages import PAGE_IDS, PAGE_LABELS, SCENARIO_IDS
 from shared.ui2_contract.text import PREVIEW_BANNER_TEXT
 from tests import test_c3_layering_guard as c3
 from tests.test_macro_v2_tab import TestStreamlitFloorCompatibility as _FloorBase
@@ -146,10 +146,11 @@ def test_boot_has_no_exception_and_preview_banner(at):
     assert PREVIEW_BANNER_TEXT in _blob(at)
 
 
-def test_nav_has_exactly_the_four_pages(at):
+def test_nav_has_exactly_the_five_pages(at):
+    """DEC-146：導覽恰五頁（取代 `..._four_pages`；需求由四頁改五頁）。"""
     nav = at.radio(key="ui2_page")
-    assert list(nav.options) == [PAGE4_LABELS[p] for p in PAGE_IDS]
-    assert list(nav.options) == ["📊 市場", "🎯 標的", "💼 持股", "👤 我的"]
+    assert list(nav.options) == [PAGE_LABELS[p] for p in PAGE_IDS]
+    assert list(nav.options) == ["📊 市場", "🎯 標的", "💼 持股", "👤 我的", "🗂 資料"]
 
 
 @pytest.mark.parametrize("scenario", SCENARIO_IDS)
@@ -160,7 +161,7 @@ def test_every_page_switches_and_renders_in_every_scenario(at, scenario):
         assert not at.exception, f"{page}/{scenario}: {at.exception}"
         blob = _blob(at)
         assert PREVIEW_BANNER_TEXT in blob, f"{page}/{scenario}: 缺 Preview fake 標示"
-        assert PAGE4_LABELS[page] in blob, f"{page}/{scenario}: 缺頁標題"
+        assert PAGE_LABELS[page] in blob, f"{page}/{scenario}: 缺頁標題"
         assert "是否需要行動" in blob and "ui2-cta" in blob      # DEC-129：不強制可見題號「②」
     at.radio(key="ui2_page").set_value(PAGE_IDS[0]).run(timeout=60)
 

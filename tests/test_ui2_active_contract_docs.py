@@ -680,7 +680,7 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
 #: `tests/fixtures/ui2_p3_evidence_baseline.json` 的 sha256。⚠ 重新產生 baseline 的流程（有意識的 evidence 變更才可做）：
 #: ① `python -m tests.test_ui2_p3_evidence_preservation --regen` ② `sha256sum tests/fixtures/ui2_p3_evidence_baseline.json`
 #: ③ 把新值填到下面 ④ PR 描述與 BACKLOG 說明為何 evidence 變了（不得是縮小）。
-_P3_BASELINE_SHA256 = "a8ab54b0d31f78db976ed75cd8a7909562033ce28ce38f9e37f532a200e8ad53"
+_P3_BASELINE_SHA256 = "fbbc8db66830a8b258f5b726cf5578eb038d973ef72922f04d78350c5ac0ebc3"
 
 
 def test_p3_evidence_baseline_file_is_pinned_by_sha256():

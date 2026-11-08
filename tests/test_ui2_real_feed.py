@@ -695,7 +695,8 @@ def test_real_threshold_registered_with_source():
 def test_real_viewport_evidence_passed_and_is_real_mode(name):
     d = _evidence(name)
     assert d["meta"]["feed"] == "real"
-    assert d["summary"]["failed"] == [] and d["summary"]["states"] == 11
+    # DEC-146：五頁 → 2 viewport × (5 頁＋🎯 查一檔) ＋ 手機市場壓力態 1 ＝ 13（舊四頁＝11）
+    assert d["summary"]["failed"] == [] and d["summary"]["states"] == 2 * (len(PAGE_IDS) + 1) + 1
     pages = {(r["viewport_name"], r["page"], r.get("mode")) for r in d["results"]}
     for vp in ("mobile", "desktop"):
         for p in PAGE_IDS:
@@ -729,11 +730,12 @@ def test_real_banner_evaluator_has_teeth():
 def _full_from_evidence(r: dict) -> dict:
     """由證據 JSON 的 mobile 市場頁量測組回 `evaluate()` 需要的 dict（缺的導覽細節以合法值補，只為驗 banner 判定）。"""
     nav = dict(r["nav"])
-    nav.update(labels=list(MV.NAV_LABELS), label_tops=[nav["top"] + 2] * 4, label_lefts=[0, 97, 195, 292],
-               label_heights=[50] * 4, checked_count=1, checked_index=0,
-               marker_contents=['"● "', "none", "none", "none"])
+    nav.update(labels=list(MV.NAV_LABELS), label_tops=[nav["top"] + 40] * 5, label_lefts=[0, 78, 156, 234, 312],
+               label_heights=[44] * 5, checked_count=1, checked_index=0,
+               marker_contents=['"● "', "none", "none", "none", "none"])
     b3 = r["batch3"]
     return {"viewport": r["viewport"], "page": r["page"], "scenario": r["scenario"], "nav": nav,
+            "top_nav": r["top_nav"], "banner_box": r.get("banner_box"),
             "elements": r["elements"], "hscroll": r["hscroll"], "title": r["title"],
             "last_content": {"bottom": r["last_content_bottom"], "left": 14.0},
             "risk": b3["risk"], "first_block_after_l1_top": b3["first_block_after_l1_top"],

@@ -1,4 +1,4 @@
-"""New UI2 Preview 殼：四頁導覽＋派發；開發專用的 Preview 控制僅在 `?ui2_dev=1` 時顯示。
+"""New UI2 Preview 殼：五頁頂部兩列導覽（DEC-146）＋派發；開發專用的 Preview 控制僅在 `?ui2_dev=1` 時顯示。
 
 session key 僅限 `ui2_` 前綴的純 UI 狀態（目前頁、場景、資料來源）；⛔ 寫任何投資狀態 key。
 資料來源（`ui2_feed`）：預設 FAKE（`src.services.ui2.preview_feed`，既有行為不變）；
@@ -7,7 +7,7 @@ Real-data Preview（NUI2-REAL-FEED）＝`src.services.ui2.real_feed`（唯讀；
 
 Preview 控制的去向（Active Contract §6／DEC-130 (c)／UI Correction P1）：
 - 預設（無旗標）**0 個** Preview 控制；預設值＝FAKE／loaded／帳戶預設態（`ui2_` session 預設）。
-- `?ui2_dev=1`：在頁面內容之後、導覽之前畫一個虛線框、標明「🧪 開發／測試工具（非產品內容）」的獨立區塊
+- `?ui2_dev=1`：在頁面內容之後畫一個虛線框、標明「🧪 開發／測試工具（非產品內容）」的獨立區塊
   （不是 expander、不在 sidebar、不新增導覽項、不佔桌機左導覽）。
 - ⛔ `ui2_dev` 只決定「開發面是否顯示」；不是任何登入／授權證據（守衛 `check_ui2_dev_not_auth`、`T_new_9`）。
   帳戶場景只是 FAKE 示意，不是正式 auth contract（`NUI2-AUTH-CONTRACT-GATE`）。
@@ -18,15 +18,14 @@ import streamlit as st
 
 from shared.ui2_contract.pages import (
     ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, FEED_FAKE, FEED_IDS, FEED_REAL,
-    PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS,
+    PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
 )
 from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import get_real_page_vm
 from src.services.ui2.real_feed import read_real_snapshot
 from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_PREVIEW_BANNER_NOTE
-from src.ui2.components.html import banner_html, drawer_account_html
+from src.ui2.components.html import top_status_row_html
 from src.ui2.shell.css import CSS
-from src.ui2.shell.drawer_js import render_drawer_script
 from src.ui2.views import VIEWS
 
 KEY_PAGE = "ui2_page"
@@ -95,36 +94,23 @@ def run() -> None:
         vm = get_preview_page_vm(st.session_state[KEY_PAGE], st.session_state[KEY_SCENARIO],
                                  mode=st.session_state.get(KEY_TARGET_MODE),
                                  account=st.session_state[KEY_ACCOUNT])
-    # 單行標示放頁面最頂（導覽之前）：FAKE＝示意資料、Real＝Real-data Preview（非正式 production default）。
-    if vm.banner_text:
-        note = PREVIEW_BANNER_NOTE if vm.is_fake else REAL_PREVIEW_BANNER_NOTE
-        st.markdown(banner_html(vm.banner_text, note, note_hidden_on_mobile=not vm.is_fake), unsafe_allow_html=True)
+    # 頂部兩列導覽（fixed；DOM 順序＝Tab 順序最先）。第一列含資料模式標示（FAKE＝示意資料、Real＝Real-data Preview（非正式 production default））。
+    _render_nav(vm)
     VIEWS[st.session_state[KEY_PAGE]](vm)
     if dev:
         _render_dev_surface(real)
-    _render_nav()
 
 
-#: ☰ 外層標籤輪替（降級用）：切頁後外層換標籤 → React 重建 checkbox → 收合。JS 被擋時唯一的自動收合路徑。
-_WRAP_TAGS = ("div", "section", "article", "aside")
-#: ☰＋遮罩（固定字串；`role=switch`＋原生 checked；⛔ 靜態 aria-expanded、⛔ aria-controls；☰ 符號 aria-hidden）。
-#: 殼內唯一的 raw `<input>`（守衛 `tests/test_ui2_drawer_js_guard.py`）。
-_TOGGLE_HTML = ('<input type="checkbox" id="ui2dr" class="ui2-dr-toggle" role="switch" aria-label="主選單">'
-                '<label for="ui2dr" class="ui2-dr-btn" aria-hidden="true">☰</label>'
-                '<label for="ui2dr" class="ui2-dr-scrim" aria-hidden="true"></label>')
+def _render_nav(vm) -> None:
+    """DEC-146 頂部兩列導覽（桌機與手機同一份 DOM；⛔ 左 rail、⛔ Drawer、⛔ JS）。
 
-
-def _render_nav() -> None:
-    """W-1 導覽（DEC-134／DEC-137）：手機＝左上 ☰＋左側抽屜（預設收合）、桌機＝左側固定 rail；同一份 DOM、只靠 CSS 換呈現。
-
-    放在內容之後（⛔ 在內容前新增 element container：會吃掉第一屏 ≥160px 餘裕）；視覺位置由 `position:fixed` 決定。
+    第一列＝Active Sheet｜資料模式標示（FAKE／Real-data Preview）｜帳號入口狀態（Sheet／帳號為固定占位的 Capability `⬜ 尚未提供`，非互動）；第二列＝五頁主導覽。
     用 `st.container(key=...)`（`st-key-ui2_nav` class）當唯一 CSS 錨點；元件仍是 `st.radio`（key=`ui2_page`；
-    原生 radiogroup／checked＝當前頁語意；AppTest 可切頁）。⛔ 新增 session key；帳戶摘要固定占位（不讀 `ui2_account`）。
+    原生 radiogroup／checked＝當前頁語意、方向鍵切換、Tab 進出；AppTest 可切頁）。⛔ 新增 session key；
+    第一列不讀 `ui2_account`／`ui2_dev`／query。位置由 CSS `position:fixed` 決定（手機第二列只在自身容器內橫向捲動）。
     """
-    tag = _WRAP_TAGS[PAGE_IDS.index(st.session_state[KEY_PAGE])]
-    st.markdown(f'<{tag} class="ui2-dr-wrap">{_TOGGLE_HTML}</{tag}>', unsafe_allow_html=True)
     with st.container(key=KEY_NAV):
+        note = (PREVIEW_BANNER_NOTE if vm.is_fake else REAL_PREVIEW_BANNER_NOTE) if vm.banner_text else ""
+        st.markdown(top_status_row_html(vm.banner_text, note, note_hidden_on_mobile=not vm.is_fake), unsafe_allow_html=True)
         st.radio("導覽", PAGE_IDS, key=KEY_PAGE, horizontal=True,
-                 format_func=lambda p: PAGE4_LABELS[p], label_visibility="collapsed")
-        st.markdown(drawer_account_html(), unsafe_allow_html=True)
-    render_drawer_script()
+                 format_func=lambda p: PAGE_LABELS[p], label_visibility="collapsed")

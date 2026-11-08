@@ -22,7 +22,7 @@ from shared.ui2_contract import text as T
 from shared.ui2_contract.models import (
     CapabilityState, CtaVM, FieldState, FieldVM, FreshnessInfo, JudgementState, status_prefixes_for,
 )
-from shared.ui2_contract.pages import PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS
+from shared.ui2_contract.pages import PAGE4_LABELS, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS
 from src.services.ui2.preview_feed import get_preview_page_vm
 from src.ui2.components import html as H
 from src.ui2.shell.css import CSS
@@ -35,9 +35,13 @@ APP_SRC = (ROOT / "src" / "ui2" / "shell" / "app.py").read_text(encoding="utf-8"
 # ════════════════════════════════════════════════════════════════════
 # 1. W-1 導覽（靜態契約；真位置由瀏覽器量測證明）
 # ════════════════════════════════════════════════════════════════════
-def test_w1_nav_is_exactly_four_fixed_pages_no_fifth():
-    assert len(PAGE_IDS) == 4
-    assert [PAGE4_LABELS[p] for p in PAGE_IDS] == list(MV.NAV_LABELS) == ["📊 市場", "🎯 標的", "💼 持股", "👤 我的"]
+def test_w1_nav_is_exactly_five_top_pages():
+    """DEC-146（取代舊 `test_w1_nav_is_exactly_four_fixed_pages_no_fifth`；需求本來就由四頁改五頁）：UI2 導覽恰五頁、順序固定，
+    第五頁 `🗂 資料` 為 **UI2 自有登錄**（`shared/ui2_contract/pages.py`），⛔ 擴充舊 UI 共用的 `shared/ia_nav4`（仍固定四頁）。"""
+    from shared import ia_nav4
+    assert len(PAGE_IDS) == 5
+    assert [PAGE_LABELS[p] for p in PAGE_IDS] == list(MV.NAV_LABELS) == ["📊 市場", "🎯 標的", "💼 持股", "👤 我的", "🗂 資料"]
+    assert tuple(PAGE4_LABELS) == PAGE_IDS[:4] and len(ia_nav4.PAGE4_LABELS) == 4      # 舊四頁 SSOT 未被擴充
 
 
 def test_w1_nav_is_keyed_container_with_ui2_prefixed_radio():
@@ -45,90 +49,102 @@ def test_w1_nav_is_keyed_container_with_ui2_prefixed_radio():
     assert 'KEY_NAV = "ui2_nav"' in APP_SRC and "st.container(key=KEY_NAV)" in APP_SRC
     assert 'KEY_PAGE = "ui2_page"' in APP_SRC and "key=KEY_PAGE" in APP_SRC
     for forbidden in ("st.sidebar", "st.navigation", "st.tabs(", "st.page_link", "st.Page("):
-        assert forbidden not in APP_SRC, f"導覽不得改用 {forbidden}（第五頁／多頁路由風險）"
+        assert forbidden not in APP_SRC, f"導覽不得改用 {forbidden}（多頁路由風險）"
 
 
-def _css_block(media: str) -> str:
-    m = re.search(re.escape(media) + r"\s*\{(.*?)\n\}", CSS, re.S)
-    assert m, f"CSS 缺 {media} 區塊"
-    return m.group(1)
+def _nav_css(css: str = CSS) -> str:
+    return css[css.index("/* ── DEC-146"):css.index("/* ── Batch 3")]
 
 
-def check_mobile_drawer_css(css: str) -> list[str]:
-    """D-1（DEC-134／DEC-137；取代舊 `test_w1_mobile_nav_is_bottom_fixed_53px`）：手機導覽＝左上 ☰＋左側抽屜。
-    改寫為**等價或更嚴格**：仍鎖 `position:fixed`、內容底部留白 5rem；新增鎖「⛔ 底部固定 53px 主導覽」「收合態在視窗外且
-    hidden」「☰ 貼 (0,0)、44×44、占既有 2.75rem（不新增位移）」。不再覆蓋的舊斷言：手機導覽 `bottom:0;height:53px`（DEC-134 取代）。"""
+def check_top_nav_css(css: str) -> list[str]:
+    """DEC-146（取代舊 `check_mobile_drawer_css`／左 rail 守衛）：頂部兩列導覽的 CSS 契約。
+    等價或更嚴：仍鎖 `position:fixed`、手機內容底部保留 5rem、safe-area `env()`、reduced-motion 無動畫依賴；
+    新增鎖「頂端 top:0／左右貼齊」「第二列只在自身容器橫向捲動」「觸控目標 44px」「⛔ 左 rail／Drawer／☰／底部固定 53px 殘留」
+    「讓位 padding-top 由 --ui2-nav-h 計算（⛔ 固定 2.75rem 舊保留帶）」。不再覆蓋的舊斷言（需求改變）：左側 rail／抽屜／☰ 的全部規則。"""
     bad = []
-    m = re.search(re.escape("@media (max-width:768px)") + r"\s*\{(.*?)\n\}", css, re.S)
-    block = m.group(1) if m else ""
-    if not block:
-        bad.append("缺手機 @media 區塊")
-    if re.search(r"\.st-key-ui2_nav\{[^}]*bottom:0;height:\d+px", css) or "height:53px" in css:
-        bad.append("手機導覽被放回底部固定列（DEC-134 已取代）")
-    if ".st-key-ui2_nav{position:fixed;" not in css:
-        bad.append("導覽基礎規則不是 position:fixed")
-    if ".st-key-ui2_nav{z-index:999995;top:0;left:0;bottom:0;width:min(82vw,320px);box-sizing:border-box;" not in block:
-        bad.append("抽屜不是左側 min(82vw,320px)")
-    if "transform:translateX(-105%);visibility:hidden" not in block:
-        bad.append("收合態抽屜未移出視窗／未 hidden")
-    if ".stApp:has(.ui2-dr-toggle:checked) .st-key-ui2_nav{transform:none;visibility:visible" not in block:
-        bad.append("☰ 勾選時抽屜不展開")
-    if "padding-bottom:5rem" not in block:
-        bad.append("內容底部保留量 5rem 消失")
-    if ".ui2-dr-toggle{position:fixed;top:0;left:0;width:44px;height:44px;" not in css:
-        bad.append("☰ checkbox 不在 (0,0) 44×44")
-    if ".ui2-dr-btn{position:fixed;top:0;left:0;" not in css or "min-height:44px;min-width:44px" not in css:
-        bad.append("☰ 按鈕不在 (0,0) 或小於 44×44")
-    if css.count("padding-top:") != css.count("padding-top:4rem") + css.count("padding-top:2.75rem") + \
-            css.count("padding-top:.75rem") + css.count("padding-top:3.6rem"):
-        bad.append("出現新的 padding-top 位移（☰ 必須占既有 2.75rem）")
-    if ".block-container{padding-top:2.75rem !important" not in css:
-        bad.append("頂部保留帶 2.75rem 被改動")
+    nav = re.sub(r"/\*.*?\*/", "", _nav_css(css), flags=re.S) if "/* ── DEC-146" in css and "/* ── Batch 3" in css else ""
+    if not nav:
+        return ["缺 DEC-146 導覽區段"]
+    if ".st-key-ui2_nav{position:fixed;top:0;left:0;right:0;" not in nav:
+        bad.append("導覽不是 fixed 且貼齊視窗頂端左右")
+    if "overflow-x:auto" not in nav or "flex-wrap:nowrap" not in nav:
+        bad.append("第二列未設為自身容器內橫向捲動（overflow-x:auto＋nowrap）")
+    if "height:44px" not in nav:
+        bad.append("第二列觸控目標小於 44px")
+    if 'p::before{content:"● "' not in nav or "label:has(input:checked){font-weight:700;border-bottom-color:currentColor}" not in nav:
+        bad.append("選中態缺 ● 符號／粗體／底線（顏色不是唯一載體）")
+    if "calc(var(--ui2-nav-h)" not in css or "padding-top:2.75rem" in css:
+        bad.append("內容讓位不是由 --ui2-nav-h 計算（或殘留舊 2.75rem 保留帶）")
+    if "padding-bottom:5rem" not in css:
+        bad.append("手機內容底部保留量 5rem 消失")
+    if "env(safe-area-inset-bottom" not in css or "env(safe-area-inset-left" not in nav:
+        bad.append("safe-area 不再套用")
+    if "min-width:769px" in nav and "flex:1 1 0" not in nav:
+        bad.append("桌機五項未平分寬度")
+    if "@media (prefers-reduced-motion:reduce){.st-key-ui2_nav,.st-key-ui2_nav *{transition:none !important;animation:none !important" not in nav:
+        bad.append("缺 prefers-reduced-motion 規則（Streamlit 1.56 BaseWeb 內部元件有 transition）")
+    if re.search(r"transition\s*:\s*(?!none)|animation\s*:\s*(?!none)", nav):
+        bad.append("導覽出現動畫宣告（只准 reduced-motion 內的 none）")
+    for dead in ("translateX", "ui2-dr", "padding-left:12.5rem", "width:11rem", "height:53px", "bottom:0;height"):
+        if dead in css:
+            bad.append(f"殘留舊 Drawer／rail／底部列規則：{dead}")
     return bad
 
 
-def test_w1_mobile_nav_is_left_drawer_not_bottom_fixed():
-    assert check_mobile_drawer_css(CSS) == []
+def test_w1_top_nav_css_contract():
+    assert check_top_nav_css(CSS) == []
 
 
 @pytest.mark.parametrize("name,mut", [
-    ("放回底部 53px", lambda c: c.replace("@media (max-width:768px){\n", "@media (max-width:768px){\n  .st-key-ui2_nav{left:0;right:0;bottom:0;height:53px}\n", 1)),
-    ("收合態未移出", lambda c: c.replace("transform:translateX(-105%);visibility:hidden", "transform:none;visibility:visible")),
-    ("☰ 舊 8px 案", lambda c: c.replace(".ui2-dr-toggle{position:fixed;top:0;left:0;", ".ui2-dr-toggle{position:fixed;top:8px;left:8px;")),
-    ("頂部保留量放大", lambda c: c.replace(".block-container{padding-top:2.75rem", ".block-container{padding-top:3.25rem")),
     ("非 fixed", lambda c: c.replace(".st-key-ui2_nav{position:fixed;", ".st-key-ui2_nav{position:static;")),
-    ("底部留白消失", lambda c: c.replace("  .block-container{padding-bottom:5rem !important}\n}", "}")),
+    ("第二列不可橫向捲動", lambda c: c.replace("overflow-x:auto;overflow-y:hidden", "overflow-x:visible;overflow-y:hidden")),
+    ("觸控目標縮小", lambda c: c.replace("height:44px", "height:30px")),
+    ("選中態拔掉底線", lambda c: c.replace("font-weight:700;border-bottom-color:currentColor", "font-weight:700")),
+    ("拔掉 ● 符號", lambda c: c.replace('p::before{content:"● "', 'p::before{content:""')),
+    ("讓位改回固定保留帶", lambda c: c.replace("padding-top:calc(var(--ui2-nav-h)", "padding-top:2.75rem;x:calc(var(--ui2-nav-h)")),
+    ("手機底部留白消失", lambda c: c.replace("@media (max-width:768px){.block-container{padding-bottom:5rem !important}}", "")),
+    ("safe-area 拔掉", lambda c: c.replace("env(safe-area-inset-left", "xenv(safe-area-inset-lx")),
+    ("殘留左 rail", lambda c: c.replace("/* ── Batch 3", ".block-container{padding-left:12.5rem}\n/* ── Batch 3", 1)),
+    ("加回 Drawer 動畫", lambda c: c.replace(".st-key-ui2_nav{position:fixed;", ".st-key-ui2_nav{transition:transform .2s;position:fixed;")),
+    ("拔掉 reduced-motion 規則", lambda c: c.replace("@media (prefers-reduced-motion:reduce){.st-key-ui2_nav,.st-key-ui2_nav *{transition:none", "@media (prefers-reduced-motion:no-preference){.st-key-ui2_nav,.st-key-ui2_nav *{transition:none")),
+    ("桌機不平分", lambda c: c.replace("{flex:1 1 0;min-width:0}", "{flex:0 0 auto}")),
 ])
-def test_w1_mobile_drawer_css_guard_has_teeth(name, mut):
+def test_w1_top_nav_css_guard_has_teeth(name, mut):
     m = mut(CSS)
     assert m != CSS, name
-    assert check_mobile_drawer_css(m), name
-
-
-def test_w1_desktop_nav_is_left_column():
-    block = _css_block("@media (min-width:769px)")
-    assert ".st-key-ui2_nav{top:0;left:0;bottom:0;" in block
-    assert 'flex-direction:column' in block                      # 四項垂直排列
-    assert "padding-left:12.5rem" in block                       # 內容讓出左欄，不被擠壓／遮住
-    assert "width:11rem" in block                                # rail 176px（DEC-137：不變）
-    assert ".ui2-dr-btn,.ui2-dr-scrim,.ui2-dr-toggle{display:none !important}" in block   # 桌機無 ☰／遮罩（⛔ 第二個主導覽入口）
+    assert check_top_nav_css(m), name
 
 
 def test_w1_current_page_is_marked_beyond_color():
-    """當前頁：粗體＋『● 』符號前綴＋色條（border，非僅文字色）；原生 radio `checked` 為語意狀態。"""
-    assert 'p::before{content:"● "' in CSS
-    assert "label:has(input:checked){font-weight:700}" in CSS
-    # DEC-137：手機抽屜與桌機 rail 皆為左色條（舊手機底部列為上色條；不再覆蓋的舊斷言：`border-top-color`）
-    for media in ("@media (max-width:768px)", "@media (min-width:769px)"):
-        assert "label:has(input:checked){border-left-color:currentColor}" in _css_block(media), media
+    """當前頁：粗體＋『● 』符號前綴＋底線（border-bottom，非僅文字色）；原生 radio `checked` 為語意狀態。"""
+    nav = _nav_css()
+    assert 'p::before{content:"● "' in nav
+    assert "label:has(input:checked){font-weight:700;border-bottom-color:currentColor}" in nav
 
 
 def test_w1_nav_css_does_not_depend_on_streamlit_internal_classes():
-    nav_css = re.sub(r"/\*.*?\*/", "", CSS[CSS.index("/* ── W-1"):], flags=re.S)     # 註解可提及，規則不可依賴
+    nav_css = re.sub(r"/\*.*?\*/", "", _nav_css(), flags=re.S)     # 註解可提及，規則不可依賴
     assert "emotion" not in nav_css and "data-baseweb" not in nav_css and "stRadioOption" not in nav_css, \
         "導覽 CSS 依賴 Streamlit 內部 class 會在 1.56／1.59 間失效"
     for internal in ("stSidebar", "stToolbar", "stMain", "stElementContainer", "stVerticalBlock"):   # D-4 加嚴（DEC-137）
         assert internal not in nav_css, internal
+
+
+def test_w1_top_row_is_fixed_placeholder_not_login():
+    """第一列 Active Sheet／帳號＝固定占位（Capability `⬜ 尚未提供`）：⛔ 讀 session／query／帳戶、⛔ 輸入參數影響其內容、⛔ 互動元素。"""
+    base = H.top_status_row_html()
+    assert base.count(T.TEXT_NOT_PROVIDED) == 2 and 'data-axis="capability"' in base
+    for bad in ("<button", "<input", "<a ", "href=", "onclick", "已登入", "signed"):
+        assert bad not in base, bad
+    # 模式標示併入第一列時，Sheet／帳號兩個占位不變
+    withb = H.top_status_row_html(T.PREVIEW_BANNER_TEXT, T.PREVIEW_BANNER_NOTE)
+    assert withb.count(T.TEXT_NOT_PROVIDED) == 2 and T.PREVIEW_BANNER_TEXT in withb and T.PREVIEW_BANNER_NOTE in withb
+    import ast
+    import inspect
+    import textwrap
+    fn = ast.parse(textwrap.dedent(inspect.getsource(H.top_status_row_html))).body[0]
+    names = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)} | {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+    assert not names & {"st", "session_state", "query_params", "ui2_account", "ui2_dev"}, names      # 只吃參數，⛔ 讀任何狀態
 
 
 def test_w1_page_switch_still_works_via_app_test():
@@ -342,20 +358,21 @@ def test_first_screen_has_the_four_questions_in_order(page):
 
 
 def _good_mobile() -> dict:
-    """DEC-137 手機抽屜收合態（真實量測形狀：抽屜在視窗外、hidden；☰ 在 (0,0) 44×44；底部保留線 791）。"""
+    """DEC-146 手機頂部兩列導覽（真實量測形狀：fixed 貼齊頂端左右、第一列兩行 40px＋第二列 44px＋邊線＝導覽底緣 85；底部保留線 791）。"""
     return {
         "viewport": {"w": 390, "h": 844},
-        "nav": {"top": 0.0, "bottom": 844.0, "left": -335.9, "right": -1.6, "position": "fixed", "visibility": "hidden",
-                "labels": list(MV.NAV_LABELS), "label_tops": [57.6, 105.6, 153.6, 201.6], "label_lefts": [-323.9] * 4,
-                "checked_count": 1, "checked_index": 0, "marker_contents": ['"● "', '""', '""', '""']},
-        "drawer": {"toggle": {"top": 0.0, "bottom": 44.0, "left": 0.0, "right": 44.0, "width": 44.0, "height": 44.0,
-                              "position": "fixed", "display": "inline-block"},
-                   "page_radiogroups": 1, "bottom_fixed_navs": 0, "open": False},
-        "elements": [{"q": q, "text": q, "top": 100.0 + i * 60, "bottom": 150.0 + i * 60, "left": 14.0, "right": 376.0,
+        "nav": {"top": 0.0, "bottom": 85.0, "left": 0.0, "right": 390.0, "width": 390.0, "position": "fixed", "visibility": "visible",
+                "labels": list(MV.NAV_LABELS), "label_tops": [40.0] * 5, "label_lefts": [0.0, 78.0, 156.0, 234.0, 312.0],
+                "label_heights": [44.0] * 5,
+                "checked_count": 1, "checked_index": 0, "marker_contents": ['"● "', '""', '""', '""', '""']},
+        "top_nav": {"page_radiogroups": 1, "bottom_fixed_navs": 0, "drawer_dom": 0, "rail_padding": False,
+                    "group": {"overflow_x": "auto", "scroll_w": 400.0, "client_w": 390.0, "last_right": 400.0,
+                              "last_left_after_scroll": 322.0, "last_right_after_scroll": 390.0}},
+        "elements": [{"q": q, "text": q, "top": 130.0 + i * 60, "bottom": 180.0 + i * 60, "left": 14.0, "right": 376.0,
                       "height": 50.0, "width": 362.0} for i, q in enumerate(MV.FIRST_SCREEN_QS)],
         "hscroll": {"doc": {"scrollWidth": 390, "clientWidth": 390}, "main": {"scrollWidth": 390, "clientWidth": 390},
-                    "qa_clipped": False},
-        "title": {"top": 60.0, "bottom": 90.0, "banner_bottom": 55.0, "qa_top": 95.0},
+                    "qa_clipped": False, "top1_clipped": False},
+        "title": {"top": 90.0, "bottom": 120.0, "banner_bottom": 38.0, "qa_top": 125.0},
         "last_content": {"bottom": 740.0, "left": 14.0},
     }
 
@@ -363,13 +380,15 @@ def _good_mobile() -> dict:
 def _good_desktop() -> dict:
     m = _good_mobile()
     m["viewport"] = {"w": 1440, "h": 900}
-    m["nav"].update(top=0.0, bottom=900.0, left=0.0, right=176.0, label_tops=[64.0, 102.0, 141.0, 180.0],
-                    label_lefts=[0.0] * 4, visibility="visible")
-    m["drawer"]["toggle"].update(display="none", top=0.0, bottom=0.0, left=0.0, right=0.0, width=0.0, height=0.0)
-    for e in m["elements"]:
-        e["left"] = 200.0
+    m["nav"].update(top=0.0, bottom=73.0, left=0.0, right=1440.0, width=1440.0, label_tops=[29.0] * 5,
+                    label_lefts=[0.0, 288.0, 576.0, 864.0, 1152.0])
+    m["top_nav"]["group"] = {"overflow_x": "auto", "scroll_w": 1440.0, "client_w": 1440.0, "last_right": 1440.0,
+                             "last_left_after_scroll": 1152.0, "last_right_after_scroll": 1440.0}
+    m["title"] = {"top": 81.0, "bottom": 111.0, "banner_bottom": 22.0, "qa_top": 115.0}
+    for i, e in enumerate(m["elements"]):
+        e.update(top=120.0 + i * 60, bottom=170.0 + i * 60, left=200.0)
     m["hscroll"] = {"doc": {"scrollWidth": 1440, "clientWidth": 1440}, "main": {"scrollWidth": 1440, "clientWidth": 1440},
-                    "qa_clipped": False}
+                    "qa_clipped": False, "top1_clipped": False}
     m["last_content"] = {"bottom": 880.0, "left": 200.0}
     return m
 
@@ -408,47 +427,87 @@ def test_evaluator_has_teeth_horizontal_scroll():
     assert "no_horizontal_scroll" in _mut(_good_mobile, lambda m: m["hscroll"].update(qa_clipped=True))
 
 
-def test_evaluator_has_teeth_nav_not_bottom_fixed():
-    """D-7（DEC-137 改寫；等價或更嚴格）：舊牙齒「導覽不在底部」改為「導覽被放回底部／收合態仍在畫面上」必紅，
-    另加 ☰ 位置／大小、雙主導覽、桌機出現 ☰、缺量測鍵。不再覆蓋的舊斷言：手機導覽必須貼底 53px、四格同列（DEC-134 取代）。"""
-    back_to_bottom = lambda m: (m["nav"].update(top=791.0, bottom=844.0, left=0.0, right=390.0, visibility="visible",   # noqa: E731
-                                                label_tops=[792.0] * 4),
-                                m["drawer"].update(bottom_fixed_navs=1))
-    assert "nav_fixed_four" in _mut(_good_mobile, back_to_bottom)
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["drawer"].update(bottom_fixed_navs=1))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"].update(position="static"))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"].update(right=300.0))               # 收合態仍在畫面上
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"].update(visibility="visible"))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"].update(label_tops=[792, 792, 840, 840]))
-    assert "nav_fixed_four" in _mut(_good_desktop, lambda m: m["nav"].update(label_tops=[64.0] * 4))  # 桌機未垂直
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["drawer"]["toggle"].update(top=8.0, bottom=52.0))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["drawer"]["toggle"].update(width=30.0, height=30.0))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["drawer"].update(toggle=None))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["drawer"].update(page_radiogroups=2))      # 雙主導覽
-    assert "nav_fixed_four" in _mut(_good_desktop, lambda m: m["drawer"]["toggle"].update(display="inline-block"))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m.pop("drawer"))                              # 缺量測鍵＝紅
-    assert "first_screen_above_nav" in _mut(_good_mobile, lambda m: m["elements"][0].update(top=20.0))   # 壓到 ☰
+def test_evaluator_has_teeth_top_five_nav():
+    """DEC-146（取代 `test_evaluator_has_teeth_nav_not_bottom_fixed`／`..._fifth_page`；需求由左 Drawer／rail 四頁改頂部五頁）：
+    等價或更嚴——仍鎖：導覽非 fixed、底部固定主導覽、雙主導覽、桌機未同列、缺量測鍵、checked≠1、項目數；
+    新增鎖：未貼齊頂端左右、☰／Drawer／左 rail 殘留、觸控目標過小、手機第二列不可捲或第 5 項不可達、桌機五項未全可見。
+    不再覆蓋的舊斷言（Drawer 不存在）：收合態在視窗外且 hidden、☰ (0,0) 44×44、四項垂直排列。"""
+    K = "nav_fixed_five_top"
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(position="static"))
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"].update(bottom_fixed_navs=1))               # 導覽放回底部
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"].update(page_radiogroups=2))                # 雙主導覽
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"].update(drawer_dom=1))                      # ☰／Drawer 殘留
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"].update(rail_padding=True))                 # 左 rail 讓位殘留
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(top=12.0))                              # 未貼齊頂端
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(width=300.0))                           # 未貼齊左右
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(label_tops=[40.0, 40.0, 88.0, 88.0, 88.0]))   # 五項不同列
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(label_heights=[44.0, 44.0, 30.0, 44.0, 44.0]))  # 觸控目標過小
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"]["group"].update(overflow_x="hidden"))      # 手機第二列不可捲
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"]["group"].update(last_right_after_scroll=470.0))  # 第 5 項捲到底仍不可達
+    assert K in _mut(_good_mobile, lambda m: m["top_nav"]["group"].update(last_left_after_scroll=-20.0))
+    assert K in _mut(_good_desktop, lambda m: m["top_nav"]["group"].update(scroll_w=1700.0))         # 桌機需捲動＝五項未全可見
+    assert K in _mut(_good_desktop, lambda m: m["top_nav"]["group"].update(last_right=1500.0))
+    assert K in _mut(_good_mobile, lambda m: m.pop("top_nav"))                                       # 缺量測鍵＝紅
+    assert K in _mut(_good_mobile, lambda m: m["nav"]["labels"].append("⚙ 設定"))                    # 第六頁
+    assert K in _mut(_good_mobile, lambda m: m["nav"]["labels"].pop())                               # 少一頁
+    assert K in _mut(_good_mobile, lambda m: m["nav"].update(checked_count=2))
+    # 頂部導覽遮住第一屏（含主 CTA）
+    assert "first_screen_above_nav" in _mut(_good_mobile, lambda m: m["elements"][3].update(top=60.0))
+    assert "first_screen_above_nav" in _mut(_good_desktop, lambda m: m["elements"][0].update(top=40.0))
+    assert "first_screen_above_nav" in _mut(_good_mobile, lambda m: m["elements"][3].update(bottom=800.0))
 
 
-def test_evaluator_has_teeth_fifth_page():
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"]["labels"].append("⚙ 設定"))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"]["labels"].pop())
+def test_evaluator_has_teeth_top_row_clipped():
+    assert "no_horizontal_scroll" in _mut(_good_mobile, lambda m: m["hscroll"].update(top1_clipped=True))
 
 
-def test_evaluator_has_teeth_current_marked_by_color_only():
-    assert "nav_current_marked_not_by_color_only" in _mut(
-        _good_mobile, lambda m: m["nav"].update(marker_contents=['""'] * 4))
-    assert "nav_fixed_four" in _mut(_good_mobile, lambda m: m["nav"].update(checked_count=2))
+def _banner_box(**kw):
+    b = {"height": 14.0, "lineHeight": 14.4, "fontSize": 12.0, "top": 6.0, "bottom": 20.0, "left": 12.0, "right": 300.0,
+         "clipped": False, "row_top": 0.0, "row_bottom": 40.0}
+    b.update(kw)
+    return b
 
 
-def test_evaluator_has_teeth_content_hidden_under_nav():
-    assert "content_not_covered_by_nav" in _mut(_good_mobile, lambda m: m["last_content"].update(bottom=830.0))
-    assert "content_not_covered_by_nav" in _mut(_good_desktop, lambda m: m["last_content"].update(left=100.0))
+def _p1_banner_fails(**kw) -> list[str]:
+    m = _good_mobile()
+    m.update(page="p4_market", banner_text="示意資料（FAKE）", banner_box=_banner_box(**kw))
+    out = {t["id"]: [] for t in MV.THRESHOLDS}
+    MV._evaluate_p1(m, out)
+    return out["p1_banner_single_line"]
+
+
+def test_banner_in_first_row_equivalent_judgement_has_teeth():
+    """DEC-146：標示併入第一列後，`p1_banner_single_line` 改為『位於第一列內、單行、未截斷、未超出視窗』的等價判定；
+    把標示移走／截斷／折行／超出視窗必紅（不是放寬）。"""
+    assert _p1_banner_fails() == []
+    assert _p1_banner_fails(top=50.0, bottom=64.0)                    # 移到第一列之外（例如又變回獨立一行）
+    assert _p1_banner_fails(top=-8.0, bottom=6.0)                     # 跑到第一列之上
+    assert _p1_banner_fails(clipped=True)                             # 截斷
+    assert _p1_banner_fails(height=30.0)                              # 折成兩行
+    assert _p1_banner_fails(right=420.0)                              # 超出視窗右緣
+    m = _good_mobile()
+    m.update(page="p4_market", banner_text="示意資料（FAKE）")        # 有標示文字卻缺量測
+    out = {t["id"]: [] for t in MV.THRESHOLDS}
+    MV._evaluate_p1(m, out)
+    assert out["p1_banner_single_line"]
+
+
+def test_real_banner_in_first_row_judgement_has_teeth():
+    from shared.ui2_contract.text import REAL_PREVIEW_BANNER_TEXT
+    base = _good_mobile()
+    base.update(feed="real", banner_text=REAL_PREVIEW_BANNER_TEXT, banner_box=_banner_box())
+    assert "real_feed_banner_on_top" not in _failing(base)
+    for kw in ({"top": 50.0, "bottom": 64.0}, {"clipped": True}):
+        m = copy.deepcopy(base)
+        m["banner_box"].update(kw)
+        assert "real_feed_banner_on_top" in _failing(m), kw
 
 
 def test_evaluator_has_teeth_title_overlap():
     assert "no_title_overlap" in _mut(_good_mobile, lambda m: m["title"].update(top=40.0))
     assert "no_title_overlap" in _mut(_good_mobile, lambda m: m["title"].update(qa_top=80.0))
+    assert "no_title_overlap" in _mut(_good_mobile, lambda m: m["title"].update(top=60.0, banner_bottom=30.0))   # 標題被頂部導覽（底緣 85）遮住
+    assert "no_title_overlap" in _mut(_good_desktop, lambda m: m["title"].update(top=50.0, banner_bottom=22.0))
 
 
 # ════════════════════════════════════════════════════════════════════

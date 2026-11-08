@@ -6,7 +6,13 @@
     python -m tests.ui2_viewport.measure_viewport --url http://localhost:8501 --out /tmp/x   # 量既有 server
     python -m tests.ui2_viewport.measure_viewport --feed real --shots all --out docs/vnext/newui2_realfeed  # Real-data Preview
 
-對 `streamlit run app_ui2.py` 於 390×844（手機）與 1440×900（桌機），四頁 ×（cold／loaded／missing／
+DEC-146（2026-11-07）：導覽改為**頂部兩列五頁**（第一列＝Active Sheet｜FAKE／Real 模式標示｜帳號；第二列＝五頁 radiogroup；
+⛔ Drawer／左 rail）。判定器相應改寫（`nav_fixed_four`→`nav_fixed_five_top`；`first_screen_above_nav`／`no_title_overlap`／
+`p1_banner_single_line`／`real_feed_banner_on_top` 改為「頂部導覽／第一列內」的等價判定，均有突變 teeth，見 tests/test_ui2_batch2.py）。
+`p2_nav_margin_160` 的量測錨點（今日主要風險之後第一區塊頂緣 → 底部保留線 791）與舊值**同公式同單位**，只是頂部導覽的高度現在
+自然包含在內（內容被導覽往下推），所以舊 162.5 與現值可直接比較；門檻 160 不變。
+
+對 `streamlit run app_ui2.py` 於 390×844（手機）與 1440×900（桌機），五頁 ×（cold／loaded／missing／
 stale／unavailable／not_evaluated）逐一量測並輸出 `viewport_measurements.json`＋截圖。
 
 判定門檻**全部引用既有條文，不自創新門檻**（見 `THRESHOLDS`）。第一屏高度、導覽列高度出自
@@ -46,9 +52,9 @@ MOBILE_MAX_W = 768
 FIRST_SCREEN_QS = ("q1", "q2", "q3", "q4")
 #: 💼 持股（DEC-141 Q6）：「是否需要行動／下一步」合為「今日需處理」單行 → 沒有獨立 q3 錨點（其餘頁不變）。
 HOLD_FIRST_SCREEN_QS = ("q1", "q2", "q4")
-#: ☰ 觸控目標下限（統一施工規格 §5；通用準則，非客戶裁示）。
-TOGGLE_MIN_PX = 44
-NAV_LABELS = ("📊 市場", "🎯 標的", "💼 持股", "👤 我的")
+#: 頂部導覽第二列觸控目標下限（統一施工規格 §5；通用準則，非客戶裁示；DEC-146 沿用 ☰ 的 44px）。
+NAV_TOUCH_MIN_PX = 44
+NAV_LABELS = ("📊 市場", "🎯 標的", "💼 持股", "👤 我的", "🗂 資料")
 
 #: 判定門檻與出處（⛔ 新門檻）。`id` 對應 `evaluate()` 的 check key。
 THRESHOLDS: list[dict[str, str]] = [
@@ -57,24 +63,25 @@ THRESHOLDS: list[dict[str, str]] = [
              "的元素底緣 ≤ 可用高：手機 = 844 − 底部導覽 53 = 791px；桌機 = 900px。",
      "source": "Freeze §16 視窗說明＋§0.1.6-2、Gate §3、Wireframes §0.4／§1／§8（px 數值出自 Freeze §16『可用高約 791px』）"},
     {"id": "first_screen_above_nav",
-     "rule": "手機：第一屏元素底緣 ≤ 底部保留線（844 − 53 = 791；DEC-134 起不再有底部固定列，保留帶＝Manage app／家的指示條），"
-             "且不與左上 ☰ 矩形相交；桌機：元素左緣 ≥ 左側導覽右緣。",
-     "source": "Wireframes §0.4（W-1）／Freeze §16；DEC-134／DEC-137（手機抽屜）"},
+     "rule": "（DEC-146 頂部兩列導覽；取代舊『不與 ☰ 相交／桌機不入左 rail』）第一屏元素：手機底緣 ≤ 底部保留線（844 − 53 = 791）；"
+             "手機與桌機頂緣 ≥ 頂部導覽底緣（不被固定在頂端的兩列導覽遮住）；主 CTA（q4）因此必在導覽之下、首屏之內＝可操作。",
+     "source": "Wireframes §0.4（W-1）／Freeze §16；DEC-134（底部保留帶）；DEC-146（頂部兩列）"},
     {"id": "no_horizontal_scroll",
-     "rule": "document／stMain 的 scrollWidth ≤ clientWidth（無水平捲動）；第一屏區塊內容不被橫向裁切。",
-     "source": "Gate §3（Mobile-first）、Audit Checklist 手機項（客戶 (5)-9）"},
-    {"id": "nav_fixed_four",
-     "rule": "導覽恰 4 項（📊 市場／🎯 標的／💼 持股／👤 我的）；全 DOM 恰 1 個頁面 radiogroup；恰一項為當前頁。"
-             "手機（DEC-134／DEC-137）＝左上固定 ☰（top≈0、left≈0、≥44×44）＋左側抽屜：收合態抽屜完全在視窗外（right ≤ 0）且 "
-             "visibility:hidden、4 項垂直排列、視窗底部 0 個固定主導覽（⛔ 放回底部）；"
-             "桌機＝左側固定（left = 0、垂直排列）且 ☰ 不顯示。",
-     "source": "Wireframes §0.4／§7 W-1；客戶 (5)-7（固定四頁、⛔ 第五頁）；DEC-134／DEC-137（手機抽屜）"},
+     "rule": "document／stMain 的 scrollWidth ≤ clientWidth（無水平捲動）；第一屏區塊內容不被橫向裁切；"
+             "頂部第一列（Active Sheet｜模式標示｜帳號）不被裁切（scrollWidth ≤ clientWidth 且 scrollHeight ≤ clientHeight）。",
+     "source": "Gate §3（Mobile-first）、Audit Checklist 手機項（客戶 (5)-9）；DEC-146（第一列併入標示，不得截斷）"},
+    {"id": "nav_fixed_five_top",
+     "rule": "（DEC-146；取代舊 nav_fixed_four）導覽恰 5 項（📊 市場／🎯 標的／💼 持股／👤 我的／🗂 資料）；全 DOM 恰 1 個頁面 radiogroup；恰一項為當前頁。"
+             "手機與桌機同一份 DOM：fixed 於視窗頂端（top≈0、left≈0、寬＝視窗寬）、五項同一列、觸控目標高 ≥44px、"
+             "⛔ ☰／遮罩／Drawer／左 rail／視窗底部固定主導覽。桌機＝五項全可見、無需捲動；"
+             "手機＝第二列在自身容器內橫向捲動（overflow-x:auto/scroll），捲到最右後第 5 項（🗂 資料）完整進入視窗。",
+     "source": "DEC-146（客戶核准頂部兩列五頁）；Wireframes §0.4／§7 W-1；NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE §2／§4"},
     {"id": "nav_current_marked_not_by_color_only",
      "rule": "當前頁除顏色外另有符號（`● ` 前綴 pseudo-element）與原生 radio `checked` 狀態。",
      "source": "Freeze §4.1（顏色不是唯一載體）"},
     {"id": "content_not_covered_by_nav",
-     "rule": "捲到頁底後，最後一個內容元素底緣 ≤ 底部保留線 791（手機；DEC-134 前＝導覽列上緣，同一條線）／左緣 ≥ 導覽右緣（桌機）。",
-     "source": "Wireframes §0.4（導覽不得遮住主要內容）"},
+     "rule": "捲到頁底後，最後一個內容元素底緣 ≤ 底部保留線 791（手機）／≤ 視窗高（桌機）；且捲到底後內容底緣不被頂部導覽遮蓋（導覽在頂端，故以底緣判定）。",
+     "source": "Wireframes §0.4（導覽不得遮住主要內容）；DEC-146（導覽改頂部）"},
     {"id": "market_conclusion_in_first_screen",
      "rule": "📊 市場：今日結論列存在、位於第一屏（底緣 ≤ 可用高；與 ①～④ 同一條門檻）、且在 ① 市場目前狀態之上。",
      "source": "Freeze §0.1.6-5（四必要項＋今日結論同在第一屏）、Wireframes §2.1／§9、DEC-081 Q2-1／DEC-109"},
@@ -112,7 +119,7 @@ THRESHOLDS: list[dict[str, str]] = [
      "source": "Wireframes §1（👤 我的列）／§5.1、Freeze §16.4（不用滑：connection state、primary management actions）"},
     {"id": "real_feed_banner_on_top",
      "rule": "Real-data Preview（`--feed real`）：頁首 banner 文字以 `REAL_PREVIEW_BANNER_TEXT`（Real-data Preview（非正式 "
-             "production default））開頭、底緣 ≤ 頁面標題頂緣（在頁首）且 ≤ 可用高。FAKE feed 不適用（恆通過）。"
+             "production default））開頭、底緣 ≤ 頁面標題頂緣（在頁首）且 ≤ 可用高，且位於頂部第一列內、不被截斷（DEC-146 方案 A）。FAKE feed 不適用（恆通過）。"
              "另：👤 我的在 real 模式不讀帳戶（account＝None，路徑 C 擋）⇒ `me_account_state_first_screen` 改判"
              "『不得出現帳戶動作列（不假裝已登入／未登入）、主 CTA 仍在第一屏』。",
      "source": "客戶 (11) A3（Preview 明確標示 Real-data Preview／非正式 production default）；Freeze §16（可用高）"},
@@ -122,8 +129,9 @@ THRESHOLDS: list[dict[str, str]] = [
              "唯一放行：客戶要求的 Real-data 單行標示 `REAL_PREVIEW_BANNER_TEXT`。",
      "source": "客戶 2026-11-03 (16) P1 第 2 項；Active Presentation Contract §9／§11（題號與工程字樣）"},
     {"id": "p1_banner_single_line",
-     "rule": "（P1）頂部標示（FAKE 示意資料／Real-data Preview）為單行：banner 高度 ≤ 1 行行高 + 上下 padding 12px"
-             "（行高由頁內 `getComputedStyle(.ui2-banner).lineHeight` 現場量）。",
+     "rule": "（P1／DEC-146）頂部標示（FAKE 示意資料／Real-data Preview）為單行且位於頂部導覽**第一列內**（DEC-146 方案 A）：banner 高度 ≤ 1 行行高 + 12px"
+             "（行高由頁內 `getComputedStyle(.ui2-banner).lineHeight` 現場量）、文字不被截斷（scrollWidth ≤ clientWidth）、"
+             "上下緣落在第一列（`.ui2-top1`）內、不超出視窗左右緣。",
      "source": "客戶 2026-11-03 (16) P1：Real banner『縮為單行』；手機窄螢幕折行 → 判紅"},
     {"id": "p3_no_evidence_expander",
      "rule": "（P3）四頁產品畫面（排除 `?ui2_dev=1` 開發面與導覽）實際渲染的 expander（DOM `stExpander`）標題，只准是 "
@@ -148,7 +156,7 @@ THRESHOLDS: list[dict[str, str]] = [
              "0 個資料列（⛔ 假列）；欄名不被裁切。",
      "source": "客戶 2026-11-05 Q1~Q8（DEC-141）；Wireframes §4.2／W-6／W-11（客戶 Q3 核准）"},
     {"id": "no_title_overlap",
-     "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
+     "rule": "頁面標題不與 Preview banner、第一屏區塊、頂部導覽重疊（上下緣依序不交疊；DEC-146：標題頂緣 ≥ 導覽底緣）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
 ]
 
@@ -162,7 +170,6 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     nav = m["nav"]
     limit = (vh - NAV_MOBILE_H) if mobile else vh
     line = _nav_line(m)
-    tg = (m.get("drawer") or {}).get("toggle")
     present = {e["q"] for e in m["elements"]}
     for q in (HOLD_FIRST_SCREEN_QS if m.get("page") == "p4_hold" else FIRST_SCREEN_QS):
         if q not in present:
@@ -173,48 +180,54 @@ def evaluate(m: dict) -> dict[str, list[str]]:
                 f"{e['q']}（{e['text'][:12]}）底緣 y={e['bottom']:.0f} > 可用高 {limit}")
         if mobile and line is not None and e["bottom"] > line + 0.5:
             out["first_screen_above_nav"].append(f"{e['q']} 底緣 {e['bottom']:.0f} > 底部保留線 {line:.0f}")
-        if mobile and tg and _intersects(e, tg):
-            out["first_screen_above_nav"].append(f"{e['q']} 與 ☰ 矩形相交")
-        if not mobile and nav["right"] is not None and e["left"] < nav["right"] - 0.5:
-            out["first_screen_above_nav"].append(f"{e['q']} 左緣 {e['left']:.0f} < 導覽右緣 {nav['right']:.0f}")
+        if nav.get("bottom") is not None and e["top"] < nav["bottom"] - 0.5:     # DEC-146：頂部導覽不得遮住第一屏（含主 CTA）
+            out["first_screen_above_nav"].append(f"{e['q']} 頂緣 {e['top']:.0f} < 頂部導覽底緣 {nav['bottom']:.0f}（被導覽遮住）")
     h = m["hscroll"]
     for k in ("doc", "main"):
         if h[k]["scrollWidth"] > h[k]["clientWidth"] + 0.5:
             out["no_horizontal_scroll"].append(f"{k}: scrollWidth {h[k]['scrollWidth']} > clientWidth {h[k]['clientWidth']}")
     if h["qa_clipped"]:
         out["no_horizontal_scroll"].append("第一屏區塊內容被橫向裁切")
-    # 導覽
+    if h.get("top1_clipped"):
+        out["no_horizontal_scroll"].append("頂部第一列（Active Sheet｜模式標示｜帳號）被裁切")
+    # 導覽（DEC-146：頂部兩列五頁）
     labels = nav["labels"]
     if tuple(labels) != NAV_LABELS:
-        out["nav_fixed_four"].append(f"導覽項 {labels!r} ≠ 固定四頁 {NAV_LABELS!r}")
+        out["nav_fixed_five_top"].append(f"導覽項 {labels!r} ≠ 固定五頁 {NAV_LABELS!r}")
     if nav["position"] != "fixed":
-        out["nav_fixed_four"].append(f"導覽 position={nav['position']!r}（應為 fixed）")
-    dr = m.get("drawer")
-    if dr is None:
-        out["nav_fixed_four"].append("量測缺 `drawer` 鍵（☰／抽屜／頁面 radiogroup 數量）")
-        dr = {}
-    if dr and dr.get("page_radiogroups") != 1:
-        out["nav_fixed_four"].append(f"頁面 radiogroup 數量 {dr.get('page_radiogroups')} ≠ 1（雙主導覽）")
-    if dr and dr.get("bottom_fixed_navs", 0):
-        out["nav_fixed_four"].append(f"視窗底部出現 {dr['bottom_fixed_navs']} 個固定主導覽（DEC-134 起手機不得有底部導覽）")
-    if mobile:
-        if (nav["right"] if nav["right"] is not None else 99) > 0.5 or nav.get("visibility", "hidden") != "hidden":
-            out["nav_fixed_four"].append(f"手機收合態抽屜應在視窗外且 hidden：right={nav['right']} visibility={nav.get('visibility')}")
-        if dr and not (tg and tg.get("position") == "fixed" and tg.get("display") != "none"
-                       and abs(tg["top"]) <= 1 and abs(tg["left"]) <= 1
-                       and tg["width"] >= TOGGLE_MIN_PX - 0.5 and tg["height"] >= TOGGLE_MIN_PX - 0.5):
-            out["nav_fixed_four"].append(f"手機 ☰ 應固定於左上 (0,0)、≥{TOGGLE_MIN_PX}×{TOGGLE_MIN_PX}：{tg!r}")
-        if len({round(t) for t in nav["label_tops"]}) != 4:
-            out["nav_fixed_four"].append("手機抽屜 4 項應垂直排列")
+        out["nav_fixed_five_top"].append(f"導覽 position={nav['position']!r}（應為 fixed）")
+    tn = m.get("top_nav")
+    if tn is None:
+        out["nav_fixed_five_top"].append("量測缺 `top_nav` 鍵（radiogroup 數／☰ 殘留／捲動／第 5 項可達）")
+        tn = {}
     else:
-        if abs(nav["left"] or 0) > 1:
-            out["nav_fixed_four"].append("桌機導覽應在左側（left=0）")
-        if len({round(x) for x in nav["label_lefts"]}) != 1 or len({round(t) for t in nav["label_tops"]}) != 4:
-            out["nav_fixed_four"].append("桌機導覽 4 項應垂直排列")
-        if dr and tg and tg.get("display") != "none":
-            out["nav_fixed_four"].append("桌機不得顯示 ☰（不建立第二個主導覽入口）")
+        if tn.get("page_radiogroups") != 1:
+            out["nav_fixed_five_top"].append(f"頁面 radiogroup 數量 {tn.get('page_radiogroups')} ≠ 1（雙主導覽）")
+        if tn.get("bottom_fixed_navs", 0):
+            out["nav_fixed_five_top"].append(f"視窗底部出現 {tn['bottom_fixed_navs']} 個固定主導覽（導覽只在頂部）")
+        if tn.get("drawer_dom", 0):
+            out["nav_fixed_five_top"].append(f"殘留 ☰／遮罩／Drawer DOM {tn['drawer_dom']} 個（DEC-146 不留 Drawer）")
+        if tn.get("rail_padding"):
+            out["nav_fixed_five_top"].append("內容仍為左 rail 讓位（padding-left）")
+        if not (abs(nav.get("top") or 0) <= 1 and abs(nav.get("left") or 0) <= 1 and abs((nav.get("width") or 0) - vw) <= 1):
+            out["nav_fixed_five_top"].append(f"導覽未貼齊視窗頂端左右：top={nav.get('top')} left={nav.get('left')} width={nav.get('width')}")
+        g = tn.get("group") or {}
+        if not g:
+            out["nav_fixed_five_top"].append("缺第二列容器量測")
+        elif mobile:
+            if g.get("overflow_x") not in ("auto", "scroll"):
+                out["nav_fixed_five_top"].append(f"手機第二列不是自身容器內橫向捲動（overflow-x={g.get('overflow_x')!r}）")
+            if g.get("last_right_after_scroll") is None or g["last_right_after_scroll"] > vw + 0.5 or g.get("last_left_after_scroll", 0) < -0.5:
+                out["nav_fixed_five_top"].append(f"手機捲到最右後第 5 項未完整進入視窗：{g.get('last_left_after_scroll')}～{g.get('last_right_after_scroll')}")
+        else:
+            if g.get("scroll_w", 0) > g.get("client_w", 0) + 0.5 or g.get("last_right", 1e9) > vw + 0.5:
+                out["nav_fixed_five_top"].append("桌機五項未全部可見（需捲動或超出視窗）")
+    if len({round(t) for t in nav["label_tops"]}) != 1:
+        out["nav_fixed_five_top"].append("五項應在同一列")
+    if any(h_ < NAV_TOUCH_MIN_PX - 0.5 for h_ in nav.get("label_heights", [])):
+        out["nav_fixed_five_top"].append(f"導覽觸控目標高 {nav.get('label_heights')} < {NAV_TOUCH_MIN_PX}px")
     if nav["checked_count"] != 1:
-        out["nav_fixed_four"].append(f"當前頁（checked）數量 {nav['checked_count']} ≠ 1")
+        out["nav_fixed_five_top"].append(f"當前頁（checked）數量 {nav['checked_count']} ≠ 1")
     marks = nav["marker_contents"]
     if [i for i, c in enumerate(marks) if "●" in c] != [nav["checked_index"]]:
         out["nav_current_marked_not_by_color_only"].append(f"當前頁符號標記與 checked 不一致：{marks!r}")
@@ -222,8 +235,8 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     last = m["last_content"]
     if mobile and line is not None and last["bottom"] > line + 0.5:
         out["content_not_covered_by_nav"].append(f"頁底內容 {last['bottom']:.0f} > 底部保留線 {line:.0f}")
-    if not mobile and nav["right"] is not None and last["left"] < nav["right"] - 0.5:
-        out["content_not_covered_by_nav"].append(f"頁底內容左緣 {last['left']:.0f} < 導覽右緣 {nav['right']:.0f}")
+    if not mobile and last["bottom"] > vh + 0.5:
+        out["content_not_covered_by_nav"].append(f"桌機頁底內容底緣 {last['bottom']:.0f} > 視窗高 {vh}")
     se = m.get("scroll_end_bottom")        # 捲到底後 block-container 內容底緣（扣掉底部 padding）；舊 dict 無此鍵 → 略過
     if mobile and se is not None and line is not None and se > line + 0.5:
         out["content_not_covered_by_nav"].append(f"捲到底後內容底緣 {se:.0f} > 底部保留線 {line:.0f}")
@@ -238,12 +251,19 @@ def evaluate(m: dict) -> dict[str, list[str]]:
             out[rb].append("banner 不在頁面標題之上")
         elif tt["banner_bottom"] > limit + 0.5:
             out[rb].append(f"banner 底緣 {tt['banner_bottom']:.0f} > 可用高 {limit}")
+        bbx = m.get("banner_box") or {}
+        if bbx.get("row_top") is not None and not (bbx["top"] >= bbx["row_top"] - 0.5 and bbx["bottom"] <= bbx["row_bottom"] + 0.5):
+            out[rb].append("Real 標示不在頂部第一列內（DEC-146 方案 A：標示併入第一列）")
+        if bbx.get("clipped"):
+            out[rb].append("Real 標示被截斷（必要揭露不得消失）")
     # 標題不重疊
     t = m["title"]
     if t["banner_bottom"] is not None and t["top"] < t["banner_bottom"] - 0.5:
         out["no_title_overlap"].append("標題與 banner 重疊")
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
+    if nav.get("bottom") is not None and t["top"] is not None and t["top"] < nav["bottom"] - 0.5:
+        out["no_title_overlap"].append(f"標題頂緣 {t['top']:.0f} 被頂部導覽（底緣 {nav['bottom']:.0f}）遮住")
     _evaluate_p1(m, out)
     _evaluate_p2(m, out)
     _evaluate_h1(m, out)
@@ -252,7 +272,11 @@ def evaluate(m: dict) -> dict[str, list[str]]:
 
 
 def _nav_line(m: dict) -> float | None:
-    """導覽／保留線：手機＝視窗高 − 底部保留帶 53（DEC-134 前＝底部導覽上緣，數值相同）；桌機＝導覽 top（沿用）。"""
+    """底部保留線（DEC-146 後的『首屏可操作空間』下界）：手機＝視窗高 − 底部保留帶 53（Manage app／家的指示條可能遮擋區；數值與
+    DEC-134／DEC-137 的 791 相同，故與歷史值可比）；桌機＝無底部保留帶 → None 以外回傳導覽 top（僅供舊呼叫相容，桌機判定不用它）。
+    ⚠️ DEC-146 起導覽在頂部：`first_block_after_l1_top`（今日主要風險之後第一區塊頂緣）已**自然包含**頂部兩列導覽＋標示列的高度，
+    因此 `p2_nav_margin_160` ＝『頂部導覽之下、底部保留線之上，第一個後續內容區塊以下還剩多少可操作空間』——
+    與舊值同公式同單位，**可直接比較**（舊 162.5／現值見 evidence），⛔ 因導覽移位而放寬門檻或改量測基準。"""
     vp = m.get("viewport")
     if vp is None:                      # 舊版／合成 dict（無 viewport）：沿用導覽 top
         return m["nav"].get("top")
@@ -402,6 +426,15 @@ def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
     if bb:
         if bb["height"] > bb["lineHeight"] + 12.5:
             out["p1_banner_single_line"].append(f"banner 高 {bb['height']:.0f}px > 1 行（行高 {bb['lineHeight']:.0f}+12）：折行")
+        if bb.get("clipped"):
+            out["p1_banner_single_line"].append("banner 文字被截斷（scrollWidth > clientWidth）")
+        if bb.get("row_top") is not None and not (bb["top"] >= bb["row_top"] - 0.5 and bb["bottom"] <= bb["row_bottom"] + 0.5):
+            out["p1_banner_single_line"].append(
+                f"banner（top {bb['top']:.0f}～{bb['bottom']:.0f}）不在頂部第一列內（{bb['row_top']:.0f}～{bb['row_bottom']:.0f}）")
+        if bb.get("right") is not None and (bb["right"] > m["viewport"]["w"] + 0.5 or bb["left"] < -0.5):
+            out["p1_banner_single_line"].append("banner 超出視窗左右緣")
+    elif m.get("page") is not None and m.get("banner_text"):
+        out["p1_banner_single_line"].append("有 banner 文字但缺 `banner_box` 量測")
 
 
 #: 判定器自己的允許標題常數（獨立於被測的 `src.ui2.views._page.SHOWN_FOLDS`，避免 mutation 時判定器跟著被改；
@@ -409,6 +442,7 @@ def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
 P3_ALLOWED_EXPANDER_TITLES: dict[str, frozenset[str]] = {
     "p4_market": frozenset(),
     "p4_hold": frozenset(),
+    "p4_data": frozenset(),         # DEC-146：🗂 資料頁不渲染任何 expander
     "p4_target": frozenset({"選股條件（收合）"}),
     "p4_me": frozenset({"Audit：Decision Digest", "Audit：Rule Registry（唯讀）"}),
 }
@@ -578,14 +612,22 @@ _JS = r"""
   const nav = document.querySelector('.st-key-ui2_nav');
   const nr = nav ? R(nav) : null;
   const labels = nav ? [...nav.querySelectorAll('[role="radiogroup"] > label')] : [];
-  // DEC-137 抽屜：☰ 矩形、頁面 radiogroup 數（全 DOM，以四頁 label 判定）、視窗底部固定主導覽數
-  const tgEl = document.querySelector('.ui2-dr-toggle');
-  const tgBox = tgEl ? {...R(tgEl), position: getComputedStyle(tgEl).position, display: getComputedStyle(tgEl).display} : null;
-  const PAGE_LABELS = ['📊 市場', '🎯 標的', '💼 持股', '👤 我的'];
+  // DEC-146 頂部導覽：頁面 radiogroup 數（全 DOM，以五頁 label 判定）、視窗底部固定主導覽數、☰／Drawer 殘留、第二列捲動與第 5 項可達
+  const PAGE_LABELS = ['📊 市場', '🎯 標的', '💼 持股', '👤 我的', '🗂 資料'];
   const pageGroups = [...document.querySelectorAll('[role="radiogroup"]')].filter(g => [...g.querySelectorAll('label')].some(l => PAGE_LABELS.includes(l.textContent.trim())));
   const bottomFixed = pageGroups.filter(g => { const r = R(g); let e = g, fx = false; while (e && e !== document.body) { if (getComputedStyle(e).position === 'fixed') { fx = true; break; } e = e.parentElement; }
     return fx && r.bottom >= innerHeight - 1 && r.right > 0 && r.left < innerWidth && r.top < innerHeight && getComputedStyle(g).visibility === 'visible'; }).length;
   const checkedIdx = labels.findIndex(l => l.querySelector('input').checked);
+  const grpEl = nav ? nav.querySelector('[role="radiogroup"]') : null;
+  let topGroup = null;
+  if (grpEl && labels.length) {
+    const lastL = labels[labels.length - 1]; const gs = getComputedStyle(grpEl);
+    const before = grpEl.scrollLeft; const lr0 = R(lastL);
+    grpEl.scrollLeft = grpEl.scrollWidth; const lr1 = R(lastL); grpEl.scrollLeft = before;      // 量完還原
+    topGroup = {overflow_x: gs.overflowX, scroll_w: grpEl.scrollWidth, client_w: grpEl.clientWidth, last_right: lr0.right,
+                last_left_after_scroll: lr1.left, last_right_after_scroll: lr1.right};
+  }
+  const row1El = document.querySelector('.ui2-top1');
   const elements = [...document.querySelectorAll('[data-ui2-q]')].map(e => ({q: e.dataset.ui2Q, text: e.innerText.replace(/\s+/g,' ').trim(), ...R(e)}));
   const qa = document.querySelector('.ui2-m-l1') || document.querySelector('.ui2-qa');
   const title = document.querySelector('.ui2-pagetitle');
@@ -656,7 +698,9 @@ _JS = r"""
         text: th.innerText.trim(), left: R(th).left, right: R(th).right, clipped: th.scrollWidth > th.clientWidth + 1}))} : null,
   } : null;
   const bn = document.querySelector('.ui2-banner');
-  const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
+  const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize),
+    top: R(bn).top, bottom: R(bn).bottom, left: R(bn).left, right: R(bn).right, clipped: bn.scrollWidth > bn.clientWidth + 1,
+    row_top: row1El ? R(row1El).top : null, row_bottom: row1El ? R(row1El).bottom : null} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
@@ -671,8 +715,9 @@ _JS = r"""
     font_sizes: {q1: fz('[data-ui2-q="q1"]'), ctx: fz('.ui2-ctxline')},
     account: accEl ? {...R(accEl), state: accEl.dataset.ui2Account} : null,
     snapshot_labels: snap,
-    drawer: {toggle: tgBox, page_radiogroups: pageGroups.length, bottom_fixed_navs: bottomFixed,
-      open: !!(tgEl && tgEl.checked)},
+    top_nav: {page_radiogroups: pageGroups.length, bottom_fixed_navs: bottomFixed, group: topGroup,
+      drawer_dom: document.querySelectorAll('.ui2-dr-toggle, .ui2-dr-btn, .ui2-dr-scrim, .ui2-dr-wrap').length,
+      rail_padding: parseFloat(getComputedStyle(document.querySelector('.block-container')).paddingLeft) > 150},
     nav: nr && {...nr, position: getComputedStyle(nav).position, visibility: getComputedStyle(nav).visibility,
       labels: labels.map(l => l.textContent.trim()),
       label_tops: labels.map(l => l.getBoundingClientRect().top), label_lefts: labels.map(l => l.getBoundingClientRect().left),
@@ -680,7 +725,8 @@ _JS = r"""
       checked_count: labels.filter(l => l.querySelector('input').checked).length, checked_index: checkedIdx,
       marker_contents: labels.map(l => { const p = l.querySelector('p'); return p ? getComputedStyle(p, '::before').content : ''; })},
     elements,
-    hscroll: {doc: sc(document.documentElement), main: sc(main), qa_clipped: qa ? qa.scrollWidth > qa.clientWidth + 0.5 : false},
+    hscroll: {doc: sc(document.documentElement), main: sc(main), qa_clipped: qa ? qa.scrollWidth > qa.clientWidth + 0.5 : false,
+            top1_clipped: row1El ? (row1El.scrollWidth > row1El.clientWidth + 1 || row1El.scrollHeight > row1El.clientHeight + 1) : false},
     title: {top: title ? R(title).top : null, bottom: title ? R(title).bottom : null,
             banner_bottom: banner ? R(banner).bottom : null, qa_top: qa ? R(qa).top : null},
     last_content: {bottom: last.bottom, left: last.left},
@@ -807,7 +853,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
            "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
                    if k in ("top", "bottom", "left", "right", "width", "height", "position", "visibility", "labels",
                             "checked_index")},
-           "drawer": m.get("drawer"),
+           "top_nav": m.get("top_nav"), "banner_box": m.get("banner_box"),
            "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
            "last_content_bottom": round(m["last_content"]["bottom"], 1),
            "card_heights": m["card_heights"], "expanders": m.get("expanders"),
@@ -861,7 +907,7 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
 
     from shared.ui2_contract.pages import (
         ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_LABELS, MODE_LOOKUP,
-        P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
+        P4_ME, P4_MARKET, P4_TARGET, PAGE_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
     )
     from src.ui2.shell.app import _ACCOUNT_LABELS, _SCENARIO_LABELS
 
@@ -877,7 +923,7 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
             page = browser.new_page(viewport={"width": vw, "height": vh})
             page.goto(_dev_url(url))
             page.wait_for_selector(".ui2-qa", timeout=40000)
-            nav_click = lambda pid: click_nav(page, PAGE4_LABELS[pid])
+            nav_click = lambda pid: click_nav(page, PAGE_LABELS[pid])
             for scenario in SCENARIO_IDS:
                 _select_box(page, "場景", _SCENARIO_LABELS[scenario], f'[data-ui2-scenario="{scenario}"]')
                 for pid in PAGE_IDS:
@@ -927,7 +973,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
     from playwright.sync_api import sync_playwright
 
     from shared.ui2_contract.pages import (
-        FEED_REAL, MODE_LABELS, MODE_LOOKUP, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_REAL,
+        FEED_REAL, MODE_LABELS, MODE_LOOKUP, P4_MARKET, P4_TARGET, PAGE_LABELS, PAGE_IDS, SCENARIO_REAL,
     )
     from src.ui2.shell.app import _FEED_LABELS
 
@@ -940,7 +986,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
             page.wait_for_selector(".ui2-qa", timeout=40000)
             _select_box(page, "資料來源", _FEED_LABELS[FEED_REAL], f'[data-ui2-scenario="{SCENARIO_REAL}"]')
             for pid in PAGE_IDS:
-                click_nav(page, PAGE4_LABELS[pid])
+                click_nav(page, PAGE_LABELS[pid])
                 page.wait_for_selector(f'[data-ui2-page="{pid}"][data-ui2-scenario="{SCENARIO_REAL}"]', timeout=30000)
                 page.wait_for_timeout(300)
                 results.append(_record(page, vp_name, vw, vh, pid, SCENARIO_REAL,
@@ -975,16 +1021,11 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
 
 
 def click_nav(page, label: str) -> None:
-    """點導覽項（D-8）：手機抽屜收合時 radio 不可見 → 先點 ☰ 開抽屜，再點該頁（JS 會隨即收合抽屜）；桌機直接點 rail。"""
-    tg = page.locator(".ui2-dr-toggle")
-    if tg.count() and tg.evaluate("e => getComputedStyle(e).display !== 'none' && !e.checked"):
-        tg.click()
-        page.wait_for_function("() => getComputedStyle(document.querySelector('.st-key-ui2_nav')).visibility === 'visible'",
-                               timeout=10000)
-    page.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=label).click()
-    page.wait_for_function("() => !document.querySelector('.ui2-dr-toggle') || !document.querySelector('.ui2-dr-toggle').checked",
-                           timeout=10000)
-    page.wait_for_timeout(250)          # 抽屜 transform 動畫 .2s 結束（量測時抽屜須完整收合）
+    """點導覽項（DEC-146）：頂部導覽五項常駐（桌機全可見；手機必要時先捲入視野再點），⛔ 先開抽屜。"""
+    loc = page.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=label)
+    loc.scroll_into_view_if_needed()
+    loc.click()
+    page.wait_for_timeout(250)
 
 
 def _want_shot(mode: str, vp_name: str, scenario: str) -> bool:
