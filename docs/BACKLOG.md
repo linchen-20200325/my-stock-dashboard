@@ -1927,3 +1927,13 @@
 | `NUI2-BRANCH-RETENTION-1107` | P3 OPEN（紀錄） | 依裁示：`docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107` 暫時全部保留、不建 archive tag（環境代理亦擋 ref 寫入）；`data`、`v2`、`claude/stock-dashboard-handoff-g9dtm0` 必留。 | 日後可建 tag 時再依 DEC-012 條件處理。 |
 
 **既有「五頁工程待施工」類條目**：`NUI2-GH-MEMORY-DATA-GATE` 段尾的更新註記已補「已由 #1055 完成」；「方案 A」須如實註明為 **ChatGPT 建議、非使用者逐字裁示**；QA 判定其在 DEC-146 授權內，使用者可推翻（見 PROJECT_STATE §70.4）。
+
+### NUI2-GOV｜#1057 合併後續與 #1034／#1054／#1038 狀態登記（2026-11-08；補註，只追加，不新增 DEC）
+
+| ID | Priority / 狀態 | 內容 | 建議／觸發 |
+|---|---|---|---|
+| `NUI2-GOV-1034-EXTRACT` 進度註記 | #1057 已合併（main `2ad57f5`）：PROJECT_RULES §0.4 核銷（#1034 部分）；其餘見下列兩列。#1034 維持 Draft、不直接合併。 | 〔更新 2026-11-08：§0.4 已由 #1057 進 main，上列原文「§0.4 目前僅在 #1034」已過期；原文保留，有意識的更新，不是漏刪〕 | — |
+| `NUI2-GOV-1034-DEC-STALE` | P2 OPEN（docs-only） | DEC-143／144／145 文末仍寫「落盤 #1034／合併前未生效」過期字樣。 | 依 DECISIONS 既有訂正慣例另批。 |
+| `NUI2-GOV-1034-RULES-RENUMBER` | P2 OPEN（docs-only） | #1034 的 §32（三方案）／§33（巡檢靜默）與 main 現有 §32 撞號；main 約第 1038 行已有「3 方案回報」條；PROJECT_RULES §31 補註「進 main 前屬本 docs PR 待合併」為舊文。 | 逐句比對後再以 §33／§34 保存，不整段貼上。 |
+| `NUI2-DATA-1054-REVIEW` | P1 OPEN（#1054 未合併；head `2f51915`，CI 全綠） | 已驗：twii_ohlcv 僅 2026-11-06 末列 fetched_at 變、OHLC 值相同、無 OHLC 違規、日期單調唯一，volume 34 筆 NaN（既有）；metadata 兩個 FinMind 項 last_error 改「抓取結果為空」（11-07 週六，無法區分休市與故障）；tw_pmi.json 只換 fetched_at／cached_at，資料實停 2026-10-01 且 `is_proxy:true`。**未宣稱發布端到端成功。** | 待查：下游是否把 fetched_at 當資料新鮮度（違反 missing≠fresh）；查完再決定合併。 |
+| `NUI2-PIT-1038-BLOCK` | P1 BLOCKED（#1038 Draft／NO MERGE） | PIT 阻塞：缺逐列來源發布時間；新列 date=11-05 但 inst／li 腿 as_of=11-06；有 `date_source=backfill_from_captured_at` 回填列。 | 需 Decision Gate、逐列來源證據、`load_signals` 壞檔 fail-closed、非作者 QA。 |
