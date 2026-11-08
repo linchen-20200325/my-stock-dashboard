@@ -14,7 +14,11 @@ Batch B 才會讓 C4 使用這些欄位。舊欄位(`yoy_last3` 等)由 `compute
   contract_fail_reasons       list[str] FAIL_CLOSED/UNDETERMINED 的原因(不默默修正)
   as_of                       str|None  回溯基準日(ISO);None = 呼叫端沒給
   month_key_source            str       revenue_year_month / date_column / none
-  month_key_verified          bool      月份鍵是否來自『明示的 revenue_year+revenue_month 欄且與 date 一致』
+  month_key_verified          bool      月份鍵是否來自『明示的 revenue_year+revenue_month 欄、date 與之逐列一致、且呼叫端
+                                         未標記該來源『尚未經真實資料驗證』(`source_month_key_verified`,DEC-152)』
+  month_key_source_fields     list[str] 月份鍵實際取自哪些欄位(['revenue_year','revenue_month'] / ['date'] / [])
+  month_key_date_agrees       bool|None 有 revenue_year/month 與 date 兩者時,逐列年月是否全部一致;不適用 → None
+                                         (False ＝ date 與營收月份不同,**不**視為衝突:DEC-152 客戶指出兩者本來就可能不同)
   yoy_months                  list      與舊 `yoy_last3` 一對一對應的年月鍵 'YYYY-MM'(列位置的月份,None = 無此列/無法判定)
   yoy_months_contiguous       bool|None 舊 `yoy_last3` 那 3 列是否為 3 個連續日曆月;None = UNDETERMINED
   yoy_target_months           list[3]   固定 3 個目標日曆月(最近 3 個『已達 SSOT 公告時點』的月,舊→新);None = as_of 缺
@@ -35,11 +39,18 @@ Batch B 才會讓 C4 使用這些欄位。舊欄位(`yoy_last3` 等)由 `compute
 與 `monthly_publication_due`(due = 次月 1 日 + 發布延遲)。⚠️ 來源(FinMind/OpenAPI)沒有逐筆『實際公告日』欄位,
 本契約只能保證『已過 SSOT 公告時點』,**不能**證明某公司某月在某日確實已公告;不得用 fetched_at 當公告日、
 不得從列表位置推月份、不得用目前日期推斷『某月已發布』——只在呼叫端明確給 as_of(可注入)時比對 SSOT 公告時點。
-月份鍵只認明示欄位:
-  · 有 revenue_year+revenue_month 且與 date 的年月一致 → 已驗證(month_key_verified=True);
+月份鍵只認明示欄位(DEC-152 C4-D 起):
+  · 有 revenue_year+revenue_month → **以它們為月份鍵**(來源宣稱的營收所屬月);date 只用來交叉核對:
+      - 逐列一致且呼叫端未標記『來源未驗證』→ 已驗證(month_key_verified=True,與修前相同);
+      - date 與營收月份**不同**(例:date 是公布月)→ **不 FAIL_CLOSED**(修前會),但 month_key_verified=False,
+        公告時點資格 NOT VERIFIED(原因 date_differs_from_revenue_ym);
+      - 呼叫端傳 `source_month_key_verified=False`(全市場批次路徑,SSOT
+        `shared.monthly_revenue_month_key.BATCH_SOURCE_MONTH_KEY_VERIFIED`)→ 一律 month_key_verified=False:
+        來源欄位宣稱的月份在**真實資料驗證前**不得使公告時點資格變 True(護欄,不是評分規則)。
   · 只有 date → 月份語意『NOT VERIFIED』(FinMind 的 date 可能是營收月或公布月,本沙箱連不到 FinMind 無法核實),
     公告時點資格一律 NOT VERIFIED,依賴它的強連續訊號由 Batch B 阻擋;
-  · 兩者不一致 / 重複月 / 月序錯亂 / 無法解析 → FAIL_CLOSED(標原因,不默默修正)。
+  · 重複月 / 月序錯亂 / 月份鍵無法解析(含 revenue_year/month 缺值、date 存在卻有解析不了的列)→ FAIL_CLOSED
+    (標原因,不默默修正)。**不從 date 推導 revenue_year/month 補缺**:缺值就是缺值。
 
 §8.2:L2 純函式,不碰 I/O、不讀時鐘(as_of 由呼叫端注入)。
 """
@@ -83,12 +94,14 @@ MONTH_REASON_FAIL_CLOSED = "contract_fail_closed"       # 整體 fail-closed
 FAIL_DUPLICATE_MONTH = "duplicate_month"
 FAIL_MONTH_ORDER = "month_order_disorder"
 FAIL_MONTH_UNPARSEABLE = "month_unparseable"
-FAIL_KEY_CONFLICT = "date_vs_revenue_ym_conflict"
 FAIL_UPSTREAM = "upstream_fetch_failed"
 FAIL_CONTRACT_EXCEPTION = "contract_exception"
 UND_NO_DATA = "no_data"
 UND_NO_MONTH_INFO = "no_month_info"
 UND_LEGACY_INPUT = "legacy_input_no_month_contract"
+# date_eligibility_reasons 的資訊性原因(非 FAIL)
+ELIG_REASON_DATE_DIFFERS = "date_differs_from_revenue_ym"        # date 與來源宣稱營收月份不同(DEC-152:合法,但無法自我驗證)
+ELIG_REASON_SOURCE_UNVERIFIED = "source_month_key_unverified_pending_real_data"   # 護欄:來源欄位未經真實資料驗證
 
 #: 注入到 L3 輸入 dict 的鍵(shortage_screener 的 stock['revenue_month_contract'])。
 MONTH_CONTRACT_KEY = "revenue_month_contract"
@@ -96,7 +109,7 @@ MONTH_CONTRACT_KEY = "revenue_month_contract"
 #: `extract_month_contract` 要從 compute_yoy_mom 結果複製的契約欄位(舊欄位不在內)。
 CONTRACT_FIELDS: tuple[str, ...] = (
     "contract_version", "contract_status", "contract_fail_reasons", "as_of",
-    "month_key_source", "month_key_verified", "yoy_months", "yoy_months_contiguous",
+    "month_key_source", "month_key_verified", "month_key_source_fields", "month_key_date_agrees", "yoy_months", "yoy_months_contiguous",
     "yoy_target_months", "yoy_target3", "yoy_missing_reasons",
     "target_observed", "target_base_valid", "target_yoy_computable", "target_date_eligible",
     "date_eligibility", "date_eligibility_reasons", "excluded_not_yet_due_months",
@@ -152,6 +165,8 @@ def _empty_contract(status: str, reasons: list[str], *, as_of: _dt.date | None =
         "as_of": as_of.isoformat() if as_of else None,
         "month_key_source": source,
         "month_key_verified": False,
+        "month_key_source_fields": [],
+        "month_key_date_agrees": None,
         "yoy_months": [None] * n_yoy,
         "yoy_months_contiguous": None,
         "yoy_target_months": [None] * TARGET_MONTHS,
@@ -209,9 +224,11 @@ def mark_upstream_failed(contract: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _row_keys(df: pd.DataFrame):
-    """逐列月份鍵(原始列序,不排序)。回 (keys, source, verified, fail_reasons)。
+    """逐列月份鍵(原始列序,不排序)。回 (keys, source, self_consistent, fail_reasons, date_agrees)。
 
-    keys[i] = 月序 int 或 None(該列無法解析)。只認明示欄位,不從列位置推月份。
+    keys[i] = 月序 int 或 None(該列無法解析)。只認明示欄位,不從列位置推月份,**不從 date 推導 revenue_year/month**。
+    self_consistent = 月份鍵全可解析且(有 date 時)date 逐列與之同月(尚未計入呼叫端的『來源未驗證』標記)。
+    date_agrees = 兩組欄位都在時 date 與 revenue_year/month 是否逐列一致;其餘 None。date≠營收月份不是 FAIL(DEC-152)。
     """
     _n = len(df)
     _has_ym = "revenue_year" in df.columns and "revenue_month" in df.columns
@@ -246,12 +263,13 @@ def _row_keys(df: pd.DataFrame):
         _src = SRC_REVENUE_YM
         if any(k is None for k in _keys):
             _fails.append(FAIL_MONTH_UNPARSEABLE)
-        if _has_date and any(d is not None and k is not None and d != k
-                             for d, k in zip(_date_keys, _ym_keys)):
-            _fails.append(FAIL_KEY_CONFLICT)
         if _has_date and any(d is None for d in _date_keys):
             _fails.append(FAIL_MONTH_UNPARSEABLE)   # date 欄存在卻有解析不了的列 → 跨欄無法對照
-        _verified = not _fails
+        # DEC-152:date 與營收月份不同不再是 FAIL(客戶指出本來就可能不同,例:date=公布月);只記錄,且不得因此算『已驗證』
+        _agrees = (all(d is not None and k is not None and d == k for d, k in zip(_date_keys, _ym_keys))
+                   if _has_date else None)
+        _verified = not _fails and _agrees is not False
+        return _keys, _src, _verified, sorted(set(_fails)), _agrees
     elif _has_date:
         _keys = _date_keys
         _src = SRC_DATE
@@ -259,8 +277,8 @@ def _row_keys(df: pd.DataFrame):
             _fails.append(FAIL_MONTH_UNPARSEABLE)
         _verified = False
     else:
-        return [None] * _n, SRC_NONE, False, []
-    return _keys, _src, _verified, sorted(set(_fails))
+        return [None] * _n, SRC_NONE, False, [], None
+    return _keys, _src, _verified, sorted(set(_fails)), None
 
 
 def compute_month_contract(
@@ -268,6 +286,7 @@ def compute_month_contract(
     *,
     as_of: Any = None,
     upstream_failed: bool = False,
+    source_month_key_verified: bool = True,
 ) -> dict[str, Any]:
     """對單股月營收序列產生月份資料契約(欄位定義見模組 docstring)。
 
@@ -276,6 +295,11 @@ def compute_month_contract(
         as_of: 回溯基準日(date/datetime/'YYYY-MM-DD');None → 目標月無法決定,公告時點 NOT VERIFIED。
                呼叫端注入(L2 不讀時鐘);回溯時未到 SSOT 公告時點的月不入。
         upstream_failed: L1 判定上游確定抓取失敗 → FAIL_CLOSED(不推定成功)。
+        source_month_key_verified: 呼叫端對『revenue_year/revenue_month 欄來源』的信任標記(DEC-152 護欄)。
+            預設 True ＝ 修前行為(明示欄位且 date 逐列一致 → month_key_verified);
+            False ＝ 來源宣稱的月份**尚未經真實資料驗證**(全市場批次路徑傳 SSOT
+            `BATCH_SOURCE_MONTH_KEY_VERIFIED`),month_key_verified 與公告時點資格一律 NOT VERIFIED。
+            此旗標只收緊、不放寬;不影響 FAIL_CLOSED 判定、缺值位置或任何分數規則。
     """
     _asof = _parse_as_of(as_of)
     if upstream_failed:
@@ -284,15 +308,16 @@ def compute_month_contract(
             or "revenue" not in df_stock.columns:
         return _empty_contract(STATUS_UNDETERMINED, [UND_NO_DATA], as_of=_asof)
     try:
-        return _compute(df_stock, _asof)
+        return _compute(df_stock, _asof, source_trusted=bool(source_month_key_verified))
     except Exception as _e:  # noqa: BLE001 — 契約算不出來 = fail-closed 並 loud,絕不讓它拖垮舊欄位或偽裝成功
         print(f"[month-contract] 契約計算例外 → FAIL_CLOSED: {type(_e).__name__}: {_e}")
         return _empty_contract(STATUS_FAIL_CLOSED, [f"{FAIL_CONTRACT_EXCEPTION}:{type(_e).__name__}"], as_of=_asof)
 
 
-def _compute(df: pd.DataFrame, asof: _dt.date | None) -> dict[str, Any]:
+def _compute(df: pd.DataFrame, asof: _dt.date | None, *, source_trusted: bool = True) -> dict[str, Any]:
     _n = len(df)
-    _keys, _src, _verified, _fails = _row_keys(df)
+    _keys, _src, _verified, _fails, _agrees = _row_keys(df)
+    _fields = {SRC_REVENUE_YM: ["revenue_year", "revenue_month"], SRC_DATE: ["date"]}.get(_src, [])
     if _src == SRC_NONE:
         return _empty_contract(STATUS_UNDETERMINED, [UND_NO_MONTH_INFO], as_of=asof, n_yoy=3)
 
@@ -307,6 +332,7 @@ def _compute(df: pd.DataFrame, asof: _dt.date | None) -> dict[str, Any]:
     _n_yoy = 3
     if _fails:
         _c = _empty_contract(STATUS_FAIL_CLOSED, _fails, as_of=asof, n_yoy=_n_yoy, source=_src)
+        _c["month_key_source_fields"] = list(_fields)
         _c["yoy_target_months"] = [None] * TARGET_MONTHS
         if asof is not None:   # 目標月是日曆事實(只依 as_of 與 SSOT),不受資料列影響
             _c["yoy_target_months"] = _target_labels(asof)
@@ -330,8 +356,14 @@ def _compute(df: pd.DataFrame, asof: _dt.date | None) -> dict[str, Any]:
     _elig_reasons: list[str] = []
     if asof is None:
         _elig_reasons.append(MONTH_REASON_AS_OF_MISSING)
-    if not _verified:
+    if _src == SRC_DATE:
         _elig_reasons.append("month_key_unverified_date_only")
+    if _src == SRC_REVENUE_YM and _agrees is False:
+        _elig_reasons.append(ELIG_REASON_DATE_DIFFERS)
+    if _src == SRC_REVENUE_YM and _verified and not source_trusted:
+        _elig_reasons.append(ELIG_REASON_SOURCE_UNVERIFIED)
+    # 護欄(DEC-152):來源宣稱的月份在真實資料驗證前,不得使 month_key_verified / 公告時點資格變 True
+    _verified = _verified and source_trusted
 
     # ── 固定 3 個目標月 ───────────────────────────────────────────────
     if asof is None:
@@ -387,6 +419,8 @@ def _compute(df: pd.DataFrame, asof: _dt.date | None) -> dict[str, Any]:
         "as_of": asof.isoformat() if asof else None,
         "month_key_source": _src,
         "month_key_verified": _verified,
+        "month_key_source_fields": list(_fields),
+        "month_key_date_agrees": _agrees,
         "yoy_months": [_label(k) for k in _yoy_idx],
         "yoy_months_contiguous": _contig,
         "yoy_target_months": [_label(t) for t in _tgt_idx],
