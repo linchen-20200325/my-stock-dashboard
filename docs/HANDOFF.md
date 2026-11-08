@@ -64,14 +64,18 @@
 
 <!-- HANDOFF_ACTIVE_GATE:END -->
 
-## 最新接手點（2026-11-08｜#1057 已合併；#1034／#1054／#1038 狀態；補註，只追加）
+## 最新接手點（2026-11-08｜#1057／#1054／#1059／#1060 已合併；#1034／#1038 狀態；就地更新）
 
 > 時點快照，下次接手仍須先重新 GitHub Gate。本段為已驗證事實，未擴寫。
 
 - **#1057 已合併**（main `2ad57f5`）：PROJECT_RULES §0.4 核銷（#1034 部分）。**#1034 維持 Draft、不直接合併**。
 - **#1034 殘餘待辦**：(1) DEC-143／144／145 文末仍寫「落盤 #1034／合併前未生效」過期字樣，依 DECISIONS 既有訂正慣例另批；(2) #1034 的 §32（三方案）／§33（巡檢靜默）與 main 現有 §32 撞號，且 main 約第 1038 行已有「3 方案回報」條，須逐句比對後再以 §33／§34 保存；(3) PROJECT_RULES §31 補註「進 main 前屬本 docs PR 待合併」為舊文。
-- **#1054**（`auto/data-macro-history`，head `2f51915`）：CI 全綠，**尚未合併**。已驗：twii_ohlcv 只有 2026-11-06 最後一列 fetched_at 改變、OHLC 值相同、無 OHLC 違規、日期單調唯一，volume 有 34 筆 NaN（既有）；metadata 兩個 FinMind 項 last_error 改為「抓取結果為空」（11-07 週六，無法區分休市與故障）；tw_pmi.json 只換 fetched_at／cached_at，資料實停在 2026-10-01 且 `is_proxy:true`。**待查**：下游是否把 fetched_at 當資料新鮮度（違反 missing≠fresh）。**未宣稱發布端到端成功。**
+- **#1054**（`auto/data-macro-history`）：~~CI 全綠，**尚未合併**。~~（過期，2026-11-08 更新：**已 squash 合併**，main `a6deab8`，原生 CI 全綠；稽核結論 PASS〔僅檔案語意〕。）已驗：twii_ohlcv 只有 2026-11-06 最後一列 fetched_at 改變、OHLC 值相同、無 OHLC 違規、日期單調唯一，volume 有 34 筆 NaN（既有）；metadata 兩個 FinMind 項 last_error 改為「抓取結果為空」（11-07 週六，無法區分休市與故障）；tw_pmi.json 只換 fetched_at／cached_at，資料實停在 2026-10-01 且 `is_proxy:true`。~~**待查**：下游是否把 fetched_at 當資料新鮮度（違反 missing≠fresh）。~~（已查：未被當資料新鮮度。）**未宣稱發布端到端成功；真實發布端到端與 Cloud 部署仍 NOT VERIFIED，不因合併改為已驗證。**
 - **#1038**：維持 **Draft／NO MERGE**。PIT 阻塞：缺逐列來源發布時間；新列 date=11-05 但 inst／li 腿 as_of=11-06；有 `date_source=backfill_from_captured_at` 回填列；需 Decision Gate、逐列來源證據、`load_signals` 壞檔 fail-closed、非作者 QA。
+- **#1059 已合併**（BACKLOG 稽核結論與 D1/D2/D3 登記）。
+- **D2 已修並合併 #1060**（main `a7ae283`）：`compute_cache_staleness` 對 `as_of>today` 回 `is_stale=True`；6 個新測試、突變驗證、還原鏈（`tests/test_d2_staleness_revert_chain.py` 並接入 p4 鏈）、非作者 QA 兩輪、CI 全綠。**D2 後續（另案）**：(a) 檔頭「`load_tw_pmi_history` 未接線」過期註解被 z40／z63／c1 revert-pair 測試釘死，改註解須同步其還原鏈；(b) `_leg_series`（`load_extreme_risk_legs`）對未來日期同型缺陷未修；(c) 畫面端 `age_days` 負值顯示「距今 -3 天」為外觀問題。
+- **D1／D3＝提案，待客戶直接確認**：ChatGPT 建議裁示（D1 以來源觀測日判板塊資金潮汐新鮮度，cron `updated_at` 不可冒充資料日；D3 空抓取分 `NO_NEW_DATA`／`FETCH_FAILED`／`UNDETERMINED` 並要求判定證據）**不是客戶逐字裁示**。正式施工（改資料契約／新鮮度門檻／新增狀態 enum）暫停。
+- **下一個唯一安全工作**：D1／D3 **唯讀盤點**（呼叫端、來源日期與時間戳欄位、現有狀態 enum），等客戶確認語意；不改程式。
 - 三個歷史分支全部保留（見 BACKLOG `NUI2-BRANCH-RETENTION-1107`）。
 
 
