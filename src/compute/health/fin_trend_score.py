@@ -341,6 +341,11 @@ def compute_one_stock_trend(
                 row["turn_icon"] = "⚠️ 雷股"
     except Exception as e:  # pragma: no cover - defensive
         row["note"] += f"轉機判定失敗 ({type(e).__name__}); "
+        # 2026-11-08（客戶 DEC-150 QA 補洞）：近兩季「能不能比」查不出來 → 明確留旗標，
+        # 讓 `scorability.trend_row_evidence` 保守判季腿無證據（不得退回只看 n_snapshots 而放行）。
+        row["diff_verdict"] = None
+        row["turn_icon"] = ""
+        row["diff_failed"] = True
 
     # ── 3. 合議 ─────────────────────────────────────────────────
     try:
