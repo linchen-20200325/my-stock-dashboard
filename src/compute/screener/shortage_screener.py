@@ -43,6 +43,7 @@ from src.compute.health.monthly_revenue_month_contract import (
     MONTH_CONTRACT_KEY,
     STATUS_FAIL_CLOSED,
     STATUS_OK,
+    MONTH_REASON_NOT_YET_DUE,
     TARGET_MONTHS,
     legacy_undetermined_contract,
 )
@@ -442,9 +443,14 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
         elig = _as3(c.get("target_date_eligible"))
         reasons3 = _as3(c.get("yoy_missing_reasons"))
         flags = [_as3(c.get(k)) for k in _FLAGS3]
-        # 值存在但契約明說『該月未觀測/基期無效/不可算』(False)→ 視為不可用(fail-closed,不信不一致的值)
-        vals = [None if (raw3[i] is not None and any(f[i] is False for f in flags)) else raw3[i]
+        # fail-closed:值要『被採用』必須 觀測/基期有效/可算 三項皆 True 且 公告時點資格不是 False;
+        # None(NOT VERIFIED)或 False 的旗標都不採用該值(位置保留為缺值,不當 0、不計入 YoY)。
+        # 資格 False＝未到公告時點的月,比照『未觀測』視為缺值(不得用未公告月的值評分)。
+        vals = [raw3[i] if (all(f[i] is True for f in flags) and elig[i] is not False) else None
                 for i in range(TARGET_MONTHS)]
+        reasons3 = [(MONTH_REASON_NOT_YET_DUE if (raw3[i] is not None and elig[i] is False
+                                                  and all(f[i] is True for f in flags)) else reasons3[i])
+                    for i in range(TARGET_MONTHS)]
         flags_all_true = all(f[i] is True for f in flags for i in range(TARGET_MONTHS))
     else:
         basis = _BASIS_LEGACY
@@ -480,7 +486,9 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
     all_above = all(y > _min for y in valid)
 
     # ── 3 個位置皆有值 ───────────────────────────────────────────────
-    if n_missing == 0 and contiguous is not False:
+    # 逐月/皆>門檻（STEADY、STRONG）需『連續性已驗證為 True』;連續性 None(UNDETERMINED,舊輸入)
+    # 與 False 一樣只能走下方保守分支(最多 PARTIAL),不得因未驗證而給 STEADY。
+    if n_missing == 0 and contiguous is True:
         increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
         if all_above:
             blockers: list[str] = []
@@ -491,7 +499,7 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
                     blockers.append("目標月未定")
                 if basis == _BASIS_TARGET and not flags_all_true:
                     blockers.append("觀測/基期/可算未全確認")
-                if c.get("yoy_months_contiguous") is not True:
+                if contiguous is not True:      # 目標三月自身是否連續日曆月(不看舊 yoy_last3 的未來跳月列)
                     blockers.append("連續性未確認")
                 if not all(e is True for e in elig):
                     blockers.append("日期資格 NOT VERIFIED" if any(e is None for e in elig) else "日期資格未通過")
@@ -502,8 +510,6 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
             _note = ""
             if increasing and blockers:
                 _note = f"；未判定加速：{'、'.join(blockers)}"
-            elif contiguous is None:
-                _note = "；月份連續性未驗證"
             return _c4_result(SHORTAGE_REV_STEADY_SCORE, f"🟡月營收 YoY 皆>{_min:.0f}%（末月{_last:+.0f}%{_note}）",
                               metrics, ok=True)
         if any(y > _min for y in valid):
@@ -512,8 +518,8 @@ def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str
         return _c4_result(0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics, ok=True)
 
     # ── 有缺月 / 不連續:不得 STEADY/STRONG;僅依既有『部分達標』『動能不足』規則,不補值 ──
-    metrics["rev_strong_blocked_by"] = ["缺月" if n_missing else "不連續"]
-    _gap = (f"缺：{_missing_desc}" if n_missing else "月份不連續")
+    metrics["rev_strong_blocked_by"] = ["缺月" if n_missing else ("不連續" if contiguous is False else "連續性未驗證")]
+    _gap = (f"缺：{_missing_desc}" if n_missing else ("月份不連續" if contiguous is False else "連續性未驗證"))
     if any(y > _min for y in valid):
         return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,
                           f"🟡月營收 YoY 部分達標（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",

@@ -116,12 +116,28 @@ def check_gap_middle_not_strong_or_steady(M):
 
 
 def check_date_eligibility_blocks_strong(M):
-    """日期資格 None(NOT VERIFIED,date-only 月份鍵)/ False → 禁 STRONG;其餘照既有規則 → STEADY。"""
+    """日期資格 None(NOT VERIFIED,date-only 月份鍵)→ 禁 STRONG;其餘照既有規則 → STEADY。
+    資格 False(未到公告時點)→ 該月值視為缺值(見 check_not_yet_due_is_missing)。"""
     y = [16.0, 18.0, 22.0]
-    for elig in ([None, None, None], [True, None, True], [True, True, False], [False, False, False]):
+    for elig in ([None, None, None], [True, None, True]):
         r = c4(M, y, hand(y, target_date_eligible=elig))
         assert r.c4_revenue_yoy == STEADY and r.c4_revenue_yoy != STRONG, (elig, r.reasons)
         assert all("逐月加速" not in x for x in r.reasons)
+    check_not_yet_due_is_missing(M)
+
+
+def check_not_yet_due_is_missing(M):
+    """target_date_eligible=False 的月:值比照 observed=False 視為缺值,不計入 YoY、走缺月分支(不得 STEADY/STRONG)。"""
+    y = [20.0, 30.0, 40.0]
+    r = c4(M, y, hand(y, target_date_eligible=[True, True, False]))
+    assert r.metrics["rev_yoy_scored"] == [20.0, 30.0, None], r.metrics["rev_yoy_scored"]
+    assert r.metrics["rev_missing_reasons"][2] == MC.MONTH_REASON_NOT_YET_DUE
+    assert r.c4_revenue_yoy == PARTIAL and r.c4_ok is True, r.reasons
+    assert "缺" in r.reason_text
+    r2 = c4(M, y, hand(y, target_date_eligible=[False, False, True]))     # 只剩 1 個有效月 → 資料不足
+    assert r2.c4_ok is False and r2.c4_revenue_yoy == 0.0
+    r3 = c4(M, y, hand(y, target_date_eligible=[False, False, False]))
+    assert r3.c4_ok is False and r3.c4_revenue_yoy == 0.0
 
 
 def check_gap_never_steady(M):
@@ -136,6 +152,23 @@ def check_fail_closed_is_insufficient(M):
     r = c4(M, [20.0, 30.0, 40.0], con)
     assert r.c4_revenue_yoy == 0.0 and r.c4_ok is False
     assert "FAIL_CLOSED" in r.miss_reason
+
+
+def check_flag_none_not_observed(M):
+    y = [16.0, 18.0, 22.0]
+    for flag in ("target_observed", "target_base_valid", "target_yoy_computable"):
+        r = c4(M, y, hand(y, **{flag: [None, True, True]}))
+        assert r.metrics["rev_yoy_scored"][0] is None and r.c4_revenue_yoy == PARTIAL
+
+
+def check_legacy_contiguity_none(M):
+    assert c4(M, [16.0, 18.0, 22.0]).metrics["rev_contiguous"] is None
+    assert c4(M, [16.0, 18.0, 22.0]).c4_revenue_yoy == PARTIAL
+
+
+def check_future_row_not_blocking(M):
+    y3, con = real_inputs(_with_future_jump_row([16.0, 18.0, 22.0]))
+    assert M.score_shortage(stock(y3, con)).c4_revenue_yoy == STRONG
 
 
 # ───────────────────────── 缺月 / 不連續 ─────────────────────────
@@ -284,11 +317,18 @@ def test_contract_fail_closed_inputs_give_insufficient(mk_df):
 
 
 def test_legacy_input_without_contract_never_strong():
-    """舊輸入(只有 revenue_yoy_last3)= UNDETERMINED:[16,18,22] 修前 STRONG,現在最多 STEADY。"""
+    """舊輸入(只有 revenue_yoy_last3)= UNDETERMINED:[16,18,22] 修前 STRONG,現在最多 PARTIAL(連續性未驗證)。
+
+    QA 修正(DEC-151 不得虛構證據):連續性未驗證 → 不得給 STEADY(三值也可能是跳月拼成)。
+    """
     r = c4(REAL, [16.0, 18.0, 22.0])
-    assert r.c4_revenue_yoy == STEADY and r.c4_ok is True
+    assert r.c4_revenue_yoy == PARTIAL and r.c4_ok is True
     assert all("逐月加速" not in x for x in r.reasons)
-    assert "NOT VERIFIED" in r.reason_text and "UNDETERMINED" in r.reason_text
+    assert "連續性未驗證" in r.reason_text
+    assert r.metrics["rev_contiguous"] is None                 # UNDETERMINED 如實呈現 None,不得顯示 True
+    assert c4(REAL, [30.0, 20.0, 25.0]).c4_revenue_yoy == PARTIAL      # 不遞增也一樣不給 STEADY
+    w = c4(REAL, [5.0, 3.0, 1.0])
+    assert w.c4_revenue_yoy == 0.0 and w.c4_ok is True and any("動能不足" in x for x in w.reasons)
     # 舊輸入有缺值位置:不壓縮
     r2 = c4(REAL, [20.0, None, 40.0])
     assert r2.c4_revenue_yoy == PARTIAL
@@ -298,7 +338,8 @@ def test_legacy_input_without_contract_never_strong():
 
 def test_legacy_undetermined_contract_object_never_strong():
     r = c4(REAL, [16.0, 18.0, 22.0], MC.legacy_undetermined_contract())
-    assert r.c4_revenue_yoy == STEADY
+    assert r.c4_revenue_yoy == PARTIAL and r.metrics["rev_contiguous"] is None
+    assert "連續性未驗證" in r.reason_text
 
 
 def test_contract_ok_but_as_of_missing_blocks_strong():
@@ -464,6 +505,84 @@ def test_malformed_contract_does_not_raise_and_never_strong():
         assert r.c4_revenue_yoy != STRONG
 
 
+# ───────────────────────── QA 追加(非作者 QA 有條件通過後的修正) ─────────────────────────
+def test_not_yet_due_month_is_missing_not_scored():
+    check_not_yet_due_is_missing(REAL)
+
+
+@pytest.mark.parametrize("flag", ["target_observed", "target_base_valid", "target_yoy_computable"])
+def test_value_with_unverified_flag_is_not_observed(flag):
+    """(M6)值存在但 observed/base_valid/computable 為 None(NOT VERIFIED)或 False → 不得被當作有效觀測。"""
+    y = [16.0, 18.0, 22.0]
+    for bad in (None, False):
+        flags = [bad, True, True]
+        r = c4(REAL, y, hand(y, **{flag: flags}))
+        assert r.metrics["rev_yoy_scored"] == [None, 18.0, 22.0], (flag, bad)
+        assert r.c4_revenue_yoy == PARTIAL, (flag, bad, r.reasons)      # 缺月分支,不得 STEADY/STRONG
+
+
+def test_legacy_contiguity_is_reported_as_undetermined_none():
+    """(M11)無契約 / UNDETERMINED 契約:rev_contiguous 必須如實為 None(不得顯示 True 或 False)。"""
+    assert c4(REAL, [16.0, 18.0, 22.0]).metrics["rev_contiguous"] is None
+    assert c4(REAL, [16.0, 18.0, 22.0], MC.legacy_undetermined_contract()).metrics["rev_contiguous"] is None
+    und = dict(MC.legacy_undetermined_contract(), contract_fail_reasons=[MC.UND_NO_MONTH_INFO])
+    assert c4(REAL, [16.0, 18.0, 22.0], und).metrics["rev_contiguous"] is None
+
+
+def _with_future_jump_row(yoys, *, ym=True, drop=(), future_rev=999.0):
+    """目標月(07-09)完整後再接一列『未到公告時點』的 2026-12(跳月未來列):舊 yoy_last3 取最後 3 列會含它。"""
+    df = producer_df(yoys, drop_cur=drop, ym=ym)
+    row = {"date": pd.Timestamp(2026, 12, 1), "revenue": future_rev}
+    if ym:
+        row.update(revenue_year=2026, revenue_month=12)
+    return pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+
+
+def test_target_contiguity_not_blocked_by_future_jump_row():
+    """(M15)目標三月完整連續、資格已驗證,只因表尾有未到期的跳月未來列(舊 yoy_months_contiguous=False)
+    → 仍應 STRONG(連續性看目標月自身);未來列的值不得影響評分。"""
+    y3, con = real_inputs(_with_future_jump_row([16.0, 18.0, 22.0]))
+    assert con["yoy_months_contiguous"] is False and con["excluded_not_yet_due_months"] == ["2026-12"]
+    assert con["yoy_target_months"] == ["2026-07", "2026-08", "2026-09"]
+    r = REAL.score_shortage(stock(y3, con))
+    assert r.c4_revenue_yoy == STRONG and r.metrics["rev_contiguous"] is True
+    r2 = REAL.score_shortage(stock(real_inputs(_with_future_jump_row([16.0, 18.0, 22.0], future_rev=1.0))[0],
+                                   real_inputs(_with_future_jump_row([16.0, 18.0, 22.0], future_rev=1.0))[1]))
+    assert r2.metrics["rev_yoy_scored"] == r.metrics["rev_yoy_scored"]       # 未來列值不同,評分輸入不變
+
+
+def test_future_jump_row_does_not_launder_unverified_months():
+    """反例:放寬連續性判斷不得放行未驗證/缺月/不連續的目標月。"""
+    # (i) 目標月缺 08 + 未來跳月列 → 缺月分支(PARTIAL),不得 STRONG/STEADY
+    r = c4_from_df(REAL, _with_future_jump_row([16.0, None, 22.0]))
+    assert r.c4_revenue_yoy == PARTIAL
+    # (ii) 月份鍵未驗證(date-only)+ 未來跳月列 → 資格 None,不得 STRONG
+    r = c4_from_df(REAL, _with_future_jump_row([16.0, 18.0, 22.0], ym=False))
+    assert r.c4_revenue_yoy == STEADY
+    # (iii) 手建:目標月標籤不連續(即使舊欄位 contiguous=True 也不得放行)→ 缺位置語意不成立,不得 STRONG/STEADY
+    y = [16.0, 18.0, 22.0]
+    r = c4(REAL, y, hand(y, yoy_target_months=["2026-07", "2026-09", "2026-10"], yoy_months_contiguous=True))
+    assert r.c4_revenue_yoy not in (STRONG, STEADY)
+    # (iv) 手建:舊 yoy_months_contiguous=True、但某月資格 None → 仍不得 STRONG
+    r = c4(REAL, y, hand(y, target_date_eligible=[True, None, True], yoy_months_contiguous=True))
+    assert r.c4_revenue_yoy == STEADY
+
+
+def test_cli_prints_scored_target3_with_missing_not_zero():
+    import importlib.util as _iu
+    spec = _iu.spec_from_file_location("_c4b_cli", REPO / "scripts/shortage_cli.py")
+    cli = _iu.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    r = REAL.score_shortage(stock([16.0, 18.0, 22.0], hand([20.0, None, 40.0])))   # legacy 與 target3 故意不同
+    txt = cli.format_score_report(r)
+    assert "2026-07:+20.0%" in txt and "2026-08:缺" in txt and "2026-09:+40.0%" in txt
+    assert "+16.0%" not in txt and "18.0" not in txt                       # 不印未被評分使用的舊 3 值
+    assert "2026-08:+0.0%" not in txt and "2026-08:0" not in txt           # 缺值不得顯示成 0
+    # 舊 ShortageScore(無 rev_yoy_scored)仍可印(退回舊欄位)
+    legacy = r.__class__(**{**r.__dict__, "metrics": {"rev_yoy_last3": [16.0, None, 22.0]}})
+    assert "缺" in cli.format_score_report(legacy)
+
+
 # ───────────────────────── 突變(改寫被測碼,檢查必須轉紅) ─────────────────────────
 def _load_mutant(old: str, new: str):
     src = (REPO / "src/compute/screener/shortage_screener.py").read_text(encoding="utf-8")
@@ -477,8 +596,8 @@ def _load_mutant(old: str, new: str):
 
 MUTANTS = {
     # (a) 把 None 壓縮回去:缺月不再擋 3 位置分支(valid 變成只含非 None 的 2 個值)
-    "compress_none": ("if n_missing == 0 and contiguous is not False:",
-                      "if contiguous is not False:", check_gap_middle_not_strong_or_steady),
+    "compress_none": ("if n_missing == 0 and contiguous is True:",
+                      "if contiguous is True:", check_gap_middle_not_strong_or_steady),
     # (b) 忽略 date_eligible:公告時點資格不再阻擋 STRONG
     "ignore_date_eligible": ("if not all(e is True for e in elig):", "if False:",
                              check_date_eligibility_blocks_strong),
@@ -486,6 +605,18 @@ MUTANTS = {
     "gap_gets_steady": ("return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,\n                          f\"🟡月營收 YoY 部分達標（{len(valid)}",
                         "return _c4_result(SHORTAGE_REV_STEADY_SCORE,\n                          f\"🟡月營收 YoY 部分達標（{len(valid)}",
                         check_gap_never_steady),
+    # (e) 未到公告時點(資格 False)的月仍計入評分
+    "not_yet_due_scored": ("elig[i] is not False) else None", "True) else None", check_not_yet_due_is_missing),
+    # (f) 旗標 None 也當作觀測到(M6)
+    "flag_none_as_observed": ("vals = [raw3[i] if (all(f[i] is True for f in flags)",
+                              "vals = [raw3[i] if (all(f[i] is not False for f in flags)", check_flag_none_not_observed),
+    # (g) legacy 路徑連續性顯示 True(M11)
+    "legacy_contiguous_true": ("contiguous = c.get(\"yoy_months_contiguous\") if status == STATUS_OK else None",
+                               "contiguous = c.get(\"yoy_months_contiguous\") if status == STATUS_OK else True",
+                               check_legacy_contiguity_none),
+    # (h) 回退到舊的『整表 yoy_months_contiguous』連續性判斷(M15)
+    "strong_uses_legacy_contiguity": ("if contiguous is not True:      #", "if c.get(\"yoy_months_contiguous\") is not True:      #",
+                                      check_future_row_not_blocking),
     # (d) 忽略 FAIL_CLOSED:契約失敗不再走資料不足
     "ignore_fail_closed": ("if status == STATUS_FAIL_CLOSED:", "if False:", check_fail_closed_is_insufficient),
 }
