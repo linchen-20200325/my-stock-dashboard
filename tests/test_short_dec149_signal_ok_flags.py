@@ -221,3 +221,32 @@ def test_badge_not_shown_for_unassessable():
 def test_forward_test_frozen_schema_unchanged():
     from src.compute.screener.forward_test import PICK_SNAPSHOT_HEADERS
     assert PICK_SNAPSHOT_HEADERS == ("cohort", "stock_id", "name", "entry_price", "factors", "frozen_at")
+
+
+# ── QA 補強（非作者 QA 變異殺手）：ok 判定的邊界各釘一個 ─────────────────────
+def test_c1_not_ok_when_t_present_but_both_bases_missing():
+    """t 有合約負債、t-1 與 t-4 皆缺 → YoY／QoQ 皆算不出 → 既有『基期不足』資料不足分支 → c1_ok False（非 cl_na）。"""
+    qs = _strong_quarters()
+    qs[1]["contract_liab"] = None     # t-1
+    qs[4]["contract_liab"] = None     # t-4
+    r = score_shortage(_stock(qs))
+    assert r.cl_na is False and r.metrics["cl_yoy"] is None and r.metrics["cl_qoq"] is None
+    assert r.c1_ok is False and r.c1_contract_liab == 0.0
+    assert "①合約負債基期不足" in r.miss_reason and "①合約負債無科目" not in r.miss_reason
+    assert (r.c2_ok, r.c3_ok, r.c4_ok) == (True, True, True) and r.n_signals_ok == 3
+
+
+def test_c3_ok_when_dio_t_and_dio_t1_present_even_if_dio_t4_missing():
+    """dio_t4 缺不算資料不足（既有 _score_inventory_days 只擋 dio_t／dio_t1 為 None）→ c3_ok True。"""
+    qs = _strong_quarters()
+    qs[7]["cogs"] = None              # 只影響 dio_t4（offset 4..7）;dio_t(0..3)、dio_t1(1..4) 不受影響
+    r = score_shortage(_stock(qs))
+    assert r.metrics["dio_t"] is not None and r.metrics["dio_t1"] is not None
+    assert r.metrics["dio_t4"] is None
+    assert r.c3_ok is True and r.n_signals_ok == 4 and r.miss_reason == ""
+
+
+def test_c4_ok_with_exactly_two_valid_months():
+    """月營收恰好 2 個有效月（邊界）→ 既有 `len(valid) < 2` 不成立 → c4_ok True。"""
+    r = score_shortage(_stock(yoy=[None, 18.0, 22.0]))
+    assert r.c4_ok is True and r.n_signals_ok == 4 and r.c4_revenue_yoy > 0
