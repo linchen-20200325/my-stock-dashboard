@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-07T15:34:05.474201+00:00",
+  "updated_at": "2026-11-08T15:53:14.916957+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
@@ -11,25 +11,33 @@
       "name": "finmind_inst",
       "last_updated": "2026-11-06",
       "row_count": 4938,
-      "last_error": "抓取結果為空"
+      "last_error": "抓取結果為空",
+      "fetch_outcome": "NO_NEW_DATA",
+      "fetch_evidence": "FinMind TaiwanStockTotalInstitutionalInvestors: HTTP 200, status 200, data=[]"
     },
     "finmind_margin": {
       "name": "finmind_margin",
       "last_updated": "2026-11-06",
       "row_count": 4938,
-      "last_error": "抓取結果為空"
+      "last_error": "抓取結果為空",
+      "fetch_outcome": "NO_NEW_DATA",
+      "fetch_evidence": "FinMind TaiwanStockTotalMarginPurchaseShortSale: HTTP 200, status 200, data=[]"
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
       "last_updated": "2026-09-01",
       "row_count": 239,
-      "last_error": "抓取結果為空"
+      "last_error": "抓取結果為空",
+      "fetch_outcome": "NO_NEW_DATA",
+      "fetch_evidence": "CBC EF15M01: 解析與 sanity 通過,請求窗口內無新月份"
     },
     "tw_pmi": {
       "name": "tw_pmi",
       "last_updated": "2026-10-01",
       "row_count": 172,
-      "last_error": "抓取結果為空"
+      "last_error": "抓取結果為空",
+      "fetch_outcome": "UNDETERMINED",
+      "fetch_evidence": "data.gov.tw 6100: CSV 解析出歷史列,窗口內 0 列,但 parser 略過列數無從核對"
     }
   }
 }
