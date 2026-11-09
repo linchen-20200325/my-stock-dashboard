@@ -1254,3 +1254,18 @@ DEC-086 規則已於 main，本表已落地。
 | 不可動 | G2F 禁用清單／G2／G4／G9 守衛（G2F 白名單僅本 PR 明列 +1 `twii_kbar_fact_of`，獨立審查 pending）、`TWII_CARD_DAYS=1`、其他頁、Risk Cap、OneBrain、OAuth／Sheet、資料發布、FinMind；252 根切換／縮放／MA／量未核准 |
 | 證據 | viewport 證據 JSON（newui2_realfeed、newui2_batch3b）因 `src/ui2` 變更重產；部署端（Streamlit Cloud）實況 NOT VERIFIED |
 | G2F 白名單 | `G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"]` **+1 名稱** `twii_kbar_fact_of`（模組級純函式；⛔ I/O／時鐘／session／producer）。必要性：feed 只能自 real_canonical 取具名名稱，否則建不出日 K 事實；`.open` 開盤價欄位讀取留在 G2 照掃的 real_canonical，G2F 禁用清單未為此 false positive 修改。先前 `RealFeedSnapshot.kbar_fact_of` 作法已依 AI 總管裁示撤回。**獨立審查 pending** |
+
+### 2026-11-09 接手點補註｜Issue #1099 PR-1 #1100＋PR-2 #1101 皆已合併（只追加；取代上一則「PR-2 施工中／merge pending QA/CI」）
+
+> 本則**取代**上一則補註（標題「PR-2 施工中…merge pending QA/CI」）中的 PR-2 狀態列與「獨立審查 pending」字樣；上一則原文一字未改、保留為歷史。
+
+| 項目 | 接手事實／限制 |
+|---|---|
+| PR-1 | #1100 squash 合併 → main `e5a429c`（head `2a65065`；CI run 42659311284 success）。QA：https://github.com/linchen-20200325/my-stock-dashboard/pull/1100#issuecomment-6746374501 |
+| PR-2 | #1101 squash 合併 → main `31acbe878be2d3a055307d1e090d65c13f6f6fc0`（head `5203f9f`）。CI run 42677530800：Fast checks、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate、Slow tests 全 success。非作者 QA **PASS**：https://github.com/linchen-20200325/my-stock-dashboard/pull/1101#issuecomment-6749470261 |
+| G2F 白名單 | `twii_kbar_fact_of` +1 名稱經非作者 QA **獨立審查**：判定為合理的最小必要變更，**非放寬守衛**（上一則「獨立審查 pending」已解除） |
+| QA 量測 | 突變 17 個：16 killed＋1 equivalent；head 層級瀏覽器重量測 390×844 與 1440×900 皆 scrollWidth＝viewport、20 根 K 棒、svg 220px |
+| 已記錄、未修（nits） | (a) commit 進 repo 的 viewport JSON `meta.git_sha`＝`e5a429c`（於 base 工作樹量測；QA 於 head 重量測結果相符）；(b) 卡片與主圖為兩次 parquet 讀取，兩次之間若有 cron 寫入或跨午夜 → 會出現一次紅色「不一致」畫面（fail-closed，非造假）；(c) 外觀：錯誤句「台股日 K暫時無法讀取」缺分隔字元。三項已登 BACKLOG 低優先，**未授權施工**（§-1） |
+| 未驗證 | Streamlit Cloud 部署端實況 **NOT VERIFIED**；平盤（灰十字）K 棒在目前真實 20 列中未出現，僅單元測試覆蓋 |
+| 範圍 | Issue #1099 範圍（PR-1＋PR-2）**已完成**；#1099 底下**無其他授權工作** |
+| **下一個唯一安全接手點** | **#1099 下無進行中任務；等客戶指示**。先前待客戶事項不變：國際趨勢相關裁示（見 BACKLOG「NUI2 市場頁施工前準備」(2)～(5)：US10Y 口徑、VIX 已收盤 bar、利差定義、TW PMI 與景氣燈號取捨）。下次接手仍須先重新 GitHub Gate |

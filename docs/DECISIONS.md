@@ -7960,3 +7960,4 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **文件規格 SSOT（決策附屬）**：`docs/vnext/NEWUI2_MARKET_TWII_KBAR_ABA_DECISION_SPEC_2026-11-09.md`。工作現況另同步 BACKLOG／HANDOFF；本次 PR **docs-only**，不得觸及 src、tests、CI／workflow、Risk Cap、OneBrain、登入／Sheet、股票選股公式。
 
 - **實作註記（2026-11-09 追加；AI 總管派工實作紀錄，非新客戶裁示）**：正式施工依 GitHub Issue #1099 的核准範圍進行——客戶施工授權為**對話轉述，repo 內無原始連結（NOT VERIFIED by repo）**。PR-1 #1100（main `e5a429c`）落地 L0／L1／L3 日 K OHLC 唯讀 fail-closed 契約；PR-2（分支 `feat/ui2-twii-kbar-market-20261109`，merge pending QA/CI）落地 Real-data Preview 📊 主圖日 K（feed 第二次讀同一白名單函式、canonical 重驗＋卡片同源對帳、FAKE 軸不給 K 棒）。本註記不改寫上方任何條文。
+- **合併補註（2026-11-09 追加；非新客戶裁示）**：PR-2 #1101 已 squash 合併 → main `31acbe8`（完整 `31acbe878be2d3a055307d1e090d65c13f6f6fc0`；CI run 42677530800 全 success；非作者 QA PASS https://github.com/linchen-20200325/my-stock-dashboard/pull/1101#issuecomment-6749470261）；上一則實作註記「merge pending QA/CI」狀態已過時，原文保留不改。
