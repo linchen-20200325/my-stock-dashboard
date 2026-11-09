@@ -2105,3 +2105,13 @@
   - 量測：`measure_viewport` 新增判定 `kbar_primary_chart`（主圖與空槽不得並存、有 K 棒時 1～20 根／svg 高 200～240／文字圖例逐字／⛔ MA·均線·成交量）；`_git_head` 支援 git worktree（`.git` 檔）以免證據 meta `git_sha` 讀成 None。viewport 證據 JSON（newui2_realfeed、newui2_batch3b；Streamlit 1.59.2＋1.56.0）因 `src/ui2` 變更重產，全數通過；newui2_realfeed 市場頁截圖更新。
   - **G2F 白名單變更（+1 名稱，獨立審查 pending）**：AI 總管裁示否決先前「經既有白名單類別 `RealFeedSnapshot.kbar_fact_of()` 取用新純函式」作法（屬未經可見審查的擴權＝「偷繞」），改走 Issue #1099 允許的明列路線：`real_canonical` 新增模組級純函式 `twii_kbar_fact_of(view, *, error_type="")`（⛔ I/O／時鐘／session／producer；G2 照掃），`tests/test_ui2_guards.py::G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"]` 只加這一個名稱；`_G2F_BANNED_NAMES`／`_G2F_BANNED_ATTRS`／其他模組／G2／G4／G9 一字未改。**必要性證據**：feed 只准自 `real_canonical` 取具名名稱，無此名稱即無法建出日 K 事實；且 G2F 禁 `.open` 屬性（為擋檔案 I/O），開盤價欄位 `view.open` 的讀取留在 `real_canonical`，避免為誤判（false positive）改禁用清單。`tests/test_ui2_twii_kbar.py` 釘住「只多這一個名稱」與「其他新名稱／`.open` 仍被擋」。**獨立審查 pending**。
   - `test_ui2_real_feed.py::test_one_snapshot_means_one_call_per_service` 原本靠假 service 不收 `with_ohlc`（日 K 意外變紅）才通過；已改為 `_feed` 假 service 收 `with_ohlc`（keyword-only），並精確斷言卡片恰一次 `(1, 無關鍵字)`、日 K 恰一次 `(20, with_ohlc=True)`、happy path 日 K 為 OK（非紅）。
+
+📌 **2026-11-09｜Issue #1099 PR-2 #1101 已合併（只追加；解除上一則兩處 pending）**：上一則補註（標題「PR-2 狀態＝merge pending QA/CI」）與其中「G2F 白名單變更…獨立審查 pending」兩處 pending 狀態**已解除**；原文一字未改、保留為歷史。
+- **合併事實**：PR-2 #1101 squash 合併 → main `31acbe878be2d3a055307d1e090d65c13f6f6fc0`（head `5203f9f`）；CI run 42677530800 五項（Fast checks、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate、Slow tests）全 success。PR-1 #1100 → main `e5a429c`（head `2a65065`，CI run 42659311284 success）。
+- **獨立審查 PASS**：非作者 QA https://github.com/linchen-20200325/my-stock-dashboard/pull/1101#issuecomment-6749470261 ——G2F 白名單 +1 名稱 `twii_kbar_fact_of` 經獨立審查判定為合理最小必要變更、**非放寬守衛**；突變 17 個（16 killed＋1 equivalent）；head 層級瀏覽器重量測 390×844／1440×900 scrollWidth＝viewport、20 根、svg 220px。
+- **限制**：Streamlit Cloud 部署端 NOT VERIFIED；平盤灰十字 K 棒在目前真實 20 列中未出現，僅單元測試覆蓋。
+- **範圍**：Issue #1099（PR-1＋PR-2）已完成；其下無其他授權工作。
+- **低優先 backlog（已記錄、未修；未授權施工，依 `CLAUDE.md` §-1 無指派／無實際 bug 觸發不主動動工）**：
+  - `NUI2-TWII-KBAR-NIT-GITSHA`：commit 進 repo 的 viewport 證據 JSON `meta.git_sha`＝`e5a429c`（於 base 工作樹量測）；QA 已於 head 重量測且相符。
+  - `NUI2-TWII-KBAR-NIT-TWO-READS`：卡片與主圖為兩次 parquet 讀取；兩次之間若有 cron 寫入或跨午夜，會出現一次紅色「不一致」畫面（fail-closed，非造假）。
+  - `NUI2-TWII-KBAR-NIT-COPY-SEP`：外觀——錯誤句「台股日 K暫時無法讀取」缺分隔字元。
