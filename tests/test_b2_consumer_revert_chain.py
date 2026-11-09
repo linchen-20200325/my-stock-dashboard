@@ -136,6 +136,10 @@ def _rel(file_path) -> str:
 
 def b2_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`(或 repo 相對路徑)與原始碼,換回 B2 之前的寫法(無 pair 則原樣;只套一次)。"""
+    # 📌 Issue #1099 PR-1(TWII 日 K OHLC 唯讀契約,2026-11-09;有意識的接鏈,⛔ 不是漏改):PR-1 在 B2 之後
+    #   於 `macro_cache_reader.py` 新增 `load_twii_ohlc` ⇒ 鏈頭往前接一節,先把 PR-1 換回(只套一次;⛔ 不動本表與 B2_BASE_SHA)。
+    from tests.test_twii_ohlc_revert_chain import twii_ohlc_revert_for
+    code = twii_ohlc_revert_for(file_path, code)
     rel = _rel(file_path)
     pairs = B2_REVERT_PAIRS.get(rel, ())
     if not pairs:
