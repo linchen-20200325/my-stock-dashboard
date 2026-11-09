@@ -317,6 +317,25 @@ def test_l3_violation_empties_ohlc_but_close_card_works(tmp_cache):
     assert v.open == v.high == v.low == () and v.n_ohlc == 0                     # ⛔ 不部分填
 
 
+def test_l3_nan_close_inside_and_outside_window_parity_no_zero_fill(tmp_cache):
+    """QA S1：一個 NaN 收盤在視窗外、一個在視窗內 ⇒ 兩路徑收盤卡完全一致、⛔ 不出現 0.0，日 K fail-closed。
+
+    突變守衛：with_ohlc=True 路徑若把 dropna 換成 fillna(0)，`0.0 not in close`／n_available 對帳會轉紅。
+    """
+    df = _frame(30)
+    df.loc[5, "close"] = float("nan")      # 視窗外（n=5 → 視窗為最後 5 列 25..29）
+    df.loc[27, "close"] = float("nan")     # 視窗內
+    _write(tmp_cache, df)
+    a = S.get_twii_trend_view(5, today=T_AFTER)
+    b = S.get_twii_trend_view(5, with_ohlc=True, today=T_AFTER)
+    assert a.ok and b.ok
+    assert (a.xs, a.close, a.as_of, a.n_available, a.is_stale) == (b.xs, b.close, b.as_of, b.n_available, b.is_stale)
+    assert b.n_available == 28 and len(b.close) == 5 and "2026-10-28" not in b.xs   # NaN 列被丟掉，不被補
+    assert 0.0 not in b.close and all(math.isfinite(c) and c > 0 for c in b.close)
+    assert b.ohlc_ok is False and b.ohlc_error == C.NOT_FINITE and "2026-10-28" in b.ohlc_detail
+    assert b.open == b.high == b.low == () and b.n_ohlc == 0
+
+
 def test_l3_nan_close_in_window_fails_closed(tmp_cache):
     df = _frame(20)
     df.loc[19, "close"] = float("nan")
@@ -375,7 +394,13 @@ def test_l3_positional_construction_still_valid():
 # ══════════════════════════════════════════════════════════════════════════
 # 真 repo parquet 對帳（同源：with_ohlc False vs True）
 # ══════════════════════════════════════════════════════════════════════════
-def test_real_parquet_parity_and_ohlc_ok():
+def test_real_parquet_parity_and_fail_closed_invariant():
+    """真 git 追蹤的 cron 資料：兩條路徑收盤卡同源（恆成立）＋日 K fail-closed 不變量。
+
+    ⚠️ 刻意**不**斷言 `ohlc_ok is True`：日後 cron 寫入合法的盤中／NaN 棒時，正確行為就是 fail-closed，
+    不該讓 CI 在零程式變更下轉紅（QA S2）。「乾淨 20 根 → ohlc_ok True」由 tmp fixture 測試釘住
+    （`test_l3_with_ohlc_ok_20_bars`）。
+    """
     p = REPO / "data_cache" / "twii_ohlcv.parquet"
     if not p.exists():
         pytest.skip("沙箱沒有 data_cache/twii_ohlcv.parquet")
@@ -384,11 +409,23 @@ def test_real_parquet_parity_and_ohlc_ok():
     today = max(date(2026, 11, 9), last + timedelta(days=1))
     a = S.get_twii_trend_view(20, today=today)
     b = S.get_twii_trend_view(20, with_ohlc=True, today=today)
-    assert a.ok and b.ok
-    assert (a.xs, a.close, a.as_of, a.is_stale, a.age_days, a.n_available) == \
-           (b.xs, b.close, b.as_of, b.is_stale, b.age_days, b.n_available)
-    assert b.ohlc_ok is True, (b.ohlc_error, b.ohlc_detail)
-    assert b.n_ohlc == 20 and len(b.open) == 20 and all(math.isfinite(x) for x in b.open + b.high + b.low)
+    # (a) 同源對帳（恆成立）
+    assert a.ok == b.ok
+    assert (a.xs, a.close, a.as_of, a.is_stale, a.n_available) == \
+           (b.xs, b.close, b.as_of, b.is_stale, b.n_available)
+    # (b) fail-closed 不變量
+    assert b.ohlc_requested is True and b.ohlc_ok in (True, False)
+    if b.ohlc_ok:
+        assert len(b.open) == len(b.high) == len(b.low) == len(b.close) == len(b.xs) == b.n_ohlc > 0
+        assert b.ohlc_error == "" and b.ohlc_detail == ""
+        # 合格的那批列，獨立再過一次 L0 契約（fetched_at 由同一份 parquet 依日期取回）
+        raw = pd.read_parquet(p, columns=["date", "fetched_at"])
+        fa = dict(zip(pd.to_datetime(raw["date"]).dt.date.astype(str), raw["fetched_at"]))
+        assert C.validate_ohlc_window(b.xs, b.open, b.high, b.low, b.close, [fa.get(d) for d in b.xs],
+                                      as_of=b.as_of, today=today) == (True, C.OHLC_OK, "")
+    else:
+        assert b.open == b.high == b.low == () and b.n_ohlc == 0
+        assert b.ohlc_error in C.OHLC_REASON_CODES, b.ohlc_error
 
 
 # ══════════════════════════════════════════════════════════════════════════
