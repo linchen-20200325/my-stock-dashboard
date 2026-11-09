@@ -50,3 +50,12 @@
 - `docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` 內容、Visual/Wireframe Gate 現況、PROJECT_STATE 之外的 DEC-070 後續。
 - `macro_fetch_orchestrator`/`refresh_macro_service` 的完整 session 寫入清單（僅引用已見段落）。
 - 未跑任何 pytest；上述守衛判讀來自讀測試原始碼，非執行結果。
+
+---
+
+## 2026-11-09 QA 補正（附註；原研究內容不改）
+
+> 本節為 append-only 附註；上文任何一行均未改動，原證據保留。不升格任何項目為 approved。以下均已對 origin/main 原碼／文件 grep 核對。
+
+1. **路徑與行號**：上文 (b2) 列的「PROJECT_STATE.md L67」應為 `docs/PROJECT_STATE.md` 第 67 行（已驗證該行仍含「VIX 只用判斷時點已完成收盤、不造成 look-ahead 的資料」）。補充：該句是 DEC-070 的客戶裁示，**出現在 Risk Cap 段落的一句話內**，屬**僅語意**裁示（Risk Cap 輸入時點語意），不是顯示路徑的實作規格，也不是 UI 顯示授權。
+2. **`page_market.py` 呼叫關係精確說法**：上文 (b) 列「`page_market.py` 約 L560/L727」。實測 L727 為 `blocks.render_chart_b(_session, source_note=FRAME_SOURCE_NOTE["intl"], where_label=_intl_raw_label)`；`intl_series` 定義於 `src/ui/views/_market_blocks.py`（約 L772），由 `render_chart_b`（`_market_blocks.py` 約 L1296，內部於約 L1300 呼叫 `intl_series(session)`）間接取用，`page_market.py` 並未以 `intl_series` 之名直接呼叫。L560 為 `_render_x6` 內的 `_render_frames_block(session, "intl", gate_key=SS_GATE_INTL_CHART, …)`（已驗證）；該函式是否再經 `intl_series` 取數，本次未追，**NOT VERIFIED**。故「約 L560/L727」讀作兩個進入點（frames 區塊與 chart B），皆非 `intl_series` 的直接 call site。

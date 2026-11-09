@@ -57,3 +57,20 @@
 - `rs_leader_service.run_rs_leader_scan`、`fetch_pe_name_maps` 的快取/退避細節。
 - `@st.cache_data` 在 UI2 test harness（socket guard/檔案指紋）下是否與現行測試相容。
 - `src/services/ui2/*` 以外任何已存在但未讀的 target preview 場景（`scenarios.py`）內容。
+
+---
+
+## 2026-11-09 QA 補正（附註；原研究內容不改）
+
+> 本節為 append-only 附註；上文任何一行均未改動，原證據保留。不升格任何項目為 approved。以下均已對 origin/main 原碼 grep 核對。
+
+1. **B1 `get_fundamental_survivors` 的 strict 語意**：上文 B1 列寫 `(refresh=False)`。舊 UI `page_find._load_survivors`（`src/ui/views/page_find.py` 約 L1013–1037）實際呼叫 `get_fundamental_survivors(strict=True)`。`src/services/fundamental_screener_service.py` 原碼：
+   - `strict=True` 且存活池為空（`surv` 為 None／empty／無 `stock_id` 欄）→ `raise RuntimeError(<排名器 note 原文>)`，帶屬性 `empty_survivor_pool = True`；
+   - 季快照讀不到（L1 `FileNotFoundError`）→ strict 下在原例外上加 `snapshot_missing = True` 後原樣往上拋（非 strict 不加屬性）；
+   - 預設 `strict=False` 時空池回空表（舊註釋明言這會被畫成「選股完成、0 檔」）。
+   → UI2 **不得**把 0 檔存活畫成有效結果而不分辨成因。UI 至少須區分原碼已存在的三態：(i) 空池錯誤（`empty_survivor_pool`；常見成因去年同季快照缺，重按不會變）、(ii) 快照缺（`snapshot_missing`）、(iii) 非 strict 下確實取得的空表／0 檔（僅在成因已查明為有效零時才可呈現為「0 檔」）。舊頁以「檔數 `None`（取不到）≠ 0 檔」區分。本補正不新增任何行為，也未規定 UI2 的具體字樣。
+2. **兩個 `classify_asset_kind` 語意不同**（皆已驗證）：
+   - L2 `src/compute/etf/asset_lag.py::classify_asset_kind`（上文 A1 所指）回 `'etf'|'stock'|'unknown'`：`00` 開頭→etf；首字為數字→stock；其餘（含空碼、`^TWII`、美股）→`unknown`，不硬判。
+   - L0 `shared/dividend_station_thresholds.py::classify_asset_kind` 只有 etf／stock 兩值，**沒有 unknown**：`00` 開頭→ETF；4 碼純數字→個股；4 碼＋單一字母（特別股如 2881A）→個股；**其餘（含美股 BND/VOO 等非台股代號）一律預設 ETF**。
+   → 兩者對同一代號可得不同結果（例：美股代號如 `VOO` 或空碼，L2＝`unknown`／無基準，L0＝ETF；L2 先經 `bare_etf_code` 正規化，其細節本次未逐行驗證，NOT VERIFIED）。UI2 **不得互換**使用，亦不得以其一的結果餵給另一者預期的三態分支。
+3. **`latest_published_quarter` 的使用者**：除上文列的 `shared/staleness` 與 `forward_test` 外，`scripts/update_fundamentals_snapshot.py`（cron；`from shared.staleness import latest_published_quarter`，約 L163 呼叫）亦使用。補充：`src/compute/screener/forward_test.py` 僅在註解中提及，非實際呼叫；實際定義於 `shared/staleness.py`（約 L689）。結論「L3 無快照過期旗標」經 grep（非 tests 的 `*.py`）仍成立：`src/services` 下無引用。

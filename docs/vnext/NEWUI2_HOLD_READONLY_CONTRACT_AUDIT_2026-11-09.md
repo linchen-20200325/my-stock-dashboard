@@ -62,3 +62,16 @@
 - DEC「Risk Cap 不獨立顯示」確切條文位置（DEC-092 Q2-2／DEC-081 Q2-2 以 DECISIONS 引述為準）；DEC-141 Q8 以全文引述。
 - Streamlit Cloud 部署行為、`updated_at` 欄是否始終有值、使用者實際 Sheet 內容。
 - `section_portfolio_summary`／`tab_stock` 的出場訊號是否與持股頁有未來整合需求（僅註記無對應）。
+
+---
+
+## 2026-11-09 QA 補正（附註；原研究內容不改）
+
+> 本節為 append-only 附註；上文任何一行均未改動，原證據保留。不升格任何項目為 approved。以下均已對 origin/main 原碼 grep 核對。
+
+1. **路徑全名**：上文裸寫的 `page_hold.py` 全路徑為 `src/ui/views/page_hold.py`（已驗證存在）。
+2. **`spreadsheets.readonly` 不只 `gsheet_sa_reader` 一條**：上文 §2 寫「`gsheet_sa_reader` 才是 `spreadsheets.readonly`」易讀成唯一路徑。實測 repo 內另有（已 grep 驗證）：
+   - `shared/risk_cap_history_policy.py` 的 `READER_SCOPES`（約 L195–196，註解「讀取端 OAuth scope：唯讀」，值恰為 `spreadsheets.readonly`）；
+   - `src/data/risk_cap/history.py`：`build_reader_client` 只用 `READER_SCOPES`；reader 憑證 scope 不是恰好 `spreadsheets.readonly` 即拒（`ReaderIdentityMismatch`）；`writer_scopes` 亦允許同一 WIF writer 身分換 `READER_SCOPES` 做寫前檢查／寫後讀回。
+   - 另 `src/data/portfolio/gsheet_sa_reader.py` 自身 `_SCOPES`＝`spreadsheets.readonly`（上文已述）。
+   以上皆屬 L1 排程／風險歷史路徑，**均不得進入 UI2**。DEC-141 Q8 原文僅為：「Q8=不開放 `gsheet_sa_reader`／cron 快照／Service Account 接入 UI2，維持誠實空槽」（docs/DECISIONS.md DEC-141）；它**只點名** `gsheet_sa_reader`／cron 快照／Service Account 接入 UI2，**本補正不擴張其文字**：risk_cap history 讀寫路徑不入 UI2，依據是上文「Risk Cap 歷史（排程）」列既有的「不得接 UI2」註記與 UI2 守衛（G2F／G4）對 `src.data` 的限制，而非 Q8 明文。
