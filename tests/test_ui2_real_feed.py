@@ -64,16 +64,36 @@ def _regime(regime="unknown", source=RA.SOURCE_UNLOADED, is_loaded=False, **extr
     return d
 
 
+def _kbar_of(view: TwiiTrendView) -> TwiiTrendView:
+    """Issue #1099 PR-2：同一份注入 view 的日 K 版本（`with_ohlc=True` 那次讀取）。收盤皆為有限正值 → 每根開高低＝收盤
+    （灰十字，與卡片同源）；否則 → 不合格（`ohlc_ok=False`、OHLC 全空），與 L3 契約一致。"""
+    if view.ok and view.close and all(isinstance(c, float) and math.isfinite(c) and c > 0 for c in view.close):
+        return dataclasses.replace(view, ohlc_requested=True, ohlc_ok=True, ohlc_error="", open=view.close,
+                                   high=view.close, low=view.close, n_ohlc=len(view.close))
+    return dataclasses.replace(view, ohlc_requested=True, ohlc_ok=False, ohlc_error="EMPTY", open=(), high=(), low=(),
+                               n_ohlc=0)
+
+
 def _feed(monkeypatch, *, twii=None, twii_exc=None, regime=None, regime_exc=None, calls=None) -> RealFeedSnapshot:
-    """經 **真 feed**（`read_real_snapshot`）跑：只把兩個 canonical service 換成注入版本。"""
+    """經 **真 feed**（`read_real_snapshot`）跑：只把兩個 canonical service 換成注入版本。
+
+    台股 service 被呼叫兩次（Issue #1099 PR-2）：卡片那次（無關鍵字）記在 `twii`／`twii_args`／`twii_call`（語意不變：
+    卡片讀取）；日 K 那次（`with_ohlc=True`）另記在 `kbar`／`kbar_call`，回傳同一份注入 view 的日 K 版本。
+    ⛔ 其他關鍵字（keyword-only 簽名，傳了就 TypeError）。"""
     calls = calls if calls is not None else {}
 
-    def fake_twii(n):
+    def fake_twii(n, *, with_ohlc=False):
+        base = twii if twii is not None else _twii_view()
+        if with_ohlc:
+            calls["kbar"] = calls.get("kbar", 0) + 1
+            calls["kbar_call"] = (n, {"with_ohlc": with_ohlc})
+            return _kbar_of(base)
         calls["twii"] = calls.get("twii", 0) + 1
         calls["twii_args"] = n
+        calls["twii_call"] = (n, {})
         if twii_exc:
             raise twii_exc
-        return twii if twii is not None else _twii_view()
+        return base
 
     def fake_regime(**kw):
         calls["regime"] = calls.get("regime", 0) + 1
@@ -422,6 +442,12 @@ def test_one_snapshot_means_one_call_per_service(monkeypatch):
     snap = _feed(monkeypatch, calls=calls)
     _vms(snap)                                               # 四頁 VM 都由同一份 snapshot 建（純函式，不再讀）
     assert calls["regime"] == 1 and calls["twii"] == 1
+    # Issue #1099 PR-2：台股 service 恰兩次——卡片 1 日（不帶 with_ohlc＝False）＋日 K 20 日（with_ohlc=True）各一次
+    assert calls["twii_call"] == (RF.TWII_CARD_DAYS, {}) == (1, {})
+    assert calls["kbar"] == 1 and calls["kbar_call"] == (RF.TWII_KBAR_DAYS, {"with_ohlc": True})
+    chart = get_real_page_vm(P4_MARKET, snap).context.kbar     # happy path：日 K 不是紅（同源、合格）
+    assert snap.kbar is not None and snap.kbar_error == ""
+    assert chart is not None and chart.field.state is FieldState.OK and len(chart.candles) == 1
 
 
 def test_risk_cap_and_action_fields_are_identical_across_pages_and_feeds():

@@ -2094,3 +2094,14 @@
 - **已定**：日 K：`close>open` 紅／`close<open` 綠／`close==open` 灰十字線；手機預設最近 20 根完整已驗證日 K；圖高約 220px 為候選視覺目標，390×844 首屏/不溢出仍必須達標；主資料 Yahoo `^TWII` 現有 OHLC parquet → 合法唯讀具新鮮度資料契約，FinMind 只備援研究。
 - **尚未授權／未實作**：live/FinMind 串接、cron、正式 UI2/Feed/Schema/Tests 改動、增加 G2F 許可／放寬守衛、圖表縮放／期間切換的操作設計、MA/成交量、投資訊號、Risk Cap、OneBrain。不得把圖型改為折線，也不能將 close 與 OHLC 舊服務混用當合法 feed。
 - **後續驗收**：先獨立查 main/head/PR/diff/CI/QA，必要時核對已批准的視覺細節；施工若獲另行核准，按 contract/負測/browser 390+1440 分批 PR，不因 docs 合併就擅自開工。#1096 原文保留歷史，其 Q1/Q4 舊折線選項不再是當前待裁示。
+
+📌 **2026-11-09｜Issue #1099 PR-1 #1100 已合併＋PR-2 施工內容（只追加；PR-2 狀態＝merge pending QA/CI）**
+- **PR-1 #1100 已合併**：main `e5a429c`（TWII 日 K OHLC 唯讀 fail-closed 資料契約；L0 `shared/twii_ohlc_contract.py`＋L1 `load_twii_ohlc`＋L3 `get_twii_trend_view(n, with_ohlc=True)` 加性欄位；預設路徑不變；不合格 → `ohlc_ok=False`＋原因碼、OHLC 全空）。非作者 QA：https://github.com/linchen-20200325/my-stock-dashboard/pull/1100#issuecomment-6746374501
+- **PR-2（分支 `feat/ui2-twii-kbar-market-20261109`；merge pending QA/CI，由 AI 總管定稿）**：Real-data Preview 📊 市場頁 Primary 位置改畫日 K（僅取代空槽內容，版面其餘不動）。
+  - 讀取：`real_feed` 卡片那次 `get_twii_trend_view(TWII_CARD_DAYS=1)` 不動；另讀一次 `get_twii_trend_view(TWII_KBAR_DAYS=20, with_ohlc=True)`（同一白名單函式；G2／G4／G9 未改；G2F 只在 `real_canonical` 精確白名單 **+1 名稱** `twii_kbar_fact_of`，禁用清單未改，見下）。
+  - canonical：`TwiiKbarFact`＋`validate_twii_kbar_fact`（重驗長度、ISO 日期嚴格升序、有限正值、OHLC 關係、≤20 根、末根＝as_of）；與卡片同源對帳（as_of／最新收盤／is_stale／age_days／upstream_state／來源）不一致 → 紅；卡片讀不到 → 灰 `⬜ 無法判定`；兩事實互相隔離。
+  - 畫面：K 色 `close>open` 紅／`<` 綠／`==` 灰十字；文字圖例「紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤」；y 軸刻度、起訖日期、資料日＋來源；圖高 220（svg 屬性）；不足 20 根照實少畫＋「僅 N 根（不足 20）」；Stale／新鮮度未判定照畫＋與卡片同字樣；ohlc 不合格灰（類別人話句）、系統錯誤紅。⛔ 量、均線、訊號、按鈕／縮放／252 根切換。
+  - FAKE 示意軸：**不給日 K 事實**（⛔ FAKE K 棒），主圖照舊誠實空槽；CI ui2-browser lane（FAKE）畫面不變。
+  - 量測：`measure_viewport` 新增判定 `kbar_primary_chart`（主圖與空槽不得並存、有 K 棒時 1～20 根／svg 高 200～240／文字圖例逐字／⛔ MA·均線·成交量）；`_git_head` 支援 git worktree（`.git` 檔）以免證據 meta `git_sha` 讀成 None。viewport 證據 JSON（newui2_realfeed、newui2_batch3b；Streamlit 1.59.2＋1.56.0）因 `src/ui2` 變更重產，全數通過；newui2_realfeed 市場頁截圖更新。
+  - **G2F 白名單變更（+1 名稱，獨立審查 pending）**：AI 總管裁示否決先前「經既有白名單類別 `RealFeedSnapshot.kbar_fact_of()` 取用新純函式」作法（屬未經可見審查的擴權＝「偷繞」），改走 Issue #1099 允許的明列路線：`real_canonical` 新增模組級純函式 `twii_kbar_fact_of(view, *, error_type="")`（⛔ I/O／時鐘／session／producer；G2 照掃），`tests/test_ui2_guards.py::G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"]` 只加這一個名稱；`_G2F_BANNED_NAMES`／`_G2F_BANNED_ATTRS`／其他模組／G2／G4／G9 一字未改。**必要性證據**：feed 只准自 `real_canonical` 取具名名稱，無此名稱即無法建出日 K 事實；且 G2F 禁 `.open` 屬性（為擋檔案 I/O），開盤價欄位 `view.open` 的讀取留在 `real_canonical`，避免為誤判（false positive）改禁用清單。`tests/test_ui2_twii_kbar.py` 釘住「只多這一個名稱」與「其他新名稱／`.open` 仍被擋」。**獨立審查 pending**。
+  - `test_ui2_real_feed.py::test_one_snapshot_means_one_call_per_service` 原本靠假 service 不收 `with_ohlc`（日 K 意外變紅）才通過；已改為 `_feed` 假 service 收 `with_ohlc`（keyword-only），並精確斷言卡片恰一次 `(1, 無關鍵字)`、日 K 恰一次 `(20, with_ohlc=True)`、happy path 日 K 為 OK（非紅）。

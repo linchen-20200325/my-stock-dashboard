@@ -5,6 +5,8 @@
 只呼叫兩個既有 L3 canonical service（**唯讀、無 session 寫入、無網路**；實查見
 `docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` §2）：
 1. `market_twii_view_service.get_twii_trend_view(1)`：讀 git 追蹤的 `data_cache/twii_ohlcv.parquet`（不快取、不碰 session）。
+   Issue #1099 PR-2：同一個函式再呼叫一次 `get_twii_trend_view(TWII_KBAR_DAYS, with_ohlc=True)` 供 📊 主圖日 K
+   （白名單名稱不變；卡片那次 `TWII_CARD_DAYS=1` 不變；兩次結果的同源對帳在 `real_canonical`）。
 2. `allocation_service.get_macro_regime(strict=True, require_valid_risk_cap=True)`：全站唯一的位階橋樑
    （只 `session_state.get('warroom_summary')` ＋ 讀本地 `macro_state.json`／`risk_cap_state.json`）；
    **strict**：讀壞了 ≠ 未評估（非 strict 會把例外吞成未評估）。`require_valid_risk_cap=True` 與 Legacy New UI
@@ -17,17 +19,20 @@
 
 每次 rerun 由殼呼叫**一次** `read_real_snapshot()`，四頁共用同一份（位階三處同一次呼叫結果）。
 例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名，僅存 snapshot 內部欄位；訊息全文只 print 進 log；P1 QA 起畫面一律不放型別名）→
-由 `real_canonical` 映射成紅色 Unavailable；兩個事實互相隔離（一個壞不拖垮另一個）。
+由 `real_canonical` 映射成紅色 Unavailable；各事實互相隔離（一個壞不拖垮另一個；日 K 與卡片亦然）。
 """
 from __future__ import annotations
 
 from src.services.ui2.real_canonical import (
-    ERROR_CODE_RE, RealFeedSnapshot, RegimeFact, TwiiFact, exception_code, validate_regime_fact,
+    ERROR_CODE_RE, RealFeedSnapshot, RegimeFact, TwiiFact, exception_code, twii_kbar_fact_of, validate_regime_fact,
     validate_twii_fact,
 )
 
 #: 卡片只顯示最新一筆收盤（取尾端 1 個交易日；「畫幾天」屬呈現決策，卡片＝1）。
 TWII_CARD_DAYS = 1
+#: 📊 主圖日 K 讀取根數（Issue #1099 PR-2；DEC-156 B：手機預設最近 20 根）。卡片那次讀取（`TWII_CARD_DAYS`）不動；
+#: 本值必須等於 `real_canonical.KBAR_VISIBLE_BARS`（測試釘相等；G2F 白名單只為本功能加 `twii_kbar_fact_of` 一個名稱）。
+TWII_KBAR_DAYS = 20
 
 
 def _code(e: BaseException) -> str:
@@ -63,6 +68,24 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
         return None, _code(e)
 
 
+def _read_twii_kbar():
+    """📊 主圖日 K：**第二次**呼叫同一個白名單 service（`with_ohlc=True`；唯讀、單一快照讀取、不快取）。
+    與卡片事實隔離：這裡丟例外／契約違反 → 只有日 K 紅色 Unavailable，卡片與位階照常。
+    欄位複製與自洽檢查在 `real_canonical.twii_kbar_fact_of()`（純；G2F 白名單明列，見該處說明）；與卡片的同源對帳在 `real_canonical` 映射期。"""
+    try:
+        from src.services.market_twii_view_service import get_twii_trend_view
+        v = get_twii_trend_view(TWII_KBAR_DAYS, with_ohlc=True)
+        if v.ohlc_detail:
+            print(f"[ui2.real_feed] 台股日 K 不合格說明（只進 log）：{v.ohlc_error} {v.ohlc_detail}")
+        if v.error:
+            print(f"[ui2.real_feed] 台股日 K 讀取說明（只進 log）：{v.error}")
+        fact = twii_kbar_fact_of(v, error_type=_type_of_service_error(v.error) if v.failed else "")
+        return fact, ""
+    except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句
+        print(f"[ui2.real_feed] 台股日 K 讀取失敗：{exception_code(e)}: {e}")
+        return None, _code(e)
+
+
 def _read_regime() -> tuple[RegimeFact | None, str]:
     try:
         from src.services.allocation_service import get_macro_regime
@@ -79,7 +102,8 @@ def _read_regime() -> tuple[RegimeFact | None, str]:
 
 
 def read_real_snapshot() -> RealFeedSnapshot:
-    """一次 rerun 的真資料快照（唯讀；兩個事實各自隔離）。"""
+    """一次 rerun 的真資料快照（唯讀；台股卡片／市場位階／台股日 K 三個事實各自隔離）。"""
     twii, twii_err = _read_twii()
     regime, regime_err = _read_regime()
-    return RealFeedSnapshot.of(twii, twii_err, regime, regime_err)
+    kbar, kbar_err = _read_twii_kbar()
+    return RealFeedSnapshot.of(twii, twii_err, regime, regime_err, kbar=kbar, kbar_error=kbar_err)

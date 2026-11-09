@@ -32,6 +32,16 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 - 位階契約**沒有 as_of** → `as_of=None`（呈現 `⬜ 資料日未提供`），⛔ 用 `cl_ts`／抓取時間頂替（新資料定義＝Stop Gate）。
 - `FieldVM.source` 誠實標「規則分支 id」，⛔ 偽裝成資料來源。
 - 契約回傳的 `exposure_limit_pct`／`risk_cap_disclosure`（Risk Cap）**不進 snapshot**（Risk Cap 恆 `⬜ 無法判定`）。
+台股日 K（Issue #1099 PR-2；DEC-156 A／B／A）——📊 主圖位置，與 TWII 卡**分屬兩個事實、互相隔離**：
+- 讀取：feed 另呼叫一次同一個 canonical service `get_twii_trend_view(KBAR_VISIBLE_BARS, with_ohlc=True)`（卡片那次
+  `TWII_CARD_DAYS=1` 不動）；欄位複製在本檔 `twii_kbar_fact_of()`（純；G2F 白名單明列 +1；feed 在自己的 try 內呼叫）。
+- 讀取期自洽檢查 `validate_twii_kbar_fact`（長度一致、日期 ISO 嚴格升序、有限正值、OHLC 關係、根數 ≤ 20、末根＝as_of、
+  不合格時 OHLC 必為空）→ 違反＝契約違反（紅；卡片照常）。
+- 對帳（純、映射期）：日 K 與卡片的 as_of／最新收盤／is_stale／upstream_state／來源須一致（兩次讀取＝同一份快照），
+  不一致 → 紅 Unavailable（⛔ 把分開讀到的不同版本假裝一致）；卡片本身讀不到 → 灰 `⬜ 無法判定`（無法對帳，不畫）。
+- `failed=True`／讀取例外 → 紅；`ok=False` → 灰 Missing；`ohlc_ok=False` → 灰 `⬜ 無法判定`＋原因**類別**人話句（⛔ 原因碼）。
+- 合格：照畫；`is_stale` True／None 的字樣與 TWII 卡**同一套**（Stale 照畫，資料是真歷史但舊）；不足 20 根 →
+  照實少畫＋「僅 N 根（不足 20）」（⛔ 補棒／補 0／內插）。
 """
 from __future__ import annotations
 
@@ -44,6 +54,7 @@ from shared.allocation_decision import REGIME_LABEL
 from shared import regime_arbiter as RA
 from shared.ui2_contract.models import PageVM
 from shared.upstream_state import UPSTREAM_TEXT_FETCH_FAILED, upstream_state_text as _upstream_state_text
+from shared import twii_ohlc_contract as OC
 from shared.ui2_contract.pages import (
     MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
     SCENARIO_REAL,
@@ -134,6 +145,96 @@ class RegimeFact:
     has_file_error: bool = False
 
 
+#: 📊 主圖預設可見根數（DEC-156 B：手機預設最近 20 根已驗證完整日 K）。feed 的 `TWII_KBAR_DAYS` 必須等於此值
+#: （feed 不得自本檔 import 新名稱〔G2F 精確白名單〕，故兩處各一份，由 tests/test_ui2_twii_kbar.py 釘相等）。
+KBAR_VISIBLE_BARS = 20
+_UPSTREAM_STATES = ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED")
+_ISO_DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@dataclass(frozen=True)
+class TwiiKbarFact:
+    """`get_twii_trend_view(n, with_ohlc=True)` 的日 K 相關欄位（原樣；Issue #1099 PR-2）。
+
+    與 `TwiiFact`（卡片）是**兩個獨立事實**：任一個壞掉不影響另一個。錯誤細節不進 snapshot（同 `TwiiFact`）。
+    `ohlc_reason`＝L0 `shared.twii_ohlc_contract` 原因碼（內部代碼，**不上畫面**；畫面只放類別人話句）。
+    `xs`／`closes` 在 `ohlc_ok` 非 True 時是卡片用的收盤序列（不畫）；`opens`／`highs`／`lows` 在不合格時必為空。
+    """
+
+    ok: bool
+    failed: bool
+    error_type: str
+    ohlc_ok: bool | None
+    ohlc_reason: str
+    xs: tuple[str, ...]
+    opens: tuple[float, ...]
+    highs: tuple[float, ...]
+    lows: tuple[float, ...]
+    closes: tuple[float, ...]
+    as_of: str | None
+    is_stale: bool | None
+    age_days: int | None
+    stale_reason: str
+    upstream_state: str
+    has_upstream_error: bool
+    source: str
+
+    def __post_init__(self) -> None:
+        if self.error_type and not _ERR_CODE_RE.match(self.error_type):
+            raise ValueError(f"error_type 只能是例外型別名（識別字），收到 {self.error_type!r}")
+
+    @classmethod
+    def from_view(cls, v: Any, *, error_type: str = "") -> "TwiiKbarFact":
+        """service 回傳值（`TwiiTrendView`，鴨子型別；本檔不 import L3 service）→ 事實。只複製、⛔ 修補。"""
+        return cls(
+            ok=bool(v.ok), failed=bool(v.failed), error_type=error_type, ohlc_ok=v.ohlc_ok,
+            ohlc_reason=str(v.ohlc_error or ""), xs=tuple(v.xs), opens=tuple(v.open), highs=tuple(v.high),
+            lows=tuple(v.low), closes=tuple(v.close), as_of=v.as_of, is_stale=v.is_stale, age_days=v.age_days,
+            stale_reason=str(v.stale_reason or ""), upstream_state=v.upstream_state,
+            has_upstream_error=(v.upstream_state == "FETCH_FAILED"), source=str(v.source))
+
+
+def _finite_positive(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
+
+
+def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
+    """日 K 事實自洽檢查（純；**重驗** L0 契約的核心條件，⛔ 只信 `ohlc_ok`）。違反 → `RealFeedContractError`。"""
+    if not (k.is_stale is True or k.is_stale is False or k.is_stale is None):
+        raise RealFeedContractError(f"台股日 K：is_stale 不是 True／False／None：{k.is_stale!r}")
+    if not (k.ohlc_ok is True or k.ohlc_ok is False):
+        raise RealFeedContractError(f"台股日 K：有要求日 K 但 ohlc_ok 不是 True／False：{k.ohlc_ok!r}")
+    if k.ok and k.failed:
+        raise RealFeedContractError("台股日 K：ok=True 與 failed=True 矛盾")
+    if k.upstream_state not in _UPSTREAM_STATES:
+        raise RealFeedContractError(f"台股日 K：upstream_state 不是三態之一：{k.upstream_state!r}")
+    if k.ohlc_ok is False:
+        if k.ohlc_reason not in OC.OHLC_REASON_CODES:
+            raise RealFeedContractError(f"台股日 K：不合格但原因碼未知：{k.ohlc_reason!r}")
+        if k.opens or k.highs or k.lows:
+            raise RealFeedContractError("台股日 K：不合格卻帶開高低（⛔ 部分填）")
+        return
+    # ohlc_ok is True
+    if not k.ok or k.failed or k.ohlc_reason:
+        raise RealFeedContractError(f"台股日 K：ohlc_ok=True 但 ok={k.ok} failed={k.failed} reason={k.ohlc_reason!r}")
+    n = len(k.xs)
+    if not (1 <= n <= KBAR_VISIBLE_BARS):
+        raise RealFeedContractError(f"台股日 K：根數 {n} 不在 1..{KBAR_VISIBLE_BARS}")
+    if not (len(k.opens) == len(k.highs) == len(k.lows) == len(k.closes) == n):
+        raise RealFeedContractError("台股日 K：日期／開高低收長度不一致")
+    if not all(isinstance(d, str) and _ISO_DATE_RX.match(d) for d in k.xs):
+        raise RealFeedContractError("台股日 K：日期不是 YYYY-MM-DD")
+    if any(a >= b for a, b in zip(k.xs, k.xs[1:])):
+        raise RealFeedContractError("台股日 K：日期未嚴格升序或重複")
+    for d, o, h, lo, c in zip(k.xs, k.opens, k.highs, k.lows, k.closes):
+        if not all(_finite_positive(x) for x in (o, h, lo, c)):
+            raise RealFeedContractError(f"台股日 K：{d} 開高低收不是有限正值")
+        if not (lo <= min(o, c) and max(o, c) <= h):
+            raise RealFeedContractError(f"台股日 K：{d} 違反 low ≤ min(open,close) ≤ max(open,close) ≤ high")
+    if k.as_of != k.xs[-1]:
+        raise RealFeedContractError(f"台股日 K：末根日期 {k.xs[-1]!r} ≠ as_of {k.as_of!r}")
+
+
 @dataclass(frozen=True)
 class RealFeedSnapshot:
     """一次 rerun 的真資料快照。每個事實恰為「有值」或「有錯誤代碼」其一；錯誤代碼必為識別字（例外型別名）。
@@ -143,6 +244,10 @@ class RealFeedSnapshot:
     twii_error: str
     regime: RegimeFact | None
     regime_error: str
+    #: 📊 台股日 K（Issue #1099 PR-2；加性欄位、有預設值）。兩者皆空＝這份 snapshot 沒有日 K 事實（主圖照舊誠實空槽）；
+    #: feed 一律讀取 ⇒ Real-data Preview 恰為「有值」或「有錯誤代碼」其一。
+    kbar: TwiiKbarFact | None = None
+    kbar_error: str = ""
 
     def __post_init__(self) -> None:
         for name, fact, err in (("twii", self.twii, self.twii_error), ("regime", self.regime, self.regime_error)):
@@ -151,13 +256,30 @@ class RealFeedSnapshot:
             if err and not _ERR_CODE_RE.match(err):
                 raise ValueError(f"{name}: 錯誤代碼只能是例外型別名（識別字；⛔ 訊息原文），收到 {err!r}"
                                  "（feed 一律經 `RealFeedSnapshot.of()`，不符者降為 `Exception`）")
+        if self.kbar is not None and self.kbar_error:
+            raise ValueError(f"kbar: 不得同時有值與錯誤代碼（收到 error={self.kbar_error!r}）")
+        if self.kbar_error and not _ERR_CODE_RE.match(self.kbar_error):
+            raise ValueError(f"kbar: 錯誤代碼只能是例外型別名（識別字；⛔ 訊息原文），收到 {self.kbar_error!r}")
 
     @classmethod
     def of(cls, twii: "TwiiFact | None", twii_error: str, regime: "RegimeFact | None",
-           regime_error: str) -> "RealFeedSnapshot":
+           regime_error: str, *, kbar: "TwiiKbarFact | None" = None, kbar_error: str = "") -> "RealFeedSnapshot":
         """feed 唯一的建構入口：錯誤代碼不符正規式 → 降為 `Exception`（複驗 P3-4：⛔ 在 feed 的 try 之外 raise
         讓整頁崩、⛔ 原文進 snapshot）。直接呼叫建構子給壞代碼仍 raise（程式錯誤，fail loud）。"""
-        return cls(twii=twii, twii_error=_safe_code(twii_error), regime=regime, regime_error=_safe_code(regime_error))
+        return cls(twii=twii, twii_error=_safe_code(twii_error), regime=regime, regime_error=_safe_code(regime_error),
+                   kbar=kbar, kbar_error=_safe_code(kbar_error))
+
+
+def twii_kbar_fact_of(view: Any, *, error_type: str = "") -> TwiiKbarFact:
+    """feed 在**自己的 try 內**呼叫：service 回傳值 → `TwiiKbarFact` → 讀取期自洽檢查（違反 raise
+    `RealFeedContractError`，feed 接住 → 日 K 紅色 Unavailable、卡片照常）。
+
+    純函式（⛔ I/O／時鐘／session／producer；G2 照掃本檔）。Issue #1099 PR-2 以**明列**方式加進 G2F 白名單
+    （`tests/test_ui2_guards.py::G2F_IMPORT_ALLOWLIST`，+1 名稱）：feed 不能自本檔取其他新名稱，且 G2F 禁 `.open`
+    屬性（為擋檔案 I/O）——開盤價欄位 `view.open` 的讀取因此留在本檔，G2F 禁用清單不變。"""
+    fact = TwiiKbarFact.from_view(view, error_type=error_type)
+    validate_twii_kbar_fact(fact)
+    return fact
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -273,6 +395,83 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
     return {**spec, "reason": "；".join(notes) or None}
 
 
+#: 日 K 不合格原因碼 → 畫面上的**類別**人話句（⛔ 原因碼本身上畫面；碼只留 snapshot 與 log）。
+_KBAR_REASON_CATEGORY: dict[str, str] = {
+    OC.EMPTY: "日 K 資料為空",
+    OC.LENGTH_MISMATCH: "日 K 日期或筆數異常", OC.BAD_DATE: "日 K 日期或筆數異常",
+    OC.DUPLICATE_DATE: "日 K 日期或筆數異常", OC.NOT_ASCENDING: "日 K 日期或筆數異常",
+    OC.FUTURE_DATE: "日 K 日期或筆數異常",
+    OC.NOT_FINITE: "日 K 價格有缺值或不合理", OC.NON_POSITIVE: "日 K 價格有缺值或不合理",
+    OC.OHLC_RELATION: "日 K 價格有缺值或不合理",
+    OC.FETCHED_AT_MISSING: "無法確認最近的日 K 已收盤完成", OC.INCOMPLETE_BAR: "無法確認最近的日 K 已收盤完成",
+    OC.AS_OF_MISMATCH: "日 K 與最新收盤不同步", OC.WINDOW_MISMATCH: "日 K 與最新收盤不同步",
+    OC.READ_FAILED: "日 K 暫時無法讀取",
+}
+KBAR_LABEL = "台股加權指數日 K"
+KBAR_NOT_DRAWN_SUFFIX = "，這次不畫日 K（缺值不補）"
+KBAR_CARD_UNAVAILABLE_TEXT = "最新收盤暫時無法讀取，無法確認日 K 與其同步" + KBAR_NOT_DRAWN_SUFFIX
+KBAR_MISMATCH_TEXT = "台股日 K：與最新收盤資料不同步，暫時無法顯示"
+KBAR_PARTIAL_FMT = "僅 {n} 根（不足 {target}）"
+
+
+def kbar_reason_text(code: str) -> str:
+    """不合格原因碼 → 類別人話句（未知碼 → 通用句；⛔ 原碼上畫面）。"""
+    return _KBAR_REASON_CATEGORY.get(code, "日 K 資料未通過檢核") + KBAR_NOT_DRAWN_SUFFIX
+
+
+def kbar_same_source_problem(k: TwiiKbarFact, card: TwiiFact | None) -> str:
+    """日 K（`ohlc_ok=True`）與 TWII 卡是否同一份快照（純）。回傳 `""`＝一致；`"card_unavailable"`＝卡片讀不到
+    （無法對帳）；`"mismatch"`＝兩次讀取不一致（⛔ 假裝一致）。比較：as_of／最新收盤（容差，§4.3）／is_stale（身分）／
+    age_days／upstream_state／來源。"""
+    if card is None or not card.ok or not card.close:
+        return "card_unavailable"
+    same = (card.as_of == k.as_of and card.is_stale is k.is_stale and card.age_days == k.age_days
+            and card.upstream_state == k.upstream_state and card.source == k.source
+            and math.isclose(card.close[-1], k.closes[-1], rel_tol=1e-9, abs_tol=1e-9))
+    return "" if same else "mismatch"
+
+
+def kbar_chart_spec(snap: RealFeedSnapshot) -> dict | None:
+    """台股日 K → 📊 主圖 spec（`vm_common.kbar_from_spec` 的輸入）。snapshot 沒有日 K 事實 → None（主圖照舊誠實空槽）。"""
+    if snap.kbar is None and not snap.kbar_error:
+        return None
+    base: dict[str, Any] = {"key": "twii_kbar", "label": KBAR_LABEL, "value": None, "as_of": None, "source": None}
+
+    def out(field: dict, candles: list | None = None, notes: list | None = None) -> dict:
+        return {"field": field, "candles": candles or [], "target_n": KBAR_VISIBLE_BARS, "notes": notes or []}
+
+    if snap.kbar is None:
+        return out({**base, "state": "unavailable", "reason": _error_text("台股日 K", snap.kbar_error)})
+    k = snap.kbar
+    validate_twii_kbar_fact(k)                  # 防呆：feed 已驗；直接餵壞 fact 仍 fail loud
+    base.update(source=k.source, as_of=k.as_of)
+    if k.failed:
+        return out({**base, "state": "unavailable", "reason": _error_text("台股日 K", k.error_type or "Exception")})
+    if not k.ok:
+        return out({**base, "missing_kind": "not_fetched", "reason": _TWII_MISSING_TEXT})
+    if k.ohlc_ok is False:
+        return out({**base, "state": "undeterminable", "reason": kbar_reason_text(k.ohlc_reason)})
+    problem = kbar_same_source_problem(k, snap.twii)
+    if problem == "card_unavailable":
+        return out({**base, "state": "undeterminable", "reason": KBAR_CARD_UNAVAILABLE_TEXT})
+    if problem:
+        return out({**base, "state": "unavailable", "reason": KBAR_MISMATCH_TEXT})
+    candles = [{"date": d, "open": o, "high": h, "low": lo, "close": c}
+               for d, o, h, lo, c in zip(k.xs, k.opens, k.highs, k.lows, k.closes)]
+    notes = [KBAR_PARTIAL_FMT.format(n=len(candles), target=KBAR_VISIBLE_BARS)] if len(candles) < KBAR_VISIBLE_BARS else []
+    # 新鮮度字樣與 TWII 卡同一套（twii_card_spec）：Stale 照畫（真歷史但舊），⛔ 當 fresh。
+    _up_text = _upstream_state_text(k.upstream_state) or (_UPSTREAM_ERROR_TEXT if k.has_upstream_error else "")
+    fresh_notes = [x for x in (k.stale_reason, _up_text) if x]
+    field = {**base, "value": f"{k.closes[-1]:,.2f}"}
+    if k.is_stale is True:
+        field.update(state="stale", stale_days=k.age_days, reason="；".join(fresh_notes) or None)
+    elif k.is_stale is None:
+        field.update(state="stale", stale_days=None, reason="；".join(["新鮮度未判定", *fresh_notes]))
+    else:
+        field.update(reason="；".join(fresh_notes) or None)
+    return out(field, candles, notes)
+
+
 # ════════════════════════════════════════════════════════════════════
 # 契約固定欄（與 FAKE 同字樣；跨頁／跨 feed 相等由測試鎖定）＋ capability 欄
 # ════════════════════════════════════════════════════════════════════
@@ -326,6 +525,7 @@ def _market(snap: RealFeedSnapshot) -> dict:
         # 第一屏短句（Freeze §16.5 縮字句）；完整原因見 mapping 文件 M6／M7。
         "conclusion": _not_provided("conclusion", "今日結論", "今日結論尚未提供"),
         "main_risk": _not_provided("main_risk_f", "今日主要風險", "今日風險摘要尚未開放"),
+        "kbar": kbar_chart_spec(snap),          # Issue #1099 PR-2：None＝無日 K 事實（主圖照舊誠實空槽）
     }
 
 

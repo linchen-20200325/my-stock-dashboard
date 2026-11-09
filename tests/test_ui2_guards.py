@@ -184,7 +184,8 @@ G2F_IMPORT_ALLOWLIST: dict[str, frozenset[str] | None] = {
     # 複驗 P2-3：改具名（不再 None）
     "src.services.ui2.real_canonical": frozenset({
         "ERROR_CODE_RE", "RealFeedSnapshot", "RegimeFact", "TwiiFact", "exception_code",
-        "validate_regime_fact", "validate_twii_fact"}),
+        "validate_regime_fact", "validate_twii_fact",
+        "twii_kbar_fact_of"}),   # Issue #1099 PR-2：+1 名稱；純函式（⛔ I/O／時鐘／session／producer），`.open` 欄位讀取留在 G2 照掃的 real_canonical
     # 明列的 shared 模組：目前無（需要時逐一具名加入）。
 }
 #: feed 內任何位置（Name／Attribute／import 名稱）都不得出現的識別字：動態取用、反射、檔案／序列化、producer、寫入。

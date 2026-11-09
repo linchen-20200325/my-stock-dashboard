@@ -201,6 +201,22 @@ CSS = """
 .ui2-primary-slot__body{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
 .ui2-primary-slot__reason{font-size:.8rem;opacity:.75}
 .ui2-primary-slot__spec{font-size:.75rem;opacity:.8;margin-top:4px;line-height:1.5;overflow-wrap:anywhere}
+/* Issue #1099 PR-2（DEC-156）：📊 台股日 K 主圖——只在有日 K 事實時取代空槽；圖高由 svg height 屬性給（約 220），
+   容器本身依內容高度；寬度 100%、x 以 % 定位 ⇒ 390 寬無水平溢出。⛔ 量、均線、按鈕。 */
+.ui2-kbar{border:1px solid rgba(128,128,128,.45);border-radius:10px;padding:2px 12px 8px 12px;margin:8px 0;min-width:0;
+  overflow:hidden}
+.ui2-kbar .ui2-section-title{margin:8px 0 2px 0}
+.ui2-kbar__sub,.ui2-kbar__meta,.ui2-kbar__note{font-size:.75rem;opacity:.8;line-height:1.5;overflow-wrap:anywhere}
+.ui2-kbar__status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:4px 0}
+.ui2-kbar__reason{font-size:.8rem;opacity:.75}
+.ui2-kbar__plot{display:flex;align-items:flex-start;width:100%;min-width:0;margin:4px 0 2px 0}
+.ui2-kbar__yaxis{flex:0 0 auto;display:block}
+.ui2-kbar__svg{flex:1 1 0;min-width:0;display:block;overflow:visible}
+.ui2-kbar__legend{font-size:.75rem;line-height:1.6;overflow-wrap:anywhere}
+.ui2-kbar__sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 0;vertical-align:-1px}
+.ui2-kbar__sw--up{background:#ef5564}
+.ui2-kbar__sw--down{background:#25be87}
+.ui2-kbar__sw--flat{background:#9aaec0}
 /* 市場頁更新 CTA 列（頂部）：按鈕與原因同列（手機窄時才折行），省去原本獨立一行的原因高度 */
 .ui2-qrow--cta-top .ui2-ctawrap{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin:0}
 .ui2-qrow--cta-top .ui2-cta__reason{margin:0}

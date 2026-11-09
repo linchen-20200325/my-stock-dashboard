@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "bb5b812e1e599bb3f4ee4aca3292a46bfbb485ec",
-  "source_hash": "6ab8f9cf2b184f4c5c0d45bb424eef45b889f9a77ccf43c6b50dac2f6823e4c9",
-  "generated_at": "2026-11-07T15:47:04+00:00",
+  "git_sha": "e5a429c22b0d28cee554c5b121b5f0733c8bfa6f",
+  "source_hash": "6e1dcecc561ec045193eb29597a85e17421e7234d6f0e5a1389960d3e9801312",
+  "generated_at": "2026-11-09T17:45:31+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.59.2",
@@ -124,6 +124,11 @@
     "id": "p2_nav_margin_160",
     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；不達須停手回報，不得縮字、刪資訊或改設計。",
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
+   },
+   {
+    "id": "kbar_primary_chart",
+    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（OneBrain → Primary → 指標卡）；水平捲動沿用 no_horizontal_scroll。",
+    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"
    },
    {
     "id": "w11_hold_layout",
@@ -280,7 +285,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.6,
+   "last_content_bottom": 434.1,
    "card_heights": [
     158,
     158,
@@ -299,26 +304,34 @@
      "height": 76.8,
      "width": 361.2
     },
-    "slot": {
-     "top": 700.0,
-     "bottom": 812.3,
-     "left": 14.4,
-     "right": 375.6,
-     "height": 112.3,
-     "width": 361.2
-    },
+    "slot": null,
     "grid": {
-     "top": 828.3,
-     "bottom": 1341.6,
+     "top": 1080.7,
+     "bottom": 1594.1,
      "left": 14.4,
      "right": 375.6,
      "height": 513.3,
      "width": 361.2
     },
     "slot_graphics": 0,
-    "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-06｜缺值不補",
-    "spec_text": "SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-06｜缺值不補",
-    "slot_danger": 0
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": {
+     "top": 700.0,
+     "bottom": 1064.7,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 364.8,
+     "width": 361.2
+    },
+    "chart_state": "ok",
+    "chart_bars": 20,
+    "chart_graphics": 2,
+    "chart_svg_h": 220,
+    "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,695 47,298 43,902 40,506 37,109 2026-10-07 2026-11-06 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-06｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -342,7 +355,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 615.2,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.3,
+    "scroll_end_bottom": 763.8,
     "nav_margin_after_risk": 175.8
    },
    "failures": {},
@@ -443,9 +456,9 @@
    "stress": {
     "risk_top": 582.4,
     "risk_bottom": 659.1,
-    "scroll_end_bottom": 764.2,
-    "scroll_end_gap_to_nav": 26.8,
-    "risk_bottom_at_scroll_end": -303.9
+    "scroll_end_bottom": 763.7,
+    "scroll_end_gap_to_nav": 27.3,
+    "risk_bottom_at_scroll_end": -556.9
    },
    "failures": {},
    "pass": true
@@ -601,7 +614,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -774,7 +795,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -954,7 +983,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -1222,7 +1259,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1369,7 +1414,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1526,7 +1579,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.6,
+   "last_content_bottom": 538.1,
    "card_heights": [
     183,
     183,
@@ -1545,26 +1598,34 @@
      "height": 41.6,
      "width": 1280
     },
-    "slot": {
-     "top": 536.3,
-     "bottom": 630.6,
-     "left": 80,
-     "right": 1360,
-     "height": 94.3,
-     "width": 1280
-    },
+    "slot": null,
     "grid": {
-     "top": 646.6,
-     "bottom": 829.6,
+     "top": 881.0,
+     "bottom": 1064.1,
      "left": 80,
      "right": 1360,
      "height": 183.1,
      "width": 1280
     },
     "slot_graphics": 0,
-    "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-06｜缺值不補",
-    "spec_text": "SPEC｜最新收盤參考｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜資料日 2026-11-06｜缺值不補",
-    "slot_danger": 0
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": {
+     "top": 536.3,
+     "bottom": 865.0,
+     "left": 80,
+     "right": 1360,
+     "height": 328.8,
+     "width": 1280
+    },
+    "chart_state": "ok",
+    "chart_bars": 20,
+    "chart_graphics": 2,
+    "chart_svg_h": 220,
+    "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,695 47,298 43,902 40,506 37,109 2026-10-07 2026-11-06 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-06｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1588,7 +1649,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 498.7,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 867.9,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -1745,7 +1806,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1918,7 +1987,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2098,7 +2175,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -2390,7 +2475,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2537,7 +2630,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
