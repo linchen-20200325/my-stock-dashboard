@@ -8,7 +8,7 @@
 > ⚠️ **provenance 揭露**：本檔由單一撰寫組撰寫，DEC 引用清單**待第二組獨立 evidence audit**（`CLAUDE.md` §-2 規則 6）；稽核通過後本註保留作 provenance。
 > 行號為 2026-10-16 實測、會漂移；引用前現場重查。
 
-> 📌 **2026-11-08 客戶核准｜New UI2 五步驟規劃前置 Gate（Old UI First）**：每次**啟動新頁面或重大功能規劃**，先 ① 確認頁面目標與已核准規格 → ② 盤點舊 UI 的設計、功能及共用資料層（包含 API／公式／例外／備援／互動）→ ③ 比較保留／改善／捨棄及至少三種可行方案的正確性、風險、速度、Token → ④ 設計符合當前 New UI2 架構的方案 → ⑤ 授權後施工、非作者 QA、最新 head CI、Merge、驗收與 GitHub 紀錄。**已核准**的五頁、Dark-only、Mobile-first、頂部兩列導覽**不重審**；新布局、欄位／動線、資料契約或投資決策語意仍走既有客戶 Gate。舊 UI 為參考而非直接照搬；不得用舊資料可抓到推論今日有效或 PIT 合格。**完整執行流程及具體舊程式入口**見 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`（PR #1087；**未合併前僅 Draft，合併後適用**）。本索引不授權任何新來源、PIT、Risk Cap、公式、排名、OneBrain runtime 或 Layout 的實作變更。
+> 📌 **2026-11-08 客戶核准｜New UI2 五步驟規劃前置 Gate（Old UI First）**：每次**啟動新頁面或重大功能規劃**，先 ① 確認頁面目標與已核准規格 → ② 盤點舊 UI 的設計、功能及共用資料層（包含 API／公式／例外／備援／互動）→ ③ 比較保留／改善／捨棄及至少三種可行方案的正確性、風險、速度、Token → ④ 設計符合當前 New UI2 架構的方案 → ⑤ 授權後施工、非作者 QA、最新 head CI、Merge、驗收與 GitHub 紀錄。**已核准**的五頁、Dark-only、Mobile-first、頂部兩列導覽**不重審**；新布局、欄位／動線、資料契約或投資決策語意仍走既有客戶 Gate。舊 UI 為參考而非直接照搬；不得用舊資料可抓到推論今日有效或 PIT 合格。**完整執行流程及具體舊程式入口**見 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`（PR #1087，已合併於 main `5eb3ee9`，現行適用）。本索引不授權任何新來源、PIT、Risk Cap、公式、排名、OneBrain runtime 或 Layout 的實作變更。
 
 ## 第 0 節｜位階、射程、文件地圖
 
