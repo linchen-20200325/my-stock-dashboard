@@ -7951,10 +7951,10 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 ### DEC-156｜New UI2 台股加權指數日 K A／B／A 客戶裁示（2026-11-09；客戶明確裁示）
 
-- **來源／效力**：客戶於本對話明確表示「同意你推薦的 A／B／A：K棒開收紅綠灰、手機近期20根圖高約220px、Yahoo OHLC唯讀接線方案。先同步 GitHub 決策與規格，正式施工仍需另行核准。」本項是**已核准的產品／資料接線方向和 docs-only 同步授權**；**不是**正式程式碼／生產接線授權。
+- **來源／效力**：客戶於本對話明確表示「同意你推薦的 A／B／A：K棒開收紅綠灰、手機近期20根圖高約220px、Yahoo OHLC唯讀接線方案。先同步 GitHub 決策與規格，正式施工仍需另行核准。」——此為**客戶於對話中的口頭裁示（轉述），repo 內無原始連結／NOT VERIFIED by repo（來源：對話引述）**，此處僅作為已記錄的客戶裁示。本項是**已核准的產品／資料接線方向和 docs-only 同步授權**；**不是**正式程式碼／生產接線授權。
 - **A — K 色**：日 K 以**當日開盤 vs 當日收盤**決定顏色：`close>open` 紅、`close<open` 綠、`close==open` 灰十字線（開收同價）。不以「相對前收」決定 K 棒色；與前收相比的日漲跌幅應另取合法前收資料及其獨立語意，不能混稱。
 - **B — Mobile**：390px 手機版**預設顯示最近 20 根已驗證的完整日 K**，圖高**約 220px，屬視覺設計目標，非強行豁免首屏版型／可用高度／無水平溢出規則**；資料可有最多 252 個交易日的候選讀取窗口供後續切換，期間切換／縮放／捲動互動尚未核准具體實作，不得自行加假按鈕；桌機採相同 K 語意，須驗 1440×900。資料不足 20 根不得補 0、補假棒；不足／過期／錯誤各依契約清楚降級。
 - **A — 來源／唯讀**：優先重用**現有 Yahoo `^TWII` 日 OHLC `data_cache/twii_ohlcv.parquet`**，以具來源、日期、`is_stale`、`upstream_state`、`as_of` 的合法、最小化加性唯讀 L3/UI2 契約接線；**FinMind `TaiwanStockPrice` 是舊 UI 個股 K 備援，不是已接大盤**，TAIEX 分 K 與官方替代來源只列研究／對帳／備援候選。**不核准新付費、live API、cron、publisher 或第二個 writer**。
-- **現狀與覆蓋範圍**：#1096「P1 收盤折線／252 根」僅是**舊研究候選**，#1097 合併的是 HTML FAKE 視覺稿及 FinMind 差異研究；**本決策覆蓋上述候選的圖型／色彩／手機預設顯示數，舊文件保留歷史、不再當待核准設計**。#1097 的 Gate 文件曾以 `close>=open` 寫紅字樣，視為舊候選：現以嚴格 `>`、`<`、`==` 決定；不可改寫歷史文件來假裝原始就一致。
+- **現狀與覆蓋範圍**：#1096「P1 收盤折線／252 根」僅是**舊研究候選**，#1097 合併的是 HTML FAKE 視覺稿及 FinMind 差異研究；**本決策覆蓋上述候選的圖型／色彩／手機預設顯示數，舊文件保留歷史、不再當待核准設計**。#1097 的 Gate 文件曾以 `close>=open` 寫紅字樣，視為舊候選：現以嚴格 `>`、`<`、`==` 決定；不可改寫歷史文件來假裝原始就一致。**有意識的政策變更，不是漏刪；決策者見上（客戶口頭裁示，轉述）；原文件（#1096 P1 折線／252 根預設、#1097 `close>=open`）保留為歷史。**
 - **施工前 Gate（仍阻擋）**：現行 `market_twii_view_service.get_twii_trend_view` 只有 close＋freshness；`macro_v2_service.get_twii_ohlc` 有 OHLC 但缺 freshness，且 G2F 未許可直接接進 UI2。資料契約必須驗證 OHLC 邏輯、有限正值、日期升序唯一／無未來日／未完成棒、stale/failed 區分、卡片與圖同源 as_of、legacy 資料有疑義時誠實降級；不得放鬆 G2F/G2/G4/G9、不得將 missing 當 0、中性或正常。實際擴充方法、schema／tests、視覺真機截圖須另行施工核准及獨立 QA／latest-head CI。
 - **文件規格 SSOT（決策附屬）**：`docs/vnext/NEWUI2_MARKET_TWII_KBAR_ABA_DECISION_SPEC_2026-11-09.md`。工作現況另同步 BACKLOG／HANDOFF；本次 PR **docs-only**，不得觸及 src、tests、CI／workflow、Risk Cap、OneBrain、登入／Sheet、股票選股公式。
