@@ -68,7 +68,7 @@ def make_flow(*, ok: bool = True, stale: bool = False, tpex_complete: bool | Non
         requested=True, ok=True, stale=stale, stale_reason=("上次更新距今 9.0 日" if stale else ""),
         sectors=SECTORS, highlight=("半導體業",), insufficient=("塑膠工業",),
         quadrant_counts=(("漲潮", 1), ("退潮", 1), ("資料不足", 1)), updated_at="2026-10-28T10:00:00+00:00",
-        n_days="20", unavailable=("生技醫療",), tpex_complete=tpex_complete)
+        observation_date="2026-10-28", n_days="20", unavailable=("生技醫療",), tpex_complete=tpex_complete)
 
 
 def make_heatmap(*, failed: bool = False) -> F.HeatmapReadout:

@@ -6,11 +6,12 @@
 """
 from __future__ import annotations
 
+import math
 from html import escape
 
 from shared.ui2_contract.models import (
     AccountVM, CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
-    JudgementState, LookupResultVM, SearchBoxVM,
+    JudgementState, KbarChartVM, LookupResultVM, SearchBoxVM,
 )
 from shared.ui2_contract import text as _T
 from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_NOT_PROVIDED, is_dev_only_text, is_known_l0_explain
@@ -464,23 +465,140 @@ def primary_slot_html(twii_card: CardVM | None) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════
-# DEC-137：手機抽屜／桌機 rail 的帳戶摘要（固定占位；J-6 採 B＝Capability 軸）
+# Issue #1099 PR-2（DEC-156 A／B／A）：📊 台股加權指數日 K 主圖（取代誠實空槽，**只在** VM 帶日 K 事實時）
 # ════════════════════════════════════════════════════════════════════
-#: 標題與原因句（統一施工規格 §7；原因句沿用既有字樣家族）。
-DRAWER_ACCOUNT_TITLE = "Google 帳號"
-DRAWER_ACCOUNT_BUTTON = "Google 登入"
-DRAWER_ACCOUNT_REASON = "登入與 Sheet 操作尚未開放"
-DRAWER_ACCOUNT_MORE = "完整設定在 👤 我的"
+#: K 棒顏色（DEC-156 A：當日收盤 vs 當日開盤；色值沿用已核准視覺稿 NEWUI2_TWII_CANDLESTICK_VISUAL_PREVIEW 的 --red／--green／--muted）。
+KBAR_COLOR: dict[str, str] = {"up": "#ef5564", "down": "#25be87", "flat": "#9aaec0"}
+#: 文字圖例（顏色不是唯一載體；DEC-156 A 逐字語意：紅＝收盤＞開盤、綠＝收盤＜開盤、灰＝收盤＝開盤）。
+KBAR_LEGEND: tuple[tuple[str, str], ...] = (("up", "紅｜收盤＞開盤"), ("down", "綠｜收盤＜開盤"), ("flat", "灰｜收盤＝開盤"))
+KBAR_LEGEND_SEP = "　"
+KBAR_SUBTITLE = "加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌"
+#: 圖高（DEC-156 B「約 220px」）：以 svg 的 height 屬性給在**圖本身**（有 K 棒才出現）；誠實空槽仍依內容高度（DEC-133 G-1=A）。
+KBAR_PLOT_H = 220
+_KB_TOP, _KB_BOTTOM_PAD = 8, 24          # 繪圖區上緣；底部留給起訖日期列
+_KB_Y_AXIS_W = 52                        # 左側 y 軸刻度欄寬（px）
+_KB_TICKS = 5
+_KB_BODY_FRAC = 0.55                     # K 棒實體寬＝每根格寬的比例
+_KB_MIN_BODY_H = 1.5                     # 開收同價（或極近）時實體最小可見高度（灰十字線的橫線）
 
 
-def drawer_account_html() -> str:
-    """抽屜／rail 帳戶摘要：**零輸入、固定占位**（⛔ 讀 `ui2_account`／`ui2_dev`／query；⛔ 宣稱已登入／未登入）。
+def kbar_direction(open_: float, close: float) -> str:
+    """DEC-156 A：`close>open` 紅（up）、`close<open` 綠（down）、`close==open` 灰十字（flat）。
+    `==` 以極小容差判定（CLAUDE.md §4.3 浮點比較；只吸收浮點表示誤差，0.01 點的差仍分紅綠）。"""
+    if math.isclose(close, open_, rel_tol=1e-12, abs_tol=1e-9):
+        return "flat"
+    return "up" if close > open_ else "down"
 
-    `⬜ 尚未提供` 屬 **Capability 軸**（DEC-124／DEC-130；⛔ 放進 Data State「狀態」欄、⛔ 第六態）；
-    登入鈕 disabled（`aria-disabled`、非 button 元素、不可觸發）。DEC-129 的「⬜ 尚未登入」字面待正式 auth contract。
+
+def kbar_legend_text() -> str:
+    return KBAR_LEGEND_SEP.join(t for _, t in KBAR_LEGEND)
+
+
+def _f(v: float) -> str:
+    return f"{v:.2f}"
+
+
+def _kbar_svg(kbar: KbarChartVM) -> str:
+    """K 棒 svg：左欄 y 軸刻度（px 定寬）＋右欄 K 棒（x 用 %、y 用 px ⇒ 寬度自適應、文字不變形、無水平溢出）。
+    ⛔ 成交量、均線、按鈕、拖曳／縮放（DEC-156 未核准）。"""
+    cs = kbar.candles
+    n = len(cs)
+    lo, hi = min(c.low for c in cs), max(c.high for c in cs)
+    span = hi - lo
+    pad = span * 0.06 if span > 0 else max(abs(hi) * 0.001, 1.0)
+    lo_p, hi_p = lo - pad, hi + pad
+    h = KBAR_PLOT_H
+    y0, y1 = _KB_TOP, h - _KB_BOTTOM_PAD
+
+    def yt(v: float) -> float:
+        return y0 + (hi_p - v) / (hi_p - lo_p) * (y1 - y0)
+
+    ticks = [hi_p - i * (hi_p - lo_p) / (_KB_TICKS - 1) for i in range(_KB_TICKS)]
+    yaxis = "".join(
+        f'<text x="{_KB_Y_AXIS_W - 6}" y="{_f(yt(t) + 3.5)}" text-anchor="end" font-size="10" fill="currentColor" '
+        f'fill-opacity="0.75">{escape(f"{t:,.0f}")}</text>' for t in ticks)
+    grid = "".join(f'<line x1="0" x2="100%" y1="{_f(yt(t))}" y2="{_f(yt(t))}" stroke="currentColor" '
+                   f'stroke-opacity="0.18" stroke-width="1"/>' for t in ticks)
+    slot = 100.0 / n
+    bw = slot * _KB_BODY_FRAC
+    bars = []
+    for i, c in enumerate(cs):
+        d = kbar_direction(c.open, c.close)
+        col = KBAR_COLOR[d]
+        cx = (i + 0.5) * slot
+        top = yt(max(c.open, c.close))
+        bh = max(_KB_MIN_BODY_H, abs(yt(c.open) - yt(c.close)))
+        bars.append(
+            f'<g class="ui2-kbar__c ui2-kbar__c--{d}" data-kbar-dir="{d}" data-kbar-date="{escape(c.date)}">'
+            f'<line x1="{_f(cx)}%" x2="{_f(cx)}%" y1="{_f(yt(c.high))}" y2="{_f(yt(c.low))}" stroke="{col}" stroke-width="1.5"/>'
+            f'<rect x="{_f(cx - bw / 2)}%" y="{_f(top)}" width="{_f(bw)}%" height="{_f(bh)}" fill="{col}"/></g>')
+    first, last = cs[0].date, cs[-1].date
+    dates = ((f'<text x="0" y="{h - 6}" text-anchor="start" font-size="10" fill="currentColor" fill-opacity="0.75">'
+              f'{escape(first)}</text>') if n > 1 else "") + (
+        f'<text x="100%" y="{h - 6}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.75">'
+        f'{escape(last)}</text>')
+    label = (f"台股加權指數日 K，{first} 至 {last} 共 {n} 根；紅＝收盤高於開盤，綠＝收盤低於開盤，灰＝收盤等於開盤"
+             if n > 1 else f"台股加權指數日 K，{last} 共 1 根；紅＝收盤高於開盤，綠＝收盤低於開盤，灰＝收盤等於開盤")
+    return (f'<div class="ui2-kbar__plot" data-ui2-kbar-plot="1">'
+            f'<svg class="ui2-kbar__yaxis" width="{_KB_Y_AXIS_W}" height="{h}" aria-hidden="true">{yaxis}</svg>'
+            f'<svg class="ui2-kbar__svg" width="100%" height="{h}" role="img" aria-label="{escape(label)}">'
+            f'{grid}{"".join(bars)}{dates}</svg></div>')
+
+
+def kbar_meta_text(fresh: FreshnessInfo) -> str:
+    """圖下一行：資料日（缺→`⬜ 資料日未提供`，⛔ 補推估日期）｜來源（缺→省略）｜缺值不補。"""
+    parts = [f"資料日 {fresh.as_of}" if fresh.as_of else TEXT_ASOF_MISSING]
+    if fresh.source:
+        parts.append(fresh.source)
+    parts.append(SPEC_MISSING_POLICY)
+    return "｜".join(parts)
+
+
+def kbar_chart_html(kbar: KbarChartVM) -> str:
+    """📊 台股日 K 主圖（Issue #1099 PR-2）。放在原誠實空槽的位置（同一個 markdown 區塊），版面其餘不動。
+
+    - OK／Stale：K 棒＋y 軸刻度＋起訖日期＋文字圖例＋資料日／來源；Stale 另有與 TWII 卡相同的 `⚠` 字樣（照畫，資料是真歷史但舊）。
+    - 不足 20 根：照實少畫＋「僅 N 根（不足 20）」（⛔ 補棒）。
+    - Missing／無法判定（灰）、Unavailable（紅，系統真錯誤）：0 個圖形、狀態字樣＋一句人話原因（CLAUDE.md §1.A 第 4 點灰紅分離）。
     """
+    f = kbar.field
+    has_bars = bool(kbar.candles)
+    reason = f'<span class="ui2-kbar__reason">{escape(f.detail)}</span>' if shown(f.detail) else ""
+    chip = status_chip_html(f)
+    status = f'<div class="ui2-kbar__status" data-ui2-kbar-status="1">{chip}{reason}</div>' if (chip or reason) else ""
+    body = ""
+    if has_bars:
+        legend = "".join(
+            (KBAR_LEGEND_SEP if i else "")
+            + f'<span class="ui2-kbar__sw ui2-kbar__sw--{d}" data-kbar-sw="{d}"></span>{escape(t)}'
+            for i, (d, t) in enumerate(KBAR_LEGEND))
+        notes = "".join(f'<div class="ui2-kbar__note" data-ui2-kbar-note="1">{escape(n)}</div>' for n in kbar.notes)
+        body = (_kbar_svg(kbar) + f'<div class="ui2-kbar__legend" data-ui2-kbar-legend="1">{legend}</div>' + notes)
+    sub = f'<div class="ui2-kbar__sub">{escape(KBAR_SUBTITLE)}</div>' if has_bars else ""
+    return (f'<div class="ui2-kbar" data-ui2-l1="primary_chart" data-axis="{f.layer}" data-state="{_state_attr(f)}">'
+            f'<div class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>{sub}{status}{body}'
+            f'<div class="ui2-kbar__meta" data-ui2-kbar-meta="1">{escape(kbar_meta_text(f.freshness))}</div></div>')
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEC-146：頂部導覽第一列（Active Sheet 狀態＋帳號入口狀態；固定占位）
+# ════════════════════════════════════════════════════════════════════
+TOP_SHEET_LABEL = "Active Sheet"
+TOP_ACCOUNT_LABEL = "帳號"
+
+
+def top_status_row_html(banner_text: str | None = None, banner_note: str = "", *, note_hidden_on_mobile: bool = False) -> str:
+    """頂部第一列：Active Sheet 狀態｜資料模式標示（FAKE 示意資料／Real-data Preview；DEC-146 方案 A 併入）｜帳號入口狀態。
+
+    Active Sheet／帳號：**零輸入、固定占位**（⛔ 讀 `ui2_account`／`ui2_dev`／query／session；⛔ 宣稱已登入／未登入／已選 Sheet）。
+    `⬜ 尚未提供` 屬 **Capability 軸**（DEC-124／DEC-130；功能尚未接線）；不是按鈕、不可聚焦、不可觸發（正式 Auth／Sheet 契約之前）。
+    模式標示＝既有 `banner_html`（文字契約 `PREVIEW_BANNER_*`／`REAL_PREVIEW_BANNER_*` 不變；`role=note`），只是位置從頁首獨立一行
+    併入本列（省下一個容器與其間距）。桌機（≥769px）本列單行（Sheet｜標示｜帳號）；手機本列固定分兩行
+    （標示一行、Sheet／帳號一行；CSS 以固定高度讓位），⛔ 截斷或隱藏標示文字。"""
     chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
-    btn = cta_html(CtaVM(DRAWER_ACCOUNT_BUTTON, enabled=False, disabled_reason=DRAWER_ACCOUNT_REASON))
-    return ('<div class="ui2-drawer-acct" data-ui2-drawer-account="1" data-axis="capability" data-state="not_provided">'
-            f'<div class="ui2-drawer-acct__title">{escape(DRAWER_ACCOUNT_TITLE)}</div>{chip}{btn}'
-            f'<div class="ui2-drawer-acct__more">{escape(DRAWER_ACCOUNT_MORE)}</div></div>')
+    mode = (f'<span class="ui2-top1__mode" data-ui2-top-item="mode">'
+            f'{banner_html(banner_text, banner_note, note_hidden_on_mobile=note_hidden_on_mobile)}</span>') if banner_text else ""
+    return ('<div class="ui2-top1" data-ui2-top="status" data-axis="capability" data-state="not_provided">'
+            f'<span class="ui2-top1__item" data-ui2-top-item="sheet">{escape(TOP_SHEET_LABEL)} {chip}</span>'
+            f'{mode}'
+            f'<span class="ui2-top1__item" data-ui2-top-item="account">{escape(TOP_ACCOUNT_LABEL)} {chip}</span></div>')

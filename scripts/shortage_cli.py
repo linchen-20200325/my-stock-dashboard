@@ -36,7 +36,11 @@ if _ROOT not in sys.path:
 # 靜音 streamlit「No runtime found」cache 警告（CLI 無 streamlit runtime，屬正常）
 logging.getLogger("streamlit").setLevel(logging.ERROR)
 
-from src.compute.health.monthly_revenue_calc import compute_yoy_mom  # noqa: E402
+from src.compute.health.monthly_revenue_calc import (  # noqa: E402
+    MONTH_CONTRACT_KEY,
+    compute_yoy_mom,
+    extract_month_contract,
+)
 from src.compute.screener.shortage_screener import (  # noqa: E402
     ShortageScore,
     rank_shortage,
@@ -65,7 +69,10 @@ def build_stock_input(stock_id: str) -> dict:
                 "quarters": [], "revenue_yoy_last3": []}
     _frame = fetch_quarterly_shortage_frame(sid)
     _mrev = fetch_monthly_revenue(sid, months=18)
-    _yoy3 = (compute_yoy_mom(_mrev).get("yoy_last3", [])
+    # DEC-151 Batch A:as_of = 台灣今天(CLI 取時鐘後注入 L2);月份資料契約只透傳,本批 C4 不使用
+    from shared.macro_compute import tw_now
+    _stats = compute_yoy_mom(_mrev, as_of=tw_now().date())
+    _yoy3 = (_stats.get("yoy_last3", [])
              if _mrev is not None and not _mrev.empty else [])
     return {
         "stock_id": sid,
@@ -73,6 +80,7 @@ def build_stock_input(stock_id: str) -> dict:
         "is_finance": False,
         "quarters": _frame,
         "revenue_yoy_last3": _yoy3,
+        MONTH_CONTRACT_KEY: extract_month_contract(_stats),
     }
 
 
@@ -109,10 +117,24 @@ def format_score_report(s: ShortageScore) -> str:
         f"  ③ 存貨天數 {s.c3_inventory_days:>4.0f}/20   "
         f"最新 {_fmt_days(m.get('dio_t'))}（上季 {_fmt_days(m.get('dio_t1'))} / 去年同季 {_fmt_days(m.get('dio_t4'))}）",
         f"  ④ 月營收   {s.c4_revenue_yoy:>4.0f}/20   "
-        f"近3月YoY {[round(x, 1) if isinstance(x, (int, float)) else None for x in (m.get('rev_yoy_last3') or [])]}",
+        f"評分用3月YoY {_fmt_c4_yoy3(m)}",
         f"  理由：{s.reason_text}",
     ]
     return "\n".join(lines)
+
+
+def _fmt_c4_yoy3(m: dict) -> str:
+    """C4 實際評分使用的 3 個位置(DEC-151 `rev_yoy_scored`;缺值顯示『缺』,不是 0)。無該鍵(舊結果)→ 退回舊欄位。"""
+    _v = m.get("rev_yoy_scored")
+    _lab = m.get("rev_target_months") or [None] * 3
+    if not isinstance(_v, list):
+        _v = m.get("rev_yoy_last3") or []
+        _lab = [None] * len(_v)
+    _parts = []
+    for i, x in enumerate(_v):
+        _l = (_lab[i] if i < len(_lab) else None) or f"#{i + 1}"
+        _parts.append(f"{_l}:" + (f"{x:+.1f}%" if isinstance(x, (int, float)) else "缺"))
+    return "[" + ", ".join(_parts) + "]"
 
 
 def format_report(scores: list[ShortageScore], as_json: bool = False) -> str:

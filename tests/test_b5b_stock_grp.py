@@ -214,11 +214,21 @@ class TestTrendScorability:
         """1 季快照無法 diff（需 2 季）→ 若月營收也缺 → 無法評分。"""
         assert is_trend_scorable(_trend_row('X', 0, 1)) is False
 
+    # 📌 2026-11-08 DEC-150（客戶核准「財報缺任一必要腿不產正式綜合評級」；有意識的契約變更，⛔ 不是放寬）：
+    #   `is_trend_scorable` 由 OR（任一腿有效）改 AND（兩腿皆有效）。原 `test_two_snapshots_is_scorable`
+    #   （只有季腿 → True）與 `test_revenue_alone_is_scorable`（只有月腿 → True）兩條斷言的**預期值**依裁示翻轉
+    #   （單腿 → False）；兩腿皆足 → True 另以新斷言補上。門檻常數 TREND_MIN_* 與 per-leg 有效判定未動。
     def test_two_snapshots_is_scorable(self):
-        assert is_trend_scorable(_trend_row('X', 0, TREND_MIN_FIN_SNAPSHOTS)) is True
+        """（函式名沿用，避免測試被視為刪除）~~只有季財報腿 → 可評分~~ → DEC-150：缺月營收腿，**不**形成正式綜合評級（斷言預期值已翻轉）。"""
+        assert is_trend_scorable(_trend_row('X', 0, TREND_MIN_FIN_SNAPSHOTS)) is False
 
     def test_revenue_alone_is_scorable(self):
-        assert is_trend_scorable(_trend_row('X', TREND_MIN_REVENUE_MONTHS, 0)) is True
+        """（函式名沿用，避免測試被視為刪除）~~只有月營收腿 → 可評分~~ → DEC-150：缺季財報腿，**不**形成正式綜合評級（斷言預期值已翻轉）。"""
+        assert is_trend_scorable(_trend_row('X', TREND_MIN_REVENUE_MONTHS, 0)) is False
+
+    def test_both_legs_at_threshold_is_scorable(self):
+        assert is_trend_scorable(
+            _trend_row('X', TREND_MIN_REVENUE_MONTHS, TREND_MIN_FIN_SNAPSHOTS)) is True
 
     def test_missing_detail_dicts_are_unscorable(self):
         assert is_trend_scorable({'sid': 'X'}) is False
@@ -231,14 +241,16 @@ class TestTrendScorability:
                                    'fin_detail': {'n_snapshots': 2}}) == (3, 2)
 
     def test_split_preserves_order_and_partitions(self):
+        # DEC-150：C（只有季腿）原歸可評分，依裁示改歸無法形成正式評級（預期值翻轉，分割不變量不變）
         rows = [_trend_row('A', 3, 3), _trend_row('B', 0, 0), _trend_row('C', 0, 2)]
         ok, bad = split_trend_rows(rows)
-        assert [r['sid'] for r in ok] == ['A', 'C']
-        assert [r['sid'] for r in bad] == ['B']
+        assert [r['sid'] for r in ok] == ['A']
+        assert [r['sid'] for r in bad] == ['B', 'C']
         assert len(ok) + len(bad) == len(rows)
 
     def test_non_dict_rows_go_to_unscorable(self):
-        ok, bad = split_trend_rows([None, 'x', _trend_row('A', 1, 0)])
+        # DEC-150：A 原為 (1, 0)（只有月腿）即可評分；現需兩腿皆有效 → 改 (1, 2) 以保留本測「非 dict 歸無法評分」的意圖
+        ok, bad = split_trend_rows([None, 'x', _trend_row('A', 1, 2)])
         assert [r['sid'] for r in ok] == ['A'] and len(bad) == 2
 
 

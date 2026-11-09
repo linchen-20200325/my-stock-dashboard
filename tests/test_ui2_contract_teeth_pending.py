@@ -72,11 +72,12 @@ def test_removed_human_sections_keep_their_data_in_the_vm_for_now():
     assert {"why", "detail", "raw"} <= ids, ids
 
 
-def test_nav_is_still_exactly_four_pages_account_area_is_not_a_fifth():
-    from shared.ui2_contract.pages import PAGE4_LABELS
+def test_nav_is_exactly_five_pages_account_area_is_not_a_sixth():
+    """DEC-146（取代「恰四頁」：需求由四頁改五頁；名稱改為『恰五頁、帳號區不是第六頁』）：導覽恰五頁，第一列帳號入口不是導覽項。"""
+    from shared.ui2_contract.pages import PAGE_LABELS
     at = _at()
-    assert list(at.radio(key="ui2_page").options) == [PAGE4_LABELS[p] for p in PAGE_IDS]
-    assert len(PAGE_IDS) == 4
+    assert list(at.radio(key="ui2_page").options) == [PAGE_LABELS[p] for p in PAGE_IDS]
+    assert len(PAGE_IDS) == 5
 
 
 def test_ui2_never_derives_auth_state_from_url_or_query_params():
@@ -93,19 +94,16 @@ def test_ui2_never_derives_auth_state_from_url_or_query_params():
     assert offenders == []
 
 
-def test_mobile_nav_stays_four_cells_in_css():
-    css = (ROOT / "src" / "ui2" / "shell" / "css.py").read_text(encoding="utf-8")
-    assert "ui2_nav" in css                                     # 導覽 container 錨點仍在
-    # Account Area 若加入，只能出現在桌機 media query（手機仍固定四格）：此處只釘「手機底部導覽規則存在」
-    assert "position: fixed" in css or "position:fixed" in css
-    # D-12 加嚴（DEC-134／DEC-137；名稱保留以利追溯，「四格」現指「恰四頁」）：手機 @media 內有抽屜收合態、☰ 規則存在、
-    # ⛔ 底部固定 53px 主導覽；恰四頁由 test_ui2_batch2::test_w1_nav_is_exactly_four_fixed_pages_no_fifth 守。
+def test_mobile_nav_stays_top_two_rows_in_css():
+    """DEC-146（取代舊 `test_mobile_nav_stays_four_cells_in_css`：舊斷言鎖手機 Drawer／☰／底部 53px，需求已改頂部兩列）。
+    名稱改以利追溯：導覽 container 錨點仍在、fixed 在頂端、第二列在自身容器橫向捲動、⛔ Drawer／☰／底部固定 53px／左 rail 殘留。
+    完整契約與突變見 test_ui2_batch2::test_w1_top_nav_css_guard_has_teeth。"""
     from src.ui2.shell.css import CSS
-    mobile = CSS[CSS.index("@media (max-width:768px){\n  .st-key-ui2_nav{"):]
-    mobile = mobile[:mobile.index("\n}")]
-    assert "transform:translateX(-105%);visibility:hidden" in mobile
-    assert ".ui2-dr-toggle{position:fixed;top:0;left:0;" in CSS
-    assert "bottom:0;height:53px" not in CSS
+    assert "ui2_nav" in CSS
+    assert ".st-key-ui2_nav{position:fixed;top:0;left:0;right:0;" in CSS
+    assert "overflow-x:auto" in CSS
+    for dead in ("bottom:0;height:53px", "translateX(-105%)", ".ui2-dr-toggle", "padding-left:12.5rem"):
+        assert dead not in CSS, dead
 
 
 def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():

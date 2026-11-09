@@ -71,3 +71,8 @@ data_cache/*_snapshots/
 # VN1-STORE WIF auth-only（2026-10-19）：google-github-actions/auth 在 $GITHUB_WORKSPACE 產生的
 # 短效 external_account 憑證檔（內含 GitHub OIDC 請求 token）—— 絕不 commit（spec §6 第 3 點）。
 gha-creds-*.json
+
+# P0-FWD-STORE-ATOMIC-WRITE (2026-11-07): aborted Parquet atomic writes can leave hidden
+# .<filename>.<pid>.<random>.tmp files; never include them in cron data PRs.
+# Keep actual data_cache/**/*.parquet trackable (freeze/append-only evidence).
+data_cache/**/.*.tmp

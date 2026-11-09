@@ -1121,3 +1121,57 @@
 
 ## 補註（2026-11-05｜💼 W-11 批 1 版面空槽）
 - draft PR `ui2/hold-w11-batch1`：純版面空槽（狀態行／需處理單行／Primary 與建議持股水位空槽／持股表欄名）。W-11 仍 open（待獨立 QA＋資料接線）。守衛與證據見 BACKLOG `NUI2-HOLD-W11-BATCH1`。
+
+## 70. New UI2 有效專案知識與第一版資料資格（2026-11-07 checkpoint；GitHub 最新為準）
+
+> 本節是**目前有效的專案知識索引**，不是逐字聊天、第二套 Decision，也不是授權直接施工；與未合併 Draft 不一致時先核對最新 GitHub。原始依據：使用者五頁與 OneBrain 方向（DEC-142，已為 main 正式 DEC；#1030 為原提案 PR，仍 open）；GitHub 記憶及資料資格（DEC-143，已為 main 正式 DEC；#1034 為原提案 PR，仍 open）；已入 main 的 #1031 研究提案、#1033 資料缺口及 supersession 稽核。DEC-141～145 的正式收斂 PR #1045 已合併（`848fd977`）；後續 DEC-146（#1050，`67a7cea5`）核准五頁頂部兩列導覽方向（工程未施工，見 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`）；#1051（`9ca5441e`）`docs/handoff/stock_github_checkpoint_2026-11-07.md` 為歷史量測時點快照，非第二套 SSOT。cron 資料發布路徑 #1035／#1036／#1037／#1042 已合併，真實發布端到端 NOT VERIFIED，與 #1038 PIT 阻塞（禁合併）獨立。DEC-147 分工更新已由 #1052（`d709d87b`）合併生效；#1030／#1027 的獨有文件已由 #1053（`71ac2889`）保存，#1030、#1027 可依 DEC-147 條件關閉；#1034 的 PROJECT_RULES §0.4／§32／§33 抽取與重編號**尚未做**；#1048 已被 DEC-146＋Gate 文件承接，可關閉。
+
+### 70.1 對下一版仍有效的產品方向
+- **五頁目標**：📊市場／🎯標的／💼持股／👤我的／🗂資料。手機與桌機**頂部五頁導覽**（手機可橫滑）、頂部 Active Sheet 選擇與右上帳號、Dark-only、Mobile-first；完整資料來源健康度集中🗂資料。四頁、桌機左 rail、手機 Drawer、健康度牆留👤我的屬**舊版面歷史**；現行已寫的 JS_V4／安全守衛不得無等價 Gate 擅刪。〔已更新（2026-11-07 晚，#1055 `5bd4a7ea`）：五頁頂部導覽已在 main，JS_V4 已以零 JS 守衛＋原生鍵盤測試等價取代而退役，見 §70.4。〕文件適用性註記 PR #1046 已合併（`08bf2b68`）。
+- **OneBrain**：同一核准 canonical/Evidence 基礎→確定性 Domain／Risk Cap／Single Action Authority→Human ViewModel 精簡呈現與完整 Decision Digest 分離→按需協調六研究領域（市場、籌碼、財報、產業、持股、資料稽核）及全域正反證複核；白話短／中／長不固定月份。AI **不自行取數、不回寫、不繞過正式動作權威**；VM 存在不代表 Digest 已涵蓋，現階段仍不能宣稱 production OneBrain 完成。
+- **研究候選（非正式行情／訊號）**：2026/10 教材中的大盤 EPS×PE 情境、疑似產業缺貨／大型訂單、AI/CSP CAPEX／OCF／FCF、外資融資與國際利率；需先審核來源、發布時點、EPS/PE 口徑、真實觀察與推論、反證及資格，才可設計研究 Sheet（另走 Schema/權限 Gate）。教材歷史指數區間不可當目前市場數值。
+- **Old UI 能力重用 Gate**：財報體檢／跨期變化、月營收、法人與集保、總經與國際、ETF/持股曝險、疑似缺貨及資料診斷，逐項檢查「來源核准／可達性／資料日與發布日／Missing／公式與期間／新 UI2 feed 接線／Digest 覆蓋」。有舊程式≠可用、有 VM≠已接 AI、有來源缺口≠官方無資料。細節見 main `docs/vnext/NEWUI2_SUPERSESSION_AND_DATA_GAP_AUDIT_2026-11-06.md`。
+
+### 70.2 稽核發現與完成限制
+- `shortage_screener` 四種財務足跡僅是**疑似缺貨**，非官方確認大單；收入缺值曾見分項 0 及其他項仍 rankable。 `fin_trend_score` 月／季缺腿有 0→中性風險，`fin_health_diff` 與現金流單季／累計口徑仍須獨立負測試。這些是**待複驗稽核線索**，不是本批核准修改投資公式。
+  📌 **2026-11-08 更新（DEC-149）**：客戶已核准方向——`fin_trend_score` 維持 65%／35% 原始權重不重配、必要資料不足不產正式綜合評級；缺貨排名採至少兩項有效獨立證據資格、四項全缺排除正式排名並保留「無法評估」診斷、證據不完整的強缺貨訊號先研究降級或封頂（具體封頂分數、有效／獨立定義細節、新權重等尚未裁定）；施工分批見 BACKLOG／HANDOFF，~~目前僅 docs、未施工~~（2026-11-08 已更新：三批已 squash 合併：#1067（D3 B2，main `fb37488`）、#1068（財報缺值資格，main `db82a20`）、#1069（缺貨 Phase 3B，main `234c5f4`），皆最新 head 原生 CI 全綠、各有非作者 QA，發布端到端仍 NOT VERIFIED；~~餘項待客戶裁示~~（部分已由 DEC-150 取代：財報缺腿、空快照、C4 缺月、無法評估檔數揭露、缺貨證據資格與研究分流的方向已核准；缺貨有效／獨立定義、固定封頂、揭露分母分類、歷史案例等其餘仍待驗證；有意識的更新，不是漏刪；決策者 客戶），見 BACKLOG `NUI2-FIN-CHANGE-QUALIFICATION`／`NUI2-SHORTAGE-VERIFIED-EVIDENCE`；有意識的更新，不是漏刪；決策者 AI 總管（事實更新））。 📌 **2026-11-08 追加（DEC-150，客戶第三直接裁示，~~僅 docs、尚未施工~~〔2026-11-08 已更新：Batch A 已合併 #1072，見下句；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）〕）**：財報缺任一必要腿不產正式綜合評級（65/35 不變）、接受空快照資格修正造成的排序變化、缺貨證據資格方向＝資料品質＋不同經濟機制＋日期／來源雙重驗證（具體准入條件先驗證）、強缺貨缺證據留研究清單不立即訂固定封頂、C4 缺月不得認連續加速、在既有相關畫面揭露無法評估檔數；有效／獨立定義、固定封頂、C4 月份日期契約、揭露分母與分類仍待驗證或裁示，施工分批 Batch A→B1→B2／B3→C，見 DECISIONS／BACKLOG／HANDOFF。 📌 **2026-11-08 追加（DEC-150 本批結果）**：Batch A 已合併 #1072（main `438dd7b`，缺任一必要腿不產正式綜合評級，65/35 與公式未動；`diff_failed` 保守判定與月腿有效門檻待客戶確認）；Batch B1（C4 缺月）調查結論＝停手進 Decision Gate、B2／B3 研究（單組讀碼＋合成枚舉，未經第二組複驗，歷史報酬 NOT VERIFIED）與 Batch C（分母與線框未定）均未施工，~~下一步等客戶裁示~~（已由 DEC-151 更新：客戶 2026-11-08 已核准 C4 方向，下一個唯一安全工作＝C4 Batch A 月份契約；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-151），詳見 BACKLOG『NUI2-DATA-D1D3C』段『DEC-150 本批結果』與 HANDOFF 最新接手點；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）。 📌 **2026-11-08 追加（DEC-151，客戶第四直接裁示，僅 docs）**：C4 採最近三個完整且已達可信公告時點的日曆月、可信月份鍵、保留缺值位置；不連續不得判逐月加速，可依既有部分達標規則評分但不得虛構證據；公告時點證據仍待驗證（無法驗證標『日期資格 NOT VERIFIED』）；施工分批 Batch A 月份契約→B C4 評分修復→C 整合驗收，見 DECISIONS DEC-151／BACKLOG／HANDOFF；有意識的更新，不是漏刪；決策者 客戶。
+- 第一版到 UI2 的真實 API 成功率、資料流、source/as_of、授權與完整 Digest coverage **未實測完成**；勿把 `NOT_VERIFIED` 或 `N0~N4` 稽核分組升格為正式 Data State 第六態。
+- 已落 main 的 #1041 帳本 Fail-Closed、#1042 Parquet 原子寫入與 #1043 孤兒暫存檔 ignore，是資料保存安全修復；**#1038 仍因 PIT（2026-11-05 資料列引用較晚的 as_of）不得合併**。pandas 舊版 object 浮點精確比對已由 #1049 合併（Issue #1044 closed）。讀到 BACKLOG/HANDOFF 舊段「非原子／孤兒 tmp 未 ignore」時，以 GitHub 真實合併證據為準。
+
+### 70.3 使用方法
+- 下一個 session **先重新 GitHub Verification Gate**（main、Open/Draft PR head/diff、CI/QA、branches），再參照 DECISIONS、BACKLOG、HANDOFF；舊文件原文保留歷史，不把歷史 next action 當今日工作。
+- 新五頁 Layout、Auth/Sheet、JS 安全遷移、正式 Evidence Schema／OneBrain runtime、來源/金融公式/Risk Cap 均須各自 Gate；**本節不代表已核准施工**。
+
+### 70.4 New UI2 現況更新｜五頁＋頂部兩列導覽已在 main（2026-11-07 晚；#1055 squash `5bd4a7ea`，head `da2dfb34`）
+
+> 本小節只更新「現況」，不改 §70.1～70.3 歷史敘述；**FACT／INFERENCE／RECOMMENDATION** 分開寫。與 GitHub 最新不一致時以 GitHub 為準。
+
+**FACT（來自 #1055 合併事實與獨立 QA／原生 CI 回報）**
+- 五頁 Preview：📊市場／🎯標的／💼持股／👤我的／🗂資料，頂部兩列導覽；UI2 自有五頁登錄於 `shared/ui2_contract/pages.py`，`shared/ia_nav4` 未動。
+- 第一列＝Active Sheet｜FAKE/Real 標示｜帳號；帳號固定為「⬜ 尚未提供」占位，**不是登入**，不代表 OAuth／Active Sheet 已接線。🗂資料頁僅 Capability「尚未提供」空殼。
+- Drawer／rail／☰／`_WRAP_TAGS`／JS_V4（`src/ui2/shell/drawer_js.py`）已退役；改由 `src/ui2` 零 JS 守衛＋真 Chromium 原生 radiogroup 鍵盤測試守住。
+- 量測（Chromium 153，390×844 最小首屏餘裕）：FAKE unavailable **169.4px**（舊 162.5px）、Real **175.8px**；Streamlit 1.56.0／1.59.2 同值。4 份 viewport JSON `source_hash` 6ab8f9cf… 已重生。
+- 獨立 QA（非作者）＋原生 CI 五項（Fast、Slow、ui2-browser 1.56.0／1.59.2、ui2-browser-gate）於 head `da2dfb34` 全綠。
+- 客戶可見差異：手機第一列為兩行（40px），線框為一行；手機 Real 補充說明（「僅台股與市場位階為真資料」）仍隱藏（沿用既有行為）。
+
+**INFERENCE**
+- 「FAKE/Real 標示併入第一列」是 **ChatGPT 對 DEC-146 的最小版面修正建議（方案 A），非使用者逐字裁示**；QA 判定在 DEC-146 授權內、未觸發 Gate STOP 條件。此為 QA 解讀，使用者可另行推翻。
+
+**NOT VERIFIED**
+- iOS／Android 真機、Safari／WebKit、VoiceOver／TalkBack、Streamlit Cloud CSP、safe-area 真實 inset。上列量測僅 Chromium headless，不得外推。
+
+**RECOMMENDATION／後續**：QA SHOULD-FIX 與文件待辦見 BACKLOG `NUI2-TOPNAV-*`、`NUI2-DOCS-SUPERSEDE-DRAWER-SERIES`。下一個唯一安全動作見 HANDOFF 最末 Safe Handoff（#1034 治理段落抽取）。
+
+
+### 70.5 C4 月營收月份契約現況（2026-11-08；DEC-151／DEC-152；以 GitHub 為準）
+
+- **FACT**：C4 月份資料契約（#1075，`228e976`）與評分修復（#1076，`556b335`）已在 main，各有非作者 QA 與最新 head 原生 CI 全綠。缺月／不連續不再被壓縮成「連續加速」。
+- **現況限制**：全市場批次路徑尚未傳遞可信月份鍵，故**全市場 STRONG 暫時為 0**——這是 fail-closed 過渡狀態（客戶 DEC-152 裁示 3），**不是長期正確排名結果**。合成 3000 檔（seed 20261108，不代表真實比例）顯示 STRONG 963→0、前 50 名換 10 檔（單股路徑換 1 檔）。半邊批次失敗標整池 FAIL_CLOSED 為既有行為，客戶裁示維持。
+- **NOT VERIFIED**：FinMind `TaiwanStockMonthRevenue` 之 `revenue_year`／`revenue_month` 欄位語意與「`date` 可能不同於營收所屬月」僅為客戶轉述（ChatGPT 查閱官方文件），本 repo 沙箱無法連 FinMind、未獨立核實；公告時點資格未驗證；真實資料恢復情形未驗證。
+- **RECOMMENDATION／後續**：C4-D（以既有欄位傳遞可信月份鍵、回溯相容）→ C4-D-real（需合法 token 環境，blocked）；Batch C 整合驗證進行中。詳見 BACKLOG `NUI2-C4`、HANDOFF 最新接手點、DECISIONS DEC-152。未授權新權重／門檻／封頂／新排名例外。
+
+- **2026-11-08 補（Batch C／C4-D）**：Batch C 唯讀驗證（單組、無第二組、沙箱無 FinMind）未發現缺月被當連續加速的路徑；但下游 `fundamental_screener_service` 把缺貨缺值當 0 分入綜合排序／徽章~~（Decision Gate 候選，需客戶裁示，未修）~~（2026-11-08 已於 DEC-153 裁示（方向 B），見 NUI2-DEC153；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-153）（具體資格規則仍待 Gate）。C4-D（批次長表帶 revenue_year／month、`BATCH_SOURCE_MONTH_KEY_VERIFIED=False`）已實作於 `c4d-local`（`a958849`），~~**尚未 QA／合併**~~（2026-11-08 已更新：C4-D 非作者 QA 通過（無必修），待 PR／CI／merge；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-152）~~**非作者 QA 通過（無必修），待 PR／CI／merge，尚未合併**~~（2026-11-08 已更新：C4-D 已由 #1077 squash 合併（main `c5846b7`）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1077）；另有 Decision Gate 候選：單股『date≠ym、ym 齊全』由 FAIL_CLOSED 變最高 STEADY／PARTIAL（連續性建立在未驗證 ym 上），須客戶裁示，AI 不自改；全市場 STRONG 仍恆 0，不得宣稱恢復。細節見 BACKLOG `NUI2-C4`。
+
+- **2026-11-08 補（DEC-153 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 ~~main `35c08d2`，#1075～#1078 已 merge，~~ ~~現行 main `b01db69`，#1075～#1079 已 merge，~~（已更新：main `476529d`，#1075～#1084 部分已合併，見本檔下一則；有意識的更新，不是漏刪）#1038 Draft NO MERGE，#1034 Draft 待核銷。**Batch A**：FinMind 真實取樣 **BLOCKED**（無 token、無真實／錄製樣本；欄位語意 NOT VERIFIED；全市場 STRONG 仍恆 0，不得宣稱恢復）。**Batch B**：C4 未驗證月份鍵上限~~實作完成＋非作者 QA 通過（commit `93904d0`＋`964f717`），**待 PR／CI／merge，尚未合併**~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）**已合併 #1079**；~~待客戶確認詮釋點（5 分 vs 0 分）。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）**Batch C**：缺貨缺值唯讀研究（單組、合成資料），推薦 A 先行、資格規則進 Decision Gate、不建議數值門檻。詳見 BACKLOG `NUI2-DEC153`、HANDOFF 最新接手點、DECISIONS DEC-153 ③。
+
+- **2026-11-08 補（DEC-154 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 main `476529d`；#1082（`412d15b`）、#1083（G1，`b6a20b6`）、#1084（FinMind 唯讀探針，`476529d`）已合併，皆原生 CI 全綠、有非作者 QA；#1038 NO MERGE、#1034 待核銷。**G1**：缺貨 n_ok＜4 不再寫確定「缺貨弱」而顯示「部分證據 n/4」，排名／百分位／composite／權重逐位元不變。**探針合併≠執行，尚未執行**（`run_workflow` 403），FinMind 欄位語意與方案可取性仍 NOT VERIFIED，不得翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`，全市場 STRONG 仍恆 0、不得宣稱恢復。候選視窗研究與 `SHORTAGE_VERSION` 設計（皆未施工）見 DECISIONS DEC-154 ③。

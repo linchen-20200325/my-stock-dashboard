@@ -1,274 +1,39 @@
-"""New UI2 手機抽屜 JS 安全守衛（fast lane；純 AST／文字，不需瀏覽器）—— DEC-137。
+"""New UI2 JS 退役守衛（fast lane；純 AST／文字，不需瀏覽器）—— DEC-146。
 
-依據：`docs/vnext/NEWUI2_MOBILE_DRAWER_JS_SAFETY_DESIGN_2026-11-04.md`（§5～§9；§15 JS_V4）、
-測試與驗收規格 §2.4-4／§3（非瀏覽器項）／§4（突變 teeth）。
+**檔名沿用 `test_ui2_drawer_js_guard.py`（可追溯）；內容由「Drawer JS_V4 雜湊／API 白名單」改寫為「src/ui2 零 JS」守衛。**
 
-守什麼（每一層都附「注入違規必紅」的 teeth）：
-1. **雜湊釘住**：`DRAWER_JS_HTML` 規範化後 sha256＝`PINNED_SHA256`。任何改動（含空白、註解）→ 紅 → **必須重過 JS Gate**。
-2. **API 白名單（主守衛）**：JS 只准列舉的全域識別字／成員／事件／字串／selector／正則；另有明確禁止清單。
-   ⚠️ 誠實限制：這是 **regex 掃描，不是 JavaScript parser**；最後防線是雜湊。
-3. **Python AST 判準**：全 New UI2 恰一處 `st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)`；旗標字面 True；
-   第一參數裸 Name；該 Name 模組層恰一次賦值且為 `Constant(str)`（擋 f-string／BinOp／format／%／join／再賦值／+=／global）。
-4. **全域掃描兩個範圍**：New UI2 只准 `drawer_js.py`；`src/**` allowlist＝`drawer_js.py`＋既有 EX-OAUTH-1 `oauth_state.py`（計數不得增加）。
-5. **JS／CSS 斷點交叉比對**、**殼內 raw 互動 HTML 白名單**（只准 ☰ toggle）、**抽屜不讀** `ui2_account`／`query_params`／`ui2_dev`、
-   **CI browser lane meta 守衛**（workflow 含 required env／pin 版本／兩個 Streamlit 版本／gate job；行為測試不得裸 skip）。
+背景：DEC-137 的 JS_V4（`src/ui2/shell/drawer_js.py::DRAWER_JS_HTML`）只服務手機 ☰ Drawer（inert 背景、ESC、焦點進出、
+點當前頁收合、☰ 上按 Enter、listener 去重）。DEC-146 核准「頂部兩列五頁導覽、⛔ Drawer／rail」後，這些行為所保護的對象
+（抽屜、☰、遮罩、背景 inert）**不存在**，沒有東西需要 JS：導覽＝原生 `st.radio`（radiogroup）。
+退役**不是**刪守衛求綠，而是以「等價或更嚴」取代：
+
+| 舊守衛（JS_V4） | 汰換／改寫 |
+|---|---|
+| `PINNED_SHA256`／`test_drawer_js_hash_is_pinned`／V4 diff／AST 白名單／`MEMBERS_OK`… | **汰換**為：drawer_js 模組不存在且無任何 caller／殘留符號（`test_drawer_js_is_fully_retired`）＋ src/ui2 **零** JS 載體（`test_newui2_scope_has_zero_javascript`）。比「釘住一份 JS」更嚴：連 JS 本身都不得存在 |
+| `_JS_MUTATIONS`／`_PY_MUTATIONS`（對 JS 注入危害）teeth | **汰換**為對「零 JS」守衛的注入 teeth（`test_zero_js_guard_has_teeth`；注入 `<script>`／`unsafe_allow_javascript`／`st.html`／`on*=`／`components`／`srcdoc`／`javascript:` 必紅） |
+| `test_newui2_scope_only_drawer_js_has_javascript`（恰 1 檔有 JS） | **改寫**：New UI2 範圍 0 檔有 JS |
+| `SRC_ALLOW`／`test_src_global_javascript_count_does_not_grow` | **改寫**：`src/**` 只剩既有 EX-OAUTH-1（`oauth_state.py`）；drawer_js 項移除 |
+| `JS_CALL_ALLOWLIST`（drawer_js:1＋oauth:1＝2）＋ `test_js_call_allowlist_total_is_two` | **改寫**：drawer_js 項移除、總數＝**1**（`test_js_call_allowlist_total_is_one`）；其餘逐檔×逐函式精確計數與 teeth 保留 |
+| JS／CSS 斷點交叉比對 | **汰換**（JS 不存在）；以 `test_drawer_js_is_fully_retired` 斷言 CSS 無 Drawer 斷點殘留取代 |
+| `check_raw_interactive_html`（只准 ☰ toggle） | **更嚴**：raw 互動 HTML 白名單縮為**空**（☰ toggle 已刪） |
+| `check_drawer_reads_no_account`／帳戶摘要固定占位 | **改寫為**頂部第一列版本（`_render_nav` 只讀 `ui2_page`；`top_status_row_html` 不讀 session／query／帳戶） |
+| `test_toggle_markup_a11y_contract`（☰ aria） | **汰換**：☰ 不存在；頂部導覽的 a11y（role／checked／鍵盤）改由真 Chromium 測 `tests/test_ui2_drawer_browser.py` |
+| `test_workflow_has_required_browser_lane` 等 CI meta 守衛 | **原樣保留** |
 """
 from __future__ import annotations
 
 import ast
 import functools
-import hashlib
 import pathlib
 import re
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-JS_FILE = ROOT / "src" / "ui2" / "shell" / "drawer_js.py"
-JS_REL = "src/ui2/shell/drawer_js.py"
-CONST_NAME = "DRAWER_JS_HTML"
-
-#: JS_V4 釘住值（規範化＝CRLF/CR→LF、去頭尾換行，對含 `<script>` 包裝的整個常數）。JS_V3＝24050f1b…606cd3（研究組候選）。
-PINNED_SHA256 = "c84d687fcaa246b7411ce1f1b927efcd230e9863fbaeb132b3fb10cb3702680a"
-
-# ── API 白名單（變更＝改 JS＝重過 JS Gate；V3→V4 只新增成員 `click`）────────────────
-GLOBALS_OK = {"window", "document", "Set", "Date", "MutationObserver", "requestAnimationFrame", "setTimeout", "RegExp"}
-MEMBERS_OK = {
-    "matchMedia", "matches", "querySelector", "closest", "parentElement", "children", "checked", "focus", "inert",
-    "held", "ret", "q", "forEach", "push", "now", "add", "has", "addEventListener", "observe", "activeElement", "body",
-    "key", "target", "test", "__ui2drJS3",
-    "click",          # V4：☰ 上按 Enter → `t.click()`（走與 Space 相同的原生切換路徑）
-}
-SELECTORS_OK = {".ui2-dr-toggle", ".ui2-dr-wrap", ".st-key-ui2_nav", ".stApp",
-                ".st-key-ui2_nav input[type=radio]", ".st-key-ui2_nav input[type=radio]:checked", ".st-key-ui2_nav label"}
-REGEX_OK = {"^(Arrow|Enter$| $)"}
-EVENTS_OK = {"keydown", "change", "click"}
-OTHER_STR_OK = {"Escape", "Enter", "childList", "subtree", "(max-width: 768px)"}
-FORBIDDEN_TOKENS = ["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "localStorage", "sessionStorage",
-                    "indexedDB", "document.cookie", "eval", "Function", "import(", "importScripts", "window.open", "postMessage",
-                    "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "createElement", "setAttribute",
-                    "appendChild", "location", "navigator", "Worker", "srcdoc", "javascript:", "style.", "classList",
-                    "removeAttribute", "dispatchEvent", "parent.", "top.", "frames", "opener", "clipboard", "history"]
+JS_REL = "src/ui2/shell/drawer_js.py"          # 已退役：此路徑必須不存在
+OAUTH_REL = "src/data/portfolio/oauth_state.py"
 
 
-def normalize(s: str) -> str:
-    return s.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
-
-
-def sha(s: str) -> str:
-    return hashlib.sha256(normalize(s).encode("utf-8")).hexdigest()
-
-
-def _strip_js_comments(js: str) -> str:
-    js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
-    return re.sub(r"(?m)(^|[^:'\"\\])//[^\n]*", r"\1", js)
-
-
-def check_js_text(js: str) -> list[str]:
-    """API 白名單掃描（註解先剝掉）。regex，非 parser（誠實限制）。"""
-    v: list[str] = []
-    code = _strip_js_comments(js)
-    for rx in re.findall(r"(?<![\w)\]$])/(\^[^/\n]*)/(?=\.test)", code):
-        if rx not in REGEX_OK:
-            v.append(f"regex literal not whitelisted: /{rx}/")
-    code = re.sub(r"(?<![\w)\]$])/\^[^/\n]*/(?=\.test)", "rx_", code)
-    for t in FORBIDDEN_TOKENS:
-        if re.search(r"(?<![\w$])" + re.escape(t) + (r"(?![\w$])" if t[-1].isalnum() else ""), code):
-            v.append(f"forbidden token: {t}")
-    if "`" in code:
-        v.append("template literal (backtick) banned")
-    if "\\" in code:
-        v.append("backslash / unicode escape banned")
-    nostr = re.sub(r"'[^'\n]*'", "''", code)
-    if re.search(r"[\w$)\]]\s*\[", nostr):
-        v.append("computed member access banned")
-    if '"' in nostr:
-        v.append("double-quoted string banned（字串一律單引號，才能被白名單掃到）")
-    for s in re.findall(r"'([^'\n]*)'", code):
-        if s in EVENTS_OK or s in OTHER_STR_OK or s in SELECTORS_OK:
-            continue
-        v.append(f"string literal not whitelisted: {s!r}")
-    for m in set(re.findall(r"\.\s*([A-Za-z_$][\w$]*)", nostr)):
-        if m not in MEMBERS_OK:
-            v.append(f"member not whitelisted: .{m}")
-    for g in set(re.findall(r"(?<![\w$.])(window|document|globalThis|self|[A-Z][A-Za-z]+|setTimeout|setInterval|"
-                            r"requestAnimationFrame)\b", nostr)):
-        if g not in GLOBALS_OK:
-            v.append(f"global not whitelisted: {g}")
-    for ev in re.findall(r"addEventListener\(\s*'([^']*)'", code):
-        if ev not in EVENTS_OK:
-            v.append(f"event not whitelisted: {ev}")
-    return v
-
-
-def _assignments(tree: ast.Module) -> dict[str, list[ast.AST]]:
-    out: dict[str, list[ast.AST]] = {}
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Assign):
-            for t in n.targets:
-                for nm in ast.walk(t):
-                    if isinstance(nm, ast.Name):
-                        out.setdefault(nm.id, []).append(n)
-        elif isinstance(n, (ast.AugAssign, ast.AnnAssign)) and isinstance(n.target, ast.Name):
-            out.setdefault(n.target.id, []).append(n)
-        elif isinstance(n, ast.Global):
-            for nm in n.names:
-                out.setdefault(nm, []).append(n)
-    return out
-
-
-def check_st_html_js_calls(source: str, *, expect_hash: str | None = PINNED_SHA256) -> list[str]:
-    """JS 設計 §6：唯一允許的 `st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)` 模組的 AST 判準＋白名單＋雜湊。"""
-    v: list[str] = []
-    tree = ast.parse(source)
-    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
-             and any(k.arg == "unsafe_allow_javascript" for k in n.keywords)]
-    if len(calls) != 1:
-        v.append(f"expected exactly 1 unsafe_allow_javascript call, found {len(calls)}")
-    for c in calls:
-        f = c.func
-        if not (isinstance(f, ast.Attribute) and f.attr == "html" and isinstance(f.value, ast.Name) and f.value.id == "st"):
-            v.append("call must be st.html(...)")
-        kw = next(k for k in c.keywords if k.arg == "unsafe_allow_javascript")
-        if not (isinstance(kw.value, ast.Constant) and kw.value.value is True):
-            v.append("unsafe_allow_javascript must be literal True")
-        if len(c.args) != 1 or len(c.keywords) != 1 or any(isinstance(a, ast.Starred) for a in c.args):
-            v.append("st.html must have exactly 1 positional arg + only unsafe_allow_javascript kw")
-        a0 = c.args[0] if c.args else None
-        if not isinstance(a0, ast.Name):
-            v.append("first arg must be a bare Name (no JoinedStr/BinOp/Call/format/%/join)")
-            continue
-        if a0.id != CONST_NAME:
-            v.append(f"first arg Name must be {CONST_NAME}")
-        defs = _assignments(tree).get(a0.id, [])
-        if len(defs) != 1:
-            v.append(f"{a0.id} must be assigned exactly once (found {len(defs)}; AugAssign/global/reassign banned)")
-            continue
-        d = defs[0]
-        if not (isinstance(d, ast.Assign) and d in tree.body and len(d.targets) == 1
-                and isinstance(d.value, ast.Constant) and isinstance(d.value.value, str)):
-            v.append(f"{a0.id} must be a module-level `NAME = <str Constant>` (JoinedStr/BinOp/Call banned)")
-            continue
-        s = d.value.value
-        if not (normalize(s).startswith("<script>\n") and normalize(s).endswith("\n</script>")):
-            v.append("constant must be exactly one <script>…</script>")
-        if s.count("<script") != 1 or s.count("</script>") != 1:
-            v.append("exactly one <script> tag")
-        if expect_hash and sha(s) != expect_hash:
-            v.append(f"sha256 mismatch: {sha(s)[:12]} != {expect_hash[:12]}  (JS changed → must re-pass JS Gate and update pin)")
-        v += [f"js: {x}" for x in check_js_text(normalize(s)[len("<script>"):-len("</script>")])]
-    return v
-
-
-SRC = JS_FILE.read_text(encoding="utf-8")
-
-
-def _const() -> str:
-    from src.ui2.shell.drawer_js import DRAWER_JS_HTML
-    return DRAWER_JS_HTML
-
-
-# ════════════════════════════════════════════════════════════════════
-# 1～3. 雜湊／白名單／AST
-# ════════════════════════════════════════════════════════════════════
-def test_drawer_js_hash_is_pinned():
-    """JS changed → must re-pass JS Gate and update pin（JS 設計 §8）。"""
-    assert sha(_const()) == PINNED_SHA256, "JS changed → must re-pass JS Gate and update pin"
-
-
-def test_drawer_js_module_passes_ast_whitelist_and_hash():
-    assert check_st_html_js_calls(SRC) == []
-
-
-def test_drawer_js_v4_diff_from_v3_is_only_the_enter_branch():
-    """V3→V4 差異只有 keydown 監聽內兩行（Enter on ☰ → click()）；去掉這兩行必須逐字回到 JS_V3 雜湊。"""
-    js = _const()
-    v4_lines = [ln for ln in js.split("\n") if "V4：" in ln or "t.click(); return;" in ln]
-    assert len(v4_lines) == 2
-    v3 = "\n".join(ln for ln in js.split("\n") if ln not in v4_lines)
-    assert sha(v3) == "24050f1b81c4fed6441d8dad082c90ab0b94ce10d032f42ce36524842e606cd3"
-
-
-_TAIL = "  sync();\n})();"
-_JS_MUTATIONS = {
-    "空白 +1": ("S.q = false; sync();", "S.q = false;  sync();"),
-    "只改註解": ("去重旗標", "去重旗標x"),
-    "拔掉去重旗標": ("  if (window.__ui2drJS3) { return; }", ""),
-    "拔掉 Enter 分支": ("    if (e.key === 'Enter' && t && e.target === t) { t.click(); return; }\n", ""),
-    "fetch": (_TAIL, "  fetch('/x');\n" + _TAIL),
-    "localStorage": (_TAIL, "  localStorage.setItem('a','b');\n" + _TAIL),
-    "eval": (_TAIL, "  eval('1');\n" + _TAIL),
-    "new Function": (_TAIL, "  new Function('1')();\n" + _TAIL),
-    "innerHTML": (_TAIL, "  document.body.innerHTML = '';\n" + _TAIL),
-    "window.open": (_TAIL, "  window.open('http://x');\n" + _TAIL),
-    "postMessage": (_TAIL, "  window.parent.postMessage(1,'*');\n" + _TAIL),
-    "cookie": (_TAIL, "  const c = document.cookie;\n" + _TAIL),
-    "setAttribute": (_TAIL, "  document.body.setAttribute('x','y');\n" + _TAIL),
-    "tabIndex 寫入": (_TAIL, "  document.body.tabIndex = 1;\n" + _TAIL),
-    "未列 selector": ("$('.ui2-dr-toggle')", "$('.stApp input')"),
-    "未列事件": ("document.addEventListener('click'", "document.addEventListener('paste'"),
-    "未列成員 .value": (_TAIL, "  const v = T().value;\n" + _TAIL),
-    "window['fe'+'tch']": (_TAIL, "  window['fe'+'tch']('/x');\n" + _TAIL),
-    "樣板字串": (_TAIL, "  const z = `fe${1}`;\n" + _TAIL),
-    "unicode 跳脫": (_TAIL, "  const z = '\\u0066etch';\n" + _TAIL),
-    "計算式存取": (_TAIL, "  const k = window[mq];\n" + _TAIL),
-    "雙引號字串": (_TAIL, '  const z = "x";\n' + _TAIL),
-    "globalThis": (_TAIL, "  globalThis.x = 1;\n" + _TAIL),
-    "setInterval": (_TAIL, "  setInterval(sync, 9);\n" + _TAIL),
-}
-_PY_MUTATIONS = {
-    "f-string": ("st.html(DRAWER_JS_HTML,", 'st.html(f"<script>{DRAWER_JS_HTML}</script>",'),
-    "BinOp 拼接": ('DRAWER_JS_HTML = """<script>', 'DRAWER_JS_HTML = "<script>" + """'),
-    ".format": ("st.html(DRAWER_JS_HTML,", "st.html(DRAWER_JS_HTML.format(),"),
-    "%": ("st.html(DRAWER_JS_HTML,", "st.html(DRAWER_JS_HTML % (),"),
-    "join": ("st.html(DRAWER_JS_HTML,", "st.html(''.join([DRAWER_JS_HTML]),"),
-    "變數取代": ("st.html(DRAWER_JS_HTML,", "st.html(some_var,"),
-    "旗標非字面 True": ("st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)", "st.html(DRAWER_JS_HTML, unsafe_allow_javascript=FLAG)"),
-    "別名呼叫": ("    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)",
-               "    h = st.html\n    h(DRAWER_JS_HTML, unsafe_allow_javascript=True)"),
-    "兩個 script": ('</script>"""', '</script><script>1</script>"""'),
-}
-_PY_APPENDS = {
-    "再賦值": "\nDRAWER_JS_HTML = DRAWER_JS_HTML + '<script>x</script>'\n",
-    "+=": "\nDRAWER_JS_HTML += '<script>x</script>'\n",
-    "global 改寫": "\ndef _f():\n    global DRAWER_JS_HTML\n    DRAWER_JS_HTML = '<script>1</script>'\n",
-    "第二個呼叫": "\nst.html('<script>1</script>', unsafe_allow_javascript=True)\n",
-}
-
-
-@pytest.mark.parametrize("name", sorted(_JS_MUTATIONS) + sorted(_PY_MUTATIONS) + sorted(_PY_APPENDS))
-def test_drawer_js_guard_has_teeth(name):
-    if name in _PY_APPENDS:
-        mutated = SRC + _PY_APPENDS[name]
-    else:
-        old, new = _JS_MUTATIONS.get(name) or _PY_MUTATIONS[name]
-        assert SRC.count(old) == 1, (name, old)
-        mutated = SRC.replace(old, new)
-    assert mutated != SRC
-    try:
-        v = check_st_html_js_calls(mutated)
-    except SyntaxError:
-        v = ["SyntaxError"]
-    assert v, f"沒抓到：{name}"
-
-
-@pytest.mark.parametrize("name", ["fetch", "eval", "未列成員 .value", "window['fe'+'tch']", "setAttribute", "tabIndex 寫入"])
-def test_drawer_js_whitelist_catches_harmful_additions_even_without_hash(name):
-    """分層歸因：有害加法在**不靠雜湊**時也要被白名單層抓到（雜湊是最後防線，不是唯一防線）。"""
-    old, new = _JS_MUTATIONS[name]
-    assert check_st_html_js_calls(SRC.replace(old, new), expect_hash=None)
-
-
-def test_whitelist_only_contains_used_members():
-    """白名單不得預留未用的成員（預留＝日後可不過 Gate 加功能）；`RegExp` 全域為歷史列入、未用（JS 設計 §5.2 註）。"""
-    code = re.sub(r"'[^'\n]*'", "''", _strip_js_comments(normalize(_const())))
-    used = set(re.findall(r"\.\s*([A-Za-z_$][\w$]*)", code))
-    assert MEMBERS_OK == used, (MEMBERS_OK - used, used - MEMBERS_OK)
-
-
-# ════════════════════════════════════════════════════════════════════
-# 4. 全域掃描（兩個範圍）
-# ════════════════════════════════════════════════════════════════════
 SCAN_PATTERNS = {
     "unsafe_allow_javascript": r"unsafe_allow_javascript",
     "components": r"streamlit\.components|\bst\.components|from\s+streamlit\s+import[^\n]*\bcomponents\b|\bcomponents\.v[12]\b",
@@ -280,10 +45,9 @@ SCAN_PATTERNS = {
 }
 SCAN_SUFFIXES = {".py", ".js", ".html", ".css"}
 NEWUI2_SCOPES = ("src/ui2", "shared/ui2_contract", "src/services/ui2", "app_ui2.py")
-NEWUI2_ALLOW = {JS_REL: {"unsafe_allow_javascript", "<script"}}
-#: `src/**` 全域：既有 EX-OAUTH-1（動態字串，⛔ 不得當樣板）＋本模組。**新增任何一處＝紅**。
-SRC_ALLOW = {JS_REL: {"unsafe_allow_javascript", "<script"},
-             "src/data/portfolio/oauth_state.py": {"unsafe_allow_javascript", "<script"}}
+NEWUI2_ALLOW: dict[str, set[str]] = {}          # DEC-146：New UI2 範圍 0 JS
+#: `src/**` 全域：只剩既有 EX-OAUTH-1（動態字串，⛔ 不得當樣板）；drawer_js 已退役。**新增任何一處＝紅**。
+SRC_ALLOW = {OAUTH_REL: {"unsafe_allow_javascript", "<script"}}
 
 
 def scan_text(text: str) -> list[str]:
@@ -306,16 +70,81 @@ def scan_tree(scopes, allow: dict[str, set[str]]) -> tuple[list[str], dict[str, 
     return bad, hits
 
 
-def test_newui2_scope_only_drawer_js_has_javascript():
+
+def test_newui2_scope_has_zero_javascript():
     bad, hits = scan_tree(NEWUI2_SCOPES, NEWUI2_ALLOW)
-    assert bad == []
-    assert set(hits) == {JS_REL}
+    assert bad == [] and hits == {}, hits
 
 
 def test_src_global_javascript_count_does_not_grow():
     bad, hits = scan_tree(("src",), SRC_ALLOW)
     assert bad == []
     assert set(hits) == set(SRC_ALLOW), "allowlist 有過期項或新增 JS 檔"
+
+
+def test_drawer_js_is_fully_retired():
+    """JS_V4 退役條件（可追溯）：(1) 模組檔不存在；(2) src／shared／tests 之外的程式碼無任何 caller 或殘留符號；
+    (3) CSS 無 Drawer／☰／遮罩／左 rail 殘留。有人把 Drawer 加回來（含只加回 JS、不加 CSS）→ 紅。"""
+    assert not (ROOT / JS_REL).exists()
+    needles = ("drawer_js", "DRAWER_JS_HTML", "render_drawer_script", "__ui2drJS3", "ui2-dr-", "ui2dr", "_WRAP_TAGS", "_TOGGLE_HTML")
+    offenders = []
+    for sc in ("src", "shared", "app_ui2.py", "app.py"):
+        base = ROOT / sc
+        for p in (sorted(base.rglob("*.py")) if base.is_dir() else [base]):
+            if "__pycache__" in p.parts:
+                continue
+            t = p.read_text(encoding="utf-8")
+            offenders += [f"{p.relative_to(ROOT).as_posix()}: {n}" for n in needles if n in t]
+    assert offenders == []
+
+
+def check_zero_js(files: dict[str, str]) -> list[str]:
+    bad = []
+    for rel, t in files.items():
+        bad += [f"{rel}: {k}" for k in scan_text(t)]
+        tree = ast.parse(t)
+        for n in ast.walk(tree):     # `st.html(...)` 本身也禁（即使沒帶 unsafe_allow_javascript）：New UI2 一律走 st.markdown
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "html" \
+                    and isinstance(n.func.value, ast.Name) and n.func.value.id == "st":
+                bad.append(f"{rel}:L{n.lineno}: st.html")
+    return bad
+
+
+def _ui2_files_for_zero_js() -> dict[str, str]:
+    out = {}
+    for sc in ("src/ui2", "shared/ui2_contract", "src/services/ui2", "app_ui2.py"):
+        base = ROOT / sc
+        for p in (sorted(base.rglob("*.py")) if base.is_dir() else [base]):
+            if "__pycache__" not in p.parts:
+                out[p.relative_to(ROOT).as_posix()] = p.read_text(encoding="utf-8")
+    return out
+
+
+def test_zero_js_ast_guard_new_ui2_files():
+    assert check_zero_js(_ui2_files_for_zero_js()) == []
+
+
+@pytest.mark.parametrize("payload", [
+    "import streamlit as st\nst.html('<b>x</b>')\n",
+    "import streamlit as st\nst.html('x', unsafe_allow_javascript=True)\n",
+    "X = '<script>1</script>'\n", "X = '<b onclick=\"1\">'\n", "X = 'javascript:void 0'\n",
+    "import streamlit.components.v1 as c\n", "X = '<iframe srcdoc=1>'\n",
+])
+def test_zero_js_guard_has_teeth(payload):
+    files = _ui2_files_for_zero_js()
+    files["src/ui2/views/market.py"] += "\n" + payload
+    assert check_zero_js(files), payload
+    files2 = _ui2_files_for_zero_js()
+    files2["src/ui2/shell/app.py"] += "\n" + payload
+    assert check_zero_js(files2), payload
+
+
+def test_drawer_js_retirement_guard_has_teeth(tmp_path, monkeypatch):
+    """突變：把 drawer 符號加回任一 src 檔 → `test_drawer_js_is_fully_retired` 的 needles 掃描必抓。"""
+    needles = ("drawer_js", "DRAWER_JS_HTML", "render_drawer_script", "ui2-dr-")
+    probe = "from src.ui2.shell.drawer_js import render_drawer_script\n"
+    assert any(n in probe for n in needles)
+    assert not any(n in (ROOT / "src/ui2/shell/app.py").read_text(encoding="utf-8") for n in needles)
 
 
 # ── 精確計數守衛（QA 變異 M8：同檔加第二個呼叫原本仍綠）：每個允許檔案 × 每種受控 JS 位置的「所在函式限定名＋精確次數」──
@@ -325,7 +154,6 @@ JS_SCAN_ROOTS = ("src", "shared", "scripts", "tools", "mcp_server", "app.py", "a
 #: kind：`unsafe_js`＝帶 `unsafe_allow_javascript` 關鍵字的呼叫；`kw_ref`＝該字串出現在呼叫關鍵字以外（`**{'…':…}`、字典鍵、屬性）；
 #:      `components`＝`streamlit.components`／`st.components`／`components.v1|v2` 的 import 或屬性使用。
 JS_CALL_ALLOWLIST: dict[str, dict[tuple[str, str], int]] = {
-    "src/ui2/shell/drawer_js.py": {("unsafe_js", "render_drawer_script"): 1},               # 設計核准的唯一新位置（DEC-137）
     "src/data/portfolio/oauth_state.py": {("unsafe_js", "maybe_silent_reauth"): 1},         # 既有 EX-OAUTH-1（base 已存在）
     # 既有驗證探針腳本：把 `unsafe_allow_javascript=False` 寫在**字串**裡探測 kwarg 是否存在（不是呼叫、值為 False、非產品路徑）；精確 2 處字串
     "tools/phase3_verify/appttest_floor156.py": {("kw_ref", "<module>"): 2},
@@ -416,16 +244,51 @@ def _js_scan_read() -> dict[str, str]:
     return out
 
 
+def check_js_call_counts(files: dict[str, str], allow=JS_CALL_ALLOWLIST) -> list[str]:
+    bad = []
+    for rel, src in sorted(files.items()):
+        got = count_js_calls(src)
+        want = allow.get(rel, {})
+        for k in sorted(set(got) | set(want)):
+            if got.get(k, 0) != want.get(k, 0):
+                bad.append(f"{rel}: {k[0]} 於 {k[1]} 次數 {got.get(k, 0)} ≠ 核准 {want.get(k, 0)}")
+    for rel in allow:
+        if rel not in files:
+            bad.append(f"{rel}: 核准檔不存在於掃描範圍")
+    return bad
+
+
+@functools.lru_cache(maxsize=1)
+def _js_scan_cached() -> tuple:
+    return tuple(_js_scan_read().items())
+
+
+def _js_scan_files() -> dict[str, str]:
+    return dict(_js_scan_cached())
+
+
+def _js_scan_read() -> dict[str, str]:
+    out = {}
+    for sc in JS_SCAN_ROOTS:
+        base = ROOT / sc
+        for p in (sorted(base.rglob("*.py")) if base.is_dir() else ([base] if base.exists() else [])):
+            if "__pycache__" not in p.parts:
+                out[p.relative_to(ROOT).as_posix()] = p.read_text(encoding="utf-8")
+    return out
+
+
+
 def test_js_call_counts_exact_per_file_and_function():
-    """JS 呼叫總數（src/）＝2（oauth_state 1＋drawer_js 1；base 為 1）；相對核准清單的增加＝0。逐檔×逐函式精確比對。"""
+    """JS 呼叫總數（src/）＝1（只剩 oauth_state；base 為 1；DEC-146 退役 drawer_js 後相對 DEC-137 的 2 減 1）。逐檔×逐函式精確比對。"""
     assert check_js_call_counts(_js_scan_files()) == []
 
 
-def test_js_call_allowlist_total_is_two():
-    assert sum(n for v in JS_CALL_ALLOWLIST.values() for (k, _), n in v.items() if k == "unsafe_js") == 2
+def test_js_call_allowlist_total_is_one():
+    assert sum(n for v in JS_CALL_ALLOWLIST.values() for (k, _), n in v.items() if k == "unsafe_js") == 1
+    assert "src/ui2/shell/drawer_js.py" not in JS_CALL_ALLOWLIST
 
 
-_OAUTH = "src/data/portfolio/oauth_state.py"
+_OAUTH = OAUTH_REL
 _OA_CALL = "    st.html(_silent_redirect_script(_url), unsafe_allow_javascript=True)"
 
 
@@ -443,11 +306,10 @@ def _with(rel, fn):
     ("(c) oauth 的呼叫移到別的函式", _OAUTH, lambda s: s.replace(_OA_CALL, "    pass") + "\n\ndef _moved(_url):\n" + _OA_CALL + "\n"),
     ("(d) 新檔加", "src/data/new_file.py", lambda s: "import streamlit as st\nst.html('x', unsafe_allow_javascript=True)\n"),
     ("(e) 刪除 oauth 現有呼叫", _OAUTH, lambda s: s.replace(_OA_CALL, "    pass")),
-    ("drawer_js 同函式再加一次", "src/ui2/shell/drawer_js.py",
-     lambda s: s.replace("    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)",
-                         "    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)\n    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)")),
-    ("drawer_js 呼叫搬到模組層", "src/ui2/shell/drawer_js.py",
-     lambda s: s.replace("    st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)", "    pass") + "\nst.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)\n"),
+    ("ui2 殼加一次（drawer 復活）", "src/ui2/shell/app.py",
+     lambda s: s + "\n\ndef _again():\n    st.html('x', unsafe_allow_javascript=True)\n"),
+    ("drawer_js 檔復活", "src/ui2/shell/drawer_js.py",
+     lambda s: "import streamlit as st\n\ndef render_drawer_script():\n    st.html('x', unsafe_allow_javascript=True)\n"),
     ("**kwargs 字典繞法", "src/data/new_file.py", lambda s: "import streamlit as st\nst.html('x', **{'unsafe_allow_javascript': True})\n"),
     ("getattr 字串繞法", "src/data/new_file.py", lambda s: "k = 'unsafe_allow_javascript'\n"),
     ("components.html import", "src/data/new_file.py", lambda s: "import streamlit.components.v1 as c\n"),
@@ -480,36 +342,8 @@ def test_global_scan_does_not_confuse_ui2_components_html_module():
 
 
 # ════════════════════════════════════════════════════════════════════
-# 5. 斷點交叉比對／raw 互動 HTML／抽屜不讀帳戶與 query
+# 5. raw 互動 HTML 白名單（DEC-146：縮為空）／頂部第一列固定占位不讀帳戶與 query
 # ════════════════════════════════════════════════════════════════════
-def _css_breakpoints(css: str) -> tuple[set[int], set[int]]:
-    return ({int(x) for x in re.findall(r"@media \(max-width:(\d+)px\)\{\s*\n?\s*\.st-key-ui2_nav\{", css)},
-            {int(x) for x in re.findall(r"@media \(min-width:(\d+)px\)\{\s*\n?\s*\.st-key-ui2_nav\{", css)})
-
-
-def check_breakpoints(css: str, js: str) -> list[str]:
-    mx, mn = _css_breakpoints(css)
-    js_bp = {int(x) for x in re.findall(r"\(max-width: (\d+)px\)", js)}
-    bad = []
-    if len(mx) != 1 or len(mn) != 1 or len(js_bp) != 1:
-        bad.append(f"斷點不唯一：css max={mx} min={mn} js={js_bp}")
-    elif js_bp != mx or min(mn) != max(mx) + 1:
-        bad.append(f"JS 斷點 {js_bp} 與 CSS 抽屜斷點 max={mx}／min={mn} 不一致（桌機殘留 inert 或手機 inert 不生效）")
-    return bad
-
-
-def test_js_and_css_drawer_breakpoints_match():
-    from src.ui2.shell.css import CSS
-    assert check_breakpoints(CSS, _const()) == []
-
-
-def test_breakpoint_guard_has_teeth():
-    from src.ui2.shell.css import CSS
-    assert check_breakpoints(CSS, _const().replace("(max-width: 768px)", "(max-width: 767px)"))
-    assert check_breakpoints(CSS.replace("@media (max-width:768px){\n  .st-key-ui2_nav{",
-                                         "@media (max-width:800px){\n  .st-key-ui2_nav{"), _const())
-
-
 _INTERACTIVE = re.compile(r"(?i)<(input|label|button|select|textarea|form|a)\b|\bhref\s*=")
 
 
@@ -525,17 +359,13 @@ def _non_doc_strings(source: str) -> list[tuple[int, str]]:
 
 
 def check_raw_interactive_html(files: dict[str, str]) -> list[str]:
-    """New UI2 原始碼的字串常數中，raw 互動標籤只准 ☰ toggle（`src/ui2/shell/app.py`：1 個 `<input>`＋2 個 `<label>`）。"""
-    bad, counts = [], {}
+    """New UI2 原始碼的字串常數中，raw 互動標籤（input／label／button／select／textarea／form／a／href）**一律禁止**。
+    DEC-137 只准 ☰ toggle（1 input＋2 label）；DEC-146 移除 ☰ 後白名單縮為空（導覽用原生 st.radio，不手寫互動 HTML）。"""
+    bad = []
     for rel, src in files.items():
         for ln, s in _non_doc_strings(src):
             for m in _INTERACTIVE.finditer(s):
-                tag = (m.group(1) or "href").lower()
-                counts[(rel, tag)] = counts.get((rel, tag), 0) + 1
-                if rel != "src/ui2/shell/app.py" or tag not in {"input", "label"}:
-                    bad.append(f"{rel}:L{ln}: raw <{tag}>")
-    if counts.get(("src/ui2/shell/app.py", "input"), 0) != 1 or counts.get(("src/ui2/shell/app.py", "label"), 0) != 2:
-        bad.append(f"殼內 raw toggle 應恰 1 input＋2 label，實際 {counts}")
+                bad.append(f"{rel}:L{ln}: raw <{(m.group(1) or 'href').lower()}>")
     return bad
 
 
@@ -549,19 +379,18 @@ def _ui2_sources() -> dict[str, str]:
     return out
 
 
-def test_raw_interactive_html_is_only_the_drawer_toggle():
+def test_raw_interactive_html_is_empty():
     assert check_raw_interactive_html(_ui2_sources()) == []
 
 
 @pytest.mark.parametrize("payload", ["X = '<input type=\"text\">'\n", "X = '<button>x</button>'\n",
-                                     "X = '<a href=\"/x\">x</a>'\n", "X = '<form>'\n"])
+                                     "X = '<a href=\"/x\">x</a>'\n", "X = '<form>'\n",
+                                     "X = '<input type=\"checkbox\" id=\"ui2dr\">'\n"])
 def test_raw_interactive_html_guard_has_teeth(payload):
-    files = _ui2_sources()
-    files["src/ui2/views/market.py"] += "\n" + payload
-    assert check_raw_interactive_html(files)
-    files2 = _ui2_sources()
-    files2["src/ui2/shell/app.py"] += "\nY = '<input type=\"checkbox\">'\n"
-    assert check_raw_interactive_html(files2)
+    for rel in ("src/ui2/views/market.py", "src/ui2/shell/app.py"):
+        files = _ui2_sources()
+        files[rel] += "\n" + payload
+        assert check_raw_interactive_html(files), (rel, payload)
 
 
 _ACCOUNT_IDS = re.compile(r"ui2_account|KEY_ACCOUNT|query_params|ui2_dev|DEV_FLAG_PARAM|dev_surface_enabled|session_state")
@@ -581,73 +410,53 @@ def _fn_src(source: str, name: str) -> str:
     return ast.unparse(_strip_doc(fn))
 
 
-def check_drawer_reads_no_account(app_src: str, html_src: str, js_src: str) -> list[str]:
-    """抽屜／帳戶摘要固定占位：`_render_nav` 只准讀 `ui2_page`（KEY_PAGE）；`drawer_account_html` 零參數、零 session／query；
-    `drawer_js.py` 不碰 session／query。（統一施工規格 §7、測試規格 D-17）"""
+def check_top_row_reads_no_account(app_src: str, html_src: str) -> list[str]:
+    """頂部第一列固定占位：`_render_nav` 只准讀 `ui2_page`（KEY_PAGE；由 st.radio 自己持有）；`top_status_row_html` 只吃模式標示參數，
+    零 session／query／帳戶（取代舊 `check_drawer_reads_no_account`）。"""
     bad = []
     nav = _fn_src(app_src, "_render_nav")
-    hits = set(_ACCOUNT_IDS.findall(nav)) - {"session_state"}
+    hits = set(_ACCOUNT_IDS.findall(nav))
     if hits:
         bad.append(f"_render_nav 讀了 {hits}")
-    if re.findall(r"session_state\[(\w+)\]", nav) not in ([], ["KEY_PAGE"]):
-        bad.append("_render_nav 讀了 ui2_page 以外的 session key")
-    acc = _fn_src(html_src, "drawer_account_html")
-    if _ACCOUNT_IDS.search(acc) or not re.search(r"def drawer_account_html\(\) -> str:", acc):
-        bad.append("drawer_account_html 必須零參數且不讀 session／query／帳戶")
-    if _ACCOUNT_IDS.search(ast.unparse(_strip_doc(ast.parse(js_src)))):
-        bad.append("drawer_js.py 碰到 session／query／帳戶")
+    acc = _fn_src(html_src, "top_status_row_html")
+    if _ACCOUNT_IDS.search(acc):
+        bad.append("top_status_row_html 不得讀 session／query／帳戶")
+    if not re.search(r"def top_status_row_html\(banner_text: str \| None", acc):
+        bad.append("top_status_row_html 簽名只准模式標示參數")
     return bad
 
 
-def _drawer_srcs() -> tuple[str, str, str]:
+def _top_srcs() -> tuple[str, str]:
     return ((ROOT / "src/ui2/shell/app.py").read_text(encoding="utf-8"),
-            (ROOT / "src/ui2/components/html.py").read_text(encoding="utf-8"), SRC)
+            (ROOT / "src/ui2/components/html.py").read_text(encoding="utf-8"))
 
 
-def test_drawer_reads_no_account_query_or_dev_flag():
-    assert check_drawer_reads_no_account(*_drawer_srcs()) == []
+def test_top_row_reads_no_account_query_or_dev_flag():
+    assert check_top_row_reads_no_account(*_top_srcs()) == []
 
 
 @pytest.mark.parametrize("which,old,new", [
-    ("app", "    tag = _WRAP_TAGS[", "    _a = st.session_state[KEY_ACCOUNT]\n    tag = _WRAP_TAGS["),
-    ("app", "    tag = _WRAP_TAGS[", "    _q = st.query_params.get('ui2_dev')\n    tag = _WRAP_TAGS["),
-    ("html", "def drawer_account_html() -> str:", "def drawer_account_html(account=None) -> str:"),
-    ("html", "    btn = cta_html(CtaVM(DRAWER_ACCOUNT_BUTTON,", "    _x = 'ui2_account'\n    btn = cta_html(CtaVM(DRAWER_ACCOUNT_BUTTON,"),
+    ("app", "    with st.container(key=KEY_NAV):", "    _a = st.session_state[KEY_ACCOUNT]\n    with st.container(key=KEY_NAV):"),
+    ("app", "    with st.container(key=KEY_NAV):", "    _q = st.query_params.get('ui2_dev')\n    with st.container(key=KEY_NAV):"),
+    ("html", '    chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")\n    mode =',
+     '    chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")\n    _x = "ui2_account"\n    mode ='),
+    ("html", "def top_status_row_html(banner_text", "def top_status_row_html(account=None, banner_text"),
 ])
-def test_drawer_account_guard_has_teeth(which, old, new):
-    a, h, j = _drawer_srcs()
+def test_top_row_account_guard_has_teeth(which, old, new):
+    a, h = _top_srcs()
     if which == "app":
         assert a.count(old) == 1
         a = a.replace(old, new)
     else:
         assert h.count(old) == 1
         h = h.replace(old, new)
-    assert check_drawer_reads_no_account(a, h, j)
+    assert check_top_row_reads_no_account(a, h)
 
 
-def test_drawer_account_is_capability_axis_fixed_placeholder():
-    from shared.ui2_contract.text import TEXT_NOT_PROVIDED
-    from src.ui2.components.html import drawer_account_html
-    h = drawer_account_html()
-    assert TEXT_NOT_PROVIDED in h and 'data-axis="capability"' in h and "ui2-chip--axis-capability" in h
-    assert 'aria-disabled="true"' in h and "ui2-cta--disabled" in h and "登入與 Sheet 操作尚未開放" in h
-    assert "已登入" not in h and "尚未登入" not in h and "狀態" not in h      # ⛔ 宣稱登入狀態、⛔ 放「狀態」欄
-    assert drawer_account_html() == h                                        # 固定占位（零輸入、確定性）
-
-
-def test_allowed_ui2_writes_unchanged_by_drawer():
-    """C+JS 不新增 session key（D-17）：允許寫入的 key 仍是既有 5 個。"""
+def test_allowed_ui2_writes_unchanged_by_top_nav():
+    """頂部導覽不新增 session key：允許寫入的 key 仍是既有 5 個。"""
     from tests.test_ui2_real_feed import ALLOWED_UI2_WRITES
     assert ALLOWED_UI2_WRITES == frozenset({"ui2_page", "ui2_scenario", "ui2_account", "ui2_feed", "ui2_target_mode"})
-
-
-def test_toggle_markup_a11y_contract():
-    """A-1～A-3：`aria-label="主選單"`、☰ 符號 aria-hidden、role=switch、⛔ 靜態 aria-expanded、⛔ aria-controls。"""
-    from src.ui2.shell.app import _TOGGLE_HTML
-    assert 'role="switch"' in _TOGGLE_HTML and 'aria-label="主選單"' in _TOGGLE_HTML
-    assert '<label for="ui2dr" class="ui2-dr-btn" aria-hidden="true">☰</label>' in _TOGGLE_HTML
-    assert "aria-expanded" not in _TOGGLE_HTML and "aria-controls" not in _TOGGLE_HTML
-    assert "✕" not in _TOGGLE_HTML and "關閉" not in _TOGGLE_HTML               # S-14：✕ 待線框定案，⛔ 默默加入
 
 
 # ════════════════════════════════════════════════════════════════════

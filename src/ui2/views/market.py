@@ -15,7 +15,7 @@ from __future__ import annotations
 from html import escape
 
 from shared.ui2_contract.models import PageVM
-from src.ui2.components.html import market_l1_html, primary_slot_html
+from src.ui2.components.html import kbar_chart_html, market_l1_html, primary_slot_html
 from src.ui2.views._page import _md, render_cards, render_sections, render_title, section_l1_html
 
 ONEBRAIN_SECTION_ID = "onebrain"
@@ -29,8 +29,10 @@ def render(vm: PageVM) -> None:
     onebrain = next((s for s in vm.context.sections if s.section_id == ONEBRAIN_SECTION_ID and s.level == "L1"), None)
     if onebrain is not None:
         _md(f'<div class="ui2-m-onebrain" data-ui2-l1="onebrain">{section_l1_html(onebrain)}</div>')
-    # P2-2：台股 Primary 誠實空槽＋一行 SPEC（來源／資料日＝TWII 卡 freshness；不接歷史序列）。
+    # P2-2：台股 Primary 誠實空槽＋一行 SPEC（來源／資料日＝TWII 卡 freshness）。
+    # Issue #1099 PR-2（DEC-156）：VM 帶日 K 事實（Real-data Preview）時，同一位置改畫日 K 主圖（含灰／紅誠實狀態）；
+    # 沒有日 K 事實（FAKE 示意軸）→ 照舊誠實空槽（⛔ FAKE K 棒）。版面其餘不動。
     twii = next((c for c in vm.context.cards if c.card_id == TWII_CARD_ID), None)
-    _md(primary_slot_html(twii))
+    _md(kbar_chart_html(vm.context.kbar) if vm.context.kbar is not None else primary_slot_html(twii))
     render_cards(vm)
     render_sections(vm, skip={ONEBRAIN_SECTION_ID} if onebrain is not None else frozenset())

@@ -138,8 +138,8 @@ def _batch_finmind(months: int = 18) -> pd.DataFrame:
         months: 回溯月數(預設 18)
 
     Returns:
-        DataFrame columns: stock_id / date / revenue(多股長表)
-        失敗或無 token 回空 DataFrame
+        DataFrame columns: stock_id / date / revenue(多股長表);**來源有提供時多帶** revenue_year / revenue_month
+        (DEC-152 C4-D;來源沒有則無此兩欄,不由 date 推導)。失敗或無 token 回空 DataFrame
     """
     _tok = _get_token()
     if not _tok:
@@ -169,7 +169,16 @@ def _batch_finmind(months: int = 18) -> pd.DataFrame:
         # D13 v19.75:同單檔版,revenue 強制 float64(schema float 契約;int64 會誤殺)
         _df["revenue"] = pd.to_numeric(_df["revenue"], errors="coerce").astype("float64")
         _df = _df.dropna(subset=["date", "revenue", "stock_id"])
-        _result_b = _df[["stock_id", "date", "revenue"]].sort_values(
+        # DEC-152 C4-D(additive):來源有提供 revenue_year / revenue_month 就原樣多帶這兩欄(FinMind 官方範例顯示
+        # date 與營收所屬月份可能不同,故不可只靠 date);來源沒有就不帶——**不由 date 推導補欄**(不憑空補月份)。
+        # 兩欄只轉成數值(無法解析 → NaN,**不丟列、不補值**;契約端遇 NaN 月份鍵 → FAIL_CLOSED month_unparseable)。
+        # 欄位只在『兩欄都在』時才帶(單欄無法構成月份鍵)。舊快取(無兩欄)與舊 caller 完全相容。
+        _cols_b = ["stock_id", "date", "revenue"]
+        if "revenue_year" in _df.columns and "revenue_month" in _df.columns:
+            _df["revenue_year"] = pd.to_numeric(_df["revenue_year"], errors="coerce")
+            _df["revenue_month"] = pd.to_numeric(_df["revenue_month"], errors="coerce")
+            _cols_b += ["revenue_year", "revenue_month"]
+        _result_b = _df[_cols_b].sort_values(
             ["stock_id", "date"]
         ).reset_index(drop=True)
         # v18.356 PR-Q5b S-PROV-1 phase 19

@@ -12,6 +12,9 @@ data_cache/finmind_m1m2.parquet            ← M1B／M2 餘額 ＋ M1B 年增率
                                              表名 finmind_ 為歷史沿用；細節見下）
 data_cache/tw_pmi.parquet                  ← 台灣製造業 PMI 月頻（data.gov.tw dataset/6100，國發會提供）
 data_cache/metadata.json                   ← 各表 last_updated／row_count／last_error（本輪自陳狀態，各分支寫法見 `update_one`）
+                                             D3 起另有 additive 欄 fetch_outcome／fetch_evidence（只在本輪「抓取為空」時寫；例外／缺 token 路徑不寫，沿用「有 last_error 且非空抓取標記」；
+                                             三態 NO_NEW_DATA／FETCH_FAILED／UNDETERMINED，定義見 `shared/fetch_outcome.py`；
+                                             與 freshness 分離、不取代 last_updated、last_error 照舊）
 data_cache/macro_last_good/tw_pmi.json     ← PMI durable「上次已知值」快照（v19.118；`main()` 末段跑 runtime
                                              `macro_core.fetch_tw_pmi()`，只存 live hit、不存過期 fallback；
                                              寫檔者 `macro_core._macro_durable_save`）
@@ -70,6 +73,16 @@ import requests
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# D3(DEC-148):空抓取三態(NO_NEW_DATA／FETCH_FAILED／UNDETERMINED)。L0 純規則、不 import pandas／streamlit,
+# 放檔頭不擴大故障半徑。fetcher 以 DataFrame.attrs 帶結果;缺 attrs ＝ UNDETERMINED(保守預設)。
+from shared.fetch_outcome import (  # noqa: E402
+    META_EVIDENCE_KEY as _META_EVIDENCE_KEY,
+    META_OUTCOME_KEY as _META_OUTCOME_KEY,
+    FetchOutcome as _FO,
+    read_outcome as _read_outcome,
+    tag_outcome as _tag,
+)
 
 CACHE_DIR = Path("data_cache")
 META_PATH = CACHE_DIR / "metadata.json"
@@ -162,17 +175,26 @@ def _finmind_get(dataset: str, data_id: str, start: str, end: str,
         )
         if r.status_code != 200:
             print(f"[FinMind/{dataset}] HTTP={r.status_code} body={r.text[:200]}")
-            return pd.DataFrame()
+            return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"FinMind {dataset}: HTTP {r.status_code}")
         d = r.json()
         if d.get("status") != 200:
             print(f"[FinMind/{dataset}] status={d.get('status')} msg={d.get('msg', '')}")
-            return pd.DataFrame()
+            return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"FinMind {dataset}: status {d.get('status')}")
         df = pd.DataFrame(d.get("data", []))
         print(f"[FinMind/{dataset}] ✅ {len(df)} rows ({start}~{end})")
+        if df.empty:
+            # D3:正面證據 = HTTP 200 ＋ status 200 ＋ 回應明確帶**長度為 0 的** `data: []`。
+            # 缺 `data` 鍵、型別不是 list、或 list 非空但解析後 df 仍為空（例 `data=[{}]` 壞資料）= 證據不足。
+            _data = d.get("data")
+            if isinstance(_data, list) and len(_data) == 0:
+                return _tag(df, _FO.NO_NEW_DATA, f"FinMind {dataset}: HTTP 200, status 200, data=[]")
+            if isinstance(_data, list):
+                return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但 data 有 {len(_data)} 筆、解析後無資料列")
+            return _tag(df, _FO.UNDETERMINED, f"FinMind {dataset}: HTTP 200 但回應無 data 清單")
         return df
     except Exception as e:
         print(f"[FinMind/{dataset}] ❌ {type(e).__name__}: {e}")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"FinMind {dataset}: exception {type(e).__name__}")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -187,9 +209,19 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
     r = _fetch_url_via_proxy(url, params=params, timeout=20)
     if r is None or r.status_code != 200:
         print(f"[twii_ohlcv] HTTP={getattr(r, 'status_code', 'None')}")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED,
+                    f"Yahoo ^TWII: HTTP {r.status_code}" if r is not None else "Yahoo ^TWII: 無回應")
     try:
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as e:      # D3:回應不是 JSON ＝ 明確解析錯誤(與下方「結構缺欄」不同,後者可能只是區間無交易日)
+            print(f"[twii_ohlcv] json decode error: {type(e).__name__}: {e}")
+            return _tag(pd.DataFrame(), _FO.FETCH_FAILED, "Yahoo ^TWII: 回應不是合法 JSON")
+        _chart_err = j.get("chart", {}).get("error") if isinstance(j, dict) else None
+        if _chart_err:               # D3:API 明確回報錯誤(chart.error 非 null)
+            print(f"[twii_ohlcv] chart.error: {_chart_err}")
+            _code = _chart_err.get("code") if isinstance(_chart_err, dict) else None
+            return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"Yahoo ^TWII: chart.error code={_code}")
         result = j["chart"]["result"][0]
         ts = result["timestamp"]
         ind = result["indicators"]["quote"][0]
@@ -239,10 +271,17 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
             df["source"] = "Yahoo:^TWII:chart"
             df["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         print(f"[twii_ohlcv] ✅ {len(df)} rows ({start}~{end})")
+        if df.empty:
+            # D3:結構可解析、但沒有任何有效 close。與「區間無交易日」無從分辨 ⇒ 只能 UNDETERMINED
+            # (⛔ 不依 weekday 推論成功)。
+            return _tag(df, _FO.UNDETERMINED, "Yahoo ^TWII: 回應可解析但 0 筆有效 close")
         return df
     except Exception as e:
         print(f"[twii_ohlcv] parse error: {type(e).__name__}: {e}")
-        return pd.DataFrame()
+        # D3:此處吞掉的例外包含 KeyError('timestamp')（區間無交易日時 Yahoo 的合法形狀）與真正的 schema 漂移,
+        # 兩者不可分 ⇒ UNDETERMINED(⛔ 不標 NO_NEW_DATA、不標 FETCH_FAILED);型別名留作證據。
+        return _tag(pd.DataFrame(), _FO.UNDETERMINED,
+                    f"Yahoo ^TWII: 解析例外 {type(e).__name__}(含區間無交易日的合法形狀,無法區分)")
 
 
 def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
@@ -304,7 +343,8 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     fi = raw[raw["name"].astype(str).map(is_finmind_foreign_investor)]
     if fi.empty:
         print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.UNDETERMINED,
+                    "FinMind inst: 有資料列但無 Foreign_Investor 列(來源形狀不明,非正面的「無新資料」證據)")
     _missing = [c for c in ("date", "buy", "sell") if c not in fi.columns]
     if _missing:
         raise _missing_columns_error(_missing)
@@ -322,6 +362,8 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         fi = fi[~fi["date"].isin(_bad_days)]
     out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
     out["date"] = pd.to_datetime(out["date"]).dt.date
+    if out.empty:   # D3:有 Foreign 列但整日皆因 buy／sell 缺值被剔除 → 證據不足
+        return _tag(out, _FO.UNDETERMINED, "FinMind inst: 外資列的日期全因 buy／sell 缺值被剔除")
     # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
     if not out.empty:
         # 批 Z40：source 改記 `:Foreign_Investor` ＝ 列級口徑標記（舊列為 `:Foreign`，見 docstring）
@@ -382,7 +424,8 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
               f"（上游 shape 可能又變了）→ 保留第一列")
     if out.empty:
         print(f"[finmind_margin] ❌ 取不到融資金額序列：{meta['reason']}")
-        return pd.DataFrame()
+        # D3:來源有回資料列、但取不到 Money 序列 ＝ schema／欄位驗證失敗 ⇒ FETCH_FAILED(附 reason)
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"FinMind margin: 取不到融資金額序列：{meta['reason']}")
 
     # ── §3.2 sanity：元 → 億 ∈ (500, 10000)；任一列不合格 = 上游口徑漂移 → 全批不寫
     ok = margin_twd_sanity_mask(out["margin_balance"])
@@ -639,7 +682,7 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
     except ImportError as e:
         # §1:印出真正缺什麼,不再吞成固定字串誤導診斷
         print(f"[finmind_m1m2] import 失敗,無法抓 CBC:{type(e).__name__}: {e}")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"CBC EF15M01: import 失敗 {type(e).__name__}")
     # ── Tier 1: ms1.json（共用 tw_macro.CBC_MS1_URLS SSOT + fetch_cbc_ms1_rows kernel）──
     # v18.240：URL 清單從 tw_macro import，dead Attachment URL（v18.231 確認 404）已移除
     # DL-f1-s40：只檢查、只進 log，**不寫出**（理由見 docstring）；不論結果如何都接著請求 EF15M01。
@@ -669,26 +712,32 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
     # **只請求一次**，M1B／M2 依標籤成對取「原始值」（= 餘額），並以表內官方年增率對帳。
     # EF19M01／EF21M01 是變動因素分析表、沒有餘額欄（run 36408641177 實測），不再請求。
     ef15, ef15_desc = None, ""
+    _fail_ev = f"CBC {_EF15_FILE}: 未取得可用資料"   # D3:EF15M01 無可用資料時的錯誤證據(各失敗分支覆寫)
     r = _fu_cbc(CBC_EF15M01_URL, params={"FileName": _EF15_FILE}, timeout=20, attempts=2)
     if r is None or r.status_code != 200:
         print(f"[finmind_m1m2/{_EF15_FILE}] ❌ 無回應或非 200"
               f"（status={getattr(r, 'status_code', None)}）")
+        _fail_ev = (f"CBC {_EF15_FILE}: HTTP {r.status_code}" if r is not None
+                    else f"CBC {_EF15_FILE}: 無回應")
     else:
         try:
             sdmx = r.json()
         except ValueError as e:
             print(f"[finmind_m1m2/{_EF15_FILE}] ❌ JSON 解析失敗 {type(e).__name__}: {e}"
                   f" body={r.text[:300]}")
+            _fail_ev = f"CBC {_EF15_FILE}: 回應不是合法 JSON"
         else:
             # 對帳的致命範圍 = 寫入窗口 ＋ gap 的 t−12 基期（更早的列只警示，
             # 見 `src/data/macro/cbc_ef15m01.py` 模組 docstring）
             ef15, ef15_desc = _parse_cbc_ef15m01_levels(
                 sdmx, fatal_from=_ef15_fatal_from(start))
+            if ef15 is None:     # D3:解析／單位／對帳被拒 ＝ 明確的解析或欄位驗證失敗,拒用原因即證據
+                _fail_ev = f"CBC {_EF15_FILE}: 解析或驗證被拒：{ef15_desc}"
 
     if ef15 is None:
         print(f"[finmind_m1m2] ❌ {_EF15_FILE} 無可用資料 → 本輪不寫出"
               "（ms1 不作替代來源，DL-f1-s40）")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, _fail_ev)
     out = ef15[["date", "m1b", "m2"]].copy()
     _source = f"CBC:PXWeb:{_EF15_FILE}:daily_avg_level[{ef15_desc}]"
     # M1B YoY − M2 YoY（黃金交叉指標）。算式不變；DL-f1-r1 起先補齊日曆月再 shift(12)，
@@ -696,17 +745,18 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
     # 月份連續時與原本的逐列 shift(12) 逐位相同。期間重複則無從對齊 → 拒寫（§1）。
     if out.empty:
         print("[finmind_m1m2] ❌ 無有效列（日期或數值全數無法解析）")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.UNDETERMINED, f"CBC {_EF15_FILE}: 解析通過但無有效列")
     if not out["date"].is_unique:
         _dup = out.loc[out["date"].duplicated(keep=False), "date"].astype(str).head(6).tolist()
         print(f"[finmind_m1m2] ❌ 期間重複,無法對齊 t−12 → 拒寫：{_dup}")
-        return pd.DataFrame()
+        return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"CBC {_EF15_FILE}: 期間重複,無法對齊 t−12")
     _ts = pd.to_datetime(out["date"])
     _cal = (out[["m1b", "m2"]].set_index(_ts)
             .reindex(pd.date_range(_ts.min(), _ts.max(), freq="MS")))
     _gap = (_cal["m1b"] / _cal["m1b"].shift(12) - 1) * 100 - \
            (_cal["m2"] / _cal["m2"].shift(12) - 1) * 100
     out["m1b_m2_gap"] = _gap.reindex(_ts).to_numpy()
+    _full = out[["date", "m1b", "m2", "m1b_m2_gap"]].copy()    # D3:窗口前的整張表,只供「窗口內 0 列」時判定正面證據
     out = out[(out["date"] >= start) & (out["date"] <= end)]
     # DL-f1-s25：印實際來源（= 下方寫進 source 欄的同一個值）。原本寫死「CBC PXWeb」，
     # 走 ms1.json 或 EF15M01 都印同一句。
@@ -717,8 +767,16 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
         _ok, _msg = _m1m2_level_sanity(out)
         if not _ok:
             print(f"[finmind_m1m2] ❌ sanity 不過,拒寫：{_msg}")
-            return pd.DataFrame()
+            return _tag(pd.DataFrame(), _FO.FETCH_FAILED, f"CBC {_EF15_FILE}: 寫檔前 sanity 不過：{_msg}")
         print(f"[finmind_m1m2] sanity：{_msg}")
+    else:
+        # D3:窗口內 0 列。正面證據 = EF15M01 HTTP 200、JSON 可解析、通過單位／對帳解析，且整張表通過同一條 sanity
+        # (只是沒有落在 [start, end] 的月份)。整張表 sanity 不過 → 證據不足,不標 NO_NEW_DATA。
+        _ok_full, _msg_full = _m1m2_level_sanity(_full)
+        if _ok_full:
+            return _tag(out, _FO.NO_NEW_DATA,
+                        f"CBC {_EF15_FILE}: 解析與 sanity 通過,請求窗口內無新月份")
+        return _tag(out, _FO.UNDETERMINED, f"CBC {_EF15_FILE}: 窗口內 0 列,但整張表 sanity 不過：{_msg_full}")
     # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
     if not out.empty:
         out["source"] = _source
@@ -786,16 +844,21 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
     輸出欄位：[date, pmi]；月度資料量小（~300 月 / 25 年），每次 bootstrap 全 CSV
     無增量必要；caller 透過 `_merge_dedupe` 去重。
     """
+    # D3:本輪遇到的「明確錯誤」證據(HTTP 非 200／JSON 壞／解析不出列／例外);全敗且有任一筆 ⇒ FETCH_FAILED,
+    # 全敗但只有「200 卻無 resources 清單」這類形狀不明 ⇒ UNDETERMINED。證據不含 URL 以外的變動內容。
+    _errs: list[str] = []
     for _meta_url in _DGTW_PMI_METADATA_URLS:
         try:
             _r_meta = _fetch_url_via_proxy(_meta_url, timeout=10)
             if _r_meta is None or _r_meta.status_code != 200:
                 print(f"[tw_pmi] metadata HTTP={getattr(_r_meta, 'status_code', 'None')}")
+                _errs.append(f"metadata {'無回應' if _r_meta is None else 'HTTP ' + str(_r_meta.status_code)}")
                 continue
             try:
                 _j_meta = _r_meta.json()
             except Exception as _e_json:
                 print(f"[tw_pmi] metadata JSON parse fail: {_e_json}")
+                _errs.append("metadata 不是合法 JSON")
                 continue
             # ── v19.122:cron 端補齊 `result.distribution`（v19.120 runtime 修正的另一半）──
             # v19.120 已在 runtime 端(`macro_core._pmi_src_dgtw`)把 6100 的**真實** shape
@@ -857,15 +920,22 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                 if _r_csv is None or _r_csv.status_code != 200:
                     print(f"[tw_pmi] resource HTTP="
                           f"{getattr(_r_csv, 'status_code', 'None')} url=…{_res_url[-40:]}")
+                    _errs.append(f"resource {'無回應' if _r_csv is None else 'HTTP ' + str(_r_csv.status_code)}")
                     continue
                 _txt = _r_csv.content.decode("utf-8-sig", errors="ignore")
                 _df = _parse_pmi_csv_full(_txt)
                 if _df.empty:
                     print(f"[tw_pmi] 解析後無有效列（{len(_r_csv.content)} bytes）"
                           f"url=…{_res_url[-40:]}")
+                    _errs.append("resource CSV 解析後無有效列")
                     continue
                 _df = _df[(_df["date"] >= start) & (_df["date"] <= end)].reset_index(drop=True)
                 print(f"[tw_pmi] ✅ data.gov.tw {len(_df)} rows ({start}~{end})")
+                if _df.empty:
+                    # D3(QA 修正):`_parse_pmi_csv_full` 對解析不了的列靜默略過、不暴露原始列數,
+                    # 無從確認「沒有新月份」不是「新月份被略過」⇒ 證據不足,只能 UNDETERMINED(不標 NO_NEW_DATA)。
+                    return _tag(_df, _FO.UNDETERMINED,
+                                "data.gov.tw 6100: CSV 解析出歷史列,窗口內 0 列,但 parser 略過列數無從核對")
                 # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
                 if not _df.empty:
                     _df["source"] = "data.gov.tw:dataset:6100"
@@ -873,8 +943,12 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
                 return _df
         except Exception as _e_outer:
             print(f"[tw_pmi] outer {type(_e_outer).__name__}: {_e_outer}")
+            _errs.append(f"例外 {type(_e_outer).__name__}")
     print("[tw_pmi] ❌ 所有 dgtw metadata URL 皆失敗")
-    return pd.DataFrame(columns=["date", "pmi"])
+    _empty = pd.DataFrame(columns=["date", "pmi"])
+    if _errs:
+        return _tag(_empty, _FO.FETCH_FAILED, "data.gov.tw 6100: " + "；".join(dict.fromkeys(_errs)))
+    return _tag(_empty, _FO.UNDETERMINED, "data.gov.tw 6100: 回應 200 但無可用 resources／url(形狀不明)")
 
 
 # B7b：既有 Parquet 的定義守門（name → fn(df) -> (ok, msg)）。不過 → update_one 整段重建。
@@ -966,6 +1040,11 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
     if new.empty:
         from shared.staleness import EMPTY_FETCH_MARKER  # DL-f1-s6：與讀取端共用同一常數
         meta["last_error"] = EMPTY_FETCH_MARKER
+        # D3:空抓取三態(額外欄,additive;last_error／EMPTY_FETCH_MARKER／last_updated／row_count 一律照舊)。
+        # 缺 attrs ＝ UNDETERMINED;⛔ 不寫 0、不依 weekday 推論成功。
+        _oc, _ev = _read_outcome(new)
+        meta[_META_OUTCOME_KEY] = _oc.value
+        meta[_META_EVIDENCE_KEY] = _ev
         if _corrupt_existing is not None:
             # 重建失敗：壞檔原樣保留（不刪、不回填），但 metadata 誠實標壞,不假裝最新
             meta["last_error"] = "抓取結果為空；既有檔 sanity 不過,待重建"
@@ -983,6 +1062,12 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
     meta["last_updated"] = _last_date(merged).isoformat()
     meta["row_count"] = len(merged)
     return meta
+
+
+# D3:抓取拋例外／缺 token 跳過這兩條錯誤路徑**刻意不寫** fetch_outcome 欄：它們回傳的 metadata 形狀被
+# test_d2_update_one_exception_meta、test_dl_f1_r4_batch（整本 dict 相等）釘死，且語意本來就明確 ——
+# 「有 last_error、不是空抓取標記、沒有 fetch_outcome」＝ 錯誤（讀取端與 publish_data_pr 皆如此判讀，
+# 即 FETCH_FAILED 的向後相容表示法）。三態欄只在「空抓取」分支寫（update_one），那才是需要分流的地方。
 
 
 def main():

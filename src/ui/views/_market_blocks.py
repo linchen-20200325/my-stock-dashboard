@@ -72,6 +72,7 @@ from shared.market_conclusion import CONCEPT_REGIME, CONCEPT_RISK_CAP, RISK_CAP_
 from shared.secret_scrub import scrub_secrets
 from shared.signal_thresholds import TRADING_DAYS_PER_YEAR
 from shared.ui_state import UI_DEGRADED, UI_EMPTY, UI_FAILED, UI_LIVE
+from shared.upstream_state import classify_upstream, is_empty_fetch_marker, upstream_state_text, upstream_state_value
 from src.services import market_twii_view_service as twii_svc
 from src.ui.views import page_today as today
 from src.ui.views._ui_kit import single_submit_form
@@ -729,8 +730,14 @@ def basis_chart_a(view: twii_svc.TwiiTrendView | None, mkt_info: Any) -> Basis:
     _miss = [f"{_n}：{_w}" for _n, _w in _bad]
     if view is not None and not view.ok:
         _miss.insert(0, f"指數線：{scrub_secrets(view.error)}")
-    if view is not None and view.ok and view.upstream_error:
-        _miss.append(f"上游最後一次錯誤：{scrub_secrets(view.upstream_error)}")
+    _vstate = getattr(view, "upstream_state", "") if view is not None else ""
+    if view is not None and view.ok and (view.upstream_error or _vstate):
+        # B2（DEC-148）：三態分流文案。⛔ 不再把所有空抓取（「抓取結果為空」）都寫成「上游最後一次錯誤」。
+        _up = _vstate or upstream_state_value(classify_upstream(view.upstream_error)[0])
+        if _up == "FETCH_FAILED" and view.upstream_error and not is_empty_fetch_marker(view.upstream_error):
+            _miss.append(f"上游最後一次錯誤：{scrub_secrets(view.upstream_error)}")   # 具體錯誤原樣（洗過）
+        elif upstream_state_text(_up):
+            _miss.append(upstream_state_text(_up))
     return Basis(
         data_used=f"{twii_svc.TWII_SOURCE_TEXT}；均線取自『市場評估』結果",
         as_of=f"{_line}；均線資料日 {_ma_date}（兩者來源不同）",

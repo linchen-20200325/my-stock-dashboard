@@ -11,6 +11,8 @@
 - `DEFAULT_PARQUET_CACHE_DIR`:預設 cache 目錄(Path("data_cache"))
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
+- `load_twii_ohlc(cache_dir, *, today) -> DataFrame`:讀 twii_ohlcv.parquet → 日 K open/high/low/close/fetched_at
+  (Issue #1099 PR-1;唯讀、不驗證、不去重 —— 驗證交 L0 `shared.twii_ohlc_contract`;⛔ 不含 volume)
 - `load_tw_pmi_history(cache_dir) -> DataFrame | None`:讀 tw_pmi.parquet 原樣回傳(批 Z63,
   供 L2 `dated_inputs.extract_pmi_prev` 取「前一資料月官方值」;未接線)
 - `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
@@ -115,6 +117,9 @@ def compute_cache_staleness(
           "age_days":       int | None,  # as_of 距 today 幾個日曆天(僅日頻有意義)
           "periods_behind": int | None,  # 月頻:落後幾個發布期(≥1 = 真的漏了整期)
           "upstream_error": str | None,  # metadata 自陳的 `last_error`
+          "upstream_state": str,         # B2:上游抓取狀態 "" / NO_NEW_DATA / FETCH_FAILED / UNDETERMINED
+          "fetch_outcome":  str | None,  # B2:metadata 原樣的 `fetch_outcome`(舊 metadata 無此欄 → None)
+          "fetch_evidence": str,         # B2:metadata 原樣的 `fetch_evidence`(已洗過;沒有 → "")
           "meta_last_updated": str | None,
         }
 
@@ -129,12 +134,22 @@ def compute_cache_staleness(
     _today = today or _dt.date.today()
     out = {"dataset": dataset, "is_stale": True, "reason": None, "as_of": None,
            "age_days": None, "periods_behind": None,
-           "upstream_error": None, "meta_last_updated": None}
+           "upstream_error": None, "meta_last_updated": None,
+           "upstream_state": "", "fetch_outcome": None, "fetch_evidence": ""}
 
     _meta = read_cache_metadata(cache_dir)
     _entry = (_meta.get("datasets") or {}).get(dataset) or {}
     out["upstream_error"] = _entry.get("last_error")
     out["meta_last_updated"] = _entry.get("last_updated")
+    # B2(DEC-148):三態折成「上游狀態」由 L0 `shared.upstream_state` 統一判定(last_error／fetch_outcome／freshness 三者各自
+    # 表達自己的語意、不互相取代;本欄只描述「最近一次抓取」,⛔ 不蘊含資料新鮮,也不改 as_of／is_stale)。
+    # 舊 metadata 缺 fetch_outcome → 純標記字串視為 UNDETERMINED(不預設成功)。
+    from shared.fetch_outcome import META_EVIDENCE_KEY, META_OUTCOME_KEY
+    from shared.upstream_state import classify_upstream, upstream_state_value
+    out["fetch_outcome"] = _entry.get(META_OUTCOME_KEY)
+    _state, _ev = classify_upstream(out["upstream_error"], out["fetch_outcome"], _entry.get(META_EVIDENCE_KEY))
+    out["upstream_state"] = upstream_state_value(_state)
+    out["fetch_evidence"] = _ev
 
     _cad = CACHE_DATASET_CADENCE.get(dataset)
     if _cad is None:
@@ -152,6 +167,15 @@ def compute_cache_staleness(
         return out
     out["as_of"] = _as_of
     out["age_days"] = (_today - _as_of).days
+
+    # D2:資料觀測日晚於 today(未來日期)→ 無法判定新鮮度。
+    # 可能是系統時鐘錯、上游日期壞或資料被污染;絕不能落到下方「age ≤ 門檻 → fresh」
+    # (負的 age_days 永遠 ≤ 門檻,月頻 periods_behind 也 ≤ 0)而被當成最新鮮。
+    # §1 判不出來 → 視為過期;as_of / age_days(負值)照實保留供診斷,日頻與月頻同一出口。
+    if _as_of > _today:
+        out["reason"] = (f"{dataset} 資料日 {_as_of} 晚於今日 {_today},無法判定新鮮度"
+                         f"(時鐘或上游日期異常)→ 視為過期(§1 不假設新鮮)")
+        return out
 
     if _cadence == "monthly":
         _behind, _overdue = monthly_release_status(
@@ -196,12 +220,18 @@ def _attach_staleness(series, dataset: str, *, cache_dir: Path, df=None, today=N
         series.attrs["as_of"] = _st["as_of"]
         series.attrs["age_days"] = _st["age_days"]
         series.attrs["upstream_error"] = _st["upstream_error"]
+        if _st["upstream_state"]:          # B2:只在有上游問題時才加(無問題時 attrs 形狀與 B2 前逐字相同)
+            series.attrs["upstream_state"] = _st["upstream_state"]
+            if _st["fetch_evidence"]:
+                series.attrs["fetch_evidence"] = _st["fetch_evidence"]
     except Exception:  # noqa: BLE001 — 極舊 pandas 無 .attrs;不影響資料本身
         pass
     if _st["is_stale"] or _st["upstream_error"]:
         print(f"[macro_cache_reader] ⚠️ {dataset} 判為過期/上游有錯:"
               f"{_st['reason'] or '—'}"
               + (f";metadata.last_error={_st['upstream_error']!r}"
+                 f";上游狀態={_st['upstream_state'] or '—'}"
+                 + (f"({_st['fetch_evidence']})" if _st["fetch_evidence"] else "")
                  if _st["upstream_error"] else ""))
     return series
 
@@ -300,6 +330,57 @@ def load_twii_close(
     except Exception as e:  # noqa: BLE001
         print(f"[macro_cache_reader/load_twii_close] 處理失敗:{e}")
         return pd.Series(dtype=float, name="twii_close")
+
+
+#: `load_twii_ohlc` 回傳的欄位(Issue #1099 PR-1;順序固定)。
+#: ⛔ 刻意**不含 `volume`**:parquet 的 volume 實測有 NaN 與 volume=0 列(見 `scripts/update_macro_history.py`
+#: `fetch_twii_ohlcv` 註解),DEC-156 規格明文「不畫量、不把缺量當零」—— 不讀進來就不會被誤畫。
+TWII_OHLC_COLUMNS: tuple = ("open", "high", "low", "close", "fetched_at")
+
+
+def _empty_twii_ohlc() -> pd.DataFrame:
+    return pd.DataFrame(columns=list(TWII_OHLC_COLUMNS),
+                        index=pd.DatetimeIndex([], name="date"))
+
+
+def load_twii_ohlc(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+    *,
+    today=None,
+) -> pd.DataFrame:
+    """讀 twii_ohlcv.parquet → 日 K DataFrame(index=date Timestamp 升序;欄 = `TWII_OHLC_COLUMNS`)。
+
+    Issue #1099 PR-1(DEC-156 A:重用既有 Yahoo `^TWII` 日 OHLC 快取,唯讀)。
+    - **只讀、不驗證**:⛔ 不去重、⛔ 不 dropna、⛔ 不補值 —— 合法性(有限正值、OHLC 關係、日期唯一升序、
+      未來日、未收盤棒、as_of 同源)由 L3 呼叫 L0 `shared.twii_ohlc_contract.validate_ohlc_window` 判定,
+      在這裡先清掉會讓「壞資料」從驗證者眼前消失(§1 掩蓋 ≠ 解決)。
+    - 一次讀檔 = 一個快照:新鮮度判定用**同一份** DataFrame(`_attach_staleness(..., df=_raw)`),
+      掛在回傳 DataFrame 的 `.attrs`(與 `load_twii_close` 同一組 key)。
+    - 缺檔 / 壞檔 / 空檔 / 缺欄 / 轉型失敗 → 印一行 log 並回空 DataFrame(欄位保留,§1 出聲不吞)。
+    - 無 streamlit、無網路。
+
+    Args:
+        cache_dir: parquet cache 目錄(預設 data_cache/)
+        today: 過期判定的基準日(測試注入;None → 今天)
+    """
+    path = cache_dir / "twii_ohlcv.parquet"
+    df = load_parquet_safe(path, {"date", *TWII_OHLC_COLUMNS})
+    if df is None:
+        print(f"[macro_cache_reader/load_twii_ohlc] twii_ohlcv.parquet 讀不到、為空或缺欄"
+              f"(需要 {sorted({'date', *TWII_OHLC_COLUMNS})})→ 回空 DataFrame")
+        return _empty_twii_ohlc()
+    try:
+        _raw = df
+        out = df.loc[:, ["date", *TWII_OHLC_COLUMNS]].copy()
+        out["date"] = pd.to_datetime(out["date"])
+        out = out.set_index("date").sort_index(kind="stable")
+        for _c in ("open", "high", "low", "close"):
+            out[_c] = out[_c].astype(float)
+        return _attach_staleness(out, "twii_ohlcv", cache_dir=cache_dir,
+                                 df=_raw, today=today)
+    except Exception as e:  # noqa: BLE001 — 轉型失敗就講出來(§1),回空讓 L3 走「讀不到」
+        print(f"[macro_cache_reader/load_twii_ohlc] 處理失敗:{e}")
+        return _empty_twii_ohlc()
 
 
 # ══════════════════════════════════════════════════════════════════════

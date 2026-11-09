@@ -184,7 +184,8 @@ G2F_IMPORT_ALLOWLIST: dict[str, frozenset[str] | None] = {
     # 複驗 P2-3：改具名（不再 None）
     "src.services.ui2.real_canonical": frozenset({
         "ERROR_CODE_RE", "RealFeedSnapshot", "RegimeFact", "TwiiFact", "exception_code",
-        "validate_regime_fact", "validate_twii_fact"}),
+        "validate_regime_fact", "validate_twii_fact",
+        "twii_kbar_fact_of"}),   # Issue #1099 PR-2：+1 名稱；純函式（⛔ I/O／時鐘／session／producer），`.open` 欄位讀取留在 G2 照掃的 real_canonical
     # 明列的 shared 模組：目前無（需要時逐一具名加入）。
 }
 #: feed 內任何位置（Name／Attribute／import 名稱）都不得出現的識別字：動態取用、反射、檔案／序列化、producer、寫入。
@@ -835,9 +836,10 @@ def test_primary_cta_is_disabled_in_preview():
         assert cta.enabled is False and cta.disabled_reason
 
 
-def test_only_four_pages():
-    assert len(PAGE_IDS) == 4
-    assert [p for p in PAGE_IDS] == ["p4_market", "p4_target", "p4_hold", "p4_me"]
+def test_only_five_pages():
+    """DEC-146（取代 `test_only_four_pages`；需求由四頁改五頁）：恰五頁、順序固定；第五頁 `p4_data` 是 UI2 自有登錄。"""
+    assert len(PAGE_IDS) == 5
+    assert [p for p in PAGE_IDS] == ["p4_market", "p4_target", "p4_hold", "p4_me", "p4_data"]
 
 
 def test_scenarios_cover_the_required_six():
@@ -1094,6 +1096,9 @@ CAPABILITY_MARKER_ALLOWLIST = (
     # NUI2-REAL-FEED（2026-11-03；明確、經審查的擴充）：Real-data Preview 未接線欄位＝capability `⬜ 尚未提供`＋原因
     # （⛔ FAKE 值、⛔ 補 0／中性）。同屬 Preview-only；cutover 前清零規則不變（`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）。
     "src/services/ui2/real_canonical.py",
+    # DEC-146（🗂 資料頁第一批）：固定誠實空殼＝全部 capability `⬜ 尚未提供`（FAKE／Real 兩軸共用的中立模組）；同屬 Preview-only，
+    # 日後資料健康度正式接線時此項隨 `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO` 清零。
+    "src/services/ui2/data_page.py",
 )
 _CAP_NAMES = {"NOT_PROVIDED", "TEXT_NOT_PROVIDED", "TEXT_NOT_PROVIDED_AGGREGATOR"}
 

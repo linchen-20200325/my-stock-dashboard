@@ -20,6 +20,15 @@ from typing import Any
 
 import pandas as pd
 
+from src.compute.health.monthly_revenue_month_contract import (  # noqa: F401 — 對外再匯出(scripts/ CLI 只經本模組取用,避免新增 c3 跨層白名單)
+    MONTH_CONTRACT_KEY,
+    compute_month_contract,
+    extract_month_contract,
+    legacy_undetermined_contract,
+    mark_upstream_failed,
+    resolve_month_contract,
+)
+
 # 趨勢分類 → 中文 label SSOT
 TREND_LABELS = {
     "strong_up": "🚀 強進步",
@@ -31,11 +40,17 @@ TREND_LABELS = {
 }
 
 
-def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
-    """對單股月營收序列計算近 3 月 YoY + 末月 MoM。
+def compute_yoy_mom(df_stock: pd.DataFrame, *, as_of: Any = None,
+                    upstream_failed: bool = False,
+                    source_month_key_verified: bool = True) -> dict[str, Any]:
+    """對單股月營收序列計算近 3 月 YoY + 末月 MoM(+ DEC-151 Batch A 月份資料契約,additive)。
 
     Args:
-        df_stock: DataFrame with [date, revenue],按 date 升冪排序
+        df_stock: DataFrame with [date, revenue(, revenue_year, revenue_month)],按 date 升冪排序
+        as_of: 回溯基準日(可注入;None → 契約的目標月/公告時點資格為 NOT VERIFIED,不讀時鐘)
+        upstream_failed: L1 判定上游確定抓取失敗 → 契約 FAIL_CLOSED(舊欄位照舊)
+        source_month_key_verified: revenue_year/month 欄來源是否已經真實資料驗證(DEC-152 護欄;預設 True ＝ 修前行為;
+            全市場批次路徑傳 False → 契約月份鍵/公告時點資格 NOT VERIFIED,舊欄位與任何分數規則不受影響)
 
     Returns:
         dict: {
@@ -44,11 +59,16 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
           'yoy_last3': list[float | None] — [M-2, M-1, M] 的 YoY%(缺基期為 None),
           'mom_last': float | None — 末月 MoM%,
           'months_available': int,
+          + 月份資料契約欄位(見 `monthly_revenue_month_contract` docstring):contract_status / yoy_months /
+            yoy_months_contiguous / yoy_target_months / yoy_target3 / yoy_missing_reasons / target_* /
+            date_eligibility …。**舊欄位的值與格式一字不變**;契約欄位不影響任何分數。
         }
     """
+    _contract = compute_month_contract(df_stock, as_of=as_of, upstream_failed=upstream_failed,
+                                      source_month_key_verified=source_month_key_verified)
     if df_stock is None or df_stock.empty or "revenue" not in df_stock.columns:
         return {"last_date": None, "last_revenue": None, "yoy_last3": [],
-                "mom_last": None, "months_available": 0}
+                "mom_last": None, "months_available": 0, **_contract}
     _df = df_stock.copy()
     if "date" in _df.columns:
         _df = _df.sort_values("date").reset_index(drop=True)
@@ -57,7 +77,7 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
     _n = len(_rev)
     if _n == 0 or _rev[-1] is None:
         return {"last_date": None, "last_revenue": None, "yoy_last3": [],
-                "mom_last": None, "months_available": 0}
+                "mom_last": None, "months_available": 0, **_contract}
 
     # YoY: 末 3 月相對「去年同月」
     # v19.83(第六份 review 3-9):原位置索引 _idx_curr-12 假設序列連續無缺月 —
@@ -106,6 +126,7 @@ def compute_yoy_mom(df_stock: pd.DataFrame) -> dict[str, Any]:
         "yoy_last3": _yoy_last3,
         "mom_last": _mom,
         "months_available": _n,
+        **_contract,
     }
 
 

@@ -14,8 +14,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from shared.ui2_contract.models import (
-    AccountVM, CapabilityState, CardVM, ChipVM, CtaVM, FieldState, FieldVM, FirstScreenVM,
-    FreshnessInfo, JudgementState, LookupResultVM, ModeOptionVM, PageContext, PageVM,
+    AccountVM, CandleVM, CapabilityState, CardVM, ChipVM, CtaVM, FieldState, FieldVM, FirstScreenVM,
+    FreshnessInfo, JudgementState, KbarChartVM, LookupResultVM, ModeOptionVM, PageContext, PageVM,
     PresentationSlice, SearchBoxVM, SectionVM, TargetVM,
 )
 from shared.ui2_contract.pages import (
@@ -119,6 +119,17 @@ def account_from_canonical(spec: Spec) -> AccountVM:
         cta_from_spec(a, "登入與 Sheet 操作尚未開放") for a in spec["actions"]))
 
 
+def kbar_from_spec(spec: Spec) -> KbarChartVM:
+    """📊 台股日 K canonical spec → `KbarChartVM`（Issue #1099 PR-2）。原樣搬運（⛔ 補棒、⛔ 排序／去重修補——
+    不合法交給 `CandleVM`／`KbarChartVM` 建構時 raise）。"""
+    return KbarChartVM(
+        field=field_from_spec(spec["field"]),
+        candles=tuple(CandleVM(date=str(c["date"]), open=c["open"], high=c["high"], low=c["low"], close=c["close"])
+                      for c in spec.get("candles", ())),
+        target_n=int(spec["target_n"]),
+        notes=tuple(str(n) for n in spec.get("notes", ())))
+
+
 def aggregator_pending_field(label: str) -> FieldVM:
     """動作欄：Aggregator 未實作 → `⬜ 尚未提供（待 System Action Aggregator）`（僅 Preview 期；Gate §4.6.5）。
 
@@ -147,7 +158,7 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
     """canonical → PageVM。`top_n`／`mode` 只影響 `slice`，⛔ 影響 `context`（Gate §4.2-6／G3）。"""
     page = str(canonical["page"])
     banner = _banner_for(canonical)
-    for key, only in (("conclusion", P4_MARKET), ("main_risk", P4_MARKET),
+    for key, only in (("conclusion", P4_MARKET), ("main_risk", P4_MARKET), ("kbar", P4_MARKET),
                       ("target", P4_TARGET), ("account", P4_ME)):
         if canonical.get(key) is not None and page != only:
             raise ValueError(f"{page}: canonical 不得提供 {key}（僅 {only} 頁）")
@@ -193,7 +204,8 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
             first_screen=first, cards=cards, sections=sections,
             main_risk=(field_from_spec(canonical["main_risk"])
                        if canonical.get("main_risk") is not None else None),
-            target=target, account=account),
+            target=target, account=account,
+            kbar=(kbar_from_spec(canonical["kbar"]) if canonical.get("kbar") is not None else None)),
         slice=PresentationSlice(top_n=top_n, visible_card_ids=visible, active_mode=active_mode),
         banner_text=banner,
     )

@@ -713,12 +713,12 @@ def _m_market(desktop: bool = False) -> dict:
     m = _good_desktop() if desktop else _good_mobile()
     left = 200.0 if desktop else 14.0
     if desktop:   # 三 tile：q1／ctx／risk 同列
-        els = [_el("q4", 60, 98, left), _el("concl", 100, 150, left), _el("q1", 160, 260, left), _el("ctx", 160, 260, 500),
+        els = [_el("q4", 76, 108, left), _el("concl", 110, 152, left), _el("q1", 160, 260, left), _el("ctx", 160, 260, 500),
                _el("q2", 270, 330, left), _el("q3", 340, 400, left)]
         risk = {"top": 160.0, "bottom": 260.0, "left": 900.0, "right": 1300.0, "inside_l1": True, "text": "r"}
     else:
-        els = [_el("q4", 60, 98), _el("concl", 100, 150), _el("q1", 150, 210), _el("ctx", 210, 260),
-               _el("q2", 260, 320), _el("q3", 320, 380)]
+        els = [_el("q4", 90, 124), _el("concl", 126, 172), _el("q1", 172, 220), _el("ctx", 220, 262),
+               _el("q2", 262, 320), _el("q3", 320, 380)]       # DEC-146：頂部導覽底緣 85，第一屏元素必須在其下
         risk = {"top": 455.0, "bottom": 520.0, "left": 14.0, "right": 376.0, "inside_l1": True, "text": "r"}
     m.update(page="p4_market", scenario="loaded", expanders=[],     # P3：真瀏覽器量測 dict 必須帶 expanders 鍵
              elements=els, risk=risk, first_block_after_l1_top=530.0,
@@ -966,7 +966,7 @@ def test_nav_margin_content_bottom_reserve_covers_nav_height_and_safe_area():
     assert ".block-container{padding-bottom:5rem !important}" in css      # 基礎規則（無 env 支援時的後備）不動
     # D-9（DEC-137 改寫，等價）：底部固定導覽已由抽屜取代，53px 改為「底部保留帶」（Manage app／家的指示條）；
     # 保留量仍須 ≥ 保留帶 53 + 16px。不再覆蓋的舊斷言：從 CSS 解析 `.st-key-ui2_nav{…bottom:0;height:53px` 的導覽高（該規則已不存在，
-    # 且其不存在本身由 test_ui2_batch2.check_mobile_drawer_css 守）。
+    # 且其不存在本身由 test_ui2_batch2.check_top_nav_css（DEC-146 取代 check_mobile_drawer_css） 守）。
     assert not re.search(r"\.st-key-ui2_nav\{[^}]*bottom:0;height:\d+px", css)
     assert float(m.group(1)) * 16 >= MV.NAV_MOBILE_H + 16, "保留量至少要多於底部保留帶一個基本間距（16px）"
     assert MV.NAV_MOBILE_H == 53

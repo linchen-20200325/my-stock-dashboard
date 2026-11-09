@@ -39,6 +39,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # ── SSOT：訊號邊界值（重用既有）+ 本篩選器權重/分級（新）─────────────
+from src.compute.health.monthly_revenue_month_contract import (
+    MONTH_CONTRACT_KEY,
+    STATUS_FAIL_CLOSED,
+    STATUS_OK,
+    MONTH_REASON_NOT_YET_DUE,
+    TARGET_MONTHS,
+    legacy_undetermined_contract,
+)
 from shared.signal_thresholds import (
     CL_GROWTH_YOY_PCT,
     CL_SURGE_YOY_PCT,
@@ -73,6 +81,62 @@ from shared.shortage_screen_thresholds import (
 _logger = _sh_log.getLogger(__name__)
 
 
+
+# ════════════════════════════════════════════════════════════════
+# 資料資格顯示（DEC-154 G1，純顯示層）—— 原始分數與資料資格分離
+# ════════════════════════════════════════════════════════════════
+# ⛔ 本區只產生「顯示用文字／狀態鍵」：不進 total、tier、composite、百分位、排序，也不是新的排名資格。
+# 分母 4＝四個缺貨訊號（C1~C4）；n_ok 由 `_signal_flags` 既有判斷而來，本區不重新定義「有效」。
+N_SIGNALS_TOTAL = 4
+EVID_UNASSESSED = "unassessed"   # 舊 row／舊建構：沒有資料資格資訊（≠ 缺值）
+EVID_NONE = "none"               # n_ok=0：無法評估（資料不足，不是 0 分）
+EVID_PARTIAL = "partial"         # n_ok=1~3：部分有效證據
+EVID_FULL = "full"               # n_ok=4：證據完整（此時低分才是確定的「弱」）
+#: 該檔沒有任何缺貨列（未被深掃，或 n_ok=0 被排除於正式列）→ 推播／畫面共用字樣。
+SHORTAGE_NO_ROW_TEXT = "缺貨：無評估資料"
+
+
+def _n_ok_or_none(n_ok: Any) -> int | None:
+    """n_ok → 0~4 的 int；None／NaN／bool／非數字／越界 → None（不猜）。"""
+    if n_ok is None or isinstance(n_ok, bool):
+        return None
+    try:
+        f = float(n_ok)
+    except (TypeError, ValueError):
+        return None
+    if f != f or f != int(f) or not (0 <= int(f) <= N_SIGNALS_TOTAL):
+        return None
+    return int(f)
+
+
+def evidence_status(n_ok: Any) -> str:
+    """n_ok → EVID_*。"""
+    n = _n_ok_or_none(n_ok)
+    if n is None:
+        return EVID_UNASSESSED
+    if n == 0:
+        return EVID_NONE
+    return EVID_FULL if n == N_SIGNALS_TOTAL else EVID_PARTIAL
+
+
+def evidence_text(n_ok: Any, miss_reason: str = "", *, source_failed: bool = False,
+                  key_unverified: bool = False) -> str:
+    """資料資格白話字樣（純顯示）。真 0（有資料的低分）與 None（缺值）在此可辨識。"""
+    st = evidence_status(n_ok)
+    if st == EVID_UNASSESSED:
+        return "資料資格未記錄（舊資料或未評估）"
+    n = _n_ok_or_none(n_ok)
+    _mr = str(miss_reason or "").strip()
+    _fail = "（含來源失敗，非真實低分）" if source_failed else ""
+    if st == EVID_NONE:
+        return f"無法評估 0/{N_SIGNALS_TOTAL}（資料不足，不是 0 分）" + (f"：{_mr}" if _mr else "") + _fail
+    if st == EVID_FULL:
+        return (f"證據完整 {n}/{N_SIGNALS_TOTAL}"
+                + ("；④月份鍵未驗證（月營收項上限 5 分）" if key_unverified else ""))
+    return (f"部分有效證據 {n}/{N_SIGNALS_TOTAL}（缺值項不是 0 分）" + (f"；缺：{_mr}" if _mr else "")
+            + ("；④月份鍵未驗證（月營收項上限 5 分）" if key_unverified else "") + _fail)
+
+
 # ════════════════════════════════════════════════════════════════
 # 輸出模型
 # ════════════════════════════════════════════════════════════════
@@ -93,6 +157,16 @@ class ShortageScore:
     reasons: list[str] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
     version: str = SHORTAGE_VERSION
+    # ── DEC-149 Phase 3B（2026-11-08）schema-additive：缺值 vs 真 0 分的旗標 ──────────────
+    # 「ok」＝該分項**沒有**走進本檔既有的「資料不足 → 0 分」分支（定義逐字取自各 _score_* 的資料不足
+    # 判斷，**不是**新的「有效／獨立」資格或門檻）。只是旗標：⛔ 不改任何分數、權重、tier 門檻。
+    # None＝舊建構（呼叫端沒給）＝「未評估」，⛔ 不等於 False（缺值）。
+    n_signals_ok: int | None = None
+    c1_ok: bool | None = None
+    c2_ok: bool | None = None
+    c3_ok: bool | None = None
+    c4_ok: bool | None = None
+    miss_reason: str = ""             # 缺值原因（短字串；全部 ok 或未評估 → ""）
 
     @property
     def reason_text(self) -> str:
@@ -100,17 +174,39 @@ class ShortageScore:
 
     def to_row(self) -> dict[str, Any]:
         """→ 供 DataFrame / UI 表格用的一列。"""
+        _st = evidence_status(self.n_signals_ok)
+        _strength = f"{self.tier_icon} {self.tier}"
+        if self.tier == TIER_WEAK and _st == EVID_PARTIAL:
+            # DEC-154 G1：部分證據下的低分不是確定的「弱」→ 顯示層不下確定判斷（_tier 與分數不動）。
+            _strength = f"{self.tier_icon} {self.tier}（部分證據 {self.n_signals_ok}/{N_SIGNALS_TOTAL}，非確定）"
+        _m = self.metrics or {}
         return {
             "代碼": self.stock_id,
             "名稱": self.name,
             "缺貨分數": round(self.total, 1),
-            "訊號強度": f"{self.tier_icon} {self.tier}",
+            "訊號強度": _strength,
             "①合約負債": round(self.c1_contract_liab, 1),
             "②毛利率": round(self.c2_gross_margin, 1),
             "③存貨天數": round(self.c3_inventory_days, 1),
             "④月營收": round(self.c4_revenue_yoy, 1),
             "理由": self.reason_text,
             "_tier": self.tier,
+            # DEC-149 Phase 3B additive：舊 consumer 讀既有鍵不受影響；缺貨分數 0.0 可能是
+            # 「真 0 分」或「該項缺值」→ 看下列旗標區分（⛔ 不改分數數值）。
+            "有效訊號數": self.n_signals_ok,
+            "缺值原因": self.miss_reason,
+            "_n_signals_ok": self.n_signals_ok,
+            "_c1_ok": self.c1_ok,
+            "_c2_ok": self.c2_ok,
+            "_c3_ok": self.c3_ok,
+            "_c4_ok": self.c4_ok,
+            # DEC-154 G1 additive（純顯示追溯欄；⛔ 不進 composite／百分位／排序）
+            "資料資格": evidence_text(
+                self.n_signals_ok, self.miss_reason,
+                source_failed=(_m.get("rev_c4_contract_status") == STATUS_FAIL_CLOSED
+                               and self.c4_ok is False),
+                key_unverified=bool(self.c4_ok is True and _m.get("rev_c4_key_unverified"))),
+            "_evidence_status": _st,
         }
 
 
@@ -338,28 +434,227 @@ def _score_inventory_days(quarters: Any, omap: dict[int, int] | None) -> tuple[f
 
 
 # ════════════════════════════════════════════════════════════════
-# ④ 月營收 YoY 連續成長（20）
+# ④ 月營收 YoY 連續成長（20）  —— DEC-151 Batch B：依『月份資料契約』評分
 # ════════════════════════════════════════════════════════════════
-def _score_revenue_yoy(yoy_last3: Any) -> tuple[float, str, dict]:
-    raw = yoy_last3 if isinstance(yoy_last3, list) else []
-    valid = [y for y in (_num(v) for v in raw) if y is not None]
-    metrics = {"rev_yoy_last3": [_num(v) for v in raw]}
+# 客戶裁示(DEC-151):C4 採最近三個完整且到公告時點的日曆月、可信月份鍵、保留缺值位置;
+# 不連續不得判逐月加速,可依既有部分達標規則評分但不得虛構證據。
+# 修前 bug:`valid = [非 None]` 把缺值壓縮掉 → `[20,None,40]` 被當成連續兩月『逐月加速』。
+# 現行:固定 3 個『位置』(契約 yoy_target3;缺值保留 None),五項獨立欄位各自判定,**不壓成單一布林**。
+# 只重用既有分支與既有常數(STRONG/STEADY/PARTIAL 分數、SHORTAGE_REVENUE_YOY_MIN_PCT),不新增分數/門檻/權重。
+_BASIS_TARGET = "target3"        # 評分輸入 = 契約的固定 3 個目標月 YoY(yoy_target3)
+_BASIS_LEGACY = "legacy_last3"   # 無目標月(as_of 缺/舊輸入)→ 退回舊 revenue_yoy_last3 的 3 個位置
+_FLAGS3 = ("target_observed", "target_base_valid", "target_yoy_computable")
 
-    if len(valid) < 2:
-        return 0.0, "⚪月營收 YoY：資料不足", metrics
+
+def _as3(x: Any) -> list:
+    """任意輸入 → 長度 3 的 list(不足左補 None、過長取最後 3、非 list → 全 None)。保留位置,不壓縮。"""
+    if not isinstance(x, (list, tuple)):
+        return [None] * TARGET_MONTHS
+    _l = list(x)[-TARGET_MONTHS:]
+    return [None] * (TARGET_MONTHS - len(_l)) + _l
+
+
+def _labels_consecutive(labels: list) -> bool:
+    """3 個 'YYYY-MM' 是否為連續日曆月(任一為 None/無法解析 → False;跨年 12→01 正確)。"""
+    try:
+        _idx = [int(m[:4]) * 12 + int(m[5:7]) - 1 for m in labels]
+    except (TypeError, ValueError, IndexError):
+        return False
+    return all(b - a == 1 for a, b in zip(_idx, _idx[1:]))
+
+
+def _c4_result(score: float, reason: str, metrics: dict, *, ok: bool, miss: str = "") -> tuple[float, str, dict]:
+    metrics["rev_c4_ok"] = ok
+    metrics["rev_c4_miss"] = "" if ok else miss
+    return score, reason, metrics
+
+
+def _score_revenue_yoy(yoy_last3: Any, contract: Any = None) -> tuple[float, str, dict]:
+    """C4 評分。`contract`＝DEC-151 Batch A 月份資料契約(缺 → 舊輸入 UNDETERMINED,**不得**判逐月加速)。
+
+    判定用契約五項獨立欄位(連續性/觀測/基期/可算/公告時點),缺值保留位置:
+      FAIL_CLOSED               → 資料不足(0 分,c4_ok=False),不是真 0 分
+      STRONG(逐月加速)          → 契約 OK 且 3 目標月皆『觀測+基期有效+可算』、連續、3 月公告時點資格皆 True、
+                                  嚴格遞增、皆 > 門檻;任一為 None(NOT VERIFIED)/False/缺月 → 禁止
+      STEADY(皆>門檻)           → 3 個位置皆有值、連續(舊輸入連續性 UNDETERMINED 亦允許但註記)、皆 > 門檻
+      PARTIAL / 動能不足 / 資料不足 → 有缺月或不連續:有效值(保留位置)≥2 且任一>門檻 → PARTIAL;
+                                  ≥2 皆≤門檻 → 動能不足;<2 → 資料不足。**不給 STEADY/STRONG**,不補值、不把缺月當 0
+    真 0% / 負 YoY 是有效值(0.0 / 負數),與 missing(None)嚴格區分。
+    DEC-153(客戶 2026-11-08):月份鍵『未驗證』(契約 month_key_verified 非 True／資格非全 True／legacy／as_of 缺)
+    → 不得 STEADY/STRONG,最高既有 PARTIAL;有效值皆≤門檻仍『動能不足』0,<2 仍『資料不足』(c4_ok=False)。
+    """
+    c = contract if isinstance(contract, dict) and "contract_status" in contract \
+        else legacy_undetermined_contract()
+    status = c.get("contract_status")
+    legacy = [_num(v) for v in (yoy_last3 if isinstance(yoy_last3, list) else [])]
+    metrics: dict[str, Any] = {
+        "rev_yoy_last3": list(legacy),          # 舊 key 保留(舊 consumer / CLI 讀它)
+        "rev_c4_contract_status": status,
+        "rev_c4_basis": "none",
+        "rev_yoy_scored": [None] * TARGET_MONTHS,
+        "rev_target_months": [None] * TARGET_MONTHS,
+        "rev_missing_reasons": [None] * TARGET_MONTHS,
+        "rev_contiguous": None,
+        "rev_date_eligible": [None] * TARGET_MONTHS,
+        "rev_strong_blocked_by": [],
+    }
+
+    if status == STATUS_FAIL_CLOSED:
+        metrics["rev_c4_key_unverified"] = [f"契約{status}"]   # 提前 return 也要有該 key(一致 schema)
+        _why = ",".join(str(r) for r in (c.get("contract_fail_reasons") or [])) or "未註明"
+        return _c4_result(0.0, f"⚪月營收 YoY：資料不足（月份契約 FAIL_CLOSED：{_why}）", metrics, ok=False,
+                          miss=f"④月營收月份契約FAIL_CLOSED({_why})")
+
+    # ── 評分輸入:優先『固定 3 個目標月』(保留位置);目標月未定(as_of 缺/舊輸入)→ 退回舊 3 位置 ──
+    _tm = _as3(c.get("yoy_target_months"))
+    use_target = status == STATUS_OK and all(m is not None for m in _tm)
+    if use_target:
+        basis, labels = _BASIS_TARGET, _tm
+        raw3 = [_num(v) for v in _as3(c.get("yoy_target3"))]
+        contiguous: bool | None = _labels_consecutive(labels)
+        elig = _as3(c.get("target_date_eligible"))
+        reasons3 = _as3(c.get("yoy_missing_reasons"))
+        flags = [_as3(c.get(k)) for k in _FLAGS3]
+        # fail-closed:值要『被採用』必須 觀測/基期有效/可算 三項皆 True 且 公告時點資格不是 False;
+        # None(NOT VERIFIED)或 False 的旗標都不採用該值(位置保留為缺值,不當 0、不計入 YoY)。
+        # 資格 False＝未到公告時點的月,比照『未觀測』視為缺值(不得用未公告月的值評分)。
+        vals = [raw3[i] if (all(f[i] is True for f in flags) and elig[i] is not False) else None
+                for i in range(TARGET_MONTHS)]
+        reasons3 = [(MONTH_REASON_NOT_YET_DUE if (raw3[i] is not None and elig[i] is False
+                                                  and all(f[i] is True for f in flags)) else reasons3[i])
+                    for i in range(TARGET_MONTHS)]
+        flags_all_true = all(f[i] is True for f in flags for i in range(TARGET_MONTHS))
+    else:
+        basis = _BASIS_LEGACY
+        _ym = _as3(c.get("yoy_months")) if status == STATUS_OK else [None] * TARGET_MONTHS
+        labels = _ym
+        vals = _as3(legacy)
+        contiguous = c.get("yoy_months_contiguous") if status == STATUS_OK else None  # 舊輸入 = UNDETERMINED
+        elig = [None] * TARGET_MONTHS            # 沒有目標月 → 公告時點資格一律 NOT VERIFIED
+        reasons3 = [None] * TARGET_MONTHS
+        flags_all_true = False
+    metrics.update({"rev_c4_basis": basis, "rev_yoy_scored": list(vals), "rev_target_months": list(labels),
+                    "rev_missing_reasons": list(reasons3), "rev_contiguous": contiguous,
+                    "rev_date_eligible": list(elig)})
 
     _min = SHORTAGE_REVENUE_YOY_MIN_PCT
-    all_above = all(y > _min for y in valid)
-    increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
-    _last = valid[-1]
+    idx_valid = [i for i, v in enumerate(vals) if v is not None]
+    valid = [vals[i] for i in idx_valid]
+    n_missing = TARGET_MONTHS - len(valid)
 
-    if all_above and increasing:
-        return SHORTAGE_REV_STRONG_SCORE, f"🟢月營收 YoY 逐月加速（末月{_last:+.0f}%）", metrics
-    if all_above:
-        return SHORTAGE_REV_STEADY_SCORE, f"🟡月營收 YoY 皆>{_min:.0f}%（末月{_last:+.0f}%）", metrics
+    def _pos(i: int) -> str:
+        return labels[i] if labels[i] else f"第{i + 1}位"
+
+    _missing_desc = "、".join(f"{_pos(i)}" + (f"({reasons3[i]})" if reasons3[i] else "")
+                              for i in range(TARGET_MONTHS) if vals[i] is None)
+
+    # ── DEC-153(客戶 2026-11-08 裁示):月份鍵『未驗證』→ C4 不得 STEADY/STRONG ──────────────
+    # 『已驗證』= 契約 OK + 目標月已定 + month_key_verified 為 True + 3 個目標月公告時點資格皆 True。
+    # 任一不成立(legacy/UNDETERMINED、as_of 缺、date≠ym、全市場批次來源標記未驗證、資格 None/False)
+    # → 只可走下方既有 PARTIAL(5)/動能不足(0);資料不足分支(有效值<2)已於上方先處理,不硬給 5 分。
+    # 不新增分數/門檻/封頂,只重用既有分支與常數。
+    key_unverified: list[str] = []
+    if status != STATUS_OK:
+        key_unverified.append(f"契約{status}")
+    else:
+        if basis != _BASIS_TARGET:
+            key_unverified.append("目標月未定")
+        if c.get("month_key_verified") is not True:
+            key_unverified.append("月份鍵未驗證")
+        if not all(e is True for e in elig):
+            key_unverified.append("日期資格 NOT VERIFIED" if any(e is None for e in elig) else "日期資格未通過")
+    metrics["rev_c4_key_unverified"] = list(key_unverified)
+
+    if len(valid) < 2:
+        _miss = (f"④月營收缺月/不連續(有值{len(valid)}/{TARGET_MONTHS})" if basis == _BASIS_TARGET and n_missing
+                 else "④月營收有效月數<2")
+        _tail = f"（缺：{_missing_desc}）" if n_missing and basis == _BASIS_TARGET else ""
+        return _c4_result(0.0, f"⚪月營收 YoY：資料不足{_tail}", metrics, ok=False, miss=_miss)
+
+    _last = valid[-1]
+    all_above = all(y > _min for y in valid)
+
+    # ── 3 個位置皆有值 ───────────────────────────────────────────────
+    # 逐月/皆>門檻（STEADY、STRONG）需『連續性已驗證為 True』;連續性 None(UNDETERMINED,舊輸入)
+    # 與 False 一樣只能走下方保守分支(最多 PARTIAL),不得因未驗證而給 STEADY。
+    if n_missing == 0 and contiguous is True and not key_unverified:
+        increasing = all(valid[i] < valid[i + 1] for i in range(len(valid) - 1))
+        if all_above:
+            blockers: list[str] = []
+            if status != STATUS_OK:          # 無月份契約(舊輸入/UNDETERMINED):連續性與日期資格皆 NOT VERIFIED
+                blockers.append(f"契約{status}(連續性與日期資格 NOT VERIFIED)")
+            else:
+                if basis != _BASIS_TARGET:
+                    blockers.append("目標月未定")
+                if basis == _BASIS_TARGET and not flags_all_true:
+                    blockers.append("觀測/基期/可算未全確認")
+                if contiguous is not True:      # 目標三月自身是否連續日曆月(不看舊 yoy_last3 的未來跳月列)
+                    blockers.append("連續性未確認")
+                if not all(e is True for e in elig):
+                    blockers.append("日期資格 NOT VERIFIED" if any(e is None for e in elig) else "日期資格未通過")
+            metrics["rev_strong_blocked_by"] = blockers if increasing else []
+            if increasing and not blockers:
+                return _c4_result(SHORTAGE_REV_STRONG_SCORE, f"🟢月營收 YoY 逐月加速（末月{_last:+.0f}%）",
+                                  metrics, ok=True)
+            _note = ""
+            if increasing and blockers:
+                _note = f"；未判定加速：{'、'.join(blockers)}"
+            return _c4_result(SHORTAGE_REV_STEADY_SCORE, f"🟡月營收 YoY 皆>{_min:.0f}%（末月{_last:+.0f}%{_note}）",
+                              metrics, ok=True)
+        if any(y > _min for y in valid):
+            return _c4_result(SHORTAGE_REV_PARTIAL_SCORE, f"🟡月營收 YoY 部分達標（末月{_last:+.0f}%）",
+                              metrics, ok=True)
+        return _c4_result(0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics, ok=True)
+
+    # ── 有缺月 / 不連續:不得 STEADY/STRONG;僅依既有『部分達標』『動能不足』規則,不補值 ──
+    _blk = "缺月" if n_missing else ("不連續" if contiguous is False else
+                                      ("月份鍵未驗證" if key_unverified and contiguous is True else "連續性未驗證"))
+    metrics["rev_strong_blocked_by"] = [_blk] + (["、".join(key_unverified)] if key_unverified and _blk != "月份鍵未驗證" else [])
+    _gap = (f"缺：{_missing_desc}" if n_missing else ("月份不連續" if contiguous is False else "連續性未驗證"))
+    _gives_partial = any(y > _min for y in valid)
+    if key_unverified:   # 誠實標註:不寫『逐月加速』『皆>x%』;『最高部分達標』只在實際給 5 分時出現
+        _cap = "，最高部分達標" if _gives_partial else ""
+        _gap = (f"月份鍵未驗證（{'、'.join(key_unverified)}）{_cap}" if _blk == "月份鍵未驗證"
+                else f"{_gap}；月份鍵未驗證（{'、'.join(key_unverified)}）{_cap}")
     if any(y > _min for y in valid):
-        return SHORTAGE_REV_PARTIAL_SCORE, f"🟡月營收 YoY 部分達標（末月{_last:+.0f}%）", metrics
-    return 0.0, f"🔴月營收 YoY 動能不足（末月{_last:+.0f}%）", metrics
+        return _c4_result(SHORTAGE_REV_PARTIAL_SCORE,
+                          f"🟡月營收 YoY 部分達標（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",
+                          metrics, ok=True)
+    return _c4_result(0.0, f"🔴月營收 YoY 動能不足（{len(valid)}/{TARGET_MONTHS}月有值，{_gap}；最近有值月{_last:+.0f}%）",
+                      metrics, ok=True)
+
+
+# ════════════════════════════════════════════════════════════════
+# 有效旗標（DEC-149 Phase 3B）—— 只讀各分項既有的「資料不足」判斷,不新增任何有效定義
+# ════════════════════════════════════════════════════════════════
+def _signal_flags(cl_na: bool, m1: dict, m2: dict, m3: dict, m4: dict) -> tuple[
+        tuple[bool, bool, bool, bool], str]:
+    """回 ((c1_ok, c2_ok, c3_ok, c4_ok), miss_reason)。ok＝未走進該分項的『資料不足』0 分分支。
+
+    逐項對應既有判斷（⛔ 不得改成別的定義）：
+      C1 _score_contract_liab：t 期合約負債存在（非 cl_na）且 YoY／QoQ 至少算得出一個
+         （兩者皆 None ＝ 既有的「基期不足無法比較」資料不足分支）
+      C2 _score_gross_margin：gm_t／gm_t1／gm_t4 皆有
+      C3 _score_inventory_days：dio_t 與 dio_t1 皆有（dio_t4 缺不算資料不足,既有行為）
+      C4 _score_revenue_yoy：沒走進『資料不足』分支＝契約非 FAIL_CLOSED 且『保留位置』的有效月數 ≥ 2
+         （DEC-151 Batch B：由 `_score_revenue_yoy` 回報 `rev_c4_ok`；舊手建 m4 沒有該鍵時退回舊算法）
+    """
+    c1 = (not cl_na) and (m1.get("cl_yoy") is not None or m1.get("cl_qoq") is not None)
+    c2 = all(m2.get(k) is not None for k in ("gm_t", "gm_t1", "gm_t4"))
+    c3 = m3.get("dio_t") is not None and m3.get("dio_t1") is not None
+    c4 = m4.get("rev_c4_ok")
+    if c4 is None:   # 舊手建 m4(無 Batch B 鍵)→ 舊算法
+        c4 = sum(1 for y in (m4.get("rev_yoy_last3") or []) if y is not None) >= 2
+    miss: list[str] = []
+    if not c1:
+        miss.append("①合約負債無科目" if cl_na else "①合約負債基期不足")
+    if not c2:
+        miss.append("②毛利率資料不足")
+    if not c3:
+        miss.append("③存貨天數資料不足")
+    if not c4:
+        miss.append(m4.get("rev_c4_miss") or "④月營收有效月數<2")
+    return (c1, c2, c3, c4), "、".join(miss)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -408,7 +703,8 @@ def score_shortage(stock: Any) -> ShortageScore:
     c1, cl_na, r1, m1 = _score_contract_liab(quarters, omap)
     c2, r2, m2 = _score_gross_margin(quarters, omap)
     c3, r3, m3 = _score_inventory_days(quarters, omap)
-    c4, r4, m4 = _score_revenue_yoy(stock.get("revenue_yoy_last3"))
+    c4, r4, m4 = _score_revenue_yoy(stock.get("revenue_yoy_last3"),
+                                     stock.get(MONTH_CONTRACT_KEY))
 
     total = c1 + c2 + c3 + c4
     tier = _tier_from_total(total)
@@ -423,12 +719,24 @@ def score_shortage(stock: Any) -> ShortageScore:
     # t-1 / t-4 是用「list 位置」取的(連續序列才等價)。
     metrics = {**m1, **m2, **m3, **m4, "n_quarters": n_q,
                "quarter_aligned": omap is not None}
+
+    # DEC-149 Phase 3B：四項全缺（n_signals_ok == 0）→ 無法評估,不進正式排名。
+    # 重用 TIER_INSUFFICIENT（「資料不足」＝無法評估,語意吻合；`_rankable` 與 L3 `_RANKABLE_TIERS`
+    # 本來就不含它 → 排除邏輯與診斷列分流不需另開 tier）。此時 total 必為 0.0（四項皆走資料不足 0 分分支）,
+    # 分數數值照舊不動；與「資料完整、四項真低分」（n_ok=4,仍是 TIER_WEAK 且在榜）靠旗標區分。
+    (f1, f2, f3, f4), miss_reason = _signal_flags(cl_na, m1, m2, m3, m4)
+    n_ok = int(f1) + int(f2) + int(f3) + int(f4)
+    if n_ok == 0:
+        tier = TIER_INSUFFICIENT
+        reasons.append("四項缺貨訊號皆缺值，無法評估（資料不足，不是 0 分）")
     return ShortageScore(
         stock_id=stock_id, name=name, total=total, tier=tier,
         tier_icon=TIER_ICONS.get(tier, ""),
         c1_contract_liab=c1, c2_gross_margin=c2,
         c3_inventory_days=c3, c4_revenue_yoy=c4,
         cl_na=cl_na, reasons=reasons, metrics=metrics,
+        n_signals_ok=n_ok, c1_ok=f1, c2_ok=f2, c3_ok=f3, c4_ok=f4,
+        miss_reason=miss_reason,
     )
 
 
@@ -439,6 +747,9 @@ def _na_result(stock_id: str, name: str, tier: str, reason: str) -> ShortageScor
         c1_contract_liab=0.0, c2_gross_margin=0.0,
         c3_inventory_days=0.0, c4_revenue_yoy=0.0,
         cl_na=False, reasons=[reason], metrics={},
+        # DEC-149 Phase 3B：四項都沒評估（輸入錯誤／金融股／季數不足）→ 旗標全 False、n=0
+        n_signals_ok=0, c1_ok=False, c2_ok=False, c3_ok=False, c4_ok=False,
+        miss_reason=reason,
     )
 
 

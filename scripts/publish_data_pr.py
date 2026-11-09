@@ -76,7 +76,12 @@ PR body 的狀態與時間欄位（判不出就寫「無法判定」，不猜）
 --------------------------------------------------------
 ①更新失敗（metadata last_error 非空或 unresolved_days 非空）②休市／無新資料（holiday 旗標，
 或各 parquet 相對 origin/main 無新列且無錯誤）③資料過期（最後資料日距今天數；只陳述事實，
-不套門檻）。observation_date＝`--observation-date`，未帶則於表中列各檔最後資料日；
+不套門檻）。
+D3（DEC-148）空抓取三態分流（僅 data_cache/metadata.json 的 dataset 帶 `fetch_outcome` 時）：
+只有 FETCH_FAILED 進①；NO_NEW_DATA 進②「無新資料（來源讀取成功）」，**不宣稱資料 fresh**；UNDETERMINED
+進②「無法判定」。缺 `fetch_outcome`（舊 metadata）、或 last_error 不是純空抓取標記
+（含「sanity 不過」複合字串）→ 維持現行行為（進①）。三態**不**由週末／休市推論；休市推論仍只來自
+sector_flow 的 holiday 旗標。`fetch_outcome` 變化屬實質變更（需開 PR）；`fetch_evidence` 不得含時間戳。observation_date＝`--observation-date`，未帶則於表中列各檔最後資料日；
 fetched_at 取自資料檔；published_at 一律「n/a（來源未提供）」。
 """
 from __future__ import annotations
@@ -94,6 +99,19 @@ from collections import namedtuple
 from pathlib import Path
 
 import pandas as pd
+
+# D3(DEC-148):空抓取三態。本腳本在 workflow 以 `python scripts/publish_data_pr.py` 執行，sys.path[0]=scripts/，
+# 需補 repo root 才 import 得到 shared.*（同 scripts/update_macro_history.py 作法）。
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from shared.fetch_outcome import (  # noqa: E402
+    META_EVIDENCE_KEY,
+    META_OUTCOME_KEY,
+    FetchOutcome,
+    parse_outcome,
+)
+from shared.staleness import EMPTY_FETCH_MARKER  # noqa: E402
 
 BASE_BRANCH = "main"
 BRANCH_PREFIX = "auto/data-"
@@ -331,6 +349,12 @@ def _consistency_problems(rel_meta: str, meta: dict) -> list[str]:
         for name, d in (meta.get("datasets") or {}).items():
             if not d.get("last_error") and d.get("row_count") == 0:
                 out.append(f"datasets.{name}: last_error 為空但 row_count=0")
+            if META_OUTCOME_KEY in d:
+                _oc = parse_outcome(d.get(META_OUTCOME_KEY))
+                if _oc is None:
+                    out.append(f"datasets.{name}: {META_OUTCOME_KEY}={d.get(META_OUTCOME_KEY)!r} 不是三態之一")
+                elif _oc is FetchOutcome.FETCH_FAILED and not d.get(META_EVIDENCE_KEY):
+                    out.append(f"datasets.{name}: {META_OUTCOME_KEY}=FETCH_FAILED 但沒有 {META_EVIDENCE_KEY}")
             if "sanity 不過" in str(d.get("last_error") or "") and d.get("last_updated") is not None:
                 out.append(f"datasets.{name}: last_error 含「sanity 不過」但 last_updated={d.get('last_updated')!r}（必須為 null）")
     elif rel_meta == SECTOR_META:
@@ -422,13 +446,26 @@ def assess_state(files: dict[str, bytes], new_rows: dict[str, int | None], today
     """由 metadata／腳本輸出判斷三種狀態；判不出 → 「無法判定」（不猜）。"""
     failures: list[str] = []
     holidays: list[str] = []
+    no_new: list[str] = []         # D3：NO_NEW_DATA（來源讀取成功、無新觀測）
+    undetermined: list[str] = []   # D3：UNDETERMINED（空抓取但證據不足）
     has_meta = False
     for path, data in files.items():
         if path == MACRO_META:
             has_meta = True
             for name, d in (json.loads(data).get("datasets") or {}).items():
                 if d.get("last_error"):
-                    failures.append(f"{name}: {d['last_error']}")
+                    # D3：只有「純空抓取標記」且帶合法非 FETCH_FAILED 三態者才從①分流出去；
+                    # 其餘（舊 metadata 無欄、FETCH_FAILED、值不合法、last_error 是別的錯／複合字串如「sanity 不過」）
+                    # 一律維持現行行為進①。三態不由週末／休市推論。
+                    _oc = parse_outcome(d.get(META_OUTCOME_KEY))
+                    if d.get("last_error") == EMPTY_FETCH_MARKER and _oc is FetchOutcome.NO_NEW_DATA:
+                        no_new.append(name)
+                    elif d.get("last_error") == EMPTY_FETCH_MARKER and _oc is FetchOutcome.UNDETERMINED:
+                        undetermined.append(name)
+                    elif _oc is FetchOutcome.FETCH_FAILED and d.get(META_EVIDENCE_KEY):
+                        failures.append(f"{name}: {d['last_error']}（FETCH_FAILED：{d[META_EVIDENCE_KEY]}）")
+                    else:
+                        failures.append(f"{name}: {d['last_error']}")
         elif path == SECTOR_META:
             has_meta = True
             m = json.loads(data)
@@ -468,8 +505,21 @@ def assess_state(files: dict[str, bytes], new_rows: dict[str, int | None], today
         s1 = "；".join(failures)
     elif suspect:
         s1 = f"疑似失敗／無法判定（週間日無資料）：{sorted(weekday_h)}"
+    elif no_new or undetermined:
+        s1 = "無（無 FETCH_FAILED；空抓取已依三態分流，見②）"
     else:
         s1 = "無（metadata 未見 last_error／unresolved_days）" if has_meta else "無法判定（無 metadata 可判讀）"
+    # D3：三態文案併入②。NO_NEW_DATA 只代表「來源在請求範圍內沒有新觀測」，不代表資料是最新的；
+    # 有 NO_NEW_DATA／UNDETERMINED 時，不再沿用「各 parquet 無新列且無錯誤」那句（它對空抓取不成立）。
+    oc_parts: list[str] = []
+    if no_new:
+        oc_parts.append(f"無新資料（來源讀取成功，請求範圍內無新觀測；不代表資料為最新）：{sorted(no_new)}")
+    if undetermined:
+        oc_parts.append(f"無法判定（空抓取、證據不足，非失敗亦非確認無新資料）：{sorted(undetermined)}")
+    if oc_parts:
+        # 「本次有新列」是 parquet 的事實，與空抓取分流並存，不得被蓋掉；其餘 base（無新資料／無法判定）對空抓取不成立才丟
+        keep_base = bool(failures or suspect or weekend_h or (bool(known_new) and sum(known_new) > 0 and s2.startswith("無（本次有新列")))
+        s2 = "；".join(([s2] if keep_base else []) + oc_parts)
     return {"failure": s1, "holiday": s2, "stale": stale}
 
 

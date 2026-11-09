@@ -174,6 +174,41 @@ def _prefix_svc(tag: str) -> types.ModuleType:
     return _load(src, f"_prefix_d3e_{tag}_shortage_screener_service", SVC.__file__)
 
 
+def _assert_c4_fail_closed_only(got, want, *, same_score: bool):
+    """DEC-151 Batch B 語意變更後的『與修前模型比對』：上游確定失敗 → C4 契約 FAIL_CLOSED（Batch A 契約語意，
+    見 test_c4a_month_contract 的透傳測試），C4 走既有『資料不足』分支；修前模型沒有契約概念。
+
+    因此 C4 相關欄位刻意不同，**其餘一律逐字相同**，且不放寬 C4 本身的斷言：
+      · meta、代碼、名稱、①②③ 分數、_tier、c1~c3_ok 與修前逐字相同；
+      · 現行 ④月營收 == 0.0、_c4_ok False、缺值原因含 FAIL_CLOSED(upstream_fetch_failed)、理由 ④ 段寫資料不足；
+      · same_score=True（修前 C4 本來就是資料不足 0 分）→ 總分／有效訊號數也與修前相同；
+        same_score=False（修前把半邊表的 C4 算成 5 分）→ 總分 == 修前 − 修前④、有效訊號數 == 修前 − 1。
+    """
+    (g_rows, g_meta), (w_rows, w_meta) = got, want
+    assert g_meta == w_meta
+    assert len(g_rows) == len(w_rows) and g_rows
+    _c4_keys = {"缺貨分數", "④月營收", "理由", "有效訊號數", "缺值原因", "_n_signals_ok", "_c4_ok",
+                "資料資格", "_evidence_status"}   # DEC-154 G1：兩個顯示追溯欄由 n_ok／C4 派生，下方單獨斷言其值
+    for g, w in zip(g_rows, w_rows):
+        assert {k: v for k, v in g.items() if k not in _c4_keys} == {k: v for k, v in w.items() if k not in _c4_keys}
+        assert g["④月營收"] == 0.0 and g["_c4_ok"] is False
+        assert "FAIL_CLOSED(upstream_fetch_failed)" in g["缺值原因"]
+        # DEC-154 G1 新鍵：資料資格須與 n_ok／C4 FAIL_CLOSED 一致（來源失敗要被點名，不得寫成完整證據）
+        _n = g["_n_signals_ok"]
+        assert g["_evidence_status"] == ("none" if _n == 0 else "partial")
+        assert g["資料資格"].startswith(f"部分有效證據 {_n}/4" if _n else "無法評估 0/4")
+        assert "來源失敗" in g["資料資格"] and "FAIL_CLOSED(upstream_fetch_failed)" in g["資料資格"]
+        assert "證據完整" not in g["資料資格"]
+        assert g["理由"].split("；")[:3] == w["理由"].split("；")[:3]          # ①②③ 理由逐字相同
+        assert "資料不足" in g["理由"].split("；")[3] and "FAIL_CLOSED" in g["理由"].split("；")[3]
+        if same_score:
+            assert (g["缺貨分數"], g["有效訊號數"], g["_n_signals_ok"]) == (w["缺貨分數"], w["有效訊號數"], w["_n_signals_ok"])
+            assert w["_c4_ok"] is False and w["④月營收"] == 0.0
+        else:
+            assert g["缺貨分數"] == w["缺貨分數"] - w["④月營收"] and w["④月營收"] > 0
+            assert g["有效訊號數"] == w["有效訊號數"] - 1 and w["_c4_ok"] is True
+
+
 # ══════════════════════════════════════════════════════════════════
 # 上游替身、假時鐘、期望值
 # ══════════════════════════════════════════════════════════════════
@@ -615,7 +650,7 @@ def _check_finmind_multi_stock_batch_kept(mod, w: _World, n_stocks: int) -> None
             and df["stock_id"].nunique() == n_stocks and len(df) == n_stocks * 19), \
         "FinMind 多檔全市場批次不再被整批丟棄（修前：兩檔以上恆落到 OpenAPI 單月快照）"
     assert w.calls["twse"] == 0 and w.calls["tpex"] == 0, "FinMind 有資料 → 不走 OpenAPI"
-    assert list(df.columns) == ["stock_id", "date", "revenue"]
+    assert list(df.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"]  # DEC-152 C4-D 預期變化:來源(_fm_batch_frame)有 revenue_year/month → 批次表多帶這兩欄(additive);欄名/順序仍精確釘住
     assert df.equals(df.sort_values(["stock_id", "date"]).reset_index(drop=True))
 
 
@@ -625,7 +660,7 @@ def _check_all_rows_dropped_keeps_columns(mod, w: _World) -> None:
     frame["revenue"] = float("nan")
     w.fm_batch = frame
     out = mod._batch_finmind(18)
-    assert out.empty and list(out.columns) == ["stock_id", "date", "revenue"], \
+    assert out.empty and list(out.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"], \
         "樣本取首檔前要先擋空表（否則 .iloc[0] 拋錯 → 回無欄空表）"
     assert out.attrs["source"] == "FinMind:TaiwanStockMonthRevenue:batch(all-market)"
 
@@ -1073,7 +1108,8 @@ class TestD2f23ScanPartialNotCached:
         _check_l3_multi_month_partial_rows_preserved(SVC, world, side, fc_clock)
 
     def test_multi_month_partial_identical_to_prefix(self, sv, world, monkeypatch, frozen_now):
-        """同上情境：現行（第一次＋冷卻期內）與修前模型的第一次逐字相同（排行非空）。"""
+        """同上情境：現行（第一次＋冷卻期內）與修前模型的第一次相同（排行非空）——除 C4：DEC-151 Batch B 起
+        上游確定失敗（含半邊表）→ C4 契約 FAIL_CLOSED → 資料不足（修前模型把半邊表算成部分達標）。"""
         world.twse, world.tpex = "none", "ok_multi"
         now = [SVC.run_shortage_scan() for _ in range(2)]
         pre_mr, pre_svc = _prefix_mr("scan_multi"), _prefix_svc("scan_multi")
@@ -1087,7 +1123,9 @@ class TestD2f23ScanPartialNotCached:
             want = pre_svc.run_shortage_scan()
             assert [r["代碼"] for r in want[0]] == ["6488"]
             for got in now:
-                assert repr(got) == repr(want)
+                # DEC-151 Batch B：半邊表＝L1 確定失敗 → Batch A 把整個候選池契約標 FAIL_CLOSED（不推定成功），
+                # C4 現在走『資料不足』；修前模型沒有契約，把半邊表算成『部分達標』5 分。見 helper docstring。
+                _assert_c4_fail_closed_only(got, want, same_score=False)
         finally:
             pre_svc._scan_cached.clear()
             pre_mr.fetch_batch_monthly_revenue.clear()
@@ -1129,7 +1167,7 @@ class TestD2f21FinmindBatchSample:
         """「樣本違反 → 整批棄用」照舊（§1）：首檔有負營收 → 整批回空、改走 OpenAPI。"""
         world.fm_batch = _fm_batch_frame(["1001", "1002"], bad=("1001", 5))
         out = MR._batch_finmind(18)
-        assert out.empty and list(out.columns) == ["stock_id", "date", "revenue"]
+        assert out.empty and list(out.columns) == ["stock_id", "date", "revenue", "revenue_year", "revenue_month"]  # DEC-152 C4-D 預期變化:來源(_fm_batch_frame)有 revenue_year/month → 批次表多帶這兩欄(additive);欄名/順序仍精確釘住
         assert "batch 樣本 schema 違反 → 整批棄用" in capsys.readouterr().out
         world.recover()
         df = MR.fetch_batch_monthly_revenue()
@@ -1310,13 +1348,16 @@ class TestCallers:
         _install_svc(pre_svc, monkeypatch, plan, {"pool": 0, "qtr": 0, "mrev": 0})
         monkeypatch.setattr(pre_svc, "fetch_monthly_revenue", pre_mr.fetch_monthly_revenue)
         try:
-            assert repr(pre_svc.run_shortage_scan()) == repr(first), "第一次：與修前逐字相同"
+            pre_first = pre_svc.run_shortage_scan()
+            # DEC-151 Batch B：單股月營收 L1 確定失敗 → Batch A 契約 FAIL_CLOSED(upstream_fetch_failed)。修前 C4 本來
+            # 就是『資料不足』0 分（空表），故分數／c4_ok／tier 與修前相同，只有 C4 的理由／缺值原因文案不同。
+            _assert_c4_fail_closed_only(first, pre_first, same_score=True)
             world.fm_single = "ok"                                           # FinMind 恢復
             fc_clock["now"] += FAIL_COOLDOWN_SEC
             now_rows, _ = SVC.run_shortage_scan(refresh=True)
             pre_rows, _ = pre_svc.run_shortage_scan(refresh=True)
             assert now_rows[0]["理由"] != first[0][0]["理由"], "現在：重問到 FinMind，月營收年增率進得來"
-            assert pre_rows[0]["理由"] == first[0][0]["理由"], "修前：單股失敗凍在 L1，refresh 也拿不到"
+            assert pre_rows[0]["理由"] == pre_first[0][0]["理由"], "修前：單股失敗凍在 L1，refresh 也拿不到"
         finally:
             SVC._scan_cached.clear()
             pre_svc._scan_cached.clear()

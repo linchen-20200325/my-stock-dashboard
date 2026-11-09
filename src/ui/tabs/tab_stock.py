@@ -83,6 +83,13 @@ from src.data.stock.share_capital_fetcher import fetch_share_capital
 # v18.407 U4 Phase 3-B ── _fetch_pbratio_from_twse 已搬至 stock_sections.section_357_valuation
 
 
+def _fin_trend_ai_line(fin_row: dict) -> str:
+    """AI prompt 的財報趨勢一行（DEC-150）：資格由 SSOT `scorability.trend_prompt_line` 決定，
+    任一腿無效 → 不送標籤與合分（LLM 不得收到不完整評級當已確認結論）。純函式，可單測。"""
+    from src.compute.screener.scorability import trend_prompt_line
+    return trend_prompt_line(fin_row)
+
+
 def _precompute_xsec(df2, sid2, rev2, qtr2, qtr_extra2) -> dict:
     """v18.309 Bug2 Stage 1：compute-once 跨段依賴 — AI 摘要與顯示段執行順序解耦。
 
@@ -1639,14 +1646,12 @@ padding:14px 18px;margin-bottom:12px;">
                     analyze_financial_health=analyze_financial_health,
                     list_snapshots=_ls_ai, load_snapshot=_ld_ai, save_snapshot=_sv_ai,
                 )
-                _fund_str2.append(
-                    f"財報趨勢分數(月+季 65/35)={_fin_row_ai.get('label', '—')} "
-                    f"(合分 {_fin_row_ai.get('score', 0):+.2f},月分 {_fin_row_ai.get('mon_sub', 0):+.2f}/"
-                    # v19.174:改吃中性 key fin_sub(AI-A 已與舊 mj_sub 同值並存)
-                    f"季分 {_fin_row_ai.get('fin_sub', 0):+.2f})"
-                )
-            except Exception:
-                pass
+                # 2026-11-08(客戶核准):資格＋文案走 SSOT `scorability.trend_prompt_line` ——
+                #   資料不足 → 明說「無法形成綜合評級」,不送「中性 +0.00」;單腿 → 註明非完整雙頻率評級。
+                _fund_str2.append(_fin_trend_ai_line(_fin_row_ai))
+            except Exception as _e_fin_ai:
+                # 原為 `except: pass`(靜默);行為語意不變(仍不阻斷 prompt 組裝),但至少留 log(§1)
+                print(f'[AI_FIN_TREND] 財報趨勢段組裝失敗,prompt 略過該行: {type(_e_fin_ai).__name__}: {_e_fin_ai}')
             _fund_data2 = '\n'.join(_fund_str2) if _fund_str2 else '基本面資料不足'
             # ── 彙整財報體檢結果 ──────────────────────────────────
             _fh_res2 = st.session_state.get(f'_fh_{sid2}', {})
