@@ -2088,3 +2088,8 @@
 - (3) VIX 已收盤 bar 實作方式（`VN1-PG-VIX-ASOF`；實作前維持 `not_provided`）。
 - (4) 利差定義（維持留空）。
 - (5) TW PMI 與景氣燈號取捨（研究建議 TW PMI 先行）。
+
+📌 **2026-11-09｜NUI2 市場台股日 K A／B／A 客戶裁示（DEC-156，取代 #1096 的折線研究候選）**：#1097 已合併至 main `466cbf52`（3 份 docs/HTML FAKE，非實作；CI 與非作者 QA PASS）。客戶**已核准設計與研究中的唯讀路線、僅授權文件同步，不授權程式施工**。下一個唯一執行 gate：等客戶另外核准正式 OHLC UI2 接線 PR。規格 `docs/vnext/NEWUI2_MARKET_TWII_KBAR_ABA_DECISION_SPEC_2026-11-09.md`，詳細客戶裁示見 DEC-156。
+- **已定**：日 K：`close>open` 紅／`close<open` 綠／`close==open` 灰十字線；手機預設最近 20 根完整已驗證日 K；圖高約 220px 為候選視覺目標，390×844 首屏/不溢出仍必須達標；主資料 Yahoo `^TWII` 現有 OHLC parquet → 合法唯讀具新鮮度資料契約，FinMind 只備援研究。
+- **尚未授權／未實作**：live/FinMind 串接、cron、正式 UI2/Feed/Schema/Tests 改動、增加 G2F 許可／放寬守衛、圖表縮放／期間切換的操作設計、MA/成交量、投資訊號、Risk Cap、OneBrain。不得把圖型改為折線，也不能將 close 與 OHLC 舊服務混用當合法 feed。
+- **後續驗收**：先獨立查 main/head/PR/diff/CI/QA，必要時核對已批准的視覺細節；施工若獲另行核准，按 contract/負測/browser 390+1440 分批 PR，不因 docs 合併就擅自開工。#1096 原文保留歷史，其 Q1/Q4 舊折線選項不再是當前待裁示。
