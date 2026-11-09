@@ -31,6 +31,8 @@
 | **B** | 包裹 `macro_v2_service.get_twii_ohlc` 的新 L3 thin adapter，補 provenance/age/upstream/pit | 中高；新 L3 白名單、Streamlit cache/例外路徑與雙份讀取 | 中／中高 | A 不可行才考慮 |
 | **C** | 維持 UI2 誠實空槽，先只保存 K 棒視覺方向 | 最低 | 即刻／零施工 | Gate 無法通過時安全備案 |
 
+新增具名 L3 方法（如在 market_twii_view_service 增加另一個函式）＝必須修改 tests/test_ui2_guards.py 的 G2F_IMPORT_ALLOWLIST（屬需審查的守衛變更，不得放寬）；僅對既有 get_twii_trend_view 做加性欄位則白名單不必改，但 TwiiFact／validate_twii_fact 與 tests/test_ui2_real_feed.py 對 TWII_CARD_DAYS==1 的斷言需有意改寫。本表 A/B/C 與 FINMIND_OLD_UI_SOURCE_AUDIT §3 的 A/B/C 為不同的兩組方案，不互相對應。
+
 注意 A 的具名方法怎麼擴充要過 G2F 負測；**禁止**以刪除或放寬守衛換綠燈。不得修改資料源/公式/買賣語意/權限。
 
 ## 4. HTML 草稿應審什麼
