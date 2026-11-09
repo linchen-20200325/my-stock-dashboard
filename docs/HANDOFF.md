@@ -1,5 +1,15 @@
 # HANDOFF — 現行交接（my-stock-dashboard）
 
+<!-- CURRENT_RESUME_SNAPSHOT_2026_11_09:BEGIN -->
+> **最新接手優先讀本欄（2026-11-09；歷史快照，非即時 SSOT）**：查核時 main `f4d6e6a44aeb27b21921e6fa3316f97fbf581623`（#1091 docs-only merge），**Open PR 0**。#1088 macro-history 已合併 `da97d193cbbf30e187dc60b2d724e146622fa88d`，最新 head 原生 CI 5 success、非作者 QA 4912×8 逐列：OHLCV／date／source／NaN 零變更；僅 2026-11-06 列的可變 `fetched_at` 由 11/07 更新為 11/08。一次性窄範圍准許見 **DEC-155**（ChatGPT 裁示，非客戶逐字）。#1038 已 **closed／未合併**，PIT FAIL 證據保留；#1090／#1091 已合併。舊文中「#1038 仍 Draft/open」及「New UI2 只有四頁／五頁未施工」均為歷史時點，不可當現況。
+>
+> **現行產品區分**：New UI2 已有 📊市場／🎯標的／💼持股／👤我的／🗂資料五頁＋頂部兩列導覽（#1055），但預設仍為 FAKE Preview；資料頁、登入／Sheet、OneBrain 未因導航完成而具備正式接線。新頁或重大功能先依 `PROJECT_RULES.md` Old UI First 五步驟。
+>
+> **2026-11-09 唯讀校準確認**：`scripts/calibrate_health_weights.py::check_inputs_fresh` 的 `_REQUIRED_DATASETS` 只有 `twii_ohlcv`／`finmind_inst`／`finmind_m1m2`，**不含** `tw_pmi`；因此 `tw_pmi.fetch_outcome=UNDETERMINED` 不能被宣稱為此函式「直接」阻擋的原因。main 的必要 dataset metadata 為 `twii_ohlcv.last_updated=2026-11-06`（無錯），另兩項 `fetch_outcome=NO_NEW_DATA`；其當下 freshness 是否通過及實際季校準結果 **NOT VERIFIED**，需唯讀依現行 `shared/staleness.py` 評估，不放寬門檻或執行校準寫入。真實 cron 發布端到端仍 **NOT VERIFIED**。更正：DEC-155 後果句（docs/DECISIONS.md DEC-155『可能仍因 tw_pmi 為 UNDETERMINED 而阻擋』）與本檔尾 2026-11-09 補註的同句推論不成立——依 `scripts/calibrate_health_weights.py` 的 `_REQUIRED_DATASETS`（twii_ohlcv／finmind_inst／finmind_m1m2），tw_pmi 不在必要資料集內；原文保留為歷史紀錄，未改動。實際 freshness／校準是否通過仍 NOT VERIFIED。
+>
+> **安全下一步**：每次先做 LIVE GitHub Verification Gate；五頁 UI2 HTML 設計須舊 UI 功能盤點、三方案與使用者 Visual Gate，不擅動正式資料／公式／Risk Cap；季校準只做無寫入測試。下方 2026-11-07 的 Active Gate 與大段舊快照**原文保留為歷史**，若與本段不一致，仍以 LIVE GitHub／現行程式／DEC 為準。
+<!-- CURRENT_RESUME_SNAPSHOT_2026_11_09:END -->
+
 <!-- HANDOFF_ACTIVE_GATE:BEGIN -->
 ## 先讀這裡｜GitHub Resume Gate（2026-11-07；由 #1047 引入，合併後仍須重新 Gate）
 
