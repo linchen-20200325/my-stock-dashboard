@@ -11,6 +11,8 @@
 - `DEFAULT_PARQUET_CACHE_DIR`:預設 cache 目錄(Path("data_cache"))
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
+- `load_twii_ohlc(cache_dir, *, today) -> DataFrame`:讀 twii_ohlcv.parquet → 日 K open/high/low/close/fetched_at
+  (Issue #1099 PR-1;唯讀、不驗證、不去重 —— 驗證交 L0 `shared.twii_ohlc_contract`;⛔ 不含 volume)
 - `load_tw_pmi_history(cache_dir) -> DataFrame | None`:讀 tw_pmi.parquet 原樣回傳(批 Z63,
   供 L2 `dated_inputs.extract_pmi_prev` 取「前一資料月官方值」;未接線)
 - `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
@@ -328,6 +330,57 @@ def load_twii_close(
     except Exception as e:  # noqa: BLE001
         print(f"[macro_cache_reader/load_twii_close] 處理失敗:{e}")
         return pd.Series(dtype=float, name="twii_close")
+
+
+#: `load_twii_ohlc` 回傳的欄位(Issue #1099 PR-1;順序固定)。
+#: ⛔ 刻意**不含 `volume`**:parquet 的 volume 實測有 NaN 與 volume=0 列(見 `scripts/update_macro_history.py`
+#: `fetch_twii_ohlcv` 註解),DEC-156 規格明文「不畫量、不把缺量當零」—— 不讀進來就不會被誤畫。
+TWII_OHLC_COLUMNS: tuple = ("open", "high", "low", "close", "fetched_at")
+
+
+def _empty_twii_ohlc() -> pd.DataFrame:
+    return pd.DataFrame(columns=list(TWII_OHLC_COLUMNS),
+                        index=pd.DatetimeIndex([], name="date"))
+
+
+def load_twii_ohlc(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+    *,
+    today=None,
+) -> pd.DataFrame:
+    """讀 twii_ohlcv.parquet → 日 K DataFrame(index=date Timestamp 升序;欄 = `TWII_OHLC_COLUMNS`)。
+
+    Issue #1099 PR-1(DEC-156 A:重用既有 Yahoo `^TWII` 日 OHLC 快取,唯讀)。
+    - **只讀、不驗證**:⛔ 不去重、⛔ 不 dropna、⛔ 不補值 —— 合法性(有限正值、OHLC 關係、日期唯一升序、
+      未來日、未收盤棒、as_of 同源)由 L3 呼叫 L0 `shared.twii_ohlc_contract.validate_ohlc_window` 判定,
+      在這裡先清掉會讓「壞資料」從驗證者眼前消失(§1 掩蓋 ≠ 解決)。
+    - 一次讀檔 = 一個快照:新鮮度判定用**同一份** DataFrame(`_attach_staleness(..., df=_raw)`),
+      掛在回傳 DataFrame 的 `.attrs`(與 `load_twii_close` 同一組 key)。
+    - 缺檔 / 壞檔 / 空檔 / 缺欄 / 轉型失敗 → 印一行 log 並回空 DataFrame(欄位保留,§1 出聲不吞)。
+    - 無 streamlit、無網路。
+
+    Args:
+        cache_dir: parquet cache 目錄(預設 data_cache/)
+        today: 過期判定的基準日(測試注入;None → 今天)
+    """
+    path = cache_dir / "twii_ohlcv.parquet"
+    df = load_parquet_safe(path, {"date", *TWII_OHLC_COLUMNS})
+    if df is None:
+        print(f"[macro_cache_reader/load_twii_ohlc] twii_ohlcv.parquet 讀不到、為空或缺欄"
+              f"(需要 {sorted({'date', *TWII_OHLC_COLUMNS})})→ 回空 DataFrame")
+        return _empty_twii_ohlc()
+    try:
+        _raw = df
+        out = df.loc[:, ["date", *TWII_OHLC_COLUMNS]].copy()
+        out["date"] = pd.to_datetime(out["date"])
+        out = out.set_index("date").sort_index(kind="stable")
+        for _c in ("open", "high", "low", "close"):
+            out[_c] = out[_c].astype(float)
+        return _attach_staleness(out, "twii_ohlcv", cache_dir=cache_dir,
+                                 df=_raw, today=today)
+    except Exception as e:  # noqa: BLE001 — 轉型失敗就講出來(§1),回空讓 L3 走「讀不到」
+        print(f"[macro_cache_reader/load_twii_ohlc] 處理失敗:{e}")
+        return _empty_twii_ohlc()
 
 
 # ══════════════════════════════════════════════════════════════════════
