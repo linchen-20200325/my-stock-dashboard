@@ -410,9 +410,9 @@ def test_real_parquet_parity_and_fail_closed_invariant():
     a = S.get_twii_trend_view(20, today=today)
     b = S.get_twii_trend_view(20, with_ohlc=True, today=today)
     # (a) 同源對帳（恆成立）
-    assert a.ok == b.ok
-    assert (a.xs, a.close, a.as_of, a.is_stale, a.n_available) == \
-           (b.xs, b.close, b.as_of, b.is_stale, b.n_available)
+    assert a.ok and b.ok
+    assert (a.xs, a.close, a.as_of, a.is_stale, a.age_days, a.n_available) == \
+           (b.xs, b.close, b.as_of, b.is_stale, b.age_days, b.n_available)
     # (b) fail-closed 不變量
     assert b.ohlc_requested is True and b.ohlc_ok in (True, False)
     if b.ohlc_ok:
