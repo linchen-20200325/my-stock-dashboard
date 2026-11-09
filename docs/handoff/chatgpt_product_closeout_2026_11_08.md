@@ -1,9 +1,9 @@
 # ChatGPT 完整產品交接快照｜台股 AI 戰情室（2026-11-08）
 > **狀態：交接索引／時點快照，非新 Decision、非新規格、非新施工授權。** 本文件為換 ChatGPT 對話而建；不可凌駕 CLAUDE.md、PROCESS.md、PROJECT_RULES.md、已合併 DECISIONS 或正式 UI 契約。**接手時先查即時 GitHub，不可將這份快照的 PR 狀態當最新。** 本檔獨立於共用 BACKLOG／HANDOFF，避免與 Claude Code 施工衝突。
 
-> **2026-11-09 合併後補正（本 PR 仍為 Draft，未進 main；以最新 GitHub 實況為準）**：此檔 A/F/G 節中的 #1083／#1084「Draft」與 main `412d15b` 只是 **2026-11-08 時點快照，已過時**；#1083、#1084、#1086 已在 main，五步驟 Old UI First 治理 #1087 已 squash merge，main 實查 `5eb3ee9e0e506dc97c643a188ade21e69d4a754a`；`PROJECT_RULES.md` 已有正式入口與 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`。#1089 AppTest 失敗已按 Streamlit 版本漂移結案：CI 1.59.2 兩項 PASS，舊沙箱 1.67.0 超出 `requirements.txt` 的 `<1.60.0`；無 production UI2 修改。當時 Open PR：#1088 資料自動發布、#1085 本交接、#1038 PIT **NO MERGE**、#1034 舊治理衝突。**本補正不是新增裁示／實作授權，也不宣稱五頁真資料全接線、FinMind 月份／公告時點已驗、Risk Cap／OneBrain runtime 已完成。** 下一對話必須重查 main/head/CI/QA，不可把本段當永久現況。
+> **2026-11-09 合併後補正（本 PR 仍為 Draft，未進 main；以最新 GitHub 實況為準）**：此檔 A/F/G 節中的 #1083／#1084「Draft」與 main `412d15b` 只是 **2026-11-08 時點快照，已過時**；#1083、#1084、#1086 已在 main，五步驟 Old UI First 治理 #1087 已 squash merge，main 實查 `5eb3ee9e0e506dc97c643a188ade21e69d4a754a`；`PROJECT_RULES.md` 已有正式入口與 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`。#1089 AppTest 失敗已按 Streamlit 版本漂移結案：CI 1.59.2 兩項 PASS，舊沙箱 1.67.0 超出 `requirements.txt` 的 `<1.60.0`；無 production UI2 修改。當時 Open PR：#1088 資料自動發布、#1085 本交接、#1038 PIT **NO MERGE**；#1034（舊治理文件）與 #1080 已關閉未合併（#1034 於 2026-11-08T23:44Z 關閉）。**本更正涵蓋 A、F、G 三節（含 G 節「不要因換對話停止 #1083／#1084」的停止指令）；各節標題已加過時標記，舊正文保留。** #1089 是 issue 不是 PR；Streamlit 1.67 超出 `requirements.txt` 的 `<1.60.0` 造成 AppTest `filtered_state` AttributeError，環境漂移結案，非 UI2 缺陷。另：`PROJECT_RULES.md` 的 Old UI First 入口目前仍寫『PR #1087 未合併前僅 Draft，合併後適用』，與實況不符；屬 main 上另一文件漂移，不在本 PR 範圍，另案登記。**本補正不是新增裁示／實作授權，也不宣稱五頁真資料全接線、FinMind 月份／公告時點已驗、Risk Cap／OneBrain runtime 已完成。** 下一對話必須重查 main/head/CI/QA，不可把本段當永久現況。
 
-## A. GitHub Verification Gate（快照）
+## A. GitHub Verification Gate（快照） 【2026-11-08 時點，已過時，見頂部更正】
 - repo：`linchen-20200325/my-stock-dashboard`；main：`412d15bec6d478f48654e2a275e2ac542bd07484`（#1082，DEC-154）。
 - 目前 Open Draft：#1083（G1 缺貨證據資格呈現，head `691eaa3`）；#1084（FinMind 一次性手動唯讀探針，head `eb2e20a`）；#1034（舊治理文件待逐項核銷）；#1038（macro-forward-test PIT 失格，**NO MERGE**）。
 - #1075～#1079 C4 月份契約、評分、月份鍵傳遞與未驗證 5 分上限；#1081 docs 狀態收斂；#1082 DEC-154 均已合併。#1080 已關閉未合併，原分支保留。
@@ -42,7 +42,7 @@
 - OneBrain 方向是 canonical evidence → 確定性 Domain／Risk Cap／Single Action Authority → 精簡 Human VM 與可追溯完整 Decision Digest → 市場／籌碼／財報／產業／持股／資料稽核六研究領域與全域正反證檢查。AI 只讀既有核准資料，不創造、不寫回、不繞過正式行動權威；**方向已確認 ≠ production runtime 已完成**。
 - 對外文字短／中／長期不固定 3/6/9 個月，具體時間長度／公式仍須 Gate。完整證據覆蓋、來源／as_of／缺失矩陣和證據 ID 不得為省 token 而被裁切。
 
-## F. 最近投資資料資格治理
+## F. 最近投資資料資格治理 【2026-11-08 時點，已過時，見頂部更正】
 - DEC-151～154：C4 以最近三個完整且符合可信公告時點的日曆月份、保留缺月與日期證據；#1075 A、#1076 B、#1077 D、#1079 E 已合併，未驗證月份鍵在合法有效資料時最高 5，無證據不得保底。全市場 `BATCH_SOURCE_MONTH_KEY_VERIFIED=False`、STRONG 暫時為 0 是 **fail-closed 過渡**，不是市場真實統計。
 - DEC-154：一次性手動唯讀 FinMind 探針（#1084 Draft）、禁止洩漏 Token、自動排程／production writer；沒有合法 Secret 就不執行，真實月份及公告時點 **NOT VERIFIED**，不得因探針合併自行翻 verified。
 - 缺貨缺值先 G1（#1083 Draft），原始分數與資料資格分離、呈現部分有效 n/4／缺值原因；**不動正式 composite／percentile／排名／權重**；G2、G3 僅為研究方案，不核准新硬門檻。
@@ -50,11 +50,11 @@
 - 財報缺任一必要腿不產正式綜合評級、不得把缺值當 0／中性（DEC-150）；缺貨獨立證據品質、財報差分、真實歷史績效、畫面診斷分母仍有待驗／裁示。
 - #1038 PIT 歷史前視偏差阻塞，**NO MERGE**；資料發布/Cloud/真實 push、forward_test 端到端未全部驗證。
 
-## G. 治理與換對話
+## G. 治理與換對話 【2026-11-08 時點，已過時，見頂部更正】
 - ChatGPT 是**獨立治理／產品設計／投資語意審查層**；Claude Code 是工程施工、測試／非作者 QA、CI、PR merge、條件式 branch 清理及文件同步者（DEC-147）。
 - 任何專案現況、下一步、裁示、PR Gate、提示語，必須獨立 GitHub Verification Gate；至少在選方案時比較三路徑：正確性／風險、速度、Token 成本。提示語附建議模型＋Effort（Minimum Sufficient Effort）。
 - 靜默巡航：每批最多三項安全工作；不重複 subscription／CI pending；QA must-fix、最新 head CI 不綠、與既有 PR 同檔競爭、Layout／Risk Cap／PIT／Schema／新來源／不可逆操作即停手。
-- 本次是**ChatGPT 對話交接，不是專案結案**。不要因換對話停止 #1083／#1084，也不要重做已合併的 #1075～#1082；正式 BACKLOG／HANDOFF 有優先級。
+- 本次是**ChatGPT 對話交接，不是專案結案**。~~不要因換對話停止 #1083／#1084，~~（現行：#1083／#1084 已合併；後續為 FinMind 探針手動執行授權（客戶）與 DEC-154 待客戶事項。）也不要重做已合併的 #1075～#1082；正式 BACKLOG／HANDOFF 有優先級。
 - 下一位 ChatGPT 首次回報應有：最新 GitHub Gate；五頁「已核准／已實作／真來源／缺口／驗證」矩陣；Old UI 能力重用；總經與 EPS×PE 研究；OneBrain Evidence/Risk Cap 完成度；#1083/#1084/1034/1038 QA/CI；**唯一下一個安全動作**。若本文件與 main 實況不同，立即標記 STALE 並以 main 為準。
 
 ## H. 保證與限制
