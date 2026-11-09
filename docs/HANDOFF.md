@@ -1244,3 +1244,12 @@ DEC-086 規則已於 main，本表已落地。
 | 尚未施工 | 新版 UI2 仍無正式日 K；`macro_v2_service.get_twii_ohlc` 有 OHLC 無 freshness，`market_twii_view_service.get_twii_trend_view` 有 freshness 但僅 close，G2F 不能偷繞 |
 | 安全限制 | 僅本次 docs-only 同步；**正式 UI2/Feed/Schema/Test 接線需客戶另行明確授權**，不動 Risk Cap、OneBrain、OAuth、Sheet、排程、資料發布；FinMind 僅研究 |
 | 下一步 | docs-only PR：非作者 QA＋latest-head 五項 CI 全綠後安全合併；**暫停功能 PR**。規格 `docs/vnext/NEWUI2_MARKET_TWII_KBAR_ABA_DECISION_SPEC_2026-11-09.md`；核對 DECISIONS DEC-156、BACKLOG 最新追加 |
+
+### 2026-11-09 接手點補註｜Issue #1099 PR-1 #1100 已合併、PR-2 施工中（只追加；PR-2＝merge pending QA/CI）
+
+| 項目 | 接手事實／限制 |
+|---|---|
+| PR-1 | #1100 已合併 → main `e5a429c`：TWII 日 K OHLC 唯讀 fail-closed 契約（L0 契約＋L1 `load_twii_ohlc`＋L3 `with_ohlc=True` 加性欄位；預設路徑不變）。QA：https://github.com/linchen-20200325/my-stock-dashboard/pull/1100#issuecomment-6746374501 |
+| PR-2 | 分支 `feat/ui2-twii-kbar-market-20261109`（自 `e5a429c`）：Real-data Preview 📊 主圖改畫日 K（取代空槽內容）；FAKE 軸仍誠實空槽。**merge pending QA/CI**；尚未開 PR（由 AI 總管開立與定稿） |
+| 不可動 | G2F／G2／G4／G9 守衛與白名單、`TWII_CARD_DAYS=1`、其他頁、Risk Cap、OneBrain、OAuth／Sheet、資料發布、FinMind；252 根切換／縮放／MA／量未核准 |
+| 證據 | viewport 證據 JSON（newui2_realfeed、newui2_batch3b）因 `src/ui2` 變更重產；部署端（Streamlit Cloud）實況 NOT VERIFIED |

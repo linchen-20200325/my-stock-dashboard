@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.56.0",
-  "git_sha": "bb5b812e1e599bb3f4ee4aca3292a46bfbb485ec",
-  "source_hash": "6ab8f9cf2b184f4c5c0d45bb424eef45b889f9a77ccf43c6b50dac2f6823e4c9",
-  "generated_at": "2026-11-07T15:46:44+00:00",
+  "git_sha": "e5a429c22b0d28cee554c5b121b5f0733c8bfa6f",
+  "source_hash": "6e1dcecc561ec045193eb29597a85e17421e7234d6f0e5a1389960d3e9801312",
+  "generated_at": "2026-11-09T17:48:31+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "viewports": {
@@ -123,6 +123,11 @@
     "id": "p2_nav_margin_160",
     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；不達須停手回報，不得縮字、刪資訊或改設計。",
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
+   },
+   {
+    "id": "kbar_primary_chart",
+    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（OneBrain → Primary → 指標卡）；水平捲動沿用 no_horizontal_scroll。",
+    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"
    },
    {
     "id": "w11_hold_layout",
@@ -317,7 +322,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜⬜ 資料日未提供｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜⬜ 資料日未提供｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -600,7 +613,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -773,7 +794,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -953,7 +982,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -1221,7 +1258,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1376,7 +1421,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1571,7 +1624,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -1854,7 +1915,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2027,7 +2096,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2214,7 +2291,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -2482,7 +2567,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2637,7 +2730,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -2832,7 +2933,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -3115,7 +3224,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -3288,7 +3405,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -3475,7 +3600,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -3743,7 +3876,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -3898,7 +4039,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -4093,7 +4242,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -4376,7 +4533,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -4549,7 +4714,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -4736,7 +4909,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -5004,7 +5185,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -5159,7 +5348,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -5354,7 +5551,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -5637,7 +5842,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -5810,7 +6023,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -5997,7 +6218,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -6265,7 +6494,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -6420,7 +6657,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -6615,7 +6860,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -6898,7 +7151,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -7071,7 +7332,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -7258,7 +7527,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 390,
@@ -7526,7 +7803,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -7681,7 +7966,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -7849,7 +8142,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -8025,7 +8326,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -8228,7 +8537,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜⬜ 資料日未提供｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜⬜ 資料日未提供｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -8409,7 +8726,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -8582,7 +8907,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -8762,7 +9095,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -9054,7 +9395,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -9209,7 +9558,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -9404,7 +9761,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -9585,7 +9950,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -9758,7 +10131,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -9945,7 +10326,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -10237,7 +10626,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -10392,7 +10789,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -10587,7 +10992,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -10768,7 +11181,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -10941,7 +11362,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -11128,7 +11557,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -11420,7 +11857,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -11575,7 +12020,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -11770,7 +12223,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -11951,7 +12412,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -12124,7 +12593,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -12311,7 +12788,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -12603,7 +13088,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -12758,7 +13251,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -12953,7 +13454,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -13134,7 +13643,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -13307,7 +13824,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -13494,7 +14019,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -13786,7 +14319,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -13941,7 +14482,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -14136,7 +14685,15 @@
     "slot_graphics": 0,
     "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
     "spec_text": "SPEC｜最新收盤參考｜FAKE 示意資料｜資料日 FAKE 示意｜缺值不補",
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -14317,7 +14874,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -14490,7 +15055,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -14677,7 +15250,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": {
     "vw": 1440,
@@ -14969,7 +15550,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -15124,7 +15713,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -15292,7 +15889,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {
@@ -15468,7 +16073,15 @@
     "slot_graphics": 0,
     "slot_text": null,
     "spec_text": null,
-    "slot_danger": 0
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
    },
    "h1": null,
    "batch3": {

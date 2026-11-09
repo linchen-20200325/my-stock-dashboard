@@ -18,6 +18,8 @@
 """
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -254,6 +256,70 @@ class AccountVM:
     actions: tuple[CtaVM, ...]
 
 
+#: 日 K 日期格式（ISO `YYYY-MM-DD`；字串升序＝日期升序）。
+_ISO_DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _finite_positive(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
+
+
+@dataclass(frozen=True)
+class CandleVM:
+    """一根已驗證的日 K（Issue #1099／DEC-156）。純資料：顏色由 L5 依「當日收盤 vs 當日開盤」決定（⛔ 本型別計算任何語意）。
+
+    建構時再驗一次 OHLC 關係（defense in depth；canonical 已驗）：有限正值、low ≤ min(open,close) ≤ max(open,close) ≤ high。
+    """
+
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.date, str) or not _ISO_DATE_RX.match(self.date):
+            raise ValueError(f"日 K 日期須為 YYYY-MM-DD，收到 {self.date!r}")
+        px = (self.open, self.high, self.low, self.close)
+        if not all(_finite_positive(v) for v in px):
+            raise ValueError(f"{self.date}: 日 K 開高低收須為有限正值，收到 {px!r}")
+        if not (self.low <= min(self.open, self.close) and max(self.open, self.close) <= self.high):
+            raise ValueError(f"{self.date}: 違反 low ≤ min(open,close) ≤ max(open,close) ≤ high：{px!r}")
+
+
+@dataclass(frozen=True)
+class KbarChartVM:
+    """📊 台股加權指數日 K 主圖（Issue #1099 PR-2；DEC-156 A／B／A）。
+
+    - `field`：整張圖的狀態（資料語意五態或判定結果；沿用 FieldVM 的字樣／色調不變量）。OK／Stale 才可帶 K 棒，
+      `value_text`＝最新一根收盤（與 TWII 卡同值；canonical 已對帳）。
+    - `candles`：最近 ≤ `target_n` 根**已驗證**的完整日 K（升序、日期唯一）；不足 `target_n` 根 → 照實少畫（⛔ 補棒）。
+    - `notes`：人話附註（不足根數、新鮮度、上游狀態）；⛔ 例外型別名／原因碼。
+    ⛔ 成交量、均線、買賣訊號、互動控制項（DEC-156 未核准）。
+    """
+
+    field: FieldVM
+    candles: tuple[CandleVM, ...] = ()
+    target_n: int = 20
+    notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.field, FieldVM):
+            raise TypeError("KbarChartVM.field 必須是 FieldVM")
+        if not isinstance(self.target_n, int) or isinstance(self.target_n, bool) or self.target_n < 1:
+            raise ValueError(f"target_n 必須是正整數，收到 {self.target_n!r}")
+        has_value = self.field.capability is CapabilityState.PROVIDED and self.field.state in VALUE_BEARING_STATES
+        if has_value and not self.candles:
+            raise ValueError("日 K 圖 OK／Stale 態必須有 K 棒（沒有就不是 OK）")
+        if not has_value and self.candles:
+            raise ValueError(f"日 K 圖 {self.field.state!r} 態不得帶 K 棒（missing ≠ 0；⛔ 假 K 棒）")
+        if len(self.candles) > self.target_n:
+            raise ValueError(f"K 棒 {len(self.candles)} 根超過預設可見 {self.target_n} 根")
+        dates = [c.date for c in self.candles]
+        if any(a >= b for a, b in zip(dates, dates[1:])):
+            raise ValueError(f"日 K 日期必須嚴格升序且唯一：{dates!r}")
+
+
 @dataclass(frozen=True)
 class PageContext:
     """Human UI **全量**（與任何 UI 切片〔Top-N／收合／tab〕無關）。
@@ -269,6 +335,9 @@ class PageContext:
     main_risk: FieldVM | None = None
     target: TargetVM | None = None          # 🎯 標的頁專用
     account: AccountVM | None = None        # 👤 我的頁專用
+    #: 📊 市場頁台股日 K 主圖（Issue #1099 PR-2）。None＝這個 feed 沒有提供日 K 事實（FAKE 示意軸恆為 None，
+    #: L5 照舊畫誠實空槽；⛔ FAKE K 棒）。
+    kbar: KbarChartVM | None = None
 
 
 @dataclass(frozen=True)

@@ -148,6 +148,13 @@ THRESHOLDS: list[dict[str, str]] = [
              "（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；"
              "不達須停手回報，不得縮字、刪資訊或改設計。",
      "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"},
+    {"id": "kbar_primary_chart",
+     "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖"
+             "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px"
+             "（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、"
+             "不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。"
+             "排序沿用 p2（OneBrain → Primary → 指標卡）；水平捲動沿用 no_horizontal_scroll。",
+     "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
              "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
@@ -293,6 +300,43 @@ P2_NAV_MARGIN_MIN_PX = 160
 P2_NAV_MARGIN_SCENARIOS = ("stale", "unavailable")
 
 
+#: 日 K 主圖判定常數（判定器自己的字面值，獨立於被測的 `src/ui2/components/html.py`，避免 mutation 時判定器跟著被改）。
+KBAR_LEGEND_TEXT = "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤"
+KBAR_MAX_BARS = 20
+KBAR_PLOT_H_RANGE = (200.0, 240.0)
+_KBAR_FORBIDDEN = ("MA", "均線", "成交量")
+
+
+def _evaluate_kbar(p2: dict, out: dict[str, list[str]]) -> None:
+    """Issue #1099 PR-2：日 K 主圖（`p2['chart']` 有值才判；FAKE／無日 K 事實 → 只需不與空槽並存）。"""
+    k = "kbar_primary_chart"
+    chart = p2.get("chart")
+    if chart and p2.get("slot"):
+        out[k].append("誠實空槽與日 K 主圖同時出現（Primary 位置只能有一個）")
+    if not chart:
+        return
+    state, bars = p2.get("chart_state"), int(p2.get("chart_bars") or 0)
+    text = p2.get("chart_text") or ""
+    for w in _KBAR_FORBIDDEN:
+        if w in text:
+            out[k].append(f"日 K 主圖出現未核准字樣 {w!r}")
+    if state in ("ok", "stale"):
+        if not (1 <= bars <= KBAR_MAX_BARS):
+            out[k].append(f"K 棒 {bars} 根（應 1～{KBAR_MAX_BARS}）")
+        h = p2.get("chart_svg_h")
+        if h is None or not (KBAR_PLOT_H_RANGE[0] <= h <= KBAR_PLOT_H_RANGE[1]):
+            out[k].append(f"日 K 圖高 {h}（應約 220，量測 {KBAR_PLOT_H_RANGE[0]:.0f}～{KBAR_PLOT_H_RANGE[1]:.0f}）")
+        if (p2.get("chart_legend") or "") != KBAR_LEGEND_TEXT:
+            out[k].append(f"文字圖例不符：{p2.get('chart_legend')!r}")
+        if p2.get("chart_danger", 0):
+            out[k].append("有 K 棒卻出現紅色 danger chip")
+    else:
+        if bars or p2.get("chart_graphics", 0):
+            out[k].append(f"{state} 態不得有圖形（K 棒 {bars}、圖形 {p2.get('chart_graphics')}）")
+        if state != "unavailable" and p2.get("chart_danger", 0):
+            out[k].append(f"{state} 態出現紅色 danger chip（紅只給系統真錯誤）")
+
+
 def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     """P2：OneBrain／Primary 空槽順序與誠實性、手機導覽餘裕 ≥160px。僅 📊 市場頁；缺 `p2` 鍵的舊 dict／其他頁略過；
     真瀏覽器 market 量測缺 `p2` 鍵＝判紅。"""
@@ -305,11 +349,15 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
         return
     mobile = m["viewport"]["w"] <= MOBILE_MAX_W
     ob, slot, grid, risk = p2.get("onebrain"), p2.get("slot"), p2.get("grid"), m.get("risk")
+    chart = p2.get("chart")                       # Issue #1099 PR-2：日 K 主圖（只在 Real-data Preview 有日 K 事實時）
     els = {e["q"]: e for e in m["elements"]}
     if not ob:
         out[k].append("缺 🤖 OneBrain Outlook 區塊")
-    if not slot:
+    if not slot and not chart:
         out[k].append("缺 🇹🇼 台股趨勢空槽")
+    _evaluate_kbar(p2, out)
+    if not slot and chart:                        # 日 K 主圖取代空槽：順序判定改用主圖座標（判定式不變）
+        slot = chart
     if not grid:
         out[k].append("缺核心指標卡 grid")
     if ob and risk and ob["top"] < risk["bottom"] - 0.5:
@@ -322,7 +370,7 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
         out[k].append(f"空槽 top {slot['top']:.0f} 早於 OneBrain 底緣 {ob['bottom']:.0f}")
     if slot and grid and grid["top"] < slot["bottom"] - 0.5:
         out[k].append(f"指標卡 top {grid['top']:.0f} 早於空槽底緣 {slot['bottom']:.0f}（{'手機' if mobile else '桌機'}指標卡必須在空槽之後）")
-    if slot:
+    if slot and slot is not chart:
         if p2.get("slot_graphics", 0):
             out[k].append(f"空槽含 {p2['slot_graphics']} 個 svg／polyline／canvas／img（⛔ 假走勢）")
         t = p2.get("slot_text") or ""
@@ -671,12 +719,22 @@ _JS = r"""
   // P2：OneBrain／台股 Primary 空槽／指標卡 grid 座標與空槽內容
   const obEl = document.querySelector('[data-ui2-l1="onebrain"]');
   const slotEl = document.querySelector('[data-ui2-l1="primary_slot"]');
+  const chartEl = document.querySelector('[data-ui2-l1="primary_chart"]');
+  const chartSvg = chartEl ? chartEl.querySelector('.ui2-kbar__svg') : null;
+  const chartLeg = chartEl ? chartEl.querySelector('[data-ui2-kbar-legend]') : null;
   const gridEl = document.querySelector('.ui2-grid');
   const p2 = {onebrain: obEl ? R(obEl) : null, slot: slotEl ? R(slotEl) : null, grid: gridEl ? R(gridEl) : null,
     slot_graphics: slotEl ? slotEl.querySelectorAll('svg,polyline,canvas,img,[data-testid="stVegaLiteChart"]').length : 0,
     slot_text: slotEl ? slotEl.innerText.replace(/\s+/g,' ').trim() : null,
     spec_text: slotEl && slotEl.querySelector('[data-ui2-spec]') ? slotEl.querySelector('[data-ui2-spec]').innerText.replace(/\s+/g,' ').trim() : null,
-    slot_danger: slotEl ? slotEl.querySelectorAll('.ui2-chip--danger').length : 0};
+    slot_danger: slotEl ? slotEl.querySelectorAll('.ui2-chip--danger').length : 0,
+    chart: chartEl ? R(chartEl) : null, chart_state: chartEl ? chartEl.dataset.state : null,
+    chart_bars: chartEl ? chartEl.querySelectorAll('[data-kbar-dir]').length : 0,
+    chart_graphics: chartEl ? chartEl.querySelectorAll('svg,polyline,canvas,img,[data-testid="stVegaLiteChart"]').length : 0,
+    chart_svg_h: chartSvg ? R(chartSvg).height : null,
+    chart_legend: chartLeg ? chartLeg.textContent.trim() : null,
+    chart_text: chartEl ? chartEl.innerText.replace(/\s+/g,' ').trim() : null,
+    chart_danger: chartEl ? chartEl.querySelectorAll('.ui2-chip--danger').length : 0};
   // DEC-141：💼 W-11 批 1 座標與內容（僅 p4_hold 有）
   const hq = s => document.querySelector(s);
   const hStat = hq('[data-ui2-l1="hold_status"]'), hPrim = hq('[data-ui2-l1="hold_primary_slot"]'),
@@ -773,17 +831,36 @@ def source_hash(repo: Path) -> str:
     return h.hexdigest()
 
 
+def _git_dirs(repo: Path) -> tuple[Path, Path]:
+    """(gitdir, commondir)。一般 clone：皆為 `repo/.git`；git worktree：`.git` 是寫著 `gitdir: <路徑>` 的檔，
+    HEAD 在該 gitdir、分支 refs／packed-refs 在其 `commondir`（Issue #1099 PR-2：在 worktree 量測時 git_sha 不再讀成 None）。"""
+    g = repo / ".git"
+    if g.is_file():
+        line = g.read_text(encoding="utf-8").strip()
+        if line.startswith("gitdir:"):
+            gd = Path(line.split(":", 1)[1].strip())
+            gd = gd if gd.is_absolute() else (repo / gd)
+            cf = gd / "commondir"
+            if cf.exists():
+                cd = Path(cf.read_text(encoding="utf-8").strip())
+                return gd, (cd if cd.is_absolute() else (gd / cd))
+            return gd, gd
+    return g, g
+
+
 def _git_head(repo: Path) -> str | None:
     """純 Python 讀 HEAD sha（不呼叫外部 git：test_zz_test_portability）；讀不到 → None（測試會判紅）。"""
     try:
-        head = (repo / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+        gd, cd = _git_dirs(repo)
+        head = (gd / "HEAD").read_text(encoding="utf-8").strip()
         if not head.startswith("ref:"):
             return head
         ref = head.split(None, 1)[1]
-        f = repo / ".git" / ref
-        if f.exists():
-            return f.read_text(encoding="utf-8").strip()
-        for line in (repo / ".git" / "packed-refs").read_text(encoding="utf-8").splitlines():
+        for base in (gd, cd):
+            f = base / ref
+            if f.exists():
+                return f.read_text(encoding="utf-8").strip()
+        for line in (cd / "packed-refs").read_text(encoding="utf-8").splitlines():
             if line.endswith(" " + ref):
                 return line.split()[0]
     except Exception:
