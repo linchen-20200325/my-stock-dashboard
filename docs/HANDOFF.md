@@ -1233,3 +1233,14 @@ DEC-086 規則已於 main，本表已落地。
 - 治理：ChatGPT 獨立裁示（一次性、窄、非客戶逐字）允許選項 A；不授權覆寫 OHLCV／歷史／帳本／schema／公式／Risk Cap，不擴大寫入豁免。詳見 DEC-155。
 - `calibrate_health_weights` 的 `check_inputs_fresh` 可能仍因 tw_pmi UNDETERMINED 阻擋（NOT VERIFIED）。發布端到端仍 NOT VERIFIED。
 - 下次接手仍須先重新 GitHub Gate。
+
+## 2026-11-09｜New UI2 TWII 日 K 設計決策接手點（DEC-156，客戶明確核准；僅 docs）
+
+| 項目 | 接手事實／限制 |
+|---|---|
+| GitHub 基準 | 寫本決策前 main `466cbf52a2e94efa7f8fc5f3e92c490901ebaa88`、Open PR 0；#1097 squash merged（3 份 docs/HTML FAKE）；交接時**必須重查**，本行不可當最新事實 |
+| 已核准 | **日 K：當日 close>open 紅／<open 綠／==open 灰十字線**；手機**預設 20 根**；**約 220px 圖高**（仍受 390×844 首屏與無溢出驗收限制）；資料路線方向＝Yahoo 既有 TWII OHLC parquet 唯讀優先；具體 adapter／L3 形式、G2F 如何處理均**未定**（見 SPEC 三方案，施工前 Gate 仍阻擋） |
+| 舊研究 | #1096 的 P1 收盤折線已被此決策取代，僅歷史；#1097 HTML 為 FAKE 視覺草稿，不代表正式部署驗收 |
+| 尚未施工 | 新版 UI2 仍無正式日 K；`macro_v2_service.get_twii_ohlc` 有 OHLC 無 freshness，`market_twii_view_service.get_twii_trend_view` 有 freshness 但僅 close，G2F 不能偷繞 |
+| 安全限制 | 僅本次 docs-only 同步；**正式 UI2/Feed/Schema/Test 接線需客戶另行明確授權**，不動 Risk Cap、OneBrain、OAuth、Sheet、排程、資料發布；FinMind 僅研究 |
+| 下一步 | docs-only PR：非作者 QA＋latest-head 五項 CI 全綠後安全合併；**暫停功能 PR**。規格 `docs/vnext/NEWUI2_MARKET_TWII_KBAR_ABA_DECISION_SPEC_2026-11-09.md`；核對 DECISIONS DEC-156、BACKLOG 最新追加 |
