@@ -11,7 +11,7 @@
 ## 1. Old UI First 五步驟狀態（Gate §1）
 | 步 | 狀態 | 證據／缺口 |
 |---|---|---|
-| 1 目標與已核准規格 | 本檔補；使用者任務＝「看加權指數近一年走勢與資料日」。已核准：五頁、Dark-only、Mobile-first、頂部兩列導覽、首屏 ≥160px、📊 Primary 誠實空槽（DEC-133，依內容高度）、手機 Primary≈220px 例外（DEC-119，**舊 Legacy 市場頁**，是否沿用於 UI2＝NOT VERIFIED，列 Q3） | 台股主圖**尚無**核准 UI2 Wireframe；`NEWUI2_MARKET_TARGET…AUDIT` §A2 明寫「設計決定尚待、不能以研究文取代 User Visual Gate」 |
+| 1 目標與已核准規格 | 本檔補；使用者任務＝「看加權指數近一年走勢與資料日」。已核准：五頁、Dark-only、Mobile-first、頂部兩列導覽、首屏 ≥160px、📊 Primary 誠實空槽（DEC-133，依內容高度）、手機 Primary≈220px 例外（DEC-119，**舊 Legacy 市場頁**，是否沿用於 UI2＝NOT VERIFIED，列 Q3） | 台股主圖**尚無**核准 UI2 Wireframe；`NEWUI2_MARKET_TARGET_OLD_FIRST_DATA_CONTRACT_AUDIT_2026-11-09.md` §A2 明寫「設計決定尚待、不能以研究文取代 User Visual Gate」 |
 | 2 舊 UI／資料層盤點 | **已完成（本檔 §1.1＋既有三份 audit）**；caller→L3→L1 已讀；實測成功＝NOT VERIFIED | 見下 |
 | 3 保留/改善/捨棄＋≥3 方案 | 本檔 §1.2、§4 | — |
 | 4 設計最適合 UI2 | 本檔 §5（候選，待客戶） | — |
@@ -41,7 +41,7 @@
 ## 2. 資料契約核實
 - `get_twii_trend_view(n_trading_days:int)->TwiiTrendView`；`n<1` 拋 `ValueError`。欄位：`ok, xs(tuple[str]), close(tuple[float]), n_available, as_of, is_stale(bool|None), stale_reason, age_days(int|None), upstream_error, upstream_state, error, failed, source`（皆已核對原始碼）。**無 fetched_at、無 volume。**
 - L1 `load_twii_close`：`dropna`（NaN 已清並 log）、`sort_index`升序；**未去重、未檢 inf、未檢未來日期**（NOT VERIFIED 其他守衛，僅讀該函式）。
-- `get_twii_trend_view` 已在 `G2F_IMPORT_ALLOWLIST`（`src.services.market_twii_view_service: {get_twii_trend_view}`）；**傳 n>1 不需改守衛**（名稱不變，改的是呼叫引數）。未見測試鎖 `TWII_CARD_DAYS` 值（NOT VERIFIED 全量）。
+- `get_twii_trend_view` 已在 `G2F_IMPORT_ALLOWLIST`（`src.services.market_twii_view_service: {get_twii_trend_view}`）；**傳 n>1 不需改守衛**（名稱不變，改的是呼叫引數）。⚠️ **已有測試鎖 `TWII_CARD_DAYS` 值**（讀 `tests/test_ui2_real_feed.py` on origin/main）：`test_twii_reads_exactly_one_trading_day` 斷言 `calls["twii_args"] == RF.TWII_CARD_DAYS == 1`；另約 L118 以 `TWS.get_twii_trend_view(1)` 作為「同一 canonical service 的直接結果」相對斷言基準。方案 A 若改讀 N 日，這些斷言須刻意改寫（見 §6）。其餘測試是否也鎖定＝NOT VERIFIED 全量。
 - **不能做的**：不得改白名單；feed 禁 pandas/datetime → 排序／日期檢核需放 `real_canonical` 純函式（只准 `math` 等；是否允許 `datetime` 於 canonical＝NOT VERIFIED，須看 G2 規則）。
 - PIT：TWII 日收盤收盤後才完整（TWSE ~13:30 收盤、CLAUDE §2.3 標「17:00 後可信」）；快取由 `update_macro_history.yml` cron `0 9 * * *` UTC（＝TW 17:00）更新並 commit；Yahoo 盤中棒是否可能入檔＝NOT VERIFIED。**觀測日（as_of＝最後一筆交易日）≠ 抓取時間**；本 L3 不提供 fetched_at，故畫面只能寫「資料日」，**不得**以 cron 時刻或今天日期冒充。
 
@@ -58,7 +58,7 @@
 | 單點 | 點數=1 | **不畫線**（單點非走勢） | 顯示該點數值＋資料日＋「歷史不足」 | Neutral |
 | 0 點 | 點數=0 且 ok | 視為契約違反→Unavailable | fail loud | 紅 |
 | 序列含 NaN／inf | 不應出現（L1 已 dropna） | 出現＝契約違反：**整圖不畫** | 固定句；⛔ 靜默丟點後照畫 | 紅 |
-| 未來日期 | any xs > 今日(TW)（時鐘由殼提供，VM 層禁時鐘＝NOT VERIFIED 注入方式） | 不畫或截斷並標註（候選：不畫） | 「資料日異常」 | 紅 |
+| 未來日期 | any xs > 今日(TW)（VM 層無法讀時鐘：G2 禁 now／today，故「未來日期」偵測需由殼注入參考日期；注入方式與可行性＝**NOT VERIFIED**） | 不畫或截斷並標註（候選：不畫） | 「資料日異常」 | 紅 |
 | 非升序／重複日 | 契約違反 | 不畫 | 固定句 | 紅 |
 | len(xs)≠len(close) | 契約違反 | 不畫 | 固定句 | 紅 |
 | 代理／示意 | FAKE 或 Preview 資料 | 照既有橫幅 | 沿用 FAKE／Real Preview 標示；⛔ proxy≠real | 沿用 |
@@ -88,6 +88,7 @@
 - [ ] 390：無水平捲動；x 刻度不重疊；狀態列文字不被截斷；首屏既有項目底緣仍 ≤791；1440：不退化。
 - [ ] 畫面不含：例外型別名、路徑、token、「0」補值、MA 線、量能、sparkline、假走勢。
 - [ ] G2F／G2／G4／G9 守衛全綠；白名單未動（diff 可證）。
+- [ ] 若採方案 A（讀 N 日）：`tests/test_ui2_real_feed.py` 的 `test_twii_reads_exactly_one_trading_day`（`== RF.TWII_CARD_DAYS == 1`）與約 L118 對 `get_twii_trend_view(1)` 的比較，必須**刻意改寫**並在 PR 說明，不得放任其失敗當作意外。
 - [ ] 文案不含投資建議語氣；SPEC 保留「缺值不補」「最新收盤參考」改為「歷史收盤」之文案變更需客戶核（Q5）。
 - [ ] **突變／負向測試建議**：(1) 拔掉升序檢查→亂序序列必須轉紅；(2) 把 NaN 改成 0 填補→必須紅；(3) 拔 stale 標示→stale 夾具必須紅；(4) 把 `failed` 畫成灰→必須紅；(5) 將 `TWII_CHART_DAYS` 改回 1→圖必須回空槽且測試紅；(6) 夾具含未來日→必須不畫；(7) FAKE 資料不得出現在 Real 路徑。
 - [ ] 非作者 QA、最新 head 原生 CI 綠；CI 綠≠真實資料／部署驗收（部署 cron／Cloud 資料＝NOT VERIFIED，須據實寫限制）。
@@ -99,7 +100,7 @@
 | Q2 | MA 參考線 | 不畫 / 自算歷史 MA 曲線 / 另開接線讀「市場評估」最新值 | 不畫＝零新計算 | 與 Legacy 差異 | 自算＝新公式、改趨勢定義（High Gate）；讀 session＝違 G9 | **不畫**，列「尚未提供」，另案研究 |
 | Q3 | 高度契約 | 手機約 220px 例外沿用 / 回 ≤140 / 內容高度 | 220 可讀；140 省首屏 | 220 擠首屏 | 首屏 ≥160px、P2 邊界 | **手機≈200~220、桌機 ≤220，先出線框送審**（DEC-119 是否適用 UI2＝NOT VERIFIED） |
 | Q4 | 窗口與色 | 252 交易日（同舊）/ 120 / 60；折線色新 token | 252 與舊一致 | 手機點密 | 新增色 token＝視覺核准 | **252**；折線色另送色票 |
-| Q5 | 空槽→圖的文案 | 保留「最新收盤參考」SPEC 並增「歷史收盤」/ 改寫 | 保真 | 文案同步 DEC-133 鎖定字樣 | DEC-133 文案由 sha256 守衛釘住（`test_ui2_active_contract_docs`）＝改字需客戶 | 先**不改既有字樣**，新增圖下一行 |
+| Q5 | 空槽→圖的文案 | 保留「最新收盤參考」SPEC 並增「歷史收盤」/ 改寫 | 保真 | 文案同步 DEC-133 鎖定字樣 | DEC-133 文案由 sha256 守衛釘住（`tests/test_ui2_active_contract_docs.py`；其中 `test_customer_fences_are_pinned_by_sha256` 釘的是客戶原文 fence 整段 sha256，是否涵蓋 DEC-133 逐字文案＝NOT VERIFIED）＝改字需客戶 | 先**不改既有字樣**，新增圖下一行 |
 | Q6 | 接線 | A / B / C | 見 §4 | — | — | **A** |
 | Q7 | 資料不足/單點/stale 呈現 | 如 §3 / 更簡 | 誠實 | 狀態多 | 文案量 | 如 §3 |
 > **再次聲明：客戶核准視覺契約與接線契約前，不施工；本檔所有內容均為研究候選。**
