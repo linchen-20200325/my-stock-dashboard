@@ -2079,3 +2079,5 @@
 | SHORTAGE_VERSION | 設計完成（未施工） | 偏好 meta＋側檔 `freeze_meta`（加性、不動 picks schema）；Sheet 不能攜帶版本欄；升版與位置為 Decision Gate |
 
 **待客戶事項（精簡）**：(1) 探針手動執行或其他取樣授權；(2) G2／G3 與 n_ok=1～3 是否進正式百分位；(3) 候選池視窗改為目標月？(4) SHORTAGE_VERSION 位置與升版；(5) C4 全市場 STRONG 恢復條件。
+
+📌 **2026-11-09 #1088 資料 PR 合併紀錄（補註，只追加；DEC-155）**：自動資料 PR #1088（macro-history 2026-11-08，head `7fc23df`）squash 合併 → main `da97d193`；原生 CI 五項 success；非作者 QA 完整解碼 parquet：4912 列 x 8 欄、schema 相同、僅 2026-11-06 列 `fetched_at` 一格不同（QA 評論 https://github.com/linchen-20200325/my-stock-dashboard/pull/1088#issuecomment-6735771473）。metadata：`finmind_inst`／`finmind_margin`／`finmind_m1m2`＝`NO_NEW_DATA`，`tw_pmi`＝`UNDETERMINED`。ChatGPT 獨立裁示（非客戶逐字；一次性、窄；評論 …/pull/1088#issuecomment-6735942091）允許選項 A，不授權覆寫 OHLCV／歷史／帳本／schema／公式／Risk Cap，亦不擴大寫入豁免；`NO_NEW_DATA` ≠ fresh、`UNDETERMINED` ≠ success、proxy PMI 62.5 不得成為正式訊號。`calibrate_health_weights` 的 `check_inputs_fresh` 可能仍因 `tw_pmi` UNDETERMINED 阻擋（NOT VERIFIED）。#1038 closed 未合併（PIT FAIL 證據保留）；Open PR 0；發布端到端仍 NOT VERIFIED。

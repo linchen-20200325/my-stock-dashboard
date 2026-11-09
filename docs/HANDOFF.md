@@ -1215,3 +1215,11 @@ DEC-086 規則已於 main，本表已落地。
 | 探針 | **合併≠執行；尚未執行**（`run_workflow` 403）。secret 是否存在、方案能否取 `TaiwanStockMonthRevenue` 仍 NOT VERIFIED |
 | **下一個唯一安全接手點** | **等客戶**：在 GitHub Actions 頁手動 Run `probe_finmind_monthrev`（預設輸入即可）或授權其他合法取樣途徑，並裁示 G2／G3 與 n_ok=1～3 是否進正式百分位、候選池視窗是否改目標月、`SHORTAGE_VERSION` 位置與升版。跑完只讀日誌，**不得據此翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`**；**不得宣稱全市場 STRONG 恢復**（恢復條件＝真實樣本驗證＋客戶裁示） |
 | 不可動 | 依 DEC-153／154 不變：新權重／門檻／固定封頂、PIT、Risk Cap、OneBrain runtime／Layout、資料發布、#1038、保留分支 |
+
+### 2026-11-09 接手點補註｜#1088 已合併（DEC-155；只追加）
+
+- 現行 main `da97d193cbbf30e187dc60b2d724e146622fa88d`；**Open PR 0**；#1038 closed 未合併（PIT FAIL 證據保留）。
+- #1088（自動資料 PR，macro-history 2026-11-08）已於 2026-11-09T08:49:58Z squash 合併；原生 CI run 42580786108 五項 success；非作者 QA：parquet 4912 列 x 8 欄、僅 2026-11-06 列 `fetched_at` 一格不同。metadata：finmind_inst／margin／m1m2＝`NO_NEW_DATA`，tw_pmi＝`UNDETERMINED`（proxy 62.5 不得成為正式訊號）。
+- 治理：ChatGPT 獨立裁示（一次性、窄、非客戶逐字）允許選項 A；不授權覆寫 OHLCV／歷史／帳本／schema／公式／Risk Cap，不擴大寫入豁免。詳見 DEC-155。
+- `calibrate_health_weights` 的 `check_inputs_fresh` 可能仍因 tw_pmi UNDETERMINED 阻擋（NOT VERIFIED）。發布端到端仍 NOT VERIFIED。
+- 下次接手仍須先重新 GitHub Gate。
