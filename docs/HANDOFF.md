@@ -1251,5 +1251,6 @@ DEC-086 規則已於 main，本表已落地。
 |---|---|
 | PR-1 | #1100 已合併 → main `e5a429c`：TWII 日 K OHLC 唯讀 fail-closed 契約（L0 契約＋L1 `load_twii_ohlc`＋L3 `with_ohlc=True` 加性欄位；預設路徑不變）。QA：https://github.com/linchen-20200325/my-stock-dashboard/pull/1100#issuecomment-6746374501 |
 | PR-2 | 分支 `feat/ui2-twii-kbar-market-20261109`（自 `e5a429c`）：Real-data Preview 📊 主圖改畫日 K（取代空槽內容）；FAKE 軸仍誠實空槽。**merge pending QA/CI**；尚未開 PR（由 AI 總管開立與定稿） |
-| 不可動 | G2F／G2／G4／G9 守衛與白名單、`TWII_CARD_DAYS=1`、其他頁、Risk Cap、OneBrain、OAuth／Sheet、資料發布、FinMind；252 根切換／縮放／MA／量未核准 |
+| 不可動 | G2F 禁用清單／G2／G4／G9 守衛（G2F 白名單僅本 PR 明列 +1 `twii_kbar_fact_of`，獨立審查 pending）、`TWII_CARD_DAYS=1`、其他頁、Risk Cap、OneBrain、OAuth／Sheet、資料發布、FinMind；252 根切換／縮放／MA／量未核准 |
 | 證據 | viewport 證據 JSON（newui2_realfeed、newui2_batch3b）因 `src/ui2` 變更重產；部署端（Streamlit Cloud）實況 NOT VERIFIED |
+| G2F 白名單 | `G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"]` **+1 名稱** `twii_kbar_fact_of`（模組級純函式；⛔ I/O／時鐘／session／producer）。必要性：feed 只能自 real_canonical 取具名名稱，否則建不出日 K 事實；`.open` 開盤價欄位讀取留在 G2 照掃的 real_canonical，G2F 禁用清單未為此 false positive 修改。先前 `RealFeedSnapshot.kbar_fact_of` 作法已依 AI 總管裁示撤回。**獨立審查 pending** |

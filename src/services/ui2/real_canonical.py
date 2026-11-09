@@ -34,7 +34,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 - 契約回傳的 `exposure_limit_pct`／`risk_cap_disclosure`（Risk Cap）**不進 snapshot**（Risk Cap 恆 `⬜ 無法判定`）。
 台股日 K（Issue #1099 PR-2；DEC-156 A／B／A）——📊 主圖位置，與 TWII 卡**分屬兩個事實、互相隔離**：
 - 讀取：feed 另呼叫一次同一個 canonical service `get_twii_trend_view(KBAR_VISIBLE_BARS, with_ohlc=True)`（卡片那次
-  `TWII_CARD_DAYS=1` 不動）；欄位複製在本檔 `RealFeedSnapshot.kbar_fact_of()`（純；feed 在自己的 try 內呼叫）。
+  `TWII_CARD_DAYS=1` 不動）；欄位複製在本檔 `twii_kbar_fact_of()`（純；G2F 白名單明列 +1；feed 在自己的 try 內呼叫）。
 - 讀取期自洽檢查 `validate_twii_kbar_fact`（長度一致、日期 ISO 嚴格升序、有限正值、OHLC 關係、根數 ≤ 20、末根＝as_of、
   不合格時 OHLC 必為空）→ 違反＝契約違反（紅；卡片照常）。
 - 對帳（純、映射期）：日 K 與卡片的 as_of／最新收盤／is_stale／upstream_state／來源須一致（兩次讀取＝同一份快照），
@@ -269,16 +269,17 @@ class RealFeedSnapshot:
         return cls(twii=twii, twii_error=_safe_code(twii_error), regime=regime, regime_error=_safe_code(regime_error),
                    kbar=kbar, kbar_error=_safe_code(kbar_error))
 
-    @staticmethod
-    def kbar_fact_of(view: Any, *, error_type: str = "") -> TwiiKbarFact:
-        """feed 在**自己的 try 內**呼叫：service 回傳值 → `TwiiKbarFact` → 讀取期自洽檢查（違反 raise
-        `RealFeedContractError`，feed 接住 → 日 K 紅色 Unavailable、卡片照常）。
 
-        為什麼掛在 `RealFeedSnapshot` 上：feed 只准自本檔 import 具名白名單（G2F，本 PR 不改守衛），且 feed 禁止
-        `.open` 屬性（G2F 為擋檔案 I/O 而禁）；欄位複製是純動作（含讀 `view.open` 開盤價欄位），放在 G2 照掃的本檔。"""
-        fact = TwiiKbarFact.from_view(view, error_type=error_type)
-        validate_twii_kbar_fact(fact)
-        return fact
+def twii_kbar_fact_of(view: Any, *, error_type: str = "") -> TwiiKbarFact:
+    """feed 在**自己的 try 內**呼叫：service 回傳值 → `TwiiKbarFact` → 讀取期自洽檢查（違反 raise
+    `RealFeedContractError`，feed 接住 → 日 K 紅色 Unavailable、卡片照常）。
+
+    純函式（⛔ I/O／時鐘／session／producer；G2 照掃本檔）。Issue #1099 PR-2 以**明列**方式加進 G2F 白名單
+    （`tests/test_ui2_guards.py::G2F_IMPORT_ALLOWLIST`，+1 名稱）：feed 不能自本檔取其他新名稱，且 G2F 禁 `.open`
+    屬性（為擋檔案 I/O）——開盤價欄位 `view.open` 的讀取因此留在本檔，G2F 禁用清單不變。"""
+    fact = TwiiKbarFact.from_view(view, error_type=error_type)
+    validate_twii_kbar_fact(fact)
+    return fact
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -24,14 +24,14 @@
 from __future__ import annotations
 
 from src.services.ui2.real_canonical import (
-    ERROR_CODE_RE, RealFeedSnapshot, RegimeFact, TwiiFact, exception_code, validate_regime_fact,
+    ERROR_CODE_RE, RealFeedSnapshot, RegimeFact, TwiiFact, exception_code, twii_kbar_fact_of, validate_regime_fact,
     validate_twii_fact,
 )
 
 #: 卡片只顯示最新一筆收盤（取尾端 1 個交易日；「畫幾天」屬呈現決策，卡片＝1）。
 TWII_CARD_DAYS = 1
 #: 📊 主圖日 K 讀取根數（Issue #1099 PR-2；DEC-156 B：手機預設最近 20 根）。卡片那次讀取（`TWII_CARD_DAYS`）不動；
-#: 本值必須等於 `real_canonical.KBAR_VISIBLE_BARS`（測試釘相等；feed 不得自 real_canonical import 新名稱）。
+#: 本值必須等於 `real_canonical.KBAR_VISIBLE_BARS`（測試釘相等；G2F 白名單只為本功能加 `twii_kbar_fact_of` 一個名稱）。
 TWII_KBAR_DAYS = 20
 
 
@@ -71,7 +71,7 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
 def _read_twii_kbar():
     """📊 主圖日 K：**第二次**呼叫同一個白名單 service（`with_ohlc=True`；唯讀、單一快照讀取、不快取）。
     與卡片事實隔離：這裡丟例外／契約違反 → 只有日 K 紅色 Unavailable，卡片與位階照常。
-    欄位複製與自洽檢查在 `RealFeedSnapshot.kbar_fact_of()`（純；見該處說明）；與卡片的同源對帳在 `real_canonical` 映射期。"""
+    欄位複製與自洽檢查在 `real_canonical.twii_kbar_fact_of()`（純；G2F 白名單明列，見該處說明）；與卡片的同源對帳在 `real_canonical` 映射期。"""
     try:
         from src.services.market_twii_view_service import get_twii_trend_view
         v = get_twii_trend_view(TWII_KBAR_DAYS, with_ohlc=True)
@@ -79,7 +79,7 @@ def _read_twii_kbar():
             print(f"[ui2.real_feed] 台股日 K 不合格說明（只進 log）：{v.ohlc_error} {v.ohlc_detail}")
         if v.error:
             print(f"[ui2.real_feed] 台股日 K 讀取說明（只進 log）：{v.error}")
-        fact = RealFeedSnapshot.kbar_fact_of(v, error_type=_type_of_service_error(v.error) if v.failed else "")
+        fact = twii_kbar_fact_of(v, error_type=_type_of_service_error(v.error) if v.failed else "")
         return fact, ""
     except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句
         print(f"[ui2.real_feed] 台股日 K 讀取失敗：{exception_code(e)}: {e}")

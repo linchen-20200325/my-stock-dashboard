@@ -230,12 +230,12 @@ def test_every_contract_violation_makes_only_the_chart_red(monkeypatch, capsys, 
 def test_pure_validator_rejects_each_violation_directly(name):
     v = _bad_view(name)
     with pytest.raises(RC.RealFeedContractError):
-        RealFeedSnapshot.kbar_fact_of(v)
+        RC.twii_kbar_fact_of(v)
 
 
 def test_pure_converter_still_raises_on_a_bad_fact_fed_directly():
     """防呆：直接建 snapshot 塞壞 fact（繞過 feed）→ 純轉換 fail loud（程式錯誤，不是資料狀態）。"""
-    good = RealFeedSnapshot.kbar_fact_of(_kbar_view())
+    good = RC.twii_kbar_fact_of(_kbar_view())
     bad = dataclasses.replace(good, xs=tuple(reversed(good.xs)))
     snap = RealFeedSnapshot.of(_snapshots()["loaded"].twii, "", _snapshots()["loaded"].regime, "", kbar=bad)
     with pytest.raises(RC.RealFeedContractError):
@@ -265,7 +265,7 @@ def test_card_failure_does_not_crash_the_chart_and_the_chart_is_grey_not_drawn(m
 
 def test_snapshot_kbar_error_must_be_an_identifier_and_exclusive():
     base = _snapshots()["loaded"]
-    good = RealFeedSnapshot.kbar_fact_of(_kbar_view())
+    good = RC.twii_kbar_fact_of(_kbar_view())
     with pytest.raises(ValueError):
         RealFeedSnapshot(base.twii, "", base.regime, "", kbar=good, kbar_error="OSError")
     with pytest.raises(ValueError):
@@ -602,3 +602,35 @@ def test_evidence_git_head_reads_worktree_layout(tmp_path):
     (plain / ".git" / "HEAD").write_text("c" * 40 + "\n", encoding="utf-8")
     assert MV._git_head(plain) == "c" * 40
     assert MV._git_head(tmp_path / "nothing") is None
+
+
+# ══════════════════════════════════════════════════════════════════ §8 G2F 白名單只多 1 個名稱（Issue #1099 PR-2）
+#: 本 PR 之前 `real_canonical` 的 G2F 精確白名單（main e5a429c）；本 PR 只准多 `twii_kbar_fact_of` 一個名稱。
+_G2F_RC_BEFORE = frozenset({"ERROR_CODE_RE", "RealFeedSnapshot", "RegimeFact", "TwiiFact", "exception_code",
+                            "validate_regime_fact", "validate_twii_fact"})
+
+
+def test_g2f_allowlist_gained_exactly_one_pure_name():
+    from tests import test_ui2_guards as G
+    rc = G.G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"]
+    assert rc == _G2F_RC_BEFORE | {"twii_kbar_fact_of"}
+    assert set(G.G2F_IMPORT_ALLOWLIST) == {"__future__", "src.services.market_twii_view_service",
+                                           "src.services.allocation_service", "src.services.ui2.real_canonical"}
+    assert G.G2F_IMPORT_ALLOWLIST["src.services.market_twii_view_service"] == frozenset({"get_twii_trend_view"})
+    assert "open" in G._G2F_BANNED_NAMES                                      # `.open` 禁令未放寬
+    assert callable(RC.twii_kbar_fact_of) and not hasattr(RealFeedSnapshot, "kbar_fact_of")
+
+
+@pytest.mark.parametrize("name", ["TwiiKbarFact", "validate_twii_kbar_fact", "kbar_chart_spec",
+                                  "kbar_same_source_problem", "KBAR_VISIBLE_BARS", "real_canonical"])
+def test_g2f_still_rejects_any_other_new_name_from_real_canonical(name):
+    from tests import test_ui2_guards as G
+    clean = (G.FEED_FILES[0]).read_text(encoding="utf-8")
+    assert G.check_feed_boundary(clean) == []
+    assert G.check_feed_boundary(f"from src.services.ui2.real_canonical import {name}\n" + clean)
+
+
+def test_g2f_still_rejects_open_attribute_in_the_feed():
+    from tests import test_ui2_guards as G
+    clean = (G.FEED_FILES[0]).read_text(encoding="utf-8")
+    assert G.check_feed_boundary("o = v.open\n" + clean)
