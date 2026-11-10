@@ -7,15 +7,23 @@ on:
   schedule:
     - cron: '0 20 * * 1'
 
-permissions:
-  contents: write
+# 同一 job 的發布串行、不取消進行中的（避免同分支並行 push）。
+concurrency:
+  group: data-publish-etf-managers
+  cancel-in-progress: false
 
 jobs:
   update-managers:
     runs-on: ubuntu-latest
+    # 2026-11-10（Issue #1116）：發布改走「資料分支 + PR」（main 受 branch protection，裸 push 會 GH006）。
+    permissions:
+      contents: write        # 推 auto/data-etf-managers 分支（不是 main）
+      pull-requests: write   # gh pr create / list / edit。不給 actions: write —— 本流程不 dispatch 任何 workflow
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 發布 helper 需 merge origin/main 與切換分支
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,14 +42,14 @@ jobs:
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: python scripts/update_etf_managers.py
 
-      - name: Commit and Push Changes
+      - name: Publish via data PR (no direct push to main)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/data/etf/etf_managers.json
-          if git diff --staged --quiet; then
-            echo "No manager changes to commit."
-          else
-            git commit -m "🤖 自動更新：ETF 經理人 + 換手偵測"
-            git push
-          fi
+          # 2026-11-10（Issue #1116）：原「git add / commit / push」改由 helper 執行，只推 auto/data-etf-managers 並開 PR。
+          # 該 JSON 已被 git 追蹤、未被 .gitignore 蓋 → 免 --force-add。
+          # 每筆的 last_seen／tenure_days 與頂層 updated_at 每次必變，由 helper 判定「無實質變更」則不開 PR；
+          # 經理人姓名／到職日／換手 history／新增或新增標的屬實質變更。
+          python scripts/publish_data_pr.py --job etf-managers \
+            --paths src/data/etf/etf_managers.json \
+            --commit-msg "🤖 自動更新：ETF 經理人 + 換手偵測"

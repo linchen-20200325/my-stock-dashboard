@@ -2150,3 +2150,6 @@
 - `SEC-D6-RESIDUAL-URLLIB3-DEBUG-QUERY`：urllib3 DEBUG 日誌可能帶出 FRED query string（既有問題，非顯示面）。低優先；**needs-client-authorization**。
 - **AI 建議（需客戶授權；非授權工作）— 可能的後續資安批次（建議順序）**：(1) 移除 token 長度顯示（`tab_macro.py`）；(2) `proxy_helper` 改為不印例外原文（只記固定類別），即可拿掉診斷頁的 stderr 導向與鎖；(3) 診斷探測改為驗證憑證（移除 `verify=False`），先評估對 NAS／自簽 proxy 的相容性；(4) 在日誌設定層對 urllib3 DEBUG 做 query string 遮罩或固定層級。理由＝依風險由「直接顯示」到「間接日誌」。**未經客戶授權不得動工**；若授權，每項各自走獨立 Gate／QA。
 - `SEC-D6-NOT-VERIFIED`：Streamlit Cloud 真實 Secrets 載入／API 認證／真實多 session 並行，以及舊側欄洩漏是否曾在 production 發生，皆 **NOT VERIFIED**。D1–D5 仍未授權；#1107 仍 PARTIAL；Issues #1110／#1113／#1108 保持開啟由客戶決定是否關閉。
+
+
+- `ETF-MGR-DATA-PR-1`（2026-11-10，Issue #1116 客戶授權之最小修補；只追加）：`update_etf_managers.yml` 發布步驟已改走 `publish_data_pr.py --job etf-managers`。**NOT VERIFIED**：真實 Actions 發布 PR（下次排程 2026-11-16 週一 20:00 UTC）；首次 PR 出現後須由有權限者以原生 pull_request 事件觸發 required check（Close→Reopen／Update branch）再人工合併，手動 dispatch 不算 PR 證據。已知取捨（未改）：揮發鍵含 `tenure_days`，故兩次 PR 之間 main 上的 `tenure_days`／`last_seen` 可能落後最多一個 PR 週期；helper 對既有分支上的 JSON 為「以最新腳本輸出覆寫」（非 parquet 式 union），重跑僅時間戳不同時會多一個刷新 commit（不重開 PR）。未經客戶授權不調整。
