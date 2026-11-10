@@ -2188,10 +2188,11 @@
 
 
 - 📌 **2026-11-11｜Issue #1127 P-4（S7/S8）指標（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-159 轉錄，非客戶逐字、非 QA PASS）**：
-  - **完成指標（待合併，PR 號待補）**：P-4 S7（headless 組裝 `assemble_digest`）與 S8（省略揭露側車 `DigestCoverage`，`digest_coverage.v1`）程式與測試已寫於分支 `ccr-588f897e-7wzywe`（commit `7cfeb31d`）。作者自跑 1197 passed；**獨立 QA 與原生 CI 待補**。Digest v1 凍結契約未動、無 production caller、無 UI、無新資料來源。
+  - **完成指標（待合併，PR 號待補）**：P-4 S7（headless 組裝 `assemble_digest`）與 S8（省略揭露側車 `DigestCoverage`，`digest_coverage.v1`，尚未發布、回修無升版）程式與測試已寫於分支 `ccr-588f897e-7wzywe`（原版 `7cfeb31d`；獨立 QA 兩輪發現 `is_complete` 空洞，已於 `571302e1`／`95bcf809` 回修）。回修後 `is_complete` 要求 omitted／excluded／unkeyed／unmatched（`actions_unmatched_dropped`）／`holdings_without_station_row` 全 0、`digest_holdings_available`／`digest_actions_available` 皆 True、四段 used；**零行動／`station_rows=[]` 一律 `is_complete=False`**（v1 builder 無法區分「沒事做」與「判不出來」，要 Digest v2 才能放寬）；`AssembledDigest` 交叉驗證 used 段 source／as_of 與 digest 可用旗標。builder 僅純加性，24000 組隨機輸入與舊版逐位元相同。作者自跑 1277 passed（digest 相關＋c3 分層），兩個新測試檔共 280 條；**獨立 QA 第三輪與原生 CI 待補**。Digest v1 凍結契約未動、無 production caller、無 UI、無新資料來源。
+  - **已知限制**：`total`／`omitted`／`excluded`／`unmatched` 在 digest 看不到，`AssembledDigest` 不防惡意偽造；證據被拒時 `station_rows` 列層級型別錯誤不 fail loud；ticker 為精確字串比對。
   - **仍待（皆未授權施工；待客戶裁示）**：
     - **A2 stale 入 Digest**：需 Digest v2。
-    - **A5／A6／A7 嵌入式 coverage**（把 coverage 嵌入 Digest 本體）：需 v2 Decision Gate；目前 coverage 只是側車，裸 Digest 仍無 omitted 欄位。
+    - **A5／A6／A7 嵌入式 coverage**（把 coverage 嵌入 Digest 本體）：需 v2 Decision Gate；目前 coverage 只是側車，裸 Digest 仍無 omitted 欄位。⚠️ 側車的 `excluded_invalid_rows` 與契約 §6 A7、`segments` 與 A6／A1 語意**部分重疊**（QA-A 要求）；**A6／A7 仍未完成**，側車**不得**形成第二個 SSOT，v2 吸收後側車退役。
     - **`AB4R-WIRE-BUILDER`／`XV-C05` 前置**：接線前仍須先修 `XV-C05`（見上方該兩列）。
     - **S9**（G1～G6 與 OneBrain 結構化輸出之間的缺口）：未動。
   - **未啟動**：P-1 其餘、P-2、P-3、OneBrain Stage G。

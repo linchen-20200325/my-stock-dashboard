@@ -1416,14 +1416,14 @@ DEC-086 規則已於 main，本表已落地。
 ## 最新接手點（2026-11-11，Issue #1127 P-4；只追加）
 
 - **基準**：main `5f98154c`（`5f98154c5bf4c4df3279855298e7778427420403`，Issue #1127 授權時的 main）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
-- **本批**：P-4 S7/S8 程式＋文件同步的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`）。授權範圍轉錄自 Issue #1127（非逐字）；設計決定見 `docs/DECISIONS.md` DEC-159（採側車、不升 Digest v2；設計決定為 AI 總管內部技術決策，非客戶裁示）。
+- **本批**：P-4 S7/S8 程式＋文件同步的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`；原版 `7cfeb31d`，獨立 QA 兩輪發現 `is_complete` 空洞後回修於 `571302e1`／`95bcf809`）。授權範圍轉錄自 Issue #1127（非逐字）；設計決定見 `docs/DECISIONS.md` DEC-159（採側車、不升 Digest v2；設計決定為 AI 總管內部技術決策，非客戶裁示）。
 - **新檔／改動清單**：
-  - 新增 `shared/decision_digest_coverage.py`（L0；`DigestCoverage`，`digest_coverage.v1`）
-  - 新增 `src/services/decision_digest_assembly.py`（L3；`assemble_digest`、`AssembledDigest`）
-  - 修改 `src/services/decision_digest_builder.py`（純加性：`plan_action_selection`、`ActionSelectionPlan`；既有輸出行為中立）
-  - 新增 `tests/test_decision_digest_coverage.py`、`tests/test_decision_digest_assembly.py`
+  - 新增 `shared/decision_digest_coverage.py`（L0；`DigestCoverage`，`digest_coverage.v1`，尚未發布、回修無升版；回修新增 `actions_unmatched_dropped`、`holdings_without_station_row`、`digest_holdings_available`、`digest_actions_available`）
+  - 新增 `src/services/decision_digest_assembly.py`（L3；`assemble_digest`、`AssembledDigest`，建構時交叉驗證 coverage 與 digest）
+  - 修改 `src/services/decision_digest_builder.py`（純加性：`plan_action_selection`、`ActionSelectionPlan`、`_scan_action_rows` 計數；24000 組隨機輸入與舊版逐位元相同）
+  - 新增 `tests/test_decision_digest_coverage.py`、`tests/test_decision_digest_assembly.py`（合計 280 條）
   - 文件純追加：`docs/DECISIONS.md`（DEC-159）、`docs/BACKLOG.md`、本檔
-- **測試狀態（據實）**：作者自跑 1197 passed（digest 相關＋c3 分層）。**獨立 QA 與原生 CI 結果待補**；尚未合併，不得寫成已通過。
+- **測試狀態（據實）**：作者自跑 1277 passed（digest 相關＋c3 分層）。**獨立 QA 第三輪與原生 CI 結果待補**；兩輪 QA 為發現問題非 PASS；尚未合併，不得寫成已通過。
 - **不可動項**：Open 資料 PR **#1124（macro-history）、#1125（sector-flow）、#1126（macro-forward-test）禁止順手合併／改寫／rebase**（#1126 歷史曾有 PIT 失敗契約，須獨立驗證）；**#1119 維持 HOLD**；Digest v1 凍結契約（`SCHEMA_VERSION`／`MAX_ACTIONS`／列舉／既有 `shared/decision_digest*.py`）不得動；不建 production caller；不碰舊 UI、正式路由、Actions、Secrets、Risk Cap、D1～D5、EPS、OneBrain。
-- **已知限制**：裸 `DecisionDigest` v1 仍無 omitted 欄位，完整性只在 coverage 側車；嵌入 Digest 屬未來 v2 Decision Gate。P-4 完成 ≠ Stage F／C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 PIT 皆 **NOT VERIFIED**。
+- **已知限制**：裸 `DecisionDigest` v1 仍無 omitted 欄位，完整性只在 coverage 側車；嵌入 Digest 屬未來 v2 Decision Gate。`is_complete` 回修後：零行動／`station_rows=[]` 一律 False（v1 無法區分「沒事做」與「判不出來」，需 Digest v2）；`total`／`omitted`／`excluded`／`unmatched` 在 digest 看不到、`AssembledDigest` 不防惡意偽造；證據被拒時 `station_rows` 列層級型別錯誤不 fail loud；ticker 精確字串比對。側車的 `excluded_invalid_rows` 與契約 §6 A7、`segments` 與 A6／A1 語意部分重疊，A6／A7 仍未完成，不得形成第二個 SSOT。P-4 完成 ≠ Stage F／C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 PIT 皆 **NOT VERIFIED**。
 - **下一個唯一安全工作**：等客戶裁示（P-1 其餘、v2 嵌入式 coverage 的 Decision Gate）；無裁示前不動工（`CLAUDE.md` §-1）。
