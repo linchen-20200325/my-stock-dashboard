@@ -63,3 +63,10 @@ B. **P0 PIT gate 方案**：先為 `macro_forward_test` 定義清楚「交易日
 C. **PR #1038 處置**：保留 Draft；不可直接合併。若確認新增資料不符合帳本用途，先提出關閉而非覆蓋歷史列或偷偷刪檔。寫入 main 前重新驗當下 GitHub、head、required CI、獨立 QA、資料日期與 producer 合約。
 
 > 本報告只記錄已證明的差異與尚需驗證的風險；不代替客戶新的投資語意或正式架構裁示。
+
+## 7. 後續處置紀錄（2026-11-10 追加，只追加）
+
+- PR #1105 已於 2026-11-09T23:41Z 關閉未合併，依 owner 治理裁示 https://github.com/linchen-20200325/my-stock-dashboard/pull/1105#issuecomment-6754457744：PIT 不接受；未授權改寫歷史或 PIT 豁免；日後補列須另設 PIT 契約設計＋來源證據 Gate。
+- 分支 `auto/data-macro-forward-test` tip `d7ad23143ea67f5471ee75bff82cc095fd364932`，含 `9e7014c70a2fcda42d4bb14e2a044e6ec4b4057e`（#1038 head；列 2026-11-05，captured 2026-11-07 00:56+08）；`d7ad231` 列 2026-11-06，captured 2026-11-10 04:04+08；3 個 commit 皆 github-actions[bot]，對 main 的 diff 僅 `data_cache/macro_forward_test/signals.parquet`（47→49 列）。
+- 這兩列無法由後續 cron 誠實重現（cron 抓最新 bar 日期），視為非 PIT 有效，僅留 SHA 為證據（亦可由 `refs/pull/1038/head`、`refs/pull/1105/head` 取得）。該分支將於本 docs PR 合併後刪除，SHA 為長期紀錄。
+- 下次 cron 自 main 起算（main 的 `signals.parquet` 末日 2026-11-03）。
