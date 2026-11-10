@@ -2115,3 +2115,9 @@
   - `NUI2-TWII-KBAR-NIT-GITSHA`：commit 進 repo 的 viewport 證據 JSON `meta.git_sha`＝`e5a429c`（於 base 工作樹量測）；QA 已於 head 重量測且相符。
   - `NUI2-TWII-KBAR-NIT-TWO-READS`：卡片與主圖為兩次 parquet 讀取；兩次之間若有 cron 寫入或跨午夜，會出現一次紅色「不一致」畫面（fail-closed，非造假）。
   - `NUI2-TWII-KBAR-NIT-COPY-SEP`：外觀——錯誤句「台股日 K暫時無法讀取」缺分隔字元。
+
+📌 **2026-11-10｜資料 PR #1103／#1104 已合併、#1105 已關閉未合併（只追加）**：main 現為 `4432d5a78bdc4fd10df1c77a37b824e5f54ae51b`（#1104 → `fb41096d84fdcc6779245ca3d2473ffb4b42ab96`、#1103 → `4432d5a78bdc4fd10df1c77a37b824e5f54ae51b`；QA PASS、CI 五項 success；細節見 `docs/HANDOFF.md` 同日補註）。以下皆為**低優先登記，非授權工作**（依 `CLAUDE.md` §-1，無指派／無實際 bug 觸發不主動動工）：
+- `DATA-TWII-1109-NO-2ND-SOURCE`：TWII 2026-11-09 收盤（較 11-06 +4.94%，約 2.7σ）無第二獨立來源，**NOT VERIFIED**；已標示、未改值。
+- `DATA-FOREIGN-BUY-UNIT`：`foreign_buy` 單位無文件，**NOT VERIFIED**。
+- `DATA-SECTORFLOW-1023-1026-NOROW`：sector_flow 2026-10-23／10-26 無列的原因 **NOT VERIFIED**（既有，非本次引入）。
+- `DATA-FWDTEST-PIT-BACKFILL`：macro-forward-test 2026-11-05／11-06 兩列（#1038／#1105）因 PIT 不被接受而未入 main（`captured_at` 晚於 `observation_date`、`published_at` n/a；owner 治理裁示見 #1105 留言）。日後若要補列，**須另設 PIT 契約設計＋來源證據 Gate** 後才可動工；未授權改寫歷史或 PIT 豁免。證據 SHA：`9e7014c70a2fcda42d4bb14e2a044e6ec4b4057e`、`d7ad23143ea67f5471ee75bff82cc095fd364932`。

@@ -1269,3 +1269,20 @@ DEC-086 規則已於 main，本表已落地。
 | 未驗證 | Streamlit Cloud 部署端實況 **NOT VERIFIED**；平盤（灰十字）K 棒在目前真實 20 列中未出現，僅單元測試覆蓋 |
 | 範圍 | Issue #1099 範圍（PR-1＋PR-2）**已完成**；#1099 底下**無其他授權工作** |
 | **下一個唯一安全接手點** | **#1099 下無進行中任務；等客戶指示**。先前待客戶事項不變：國際趨勢相關裁示（見 BACKLOG「NUI2 市場頁施工前準備」(2)～(5)：US10Y 口徑、VIX 已收盤 bar、利差定義、TW PMI 與景氣燈號取捨）。下次接手仍須先重新 GitHub Gate |
+
+### 2026-11-10 接手點補註｜資料 PR #1104／#1103 已合併、#1105 已關閉未合併（只追加；取代「Issue #1099 …皆已合併」補註中的「下一個唯一安全接手點」之後續資料面狀態）
+
+> 上一則補註原文一字未改、保留為歷史；本則只追加資料 PR 面的新事實（2026-11-10 台北，由 AI 總管自 GitHub 查證）。
+
+| 項目 | 接手事實／限制 |
+|---|---|
+| #1104（sector-flow 2026-11-09） | squash 合併 → main `fb41096d84fdcc6779245ca3d2473ffb4b42ab96`（head `c758658dfffefcea9cb415ea63ee4e32fd43ad43`）；CI run 42722511687 五項 success；QA PASS https://github.com/linchen-20200325/my-stock-dashboard/pull/1104#issuecomment-6755592121 |
+| #1103（macro-history 2026-11-09） | squash 合併 → main `4432d5a78bdc4fd10df1c77a37b824e5f54ae51b`（head `d2455679eb3c68260127ddfeea5f4687aa999f5f`）；CI run 42722497312 五項 success；QA PASS https://github.com/linchen-20200325/my-stock-dashboard/pull/1103#issuecomment-6755593793 |
+| 合併方式 | 兩者 mergeable_state 為 `behind`，但 main 期間新增 commit 觸及的檔案互不重疊；原生 CI 已由 user 重新觸發（先前 run 為 `action_required`，因 bot 建立的 PR）；以 expectedHeadSha 釘住 head 合併 |
+| 合併後驗證 | main 相對 `8ba4de1` 的 diff＝恰好預期的 9 個 `data_cache` 檔；main 列數：twii_ohlcv 4913、finmind_inst 4939、finmind_margin 4939（末日皆 2026-11-09）、sector_flow daily_net 1716（末日 2026-11-09）。證據：0 列被移除、重疊 key 0 格變動；`bubble_latest` 自 `daily_net` 重算差 0.0；coverage 46/46；`tw_pmi` 62.5 維持 `is_proxy=true`；`finmind_m1m2` NO_NEW_DATA 與 `tw_pmi` UNDETERMINED 已誠實揭露 |
+| #1105（macro-forward-test，2026-11-06 列） | **2026-11-09T23:41Z 關閉、未合併**，依 owner／ChatGPT 治理裁示留言 https://github.com/linchen-20200325/my-stock-dashboard/pull/1105#issuecomment-6754457744：PIT 不接受（`captured_at` 晚於 `observation_date` 4 天、`published_at` n/a）；未授權改寫歷史或 PIT 豁免；日後補列須另設 PIT 契約設計＋來源證據 Gate |
+| `auto/data-macro-forward-test` 分支 | tip `d7ad23143ea67f5471ee75bff82cc095fd364932`（含 #1038 head `9e7014c70a2fcda42d4bb14e2a044e6ec4b4057e`，列 2026-11-05 captured 2026-11-07 00:56+08；`d7ad231` 列 2026-11-06 captured 2026-11-10 04:04+08）；3 個 commit 皆 github-actions[bot]；對 main 的 diff＝僅 `data_cache/macro_forward_test/signals.parquet`（47→49 列）。這兩列無法由後續 cron 誠實重現（cron 抓最新 bar 日期，無法回頭以當日視角重抓 11-05／11-06），視為**非 PIT 有效**，僅留 SHA 作證據（亦可由 `refs/pull/1038/head`、`refs/pull/1105/head` 取得）。詳見 `docs/evidence/2026-11-07_pr1038_macro_forward_pit_review.md` 末段追加 |
+| 分支刪除 | **本 docs PR 合併後**刪除該分支（依 owner 裁示與 user 明確指示）；SHA 為長期紀錄。刪除尚未執行（此刻仍存在） |
+| 下次 cron | 自 main 起算：main 的 `macro_forward_test/signals.parquet` 末日仍為 2026-11-03 |
+| 未驗證／限制 | (a) TWII 2026-11-09 收盤（較 11-06 +4.94%，約 2.7σ）無第二獨立來源：**NOT VERIFIED**（已標示、未改值）；(b) `foreign_buy` 單位無文件：**NOT VERIFIED**；(c) sector_flow 2026-10-23／10-26 無列原因 **NOT VERIFIED**（既有）；(d) Streamlit Cloud 部署端 **NOT VERIFIED** |
+| **下一個唯一安全接手點** | **無進行中授權工作；等客戶指示**。先前待客戶事項不變（見上一則補註）。下次接手仍須先重新 GitHub Gate |
