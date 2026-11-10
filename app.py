@@ -424,7 +424,7 @@ with st.sidebar:
     #       AI 現在住在「🧬 AI 問答」主頁籤,原指路會把使用者送到頁尾免責聲明。
     #   (2) `st.success('🟢 系統正常運作中')`:硬編碼常數,不讀任何狀態,且印在下方
     #       「🔌 連線狀態」三顆真燈**上方** —— FinMind/Gemini/Proxy 全紅時第一眼仍是綠。
-    #       真實狀態由下方 `_fm_tok / _gm_keys / _px_host` 三顆燈負責,不需要這句。
+    #       真實狀態由下方 `_fm_tok / _gm_keys / _px_set` 三顆燈負責,不需要這句。
     #   附帶移除 `ai_run = False`(全 repo 僅此 1 處、零 consumer,含 tests)。
 
     # ── Google 帳號（OAuth）— ETF 組合雲端存取用 ─────────────────
@@ -541,10 +541,13 @@ with st.sidebar:
     _gm_keys  = _gemini_keys()
     _gm_slots = [_n for _n in _GEMINI_KEY_NAMES
                  if str(_get_secret(_n) or '').strip()]
-    _px_host = str(_get_secret('PROXY_HOST'))
+    # D6（Issue #1113，客戶授權的資安最小修補）:側欄只顯示「Proxy 已設定／未設定」布林——
+    #   ⛔ 不保留、不顯示 PROXY_HOST／PROXY_PORT／PROXY_URL 的任何值或衍生字串。
+    #   判定語意與舊版逐字相同（先看 PROXY_HOST,再看 PROXY_URL;`str()` 後的真值）。
+    _px_set = bool(str(_get_secret('PROXY_HOST')))
     # PROXY_URL 與 PROXY_HOST 二擇一即可亮 ✅
-    if not _px_host:
-        _px_host = str(_get_secret('PROXY_URL'))
+    if not _px_set:
+        _px_set = bool(str(_get_secret('PROXY_URL')))
     _sb_c1, _sb_c2, _sb_c3 = st.columns(3)
     with _sb_c1:
         if _fm_tok:
@@ -557,19 +560,18 @@ with st.sidebar:
         else:
             st.error('Gemini ❌')
     with _sb_c3:
-        if _px_host:
-            st.success('Proxy ✅')
+        if _px_set:
+            st.success('Proxy ✅ 已設定')
         else:
-            st.warning('Proxy —')
+            st.warning('Proxy — 未設定')
     # Gemini 金鑰池偵測明細（協助確認多帳號 key 有沒有被讀到）
     if _gm_slots:
         st.caption('🔑 偵測到 Gemini 金鑰：' + '、'.join(_gm_slots))
     else:
         st.caption('🔑 未偵測到任何 Gemini 金鑰（請確認 Secrets 內 '
                    'GEMINI_API_KEY 或 GEMINI_API_KEY_2~_6 的名稱與值）')
-    if _px_host:
-        _px_port = str(_get_secret('PROXY_PORT'))  # v19.81:同上,收斂 _get_secret
-        st.caption(f'🔒 {_px_host}:{_px_port}' if _px_port else '🔒 PROXY_URL 已設定')
+    if _px_set:
+        st.caption('🔒 Proxy 已設定')
         st.caption('💡 詳細診斷請看「🔎 資料診斷」Tab 的 API Key 診斷面板')
     if st.button('🔍 測試連線', key='sb_conn_test', use_container_width=True):
         import requests as _rq_sb

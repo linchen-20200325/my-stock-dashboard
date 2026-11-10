@@ -1319,3 +1319,12 @@ DEC-086 規則已於 main，本表已落地。
 | 發現 3（資安，未修） | 舊 UI `api_diagnostic.py` 顯示 Secret 前後 4 字元＋長度並列出全部 Secret 名；`app.py` 側欄在特定組合下可能印出整段 `PROXY_URL`。**不要截圖這兩處。** 修正需客戶授權（涉及舊 UI）。 |
 | 現況 | 本項為 docs-only 研究紀錄；未動 code／資料／測試／Secrets；Streamlit Cloud 線上實況（Secret 是否載入、API 是否可達與認證、資料日）全部 **NOT VERIFIED**。#1107 仍 PARTIAL，不因本項關閉。 |
 | **下一個唯一安全接手點** | **無已授權的施工；等客戶就 D1–D6 裁示**（US10Y 口徑、VIX、利差定義與新取數、PMI vs 景氣燈號、是否新增落地 cron、是否授權移除舊診斷頁部分金鑰顯示）。若要關閉 NOT VERIFIED，請 Cloud 管理員提供一張只含「布林／HTTP 狀態／資料日」的表（無 Key、無尾碼、無 Secrets 截圖）。下次接手仍須先重新 GitHub Gate。 |
+
+### 2026-11-10 接手點補註｜Issue #1113 舊診斷頁／側欄資安最小修補（只追加；客戶 D6 授權，見 DECISIONS 2026-11-10 紀錄）
+| 項目 | 內容 |
+|---|---|
+| 目前任務 | 分支 `fix/legacy-diagnostic-secret-display-20261110`：`src/ui/pages/api_diagnostic.py` 與 `app.py` 側欄 Proxy 區塊改為「只顯示狀態、不顯示任何值」。**未動**請求語意（端點／參數／標頭／timeout／`verify=False`）、資料來源、Secrets、New UI2、其他頁。 |
+| 畫面（前→後） | Key 表：`Key｜使用來源｜實際值（遮罩 前4…後4 (len=N)）｜os.environ 同步` → `Key｜狀態（已設定／未設定／解析失敗）｜使用來源（st.secrets／os.environ／none）`；移除「Secrets keys 數」與「已偵測到的 secrets keys」；Proxy 警告不再含 URL 片段；探測結果 `HTTP <code> <本文80字>`／`<例外型別>: <原文>` → `HTTP <整數>`／`HTTP <整數>（固定類別）`／固定類別（逾時／連線失敗／代理錯誤／認證失敗(401/403)／伺服器錯誤(5xx)／其他）；側欄 `🔒 host:port` → `🔒 Proxy 已設定`，燈號文字 `Proxy ✅ 已設定`／`Proxy — 未設定`。 |
+| NOT VERIFIED | Streamlit Cloud 上 Secrets 是否載入、各 API 實際認證結果；沙箱無憑證、未連網。 |
+| 未處理（另列） | `verify=False`（請求語意，授權範圍外，可能需獨立 Gate）；`proxy_helper.get_proxy_config` 於 secrets 讀取失敗時將例外原文印到 stderr（來源模組不在授權範圍；本頁以 stderr 導向丟棄擋住）。 |
+| 下一個唯一安全接手點 | 等本分支獨立 QA／CI 與 PR 流程；D1–D5 仍**未授權**，無其他已授權施工。下次接手仍須先重新 GitHub Gate。 |
