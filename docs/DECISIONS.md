@@ -8013,3 +8013,28 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **D1～D5 現狀（截至 2026-11-10）**：UI2 真資料 feed 仍只接 TWII 卡片、TWII 日 K、市場位階三項事實；US10Y 為空槽（口徑已定、實作未授權）；VIX／利差／PMI 為空槽；無新增落地 cron。故 C5（真資料）在現行授權下仍未滿足。
 - **仍 NOT VERIFIED（不得因本條轉為 PASS）**：ETF Managers 2026-11-16 20:00 UTC 真實 GitHub Actions 發布 PR；Streamlit Cloud 上的 New UI2；以上皆無本批證據。
 - **證據文件**：`docs/vnext/NEWUI2_CAPMAP_3COL_2026-11-10.md`、`docs/vnext/NEWUI2_CUTOVER_GAP_MATRIX_2026-11-10.md`、`docs/vnext/NEWUI2_EPS_AND_DIGEST_ONEBRAIN_RESEARCH_2026-11-10.md`（皆單組產出、未經第二組獨立複驗）。待辦見 `docs/BACKLOG.md` 2026-11-10 Issue #1121 追加段。
+
+
+### DEC-159｜Issue #1127 P-4 S7/S8 施工轉錄與設計決定：採「側車」揭露省略，不升 Digest v2（2026-11-11）
+
+- **來源／效力（據實，不誇大）**：
+  - **授權範圍**＝客戶授權；來源＝GitHub Issue #1127（標題「[已授權] New UI2 Stage F P-4：Evidence→Digest headless 組裝及省略揭露（S7/S8）」，2026-11-11）。Issue 內文自述為客戶在 ChatGPT 對話回覆「同意 P-4」的**轉錄**、不含原對話 URL；本條再依該 Issue 轉錄，**非客戶逐字原文、非 QA PASS**；原始逐字對話不在 repo（**NOT VERIFIED by repo**）。
+  - **設計決定**（下方「側車」各點）＝**AI 總管**依 `CLAUDE.md` §-1.5 v3 §03-1 的內部技術決策，**不是客戶裁示**；客戶只授權「P-4 S7/S8 最小可測程式碼」，未裁示採哪種 schema 做法。
+- **授權邊界（轉錄自 Issue #1127）**：僅 `docs/vnext/NEWUI2_EPS_AND_DIGEST_ONEBRAIN_RESEARCH_2026-11-10.md` §2.4 的 P-4——**S7**＝Evidence→Digest 的 headless 組裝、**S8**＝省略揭露（`total`／`shown`／`omitted_count` 類）。**不升完整 Digest v2、不做 P-1 全量、不建 production caller、不做 P-2／P-3／OneBrain Stage G、不新增資料取數／來源／Provider／UI 表層／session 寫入。** 發現觸及凍結契約或新投資語意須停在 Gate。
+- **設計決定：採「側車（sidecar）」，避免升 Digest v2**：
+  1. **Digest v1 凍結契約未動**：`shared/decision_digest*.py`（既有）、`SCHEMA_VERSION`、`MAX_ACTIONS`、列舉成員皆**未修改**；Digest 本身一個欄位都沒加。
+  2. **builder 僅純加性**：`src/services/decision_digest_builder.py` 新增 `plan_action_selection`（回 `ActionSelectionPlan`，攤開 builder 的行動選取：完整候選、實際選取、排除計數）；`build_decision_digest` 輸出行為中立，既有測試未改；候選掃描抽成 `_scan_action_rows` 等共用判定，避免兩份邏輯漂移。
+  3. **新增 L0 `DigestCoverage`**（`shared/decision_digest_coverage.py`，`COVERAGE_SCHEMA_VERSION = "digest_coverage.v1"`，與 Digest 版本號互相獨立）：攜帶 `actions_total_eligible`／`actions_shown`／`actions_omitted_count`／`actions_max`／`excluded_invalid_rows`／`unkeyed_held_count`／四段 `SegmentEvidence`（market／risk_cap／holdings／actions）；`is_complete` 為唯一完整性判定，物件不合法即 False（fail-closed）；**不能評估的計數為 `None`，不是 0**；不含 confidence／score／neutral／safe 語意。
+  4. **新增 L3 `assemble_digest`**（`src/services/decision_digest_assembly.py`）：純函式，回 `AssembledDigest(digest, coverage)` envelope；不讀 session、不取數、不呼叫時鐘、不碰 UI／app。
+  5. **證據 fail-closed**：證據被拒用（無日期戳、`FETCH_FAILED`／`UNDETERMINED`、freshness 非 `FRESH`——含 stale、PIT 違反）時，**不只不傳該段 stamp，連同該段上游輸入（`macro_state`／`allocation` 或 `station_rows`）一併不傳 builder**，並在 coverage 記錄原因；理由見該檔 docstring（stamp 被拒仍傳 `macro_state` 會讓 `risk_cap.cap_pct` 以快照時間變成 OK）。不補日期、不補 0、不補 neutral／HOLD。
+- **為何採側車而非直接在 Digest 加欄位（兩邊理由並陳）**：
+  - **直接加 `omitted_count` 欄的理由（仍成立）**：揭露與 Digest 同物件，消費者不必多拿一個物件、不會漏讀。
+  - **側車勝出的理由**：Digest v1 凍結（契約 §5：不得改欄位／升版／動 `MAX_ACTIONS`），加欄位即屬 v2，須 Stage F 的 High Gate＋獨立 QA，超出 Issue #1127 授權；側車讓 v1 消費者零影響，Digest v2 日後吸收這些欄位時側車可退役。**代價見下方已知限制。**
+- **已知限制（據實）**：
+  - **裸 `DecisionDigest` v1 本身仍沒有 omitted 欄位**；只拿到 Digest 物件而沒拿 coverage 側車的讀者，仍**看不出少了什麼**。把 coverage 嵌入 Digest 屬未來 v2 Decision Gate，**本批未做、未核准**。
+  - **無 production caller**：`assemble_digest` 目前沒有任何正式路徑呼叫；不改 UI、不接線、無新資料來源。
+  - **P-4 完成 ≠ Stage F 完成，也 ≠ C1～C7 切換條件通過**；Digest 的 A2（stale 入 Digest）等 v2 加性欄位、OneBrain Stage G 皆未動。
+  - 仍 **NOT VERIFIED**：Streamlit Cloud 上的 New UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程真實 Actions PR、Open 資料 PR #1124／#1125／#1126 的 PIT（本批與其完全隔離，未碰）。
+- **測試結果（據實）**：作者自跑 **1197 passed**（digest 相關測試＋`tests/test_c3_layering_guard.py` 分層守衛）；本批新增 200 個測試（`tests/test_decision_digest_coverage.py`、`tests/test_decision_digest_assembly.py`）。**獨立 QA 與原生 CI 結果待補**；本條**不得**讀成已通過 QA 或已合併。
+- **程式落點**：`shared/decision_digest_coverage.py`（新）、`src/services/decision_digest_assembly.py`（新）、`src/services/decision_digest_builder.py`（純加性修改）、兩支新測試檔；commit `7cfeb31d`（分支 `ccr-588f897e-7wzywe`，PR 號待補）。
+- **單組產出聲明**：上述事實取自 commit 內容、新檔 docstring 與 Issue #1127；本條由單組撰寫，**未經第二組獨立複驗**。

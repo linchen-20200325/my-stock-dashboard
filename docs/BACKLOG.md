@@ -2185,3 +2185,14 @@
   - `DIGEST-F-ONEBRAIN-G-MIN-PLAN`：Digest F／OneBrain G 最小驗收方案 P-1～P-4 待客戶裁示；**AI 推薦 P-4 後接 P-1，為推薦、非裁示**。F／G 暫列 cutover 前置（沿現有契約，客戶可推翻）。
   - `ISSUE1110` 更新（取代上方 D1～D5 各列的「未授權」措辭，原列不改）：**D1** 口徑已定為 FRED `DGS10`，**實作（adapter／來源／排程／UI 接線）未授權**；**D2 VIX、D3 利差、D4 PMI 維持空槽**；**D5 不核准**新增每日落地 cron。
   - 維持 NOT VERIFIED：ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR、Cloud UI2。#1119 維持 HOLD。
+
+
+- 📌 **2026-11-11｜Issue #1127 P-4（S7/S8）指標（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-159 轉錄，非客戶逐字、非 QA PASS）**：
+  - **完成指標（待合併，PR 號待補）**：P-4 S7（headless 組裝 `assemble_digest`）與 S8（省略揭露側車 `DigestCoverage`，`digest_coverage.v1`）程式與測試已寫於分支 `ccr-588f897e-7wzywe`（commit `7cfeb31d`）。作者自跑 1197 passed；**獨立 QA 與原生 CI 待補**。Digest v1 凍結契約未動、無 production caller、無 UI、無新資料來源。
+  - **仍待（皆未授權施工；待客戶裁示）**：
+    - **A2 stale 入 Digest**：需 Digest v2。
+    - **A5／A6／A7 嵌入式 coverage**（把 coverage 嵌入 Digest 本體）：需 v2 Decision Gate；目前 coverage 只是側車，裸 Digest 仍無 omitted 欄位。
+    - **`AB4R-WIRE-BUILDER`／`XV-C05` 前置**：接線前仍須先修 `XV-C05`（見上方該兩列）。
+    - **S9**（G1～G6 與 OneBrain 結構化輸出之間的缺口）：未動。
+  - **未啟動**：P-1 其餘、P-2、P-3、OneBrain Stage G。
+  - **維持 NOT VERIFIED**：P-4 完成 ≠ Stage F 完成 ≠ C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 的 PIT。#1119 維持 HOLD。
