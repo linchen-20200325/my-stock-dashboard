@@ -2121,3 +2121,5 @@
 - `DATA-FOREIGN-BUY-UNIT`：`foreign_buy` 單位無文件，**NOT VERIFIED**。
 - `DATA-SECTORFLOW-1023-1026-NOROW`：sector_flow 2026-10-23／10-26 無列的原因 **NOT VERIFIED**（既有，非本次引入）。
 - `DATA-FWDTEST-PIT-BACKFILL`：macro-forward-test 2026-11-05／11-06 兩列（#1038／#1105）因 PIT 不被接受而未入 main（`captured_at` 晚於 `observation_date`、`published_at` n/a；owner 治理裁示見 #1105 留言）。日後若要補列，**須另設 PIT 契約設計＋來源證據 Gate** 後才可動工；未授權改寫歷史或 PIT 豁免。證據 SHA：`9e7014c70a2fcda42d4bb14e2a044e6ec4b4057e`、`d7ad23143ea67f5471ee75bff82cc095fd364932`。
+
+📌 **2026-11-10｜`NUI2-MARKET-ORDER-B`（Issue #1108；DEC-157；只追加）**：📊 市場頁順序改為 今日主要風險 → 台股日 K 主圖／空槽 → 核心指標卡 → 🤖 OneBrain Outlook（取代 DEC-133 G-3 的 OneBrain 位置；首屏 CTA／狀態／今日主要風險內容與位置不變）。授權來源＝客戶 Cloud 截圖回饋＋「繼續」、ChatGPT 轉達方案 B 為優先方向（Issue #1108；repo 無逐字點選 B）。分支 `feat/ui2-market-order-b-20261110`（待獨立 QA／五項原生 CI）。`p2_onebrain_primary_slot_order` 判定器與相依測試／viewport 證據（realfeed／batch3b，1.59.2＋1.56.0）已同步；**#1107 Cloud 驗收仍 PARTIAL，不因本項關閉**；Cloud 線上實況 NOT VERIFIED。

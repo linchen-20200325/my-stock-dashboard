@@ -511,13 +511,14 @@ def test_chart_takes_exactly_the_primary_slot_position(monkeypatch):
     vm = get_real_page_vm(P4_MARKET, _feed(monkeypatch))
     chunks = _render(vm, monkeypatch)
     i_l1 = next(i for i, c in enumerate(chunks) if 'class="ui2-m-l1"' in c)
-    assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 1]
-    assert 'data-ui2-l1="primary_chart"' in chunks[i_l1 + 2]
-    assert 'class="ui2-grid"' in chunks[i_l1 + 3]
+    # Issue #1108 方向 B：L1 → 日 K 主圖 → 指標卡 → OneBrain
+    assert 'data-ui2-l1="primary_chart"' in chunks[i_l1 + 1]
+    assert 'class="ui2-grid"' in chunks[i_l1 + 2]
+    assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 3]
     # 與空槽版逐塊相同（只差 Primary 那一塊）
     slot_vm = dataclasses.replace(vm, context=dataclasses.replace(vm.context, kbar=None))
     slot_chunks = _render(slot_vm, monkeypatch)
-    assert [c for i, c in enumerate(chunks) if i != i_l1 + 2] == [c for i, c in enumerate(slot_chunks) if i != i_l1 + 2]
+    assert [c for i, c in enumerate(chunks) if i != i_l1 + 1] == [c for i, c in enumerate(slot_chunks) if i != i_l1 + 1]
 
 
 def test_real_app_renders_the_chart_and_default_lane_does_not(monkeypatch):
@@ -534,7 +535,7 @@ def test_real_app_renders_the_chart_and_default_lane_does_not(monkeypatch):
 
 # ══════════════════════════════════════════════════════════════════ §7 viewport 判定器
 def _p2(**chart) -> dict:
-    p2 = {"onebrain": {"top": 570.0, "bottom": 620.0}, "slot": None, "grid": {"top": 900.0, "bottom": 1000.0},
+    p2 = {"onebrain": {"top": 1010.0, "bottom": 1060.0}, "slot": None, "grid": {"top": 900.0, "bottom": 1000.0},
           "slot_graphics": 0, "slot_text": None, "spec_text": None, "slot_danger": 0,
           "chart": {"top": 630.0, "bottom": 890.0}, "chart_state": "ok", "chart_bars": 20, "chart_graphics": 2,
           "chart_svg_h": 220.0, "chart_legend": LEGEND, "chart_text": "🇹🇼 台股趨勢 " + LEGEND, "chart_danger": 0}

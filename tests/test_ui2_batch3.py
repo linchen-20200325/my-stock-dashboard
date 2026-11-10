@@ -723,11 +723,11 @@ def _m_market(desktop: bool = False) -> dict:
     m.update(page="p4_market", scenario="loaded", expanders=[],     # P3：真瀏覽器量測 dict 必須帶 expanders 鍵
              elements=els, risk=risk, first_block_after_l1_top=530.0,
              risk_line_height=24.0, scroll_end_bottom=764.0, risk_bottom_at_scroll_end=300.0)
-    # P2（DEC-133）：真瀏覽器 market 量測 dict 必須帶 `p2` 鍵（OneBrain → 空槽 → 指標卡，皆在今日主要風險／q3 之後）
+    # P2（DEC-133）／Issue #1108 方向 B：真瀏覽器 market 量測 dict 必須帶 `p2` 鍵（空槽 → 指標卡 → OneBrain，皆在今日主要風險／q3 之後）
     spec = "SPEC｜最新收盤參考｜X｜資料日 2026-11-02｜缺值不補"
-    ob, sl, gr = (({"top": 410.0, "bottom": 440.0}, {"top": 448.0, "bottom": 540.0}, {"top": 548.0, "bottom": 700.0})
+    ob, sl, gr = (({"top": 610.0, "bottom": 640.0}, {"top": 410.0, "bottom": 502.0}, {"top": 510.0, "bottom": 602.0})
                   if desktop else
-                  ({"top": 530.0, "bottom": 560.0}, {"top": 568.0, "bottom": 650.0}, {"top": 658.0, "bottom": 780.0}))
+                  ({"top": 740.0, "bottom": 770.0}, {"top": 530.0, "bottom": 612.0}, {"top": 620.0, "bottom": 732.0}))
     m["p2"] = {"onebrain": ob, "slot": sl, "grid": gr, "slot_graphics": 0, "slot_danger": 0,
                "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 " + spec, "spec_text": spec}
     return m

@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "e5a429c22b0d28cee554c5b121b5f0733c8bfa6f",
-  "source_hash": "6e1dcecc561ec045193eb29597a85e17421e7234d6f0e5a1389960d3e9801312",
-  "generated_at": "2026-11-09T17:45:31+00:00",
+  "git_sha": "1f3c489541cfda7f11a84c999f6e5fe41f98e4e7",
+  "source_hash": "cd6b2e64649845b9bc6d1508bfd74cf9bfd4b7452a89c15523346b3e05266953",
+  "generated_at": "2026-11-10T04:30:28+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.59.2",
@@ -117,8 +117,8 @@
    },
    {
     "id": "p2_onebrain_primary_slot_order",
-    "rule": "（P2）📊 市場：DOM 與座標上依序為 今日主要風險 → 🤖 OneBrain Outlook → 🇹🇼 台股趨勢空槽 → 核心指標卡（手機與桌機皆然；桌機另要求 OneBrain 在 是否需要行動／下一步 之後）。手機指標卡必須在 Primary 空槽**之後**。空槽 0 個 svg／polyline／canvas／img（⛔ 假走勢）、含 `⬜ 尚未提供`、SPEC 行含『最新收盤參考』且不含『日頻』。",
-    "source": "客戶 2026-11-04 (19) P2（G-1=A／G-2=B／G-3=A）；Wireframes §2.1／§2.2；P2 文字線框 C 節"
+    "rule": "（P2／Issue #1108 方向 B）📊 市場：DOM 與座標上依序為 今日主要風險 → 🇹🇼 台股日 K 主圖／空槽 → 核心指標卡 → 🤖 OneBrain Outlook（手機與桌機皆然；桌機另要求 OneBrain 在 是否需要行動／下一步 之後）。指標卡必須在 Primary **之後**、OneBrain 必須在指標卡**之後**（真瀏覽器 lane 的 VM 恆帶 OneBrain 區塊，缺＝判紅；缺席時不畫空框由 tests/test_ui2_p2_primary_slot.py 單元測試守）。空槽 0 個 svg／polyline／canvas／img（⛔ 假走勢）、含 `⬜ 尚未提供`、SPEC 行含『最新收盤參考』且不含『日頻』。",
+    "source": "客戶 2026-11-04 (19) P2（G-1=A／G-2=B／G-3=A；OneBrain 位置段已由 DEC-157 取代）；Wireframes §2.1／§2.2；P2 文字線框 C 節；Issue #1108 方向 B（客戶截圖回饋＋『繼續』；DEC-157）"
    },
    {
     "id": "p2_nav_margin_160",
@@ -127,7 +127,7 @@
    },
    {
     "id": "kbar_primary_chart",
-    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（OneBrain → Primary → 指標卡）；水平捲動沿用 no_horizontal_scroll。",
+    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
     "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"
    },
    {
@@ -297,8 +297,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 615.2,
-     "bottom": 692.0,
+     "top": 1525.3,
+     "bottom": 1602.1,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -306,8 +306,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 1080.7,
-     "bottom": 1594.1,
+     "top": 992.0,
+     "bottom": 1505.3,
      "left": 14.4,
      "right": 375.6,
      "height": 513.3,
@@ -318,8 +318,8 @@
     "spec_text": null,
     "slot_danger": 0,
     "chart": {
-     "top": 700.0,
-     "bottom": 1064.7,
+     "top": 611.2,
+     "bottom": 976.0,
      "left": 14.4,
      "right": 375.6,
      "height": 364.8,
@@ -330,7 +330,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,695 47,298 43,902 40,506 37,109 2026-10-07 2026-11-06 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-06｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -353,10 +353,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 615.2,
+    "first_block_after_l1_top": 622.2,
     "risk_line_height": 24,
     "scroll_end_bottom": 763.8,
-    "nav_margin_after_risk": 175.8
+    "nav_margin_after_risk": 168.8
    },
    "failures": {},
    "pass": true
@@ -1591,8 +1591,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 486.7,
-     "bottom": 528.3,
+     "top": 1030.5,
+     "bottom": 1072.1,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -1600,8 +1600,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 881.0,
-     "bottom": 1064.1,
+     "top": 839.5,
+     "bottom": 1022.5,
      "left": 80,
      "right": 1360,
      "height": 183.1,
@@ -1612,8 +1612,8 @@
     "spec_text": null,
     "slot_danger": 0,
     "chart": {
-     "top": 536.3,
-     "bottom": 865.0,
+     "top": 494.7,
+     "bottom": 823.5,
      "left": 80,
      "right": 1360,
      "height": 328.8,
@@ -1624,7 +1624,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,695 47,298 43,902 40,506 37,109 2026-10-07 2026-11-06 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-06｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1647,7 +1647,7 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 498.7,
+    "first_block_after_l1_top": 505.7,
     "risk_line_height": 24,
     "scroll_end_bottom": 867.9,
     "nav_margin_after_risk": null
