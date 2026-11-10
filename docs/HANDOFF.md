@@ -1308,3 +1308,14 @@ DEC-086 規則已於 main，本表已落地。
 | 未驗證／限制 | (a) OneBrain 缺席情境在真實瀏覽器 **NOT VERIFIED**（僅單元測試＋突變）；(b) Streamlit Cloud 線上實況 **NOT VERIFIED**（需客戶重看三張 Cloud 截圖）；(c) QA 未自行執行 Streamlit 1.56.0（以 CI 該腿 success 為據）。 |
 | 登記為低優先 BACKLOG | 見 `docs/BACKLOG.md` 同日補註（舊順序文件待註記、DEC-157 決策者欄位釐清、證據 JSON `meta.git_sha`）；皆非授權工作。 |
 | **下一個唯一安全接手點** | **無進行中授權工作；等客戶指示**。客戶需重看 #1107／#1108 的 Cloud 截圖以確認順序 B 線上實況。下次接手仍須先重新 GitHub Gate。 |
+
+### 2026-11-10 接手點補註｜Issue #1110 Secrets／API 唯讀驗證：研究證據已落盤（只追加；docs-only，非授權、非新決策）
+
+| 項目 | 事實／限制 |
+|---|---|
+| 產物 | `docs/vnext/ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md`（基準 main `db04dac`；Issue https://github.com/linchen-20200325/my-stock-dashboard/issues/1110 ）。只讀 code 與已 commit 資料，未連網、未讀任何憑證值；文中只出現 Secret **名稱**。 |
+| 發現 1 | New UI2 的真實 feed 只讀追蹤的台股 parquet 與 session／本機位階狀態檔，**不使用任何 Secret**；客戶在 Cloud 新增 Secrets 不會讓 UI2 多出 VIX／US10Y／DXY／PMI／OneBrain。 |
+| 發現 2 | 舊 UI 資料來源矩陣：VIX、DXY、利差、PMI 目前維持「未提供」最安全；US10Y 的最小可行路徑為單一 FRED DGS10（需客戶先選口徑）。DXY 舊備援鏈可能落到 UUP（ETF）且回傳無來源標籤；台灣 PMI 現存值為 proxy 旗標＋`UNDETERMINED`。 |
+| 發現 3（資安，未修） | 舊 UI `api_diagnostic.py` 顯示 Secret 前後 4 字元＋長度並列出全部 Secret 名；`app.py` 側欄在特定組合下可能印出整段 `PROXY_URL`。**不要截圖這兩處。** 修正需客戶授權（涉及舊 UI）。 |
+| 現況 | 本項為 docs-only 研究紀錄；未動 code／資料／測試／Secrets；Streamlit Cloud 線上實況（Secret 是否載入、API 是否可達與認證、資料日）全部 **NOT VERIFIED**。#1107 仍 PARTIAL，不因本項關閉。 |
+| **下一個唯一安全接手點** | **無已授權的施工；等客戶就 D1–D6 裁示**（US10Y 口徑、VIX、利差定義與新取數、PMI vs 景氣燈號、是否新增落地 cron、是否授權移除舊診斷頁部分金鑰顯示）。若要關閉 NOT VERIFIED，請 Cloud 管理員提供一張只含「布林／HTTP 狀態／資料日」的表（無 Key、無尾碼、無 Secrets 截圖）。下次接手仍須先重新 GitHub Gate。 |

@@ -7979,3 +7979,5 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **證據限制**：新順序的版面量測（390×844、1440×900，FAKE 與 Real-data Preview）由 `tests/ui2_viewport/measure_viewport.py` 於沙箱 Chromium 量得；非 Cloud 線上驗證。
 
 > 📌 **2026-11-10 DEC-157 合併後追記（只追加，非新決策）**：PR #1109 已 squash-merge → main `81db06377b43688df49c9daf5594faea2b5e6b01`（head `30920e90bec746d7db6a4d7e2f302e57e67390e2`；CI run 42760415674 五項 success；非作者 QA PASS）。**釐清**：DEC-157「決策者」欄寫 AI 總管，係指依 Issue #1108 授權範圍執行；**授權來源**為客戶 Cloud 截圖回饋＋「繼續」、ChatGPT 轉達方案 B 為優先方向（repo 無客戶逐字點選 B）。DEC-157 原文未改。
+
+> 📌 **2026-11-10 指標（只追加；非新決策）**：Issue #1110 研究證據見 `docs/vnext/ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md`；此為研究紀錄，**不是**新的 DEC，不授權任何施工，亦不改變既有 DEC。
