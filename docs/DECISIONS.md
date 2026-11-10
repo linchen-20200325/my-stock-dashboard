@@ -8008,7 +8008,7 @@ Model：Claude Sonnet 5.5  Effort：Medium
   2. **D2（VIX）、D3（利差）、D4（台灣 PMI）**：維持空槽。D2 先完成「已收盤日」PIT Gate、不接線；D3 定義與來源暫不選定、不新取數；D4 不將 proxy／`UNDETERMINED` 當正式訊號。
   3. **D5（新增每日落地 cron）**：**不核准**，不新增 cron／workflow。
   4. **方案 A 文件**：本批僅 docs-only 文件（CAPMAP 三欄能力對照、C1～C7 切換缺口矩陣、EPS／Digest／OneBrain 研究），不改程式、測試、資料、workflow。
-  5. **EPS 預估大盤**：僅准**唯讀研究**；不新增 EPS 來源、公式或 runtime，不得宣稱任何估值或指數預測已可計算。**Digest Stage F／OneBrain Stage G**：沿現有契約**暫列 cutover 前置**，未經新裁示不改（客戶可推翻；該列為前置之轉述未對照 Issue 原文）。
+  5. **EPS 預估大盤**：僅准**唯讀研究**；不新增 EPS 來源、公式或 runtime，不得宣稱任何估值或指數預測已可計算。**Digest Stage F／OneBrain Stage G**：沿現有契約**暫列 cutover 前置**，未經新裁示不改（客戶可推翻；已由獨立 QA 對照 Issue #1121 第 4 項原文確認）。
   6. **#1119（workflow 瘦身）維持 HOLD**（見先前客戶留言紀錄）。
 - **D1～D5 現狀（截至 2026-11-10）**：UI2 真資料 feed 仍只接 TWII 卡片、TWII 日 K、市場位階三項事實；US10Y 為空槽（口徑已定、實作未授權）；VIX／利差／PMI 為空槽；無新增落地 cron。故 C5（真資料）在現行授權下仍未滿足。
 - **仍 NOT VERIFIED（不得因本條轉為 PASS）**：ETF Managers 2026-11-16 20:00 UTC 真實 GitHub Actions 發布 PR；Streamlit Cloud 上的 New UI2；以上皆無本批證據。
