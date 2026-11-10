@@ -7983,3 +7983,5 @@ Model：Claude Sonnet 5.5  Effort：Medium
 > 📌 **2026-11-10 指標（只追加；非新決策）**：Issue #1110 研究證據見 `docs/vnext/ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md`；此為研究紀錄，**不是**新的 DEC，不授權任何施工，亦不改變既有 DEC。
 
 > 📌 **2026-11-10 紀錄（只追加；非 AI 決策、非新的 DEC 編號）｜客戶 D6 授權：舊 UI 診斷頁／側欄資安最小修補（Issue #1113）**：本條**記錄**客戶就 Issue #1110 研究中 D6 所做的授權，內容依 Issue #1113 的轉錄；**repo 內沒有客戶原訊息的連結**，故此處只能引述 Issue #1113 的轉錄文字，不能自稱逐字原文。**授權範圍（摘要）**：僅限舊 API 診斷頁（`src/ui/pages/api_diagnostic.py`）與 `app.py` 側欄 Proxy 顯示的最小資安修補——不得顯示金鑰片段、長度、完整 proxy URL 或敏感回應；**不改 API 資料流、不改其他 UI**。**未授權**：D1（US10Y 口徑）、D2（VIX）、D3（利差）、D4（PMI vs 景氣燈號）、D5（落地 cron）**仍全部未授權**，本條不改變它們；亦不授權任何請求語意變更（含 `verify=False`，另列為可能的獨立 Gate）。實作見 fix/legacy-diagnostic-secret-display-20261110；Cloud 線上實況 **NOT VERIFIED**。
+
+> 📌 **2026-11-10 指標（只追加；非新決策、非新的 DEC 編號）**：上方 D6 授權紀錄所指的實作已由 PR #1114 squash-merge → main `da675689e5010795bc87f5a56d3136ff1747d1cf`（非作者資安 QA 回修後 PASS，同 head 五項 CI success）；殘留資安項與 AI 建議見 `docs/BACKLOG.md`（`SEC-D6-RESIDUAL-*`，皆需客戶授權），D1–D5 仍未授權。

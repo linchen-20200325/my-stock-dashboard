@@ -1330,3 +1330,14 @@ DEC-086 規則已於 main，本表已落地。
 | 下一個唯一安全接手點 | 等本分支獨立 QA／CI 與 PR 流程；D1–D5 仍**未授權**，無其他已授權施工。下次接手仍須先重新 GitHub Gate。 |
 
 > 📌 **2026-11-10 追記（只追加；Issue #1113 獨立資安 QA 回修）**：QA 指出診斷頁 `_get_proxy_config_quiet` 的 `contextlib.redirect_stderr` 在多 session 並行下會讓 `sys.stderr` 永久停在緩衝上（M1，已示範）。回修：以模組層 `threading.Lock` 序列化「換→呼叫→還原」，`finally` 還原當初存下的物件；`get_proxy_config` 丟例外時頁面只顯示固定文字、不外洩原文；無任何 secrets 檔時未設定的 key 改顯「未設定」。**殘留（據實）**：鎖管不到行程內他人對 `sys.stderr` 的交換，且視窗內他執行緒的 stderr 輸出會被一併丟棄（視窗僅含單次 `get_proxy_config` 呼叫）。
+
+### 2026-11-10 接手點補註｜PR #1114（Issue #1113，D6）已合併（只追加；取代上方「實作完成、待獨立 QA／CI」的待定措辭）
+| 項目 | 內容 |
+|---|---|
+| 合併事實 | PR #1114 已 squash-merge → main `da675689e5010795bc87f5a56d3136ff1747d1cf`（head `04317f81965341db200b0855215bc0eb19ace3dd`）。同 head 五項 CI 全 success（run 42786020284）。 |
+| 非作者資安 QA | 第一輪 **FAIL**（一項 must-fix）：診斷頁 `contextlib.redirect_stderr` 會交換全域 `sys.stderr`，多 session 並行下有競態（QA 已重現）。回修：模組層 `threading.Lock` 序列化「換→呼叫→還原」、`finally` 還原存下的物件、失敗路徑只顯示固定文字。**delta QA PASS**：https://github.com/linchen-20200325/my-stock-dashboard/pull/1114#issuecomment-6763597615 |
+| 測試 | fast lane 38536 passed／0 failed；browser lane 41 passed。 |
+| 殘留（未修；D6 授權範圍外，皆需客戶授權才可動） | (1) `tab_macro.py` 仍顯示 FinMind token 長度；(2) `proxy_helper.get_proxy_config` 將例外原文印到 stderr（僅診斷頁擋住；鎖只序列化本函式的交換，該呼叫視窗內他執行緒的 stderr 會一併被吞）；(3) `health_inspector.py` 的 proxy 測試訊息（經 scrub 處理）；(4) 診斷探測使用 `verify=False`；(5) urllib3 DEBUG 日誌可能帶出 FRED query string（既有問題，非顯示面）。 |
+| NOT VERIFIED | Streamlit Cloud 真實 Secrets 載入、API 認證、真實多 session 並行；舊側欄洩漏是否曾在 production 發生。 |
+| 其他 | D1–D5 仍**未授權**、等客戶裁示；#1107 Cloud 驗收仍 **PARTIAL**；Issues #1110／#1113／#1108 保持開啟，由客戶決定是否關閉。不要截圖任何含 Secret 樣貌的畫面。 |
+| **下一個唯一安全接手點** | **無已授權的施工。** 等客戶：(a) 裁示 D1–D5；(b) 決定上列殘留資安項是否授權後續批次。下次接手仍須先重新 GitHub Gate。 |
