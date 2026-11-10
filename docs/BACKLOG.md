@@ -2123,3 +2123,9 @@
 - `DATA-FWDTEST-PIT-BACKFILL`：macro-forward-test 2026-11-05／11-06 兩列（#1038／#1105）因 PIT 不被接受而未入 main（`captured_at` 晚於 `observation_date`、`published_at` n/a；owner 治理裁示見 #1105 留言）。日後若要補列，**須另設 PIT 契約設計＋來源證據 Gate** 後才可動工；未授權改寫歷史或 PIT 豁免。證據 SHA：`9e7014c70a2fcda42d4bb14e2a044e6ec4b4057e`、`d7ad23143ea67f5471ee75bff82cc095fd364932`。
 
 📌 **2026-11-10｜`NUI2-MARKET-ORDER-B`（Issue #1108；DEC-157；只追加）**：📊 市場頁順序改為 今日主要風險 → 台股日 K 主圖／空槽 → 核心指標卡 → 🤖 OneBrain Outlook（取代 DEC-133 G-3 的 OneBrain 位置；首屏 CTA／狀態／今日主要風險內容與位置不變）。授權來源＝客戶 Cloud 截圖回饋＋「繼續」、ChatGPT 轉達方案 B 為優先方向（Issue #1108；repo 無逐字點選 B）。分支 `feat/ui2-market-order-b-20261110`（待獨立 QA／五項原生 CI）。`p2_onebrain_primary_slot_order` 判定器與相依測試／viewport 證據（realfeed／batch3b，1.59.2＋1.56.0）已同步；**#1107 Cloud 驗收仍 PARTIAL，不因本項關閉**；Cloud 線上實況 NOT VERIFIED。
+
+📌 **2026-11-10｜`NUI2-MARKET-ORDER-B` 已合併（PR #1109 → main `81db06377b43688df49c9daf5594faea2b5e6b01`；只追加；取代上一則「待獨立 QA／五項原生 CI」之文字）**：CI run 42760415674 五項 success；非作者 QA PASS（https://github.com/linchen-20200325/my-stock-dashboard/pull/1109#issuecomment-6759911632，4 突變皆被抓出）。Issue #1108 留待客戶關閉；#1107 Cloud 驗收仍 PARTIAL。以下皆為**低優先登記，非授權工作**（依 `CLAUDE.md` §-1，無指派／無實際 bug 觸發不主動動工）：
+- `NUI2-MARKET-ORDER-B-NIT-STALE-DOCS`：下列文件仍描述舊順序（今日主要風險 → OneBrain → 日 K → 指標卡），已被 DEC-157 取代：`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`、Wireframes §2.1／§2.2、Active Contract §3.1、`docs/PROJECT_STATE.md`（約第 1064 行）。僅文件後續；是否加註須先有決定，未授權修改。
+- `NUI2-MARKET-ORDER-B-NIT-DEC157-OWNER`：DEC-157「決策者」欄寫 AI 總管，而授權來源為客戶 Cloud 截圖回饋；以 DECISIONS 末的追加註釋釐清（不改原行）。
+- `NUI2-MARKET-ORDER-B-NIT-GITSHA`：commit 進 repo 的證據 JSON `meta.git_sha`＝base `1f3c489`（`source_hash` 正確）。
+- `NUI2-MARKET-ORDER-B-NOT-VERIFIED`：OneBrain 缺席情境在真實瀏覽器 NOT VERIFIED（僅單元測試＋突變）；Streamlit Cloud 線上實況 NOT VERIFIED（需客戶重看三張 Cloud 截圖）；QA 未自行執行 Streamlit 1.56.0（以 CI 該腿 success 為據）。

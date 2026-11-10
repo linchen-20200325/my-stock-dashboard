@@ -1296,3 +1296,15 @@ DEC-086 規則已於 main，本表已落地。
 | 未動 | feed、K 棒契約／20 根／紅綠灰／220px、Risk Cap、OneBrain 模型、其它頁、cron／secrets／OAuth／Sheet、G2／G2F／G4／G9。 |
 | 未驗證 | Streamlit Cloud 線上實況 NOT VERIFIED；#1107 Cloud 驗收仍 PARTIAL，不因本項關閉。 |
 | **下一個唯一安全接手點** | 本分支 push 後：獨立 QA（含突變）→ 同一 head 五項原生 CI → 依 Auto-Ship Gate；合併後再同步 PROJECT_STATE。 |
+
+### 2026-11-10 合併後同步補註｜Issue #1108 順序 B 已合併（只追加；取代上一則補註中「未開 PR、未合併」「待獨立 QA／五項原生 CI」「本分支 push 後」之文字）
+
+| 項目 | 事實／限制 |
+|---|---|
+| 合併 | PR #1109（Issue #1108 方向 B，DEC-157）已 squash-merge → main `81db06377b43688df49c9daf5594faea2b5e6b01`（PR head `30920e90bec746d7db6a4d7e2f302e57e67390e2`）。 |
+| CI | run 42760415674，五項檢查全 success。 |
+| 獨立 QA | 非作者 QA PASS：https://github.com/linchen-20200325/my-stock-dashboard/pull/1109#issuecomment-6759911632 ——4 個突變皆被抓出；完整 fast lane 38480 passed／0 failed；browser lane 41 passed；harness FAKE 82/82、Real 13/13（PR 與 main 皆然）；順序 risk < primary < cards < OneBrain；首屏底緣與 main 相同；scrollWidth＝viewport。 |
+| Issue 狀態 | #1108 留待客戶自行關閉；#1107 Cloud 驗收仍 PARTIAL，**不因本項關閉**。 |
+| 未驗證／限制 | (a) OneBrain 缺席情境在真實瀏覽器 **NOT VERIFIED**（僅單元測試＋突變）；(b) Streamlit Cloud 線上實況 **NOT VERIFIED**（需客戶重看三張 Cloud 截圖）；(c) QA 未自行執行 Streamlit 1.56.0（以 CI 該腿 success 為據）。 |
+| 登記為低優先 BACKLOG | 見 `docs/BACKLOG.md` 同日補註（舊順序文件待註記、DEC-157 決策者欄位釐清、證據 JSON `meta.git_sha`）；皆非授權工作。 |
+| **下一個唯一安全接手點** | **無進行中授權工作；等客戶指示**。客戶需重看 #1107／#1108 的 Cloud 截圖以確認順序 B 線上實況。下次接手仍須先重新 GitHub Gate。 |

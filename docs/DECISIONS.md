@@ -7977,3 +7977,5 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **範圍／不做**：只動 `src/ui2/views/market.py` 渲染順序，以及依賴該順序的測試／viewport 判定器與證據（`tests/ui2_viewport/measure_viewport.py` 的 `p2_onebrain_primary_slot_order` 判定改為 Primary → 指標卡 → OneBrain，並新增突變 teeth）。**不改**：feed（real／FAKE）、K 棒契約與驗證器、20 根、紅綠灰、svg 220px、Risk Cap、OneBrain 模型／推論／VM、投資公式、其它頁、cron／secrets／OAuth／Sheet、G2／G2F／G4／G9 守衛、`render_sections(skip={onebrain})` 去重與 L2／L3 不顯示政策。
 - **與其他裁示的關係**：#1107（Cloud 實機驗收）**仍為 PARTIAL**（僅部分看到真實資料日 K，未驗證項仍未驗證），**本條與其施工不關閉 #1107**，也不是 production cutover；Streamlit Cloud 線上實況 **NOT VERIFIED**。
 - **證據限制**：新順序的版面量測（390×844、1440×900，FAKE 與 Real-data Preview）由 `tests/ui2_viewport/measure_viewport.py` 於沙箱 Chromium 量得；非 Cloud 線上驗證。
+
+> 📌 **2026-11-10 DEC-157 合併後追記（只追加，非新決策）**：PR #1109 已 squash-merge → main `81db06377b43688df49c9daf5594faea2b5e6b01`（head `30920e90bec746d7db6a4d7e2f302e57e67390e2`；CI run 42760415674 五項 success；非作者 QA PASS）。**釐清**：DEC-157「決策者」欄寫 AI 總管，係指依 Issue #1108 授權範圍執行；**授權來源**為客戶 Cloud 截圖回饋＋「繼續」、ChatGPT 轉達方案 B 為優先方向（repo 無客戶逐字點選 B）。DEC-157 原文未改。
