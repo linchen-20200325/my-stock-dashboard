@@ -7991,3 +7991,6 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 
 > 📌 **2026-11-10 指標（只追加；非新決策、非新的 DEC 編號）**：上方 Issue #1116 授權紀錄所指的實作已由 PR #1117 squash-merge → main `aa69d99e8674da17c23e1153aa677551b5837704`（非作者 QA PASS，同 head 五項 CI success）；真實 Actions 發布仍 NOT VERIFIED（下次排程 2026-11-16 20:00 UTC），待辦與限制見 `docs/BACKLOG.md`（`ETF-MGR-DATA-PR-1`／`-NIT-*`／`GH006-OTHER-DIRECT-PUSH-WORKFLOWS`）。
+
+
+> 📌 **2026-11-10 指標（只追加；非新決策、非新的 DEC 編號）**：Issue #1119（workflow 瘦身唯讀稽核）僅授權**盤點與提出清單**，**不是**刪除或停用任何 workflow 的授權，也不是新的決策；AI 做出的分類（保留核心／排程停用候選／手動研究／資安閘）皆為**提案**，待客戶另行裁示。摘要見 `docs/HANDOFF.md` 2026-11-10 session-end handoff snapshot 與 `docs/BACKLOG.md` `WORKFLOW-SLIM-AUDIT-1`。
