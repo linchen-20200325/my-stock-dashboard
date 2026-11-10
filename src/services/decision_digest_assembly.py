@@ -28,15 +28,29 @@
 變成 OK，讓一份「證據被拒用」的資料仍以 OK 進 Digest。builder 對缺 stamp 的處置（MISSING＋NO_INPUT）
 不變；本檔**不補日期、不補 0、不補 neutral／HOLD**，也不把 builder 的 MISSING 描述成「安全」。
 
-═══ coverage 的語意（描述「證據」，不是描述 Digest 段落的 availability）══════════
+═══ coverage 的語意（描述「證據」與「有沒有東西沒被讀進 Digest」，不是描述 Digest 段落的 availability）═══
 - market／risk_cap：該段的**全部**事實皆為 OK 才 `used=True`；否則 `used=False`＋原因
-  （證據被拒用 → 該證據的原因；證據可用但上游沒載入 → `not_loaded`；只採到一部分 → `partial`）。
-  risk_cap 段的 source／as_of 記的是**證據戳**（macro stamp）；快照時間（`snapshot_ts`）在 Digest 的事實上。
+  （證據被拒用 → 該證據的原因；一個 OK 事實都沒有 → `not_loaded`；只有一部分 OK → `partial`）。
+  used 段記錄的 source／as_of 取「該段所有 OK 事實 provenance 中**最舊**的 as_of」（同日取該段事實順序中的第一個）：
+  fresh 的 macro 戳不得讓 coverage 看起來比 `cap_pct` 的快照日期（`snapshot_ts`）更新。
 - holdings／actions：v1 的 holdings entry 只有行動事實，兩段都由「站內證據＋`holdings_rows`＋`station_rows`」
-  決定；全部就緒才 `used=True`。⚠️ v1 builder 對「沒有任何行動」會讓 holdings／actions 段為
-  UNAVAILABLE（無法區分「沒事做」與「判不出來」）；coverage 不改寫這點，只說「證據有沒有被讀進來、
-  有幾個候選被省略」。
-- 計數：不能評估 → None（**不是 0**）。`is_complete` 為 False。
+  決定；全部就緒才 `used=True`。
+- 「沒被讀進來」的計數（不能評估 → None，**不是 0**）：被 `MAX_ACTIONS` 截掉的候選（omitted）、資料異常被排除的列
+  （excluded）、無鍵持股（unkeyed）、行動列對不上持股鍵而被丟棄（unmatched；ticker 大小寫／空白不符、不在
+  `holdings_rows`）、持股沒有任何站內列（holdings_without_station_row）。任何一項非 0 → `is_complete=False`。
+- ⚠️ **v1 限制（不是「沒完成」）**：v1 builder 對「沒有任何行動」讓 holdings／actions 段為 UNAVAILABLE，
+  **無法區分「沒事做」與「判不出來」**。coverage 以 `digest_holdings_available`／`digest_actions_available`
+  （由 digest 推得）把這點納入 `is_complete`：零行動 ⇒ `is_complete=False`。`station_rows=[]`（fresh 證據、
+  持有列也是空）亦同。這是保守 fail-closed，意思是「v1 Digest 不能證明沒有遺漏」。
+
+═══ 已知限制（誠實揭露；不是被修掉的項目）═══════════════════════════════
+1. `AssembledDigest` **不防惡意偽造**：coverage 中的 total／excluded／unmatched／holdings_without_station_row
+   在 digest 內**看不到**，只能靠 `plan_action_selection` 與 builder 共用同一個掃描迴圈（parity 測試以固定種子隨機輸入
+   守住）與測試保證；envelope 只交叉驗證 digest 內可見者（shown、unkeyed、段落 used、source／as_of、availability 旗標）。
+2. 證據被拒用時，該段上游輸出不交給 builder，因此 `station_rows` **列層級**的型別錯誤（例如某列 `held` 不是 bool）
+   在該情形下不會 fail loud（只在證據可用時才會被 builder 掃到）。頂層型別（Mapping／list／tuple）仍會被檢查。
+3. 「站內列與持股用 ticker 精確字串比對」：大小寫／空白不同的 ticker 會被計入 unmatched 與 holdings_without_station_row
+   （這是揭露，不是修正；builder 的比對行為不變）。
 
 分層（CLAUDE.md §8.2）：L3 —— 只 import 標準函式庫、L0（`shared.*`）與同層
 `src.services.decision_digest_builder`；⛔ streamlit／`src.ui*`／`app`／requests／`src.data`／session／
@@ -52,7 +66,7 @@ from shared.decision_digest import (
     MAX_ACTIONS, TW_TZ, Availability, DataStatus, DecisionDigest, HoldingKey,
 )
 from shared.decision_digest_coverage import (
-    SEGMENT_ACTIONS, SEGMENT_HOLDINGS, SEGMENT_MARKET, SEGMENT_RISK_CAP, WITHHELD_FETCH_FAILED,
+    SEGMENT_ACTIONS, SEGMENT_HOLDINGS, SEGMENT_MARKET, SEGMENT_RISK_CAP, SEGMENTS, WITHHELD_FETCH_FAILED,
     WITHHELD_NO_STAMP, WITHHELD_NOT_LOADED, WITHHELD_PARTIAL, WITHHELD_PIT_VIOLATION, WITHHELD_STALE,
     WITHHELD_UNDETERMINED, DigestCoverage, SegmentEvidence, assert_coverage_valid,
 )
@@ -122,12 +136,37 @@ def _classify(evidence: EvidenceInput | None, generated_at: datetime) -> str | N
     return WITHHELD_UNDETERMINED   # UNDETERMINED 或 None（沒判 ＝ 不採用）
 
 
-def _seg(name: str, evidence: EvidenceInput | None, *, used: bool, reason: str | None) -> SegmentEvidence:
-    """source／as_of 取證據戳（被拒用時「若有」才帶；沒有就是 None，不補）。"""
+def _oldest(facts: Sequence) -> tuple | None:
+    """(source, as_of)：OK 事實中 provenance.as_of 最舊者（同日取第一個）；沒有 OK 事實 → None。"""
+    best = None
+    for f in facts:
+        if f.status is DataStatus.OK and f.provenance.as_of is not None:
+            if best is None or f.provenance.as_of < best[1]:
+                best = (f.provenance.source, f.provenance.as_of)
+    return best
+
+
+def _segment_facts(digest: DecisionDigest, name: str) -> list:
+    """該證據段在 digest 內可見的事實（holdings／actions 兩段在 v1 共用 entries 的行動事實）。"""
+    if name == SEGMENT_MARKET:
+        return list(digest.market.facts)
+    if name == SEGMENT_RISK_CAP:
+        rc = digest.risk_cap
+        return [rc.cap_pct, rc.exposure_lo_pct, rc.exposure_hi_pct]
+    return [f for e in digest.holdings.entries for f in e.facts]
+
+
+def _seg(name: str, evidence: EvidenceInput | None, *, used: bool, reason: str | None,
+         digest_prov: tuple | None = None) -> SegmentEvidence:
+    """used 段：source／as_of 取 digest 事實的最舊 provenance（若該段有事實），否則取證據戳；
+    未採用段：證據戳「若有」才帶（沒有就是 None，不補）。"""
     stamp = evidence.stamp if evidence is not None else None
-    return SegmentEvidence(segment=name, used=used,
-                           source=stamp.source if stamp is not None else None,
-                           as_of=stamp.as_of if stamp is not None else None,
+    if used and digest_prov is not None:
+        source, as_of = digest_prov
+    else:
+        source = stamp.source if stamp is not None else None
+        as_of = stamp.as_of if stamp is not None else None
+    return SegmentEvidence(segment=name, used=used, source=source, as_of=as_of,
                            withheld_reason=None if used else reason)
 
 
@@ -142,8 +181,11 @@ def _all_ok(facts: Sequence) -> bool:
 class AssembledDigest:
     """`DecisionDigest` ＋ 側車 `DigestCoverage`。建構時強制兩者一致，不一致 → `ValueError`。
 
-    `assemble_digest` 是**唯一**由證據推導 coverage 的入口；直接建構也會被同一套一致性檢查擋下，
-    所以不可能存在「coverage 與 digest 對不上」的 `AssembledDigest`。
+    `assemble_digest` 是**唯一**由證據推導 coverage 的入口；直接建構也會被同一套一致性檢查擋下。
+    ⚠️ **據實限制**：一致性檢查只能驗證 coverage 中「digest 內看得到」的部分（shown、unkeyed、段落 used、
+    used 段的 source／as_of、holdings／actions availability 旗標）。total／omitted／excluded／unmatched／
+    holdings_without_station_row 在 digest 內看不到，只能靠 builder parity 與測試保證——
+    **本類別不防惡意偽造**（見模組 docstring「已知限制」）。
     """
     digest: DecisionDigest
     coverage: DigestCoverage
@@ -173,8 +215,6 @@ def _consistency_problems(digest: Any, coverage: Any) -> list:
     shown = len(digest.actions.items)
     if coverage.actions_shown != shown:
         out.append(f"actions_shown({coverage.actions_shown}) != len(digest.actions.items)({shown})")
-    if coverage.actions_max != MAX_ACTIONS:
-        out.append(f"actions_max({coverage.actions_max}) != MAX_ACTIONS({MAX_ACTIONS})")
     total = coverage.actions_total_eligible
     if total is not None and shown != min(total, coverage.actions_max):
         out.append(f"shown({shown}) 必須等於 min(total({total}), max({coverage.actions_max}))")
@@ -188,7 +228,23 @@ def _consistency_problems(digest: Any, coverage: Any) -> list:
     elif hs.availability is not Availability.UNAVAILABLE or hs.unkeyed_count != 0:
         out.append("unkeyed_held_count 為 None（未知）時，digest.holdings 必須是 unavailable 且 unkeyed_count==0")
 
+    # availability 旗標必須與 digest 相符
+    if coverage.digest_holdings_available != (hs.availability is Availability.AVAILABLE):
+        out.append(f"digest_holdings_available({coverage.digest_holdings_available}) 與 "
+                   f"digest.holdings.availability({hs.availability.value}) 不一致")
+    if coverage.digest_actions_available != (digest.actions.availability is Availability.AVAILABLE):
+        out.append(f"digest_actions_available({coverage.digest_actions_available}) 與 "
+                   f"digest.actions.availability({digest.actions.availability.value}) 不一致")
+
     seg = {s.segment: s for s in coverage.segments}
+    # used 段的 source／as_of 必須等於該段 digest 事實中最舊的 provenance（該段有 OK 事實時）
+    for name in SEGMENTS:
+        sg = seg[name]
+        if sg.used:
+            expected = _oldest(_segment_facts(digest, name))
+            if expected is not None and (sg.source, sg.as_of) != expected:
+                out.append(f"{name} 段 source／as_of({sg.source!r}, {sg.as_of}) 與 digest 事實最舊 provenance"
+                           f"{expected!r} 不一致")
     # market／risk_cap：used ⇔ 該段全部事實為 OK
     market_ok = _all_ok(digest.market.facts)
     if seg[SEGMENT_MARKET].used != market_ok:
@@ -202,8 +258,6 @@ def _consistency_problems(digest: Any, coverage: Any) -> list:
         out.append("holdings 段 used=False 但 digest.holdings 帶有行動事實")
     if not seg[SEGMENT_ACTIONS].used and shown != 0:
         out.append("actions 段 used=False 但 digest.actions 帶有行動")
-    if seg[SEGMENT_ACTIONS].used and total is None:
-        out.append("actions 段 used=True 但 actions_total_eligible 為 None")
     return out
 
 
@@ -263,17 +317,15 @@ def assemble_digest(*, generated_at: datetime,
         holdings_rows=holdings_rows, holding_keys=holding_keys)
 
     # ── 各段證據 ──
-    macro_loaded = isinstance(macro_state, Mapping) and macro_state.get("is_loaded") is True
-    market_all_ok = _all_ok(digest.market.facts)
-    rc = digest.risk_cap
-    rc_all_ok = _all_ok((rc.cap_pct, rc.exposure_lo_pct, rc.exposure_hi_pct))
-
-    def fact_segment(name: str, all_ok: bool, loaded: bool) -> SegmentEvidence:
+    def fact_segment(name: str) -> SegmentEvidence:
+        facts = _segment_facts(digest, name)
         if not macro_usable:
             return _seg(name, macro_evidence, used=False, reason=macro_reason)
-        if all_ok:
-            return _seg(name, macro_evidence, used=True, reason=None)
-        return _seg(name, macro_evidence, used=False, reason=WITHHELD_PARTIAL if loaded else WITHHELD_NOT_LOADED)
+        if _all_ok(facts):
+            return _seg(name, macro_evidence, used=True, reason=None, digest_prov=_oldest(facts))
+        # 一個 OK 事實都沒有 → 上游這一段沒提供可用內容（not_loaded）；只有一部分 OK 才是 partial
+        any_ok = any(f.status is DataStatus.OK for f in facts)
+        return _seg(name, macro_evidence, used=False, reason=WITHHELD_PARTIAL if any_ok else WITHHELD_NOT_LOADED)
 
     # holdings／actions：站內證據可用、且持有列與站內列都有給、且計畫可評估 → 採用
     if not station_usable:
@@ -282,12 +334,13 @@ def assemble_digest(*, generated_at: datetime,
         station_state, station_why = False, WITHHELD_NOT_LOADED
     else:
         station_state, station_why = True, None
+    action_prov = _oldest(_segment_facts(digest, SEGMENT_HOLDINGS))   # 零行動時為 None → 取證據戳
 
     segments = (
-        fact_segment(SEGMENT_MARKET, market_all_ok, macro_loaded),
-        fact_segment(SEGMENT_RISK_CAP, rc_all_ok, isinstance(macro_state, Mapping)),
-        _seg(SEGMENT_HOLDINGS, station_evidence, used=station_state, reason=station_why),
-        _seg(SEGMENT_ACTIONS, station_evidence, used=station_state, reason=station_why),
+        fact_segment(SEGMENT_MARKET),
+        fact_segment(SEGMENT_RISK_CAP),
+        _seg(SEGMENT_HOLDINGS, station_evidence, used=station_state, reason=station_why, digest_prov=action_prov),
+        _seg(SEGMENT_ACTIONS, station_evidence, used=station_state, reason=station_why, digest_prov=action_prov),
     )
     coverage = DigestCoverage(
         actions_total_eligible=plan.total_eligible,
@@ -296,6 +349,10 @@ def assemble_digest(*, generated_at: datetime,
         actions_max=MAX_ACTIONS,
         excluded_invalid_rows=plan.excluded_invalid_rows,
         unkeyed_held_count=plan.unkeyed_held_count,
+        actions_unmatched_dropped=plan.unmatched_action_rows,
+        holdings_without_station_row=plan.holdings_without_station_row,
+        digest_holdings_available=digest.holdings.availability is Availability.AVAILABLE,
+        digest_actions_available=digest.actions.availability is Availability.AVAILABLE,
         segments=segments,
     )
     return AssembledDigest(digest=digest, coverage=coverage)

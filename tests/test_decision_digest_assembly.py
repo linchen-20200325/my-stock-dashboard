@@ -184,9 +184,10 @@ def test_all_fresh_complete_and_digest_equals_direct_builder_call():
 
 def test_provenance_source_and_as_of_traceable_into_coverage():
     a = assemble_digest(**full_kwargs(2))
-    for name in (SEGMENT_MARKET, SEGMENT_RISK_CAP):
-        s = seg(a, name)
-        assert (s.used, s.source, s.as_of, s.withheld_reason) == (True, "macro_state.json", D, None)
+    s = seg(a, SEGMENT_MARKET)
+    assert (s.used, s.source, s.as_of, s.withheld_reason) == (True, "macro_state.json", D, None)
+    s = seg(a, SEGMENT_RISK_CAP)       # 取該段所有 OK 事實中最舊的 provenance；同日取第一個（cap_pct，來源是快照）
+    assert (s.used, s.source, s.as_of, s.withheld_reason) == (True, "risk_cap_snapshot", D, None)
     for name in (SEGMENT_HOLDINGS, SEGMENT_ACTIONS):
         s = seg(a, name)
         assert (s.used, s.source, s.as_of, s.withheld_reason) == (True, "dividend_station_service", D, None)
@@ -195,13 +196,18 @@ def test_provenance_source_and_as_of_traceable_into_coverage():
     assert all(f.provenance.source == "dividend_station_service" for e in a.digest.holdings.entries for f in e.facts)
 
 
-def test_complete_with_zero_actions_pins_v1_availability_limitation():
-    """v1 builder 對「沒有任何行動」讓 holdings／actions 段 UNAVAILABLE（無法區分『沒事做』與『判不出來』）；
-    coverage 說的是「證據有沒有讀進來、有沒有被省略」，不改寫這點。"""
-    a = assemble_digest(**full_kwargs(0, station_rows=[], holdings_rows=[]))
-    assert a.digest.actions.availability is Availability.UNAVAILABLE
-    assert (a.coverage.actions_total_eligible, a.coverage.actions_omitted_count) == (0, 0)
-    assert a.coverage.is_complete is True
+def test_zero_actions_is_not_complete_because_v1_cannot_tell_nothing_to_do_from_cannot_tell():
+    """v1 builder 對「沒有任何行動」讓 holdings／actions 段 UNAVAILABLE（無法區分『沒事做』與『判不出來』）。
+    coverage 以 digest_*_available 納入 is_complete：零行動 ⇒ is_complete=False（保守 fail-closed）。
+    這是 v1 限制，**不是**「有東西漏了」——計數都是已知的 0，證據段也都 used。"""
+    for kw in (full_kwargs(0, station_rows=[], holdings_rows=[]),
+               full_kwargs(0, station_rows=[], holdings_rows=holdings_for("A"), holding_keys=keys_for("A"))):
+        a = assemble_digest(**kw)
+        assert a.digest.actions.availability is Availability.UNAVAILABLE
+        assert (a.coverage.digest_holdings_available, a.coverage.digest_actions_available) == (False, False)
+        assert a.coverage.actions_total_eligible == 0 and a.coverage.actions_omitted_count == 0
+        assert all(s.used for s in a.coverage.segments)
+        assert a.coverage.is_complete is False
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -397,7 +403,7 @@ def _check_counts_exact(n):
     assert c.actions_omitted_count == max(n - MAX_ACTIONS, 0)
     assert c.actions_max == MAX_ACTIONS
     assert [i.target.symbol for i in a.digest.actions.items] == _expected_shown_tickers(n)
-    assert a.coverage.is_complete is (n <= MAX_ACTIONS)
+    assert a.coverage.is_complete is (1 <= n <= MAX_ACTIONS)     # n=0：v1 無法區分「沒事做」與「判不出來」→ False
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, 3, 4, 7])
@@ -632,9 +638,26 @@ def _random_case(rng):
         if rng.random() < .1:
             r[KEY_INVALID_INPUTS] = ["b"]
         rows.append(r)
-    hold = [{"ticker": t, "held": rng.random() < .85} for t in tickers]
-    keys = {t: HoldingKey("pf", t) for t in tickers if rng.random() < .8}
+    hold = []
+    for t in tickers:                                 # 持有列：多數同 ticker；有些大小寫不符、有些缺席
+        x = rng.random()
+        if x < .70:
+            hold.append({"ticker": t, "held": rng.random() < .85})
+        elif x < .80:
+            hold.append({"ticker": t.lower(), "held": True})
+    for t in rng.sample(pool, rng.randrange(0, 3)):   # 站內沒有的額外持股
+        if t not in tickers:
+            hold.append({"ticker": t, "held": True})
+    rng.shuffle(hold)
+    keys = {h["ticker"]: HoldingKey("pf", h["ticker"]) for h in hold if rng.random() < .8}
     return rows, hold, keys
+
+
+def _tk(r):
+    t = r.get("ticker")
+    if t is None:
+        t = r.get("代號")
+    return t if type(t) is str and t.strip() else None
 
 
 def _brute_excluded(rows):
@@ -648,12 +671,36 @@ def _brute_excluded(rows):
     return n
 
 
-def test_plan_parity_with_build_decision_digest_on_seeded_random_inputs():
-    rng = random.Random(20261110)
-    built = 0
-    for _ in range(500):
+def _brute_unmatched(rows, hold, keys):
+    """獨立的 oracle：held、無異常、有行動碼，但 ticker 對不上（持有且有鍵的）持股。"""
+    keyed = {keys.get(_tk(h)) for h in hold if h.get("held") is True and keys.get(_tk(h)) is not None}
+    n = 0
+    for r in rows:
+        d = r.get("_detail")
+        if (r.get("held") is True and not r.get(KEY_INVALID_LIGHTS) and not r.get(KEY_INVALID_INPUTS)
+                and not (isinstance(d, dict) and d.get("error")) and r.get("_action") in ACTION_RULE_IDS):
+            k = keys.get(_tk(r))
+            if k is None or k not in keyed:
+                n += 1
+    return n
+
+
+def _brute_without_station(rows, hold):
+    covered = {_tk(r) for r in rows if r.get("held") is True and _tk(r) is not None}
+    return sum(1 for h in hold if h.get("held") is True and (_tk(h) is None or _tk(h) not in covered))
+
+
+def _parity_run(seed, cases):
+    rng = random.Random(seed)
+    built = unmatched_seen = without_seen = 0
+    for _ in range(cases):
         rows, hold, keys = _random_case(rng)
         plan = plan_action_selection(station_rows=rows, station_stamp=STATION_STAMP, holdings_rows=hold, holding_keys=keys)
+        assert plan.unmatched_action_rows == _brute_unmatched(rows, hold, keys)
+        assert plan.holdings_without_station_row == _brute_without_station(rows, hold)
+        assert plan.excluded_invalid_rows == _brute_excluded(rows)
+        unmatched_seen += plan.unmatched_action_rows > 0
+        without_seen += plan.holdings_without_station_row > 0
         try:
             d = build_decision_digest(generated_at=NOW, station_rows=rows, station_stamp=STATION_STAMP,
                                       holdings_rows=hold, holding_keys=keys)
@@ -662,7 +709,7 @@ def test_plan_parity_with_build_decision_digest_on_seeded_random_inputs():
             continue
         built += 1
         # 舊路徑：候選（保持輸入順序）→ 穩定依 Q4 序排序 → 截斷到 MAX_ACTIONS
-        keyed = frozenset(k for k, _ in ((keys.get(h["ticker"]), h) for h in hold if h.get("held") is True) if k)
+        keyed = frozenset(keys[_tk(h)] for h in hold if h.get("held") is True and _tk(h) in keys)
         legacy = sorted(B._action_candidates(rows, STATION_STAMP, keyed, keys),
                         key=lambda c: ACTION_RULE_IDS.index(c[1]))
         assert list(plan.ordered) == legacy
@@ -670,9 +717,15 @@ def test_plan_parity_with_build_decision_digest_on_seeded_random_inputs():
         carried = [(i.target, i.rule.rule_id, i.text) for i in d.actions.items]
         assert carried == [(k, c, t) for k, c, t in plan.chosen]
         assert plan.total_eligible - plan.omitted_count == len(d.actions.items)
-        assert plan.excluded_invalid_rows == _brute_excluded(rows)
         assert plan.unkeyed_held_count == d.holdings.unkeyed_count
-    assert built > 100                                                      # 夠多案例真的走到「建出 Digest」
+    return built, unmatched_seen, without_seen
+
+
+@pytest.mark.parametrize("seed", [20261110, 7, 99991])
+def test_plan_parity_with_build_decision_digest_on_seeded_random_inputs(seed):
+    built, unmatched_seen, without_seen = _parity_run(seed, 500)
+    assert built > 100                                      # 夠多案例真的走到「建出 Digest」
+    assert unmatched_seen > 50 and without_seen > 50        # 隨機輸入確實涵蓋 unmatched／無站內列情形
 
 
 def test_plan_unknown_is_none_not_zero_and_validates_types():
@@ -842,7 +895,7 @@ def test_teeth_removing_omitted_calculation_turns_the_check_red(monkeypatch):
 def test_teeth_dropping_exclusion_count_turns_the_check_red(monkeypatch):
     assert _check_excluded_counts().coverage.excluded_invalid_rows == 4
     real = B._scan_action_rows
-    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: (real(*a, **k)[0], 0))      # 突變：排除數歸零
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: (real(*a, **k)[0], 0, real(*a, **k)[2]))      # 突變：排除數歸零
     assert _check_excluded_counts().coverage.excluded_invalid_rows != 4
 
 
@@ -850,7 +903,293 @@ def test_teeth_unknown_counts_collapsing_to_zero_is_caught(monkeypatch):
     """突變：把『未知』偽裝成 0 → 側車 validator 必須擋下（actions 段未採用卻宣稱計數已知）或 is_complete 不得為 True。"""
     base = assemble_digest(generated_at=NOW)
     faked = dataclasses.replace(base.coverage, actions_total_eligible=0, actions_omitted_count=0,
-                                excluded_invalid_rows=0, unkeyed_held_count=0)
+                                excluded_invalid_rows=0, unkeyed_held_count=0, actions_unmatched_dropped=0,
+                                holdings_without_station_row=0)
     with pytest.raises(ValueError):                                         # 與 digest 的未知狀態不一致 → 拒收
         AssembledDigest(digest=base.digest, coverage=faked)
     assert faked.is_complete is False                                       # 且即使單獨看，段落未採用 → 不完整
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Issue #1127 QA 回修 M1：is_complete 的空洞（unmatched／holdings_without_station_row／digest_*_available）
+# ════════════════════════════════════════════════════════════════════════
+def _good_complete():
+    a = assemble_digest(**full_kwargs(2))
+    assert a.coverage.is_complete is True
+    return a
+
+
+def _custom(station, holdings, keys, **over):
+    return assemble_digest(**full_kwargs(0, station_rows=station, holdings_rows=holdings, holding_keys=keys, **over))
+
+
+# ── (a) 行動列對不上持股鍵：不得被靜默丟棄 ───────────────────────────────
+def test_unmatched_ticker_case_mismatch_is_counted_and_blocks_completeness():
+    a = _custom([row("t0", "cut")], holdings_for("T0"), keys_for("T0"))
+    c = a.coverage
+    assert c.actions_unmatched_dropped == 1 and a.digest.actions.items == ()
+    assert c.actions_total_eligible == 0 and c.is_complete is False
+
+
+def test_unmatched_ticker_not_in_holdings_rows():
+    a = _custom([row("T0", "cut"), row("ZZ", "add")], holdings_for("T0"), keys_for("T0", "ZZ"))
+    assert a.coverage.actions_unmatched_dropped == 1               # ZZ 有行動碼但不是持股
+    assert [i.target.symbol for i in a.digest.actions.items] == ["T0"]
+    assert a.coverage.is_complete is False
+
+
+def test_unmatched_held_holding_without_holding_key():
+    a = _custom([row("T0", "cut"), row("T1", "add")], holdings_for("T0", "T1"), keys_for("T0"))
+    assert a.coverage.actions_unmatched_dropped == 1 and a.coverage.unkeyed_held_count == 1
+    assert a.coverage.is_complete is False
+
+
+def test_unmatched_not_counted_for_nonheld_invalid_nonaction_or_error_rows():
+    rows = [row("A", "cut"),
+            row("B", "cut", held=False),                                  # 非持有
+            row("C", "cut", **{KEY_INVALID_LIGHTS: ["x"]}),               # 資料異常 → 屬於 excluded，不是 unmatched
+            row("D", "premium"),                                          # 非行動碼
+            row("E", "cut", _detail={"error": "boom"})]                   # 資料異常
+    a = _custom(rows, holdings_for("A"), keys_for("A"))
+    assert a.coverage.actions_unmatched_dropped == 0
+    assert a.coverage.excluded_invalid_rows == 2
+
+
+def test_unmatched_is_none_when_not_evaluated_not_zero():
+    for kw in (dict(station_evidence=None), dict(station_rows=None), dict(holdings_rows=None)):
+        assert assemble_digest(**full_kwargs(2, **kw)).coverage.actions_unmatched_dropped is None
+
+
+def _check_unmatched_counted():
+    a = _custom([row("t0", "cut")], holdings_for("T0"), keys_for("T0"))
+    assert a.coverage.actions_unmatched_dropped == 1
+    assert a.coverage.is_complete is False
+
+
+def test_teeth_dropping_unmatched_count_turns_the_check_red(monkeypatch):
+    _check_unmatched_counted()
+    real = B._scan_action_rows
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: (*real(*a, **k)[:2], 0))
+    with pytest.raises(AssertionError):
+        _check_unmatched_counted()
+
+
+# ── (b) 持股沒有站內列 ─────────────────────────────────────────────────
+def test_holdings_without_station_row_three_holdings_one_covered():
+    a = _custom([row("A", "cut")], holdings_for("A", "B", "C"), keys_for("A", "B", "C"))
+    assert a.coverage.holdings_without_station_row == 2
+    assert a.coverage.is_complete is False
+
+
+def test_holdings_without_station_row_ignores_nonheld_holdings_and_nonheld_station_rows():
+    a = _custom([row("A", "cut"), row("B", "cut", held=False)],
+                holdings_for("A") + holdings_for("B", "C", held=False) + holdings_for("D"),
+                keys_for("A", "B", "C", "D"))
+    assert a.coverage.holdings_without_station_row == 1          # 只有 D（B 的站內列 held=False 不算涵蓋；非持有不計）
+
+
+def test_holdings_without_station_row_nonaction_and_invalid_rows_still_cover():
+    rows = [row("A", "cut"), row("B", "premium"), row("C", "cut", **{KEY_INVALID_INPUTS: ["x"]})]
+    a = _custom(rows, holdings_for("A", "B", "C"), keys_for("A", "B", "C"))
+    assert a.coverage.holdings_without_station_row == 0
+    assert a.coverage.excluded_invalid_rows == 1 and a.coverage.is_complete is False   # C 被排除仍不完整
+
+
+def test_holdings_without_station_row_blank_ticker_counts_and_exact_match_only():
+    a = _custom([row("A ", "cut")], [{"ticker": "A", "held": True}, {"ticker": "  ", "held": True}], keys_for("A"))
+    assert a.coverage.holdings_without_station_row == 2            # "A " ≠ "A"（精確比對）；空白 ticker 無從比對
+
+
+def test_holdings_without_station_row_is_none_when_not_evaluated():
+    for kw in (dict(station_evidence=EvidenceInput(STATION_STAMP, F.STALE)), dict(station_rows=None),
+               dict(holdings_rows=None)):
+        assert assemble_digest(**full_kwargs(2, **kw)).coverage.holdings_without_station_row is None
+    assert plan_action_selection().holdings_without_station_row is None
+
+
+def test_all_holdings_covered_with_actions_is_complete():
+    assert _good_complete().coverage.holdings_without_station_row == 0
+
+
+def _check_without_station_counted():
+    a = _custom([row("A", "cut")], holdings_for("A", "B"), keys_for("A", "B"))
+    assert a.coverage.holdings_without_station_row == 1
+    assert a.coverage.is_complete is False
+
+
+def test_teeth_dropping_holdings_without_station_row_turns_the_check_red(monkeypatch):
+    _check_without_station_counted()
+    monkeypatch.setattr(B, "_count_holdings_without_station_row", lambda *a, **k: 0)
+    with pytest.raises(AssertionError):
+        _check_without_station_counted()
+
+
+# ── (c) v1 無法區分「沒事做」與「判不出來」 ───────────────────────────────
+def test_digest_available_flags_true_when_actions_present():
+    c = _good_complete().coverage
+    assert (c.digest_holdings_available, c.digest_actions_available) == (True, True)
+
+
+def test_digest_available_flags_false_when_station_withheld():
+    c = assemble_digest(**full_kwargs(3, station_evidence=EvidenceInput(STATION_STAMP, F.STALE))).coverage
+    assert (c.digest_holdings_available, c.digest_actions_available) == (False, False)
+
+
+def test_digest_holdings_partial_when_unkeyed_makes_holdings_flag_false_but_actions_true():
+    a = _custom([row("A", "cut")], holdings_for("A", "B"), keys_for("A"))
+    assert a.digest.holdings.availability is Availability.PARTIAL
+    assert (a.coverage.digest_holdings_available, a.coverage.digest_actions_available) == (False, True)
+    assert a.coverage.is_complete is False
+
+
+def test_station_rows_empty_with_fresh_evidence_is_incomplete_per_v1_limitation():
+    a = assemble_digest(**full_kwargs(0, station_rows=[], holdings_rows=[]))
+    assert a.coverage.is_complete is False and all(s.used for s in a.coverage.segments)
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Issue #1127 QA 回修 M2：envelope 交叉驗證（每個檢查各有「只有它能擋」的測試；以 match 鎖定訊息）
+# ════════════════════════════════════════════════════════════════════════
+def _swap_seg(c, name, **kw):
+    return dataclasses.replace(c, segments=tuple(dataclasses.replace(s, **kw) if s.segment == name else s
+                                                 for s in c.segments))
+
+
+def _forge(a, match, **changes):
+    with pytest.raises(ValueError, match=match):
+        AssembledDigest(digest=a.digest, coverage=dataclasses.replace(a.coverage, **changes))
+
+
+def test_envelope_rejects_risk_cap_used_when_facts_not_all_ok():
+    a = assemble_digest(**full_kwargs(2, allocation=None))               # cap OK，lo／hi MISSING → 未採用(partial)
+    prov = A._oldest(A._segment_facts(a.digest, SEGMENT_RISK_CAP))
+    forged = _swap_seg(a.coverage, SEGMENT_RISK_CAP, used=True, source=prov[0], as_of=prov[1], withheld_reason=None)
+    with pytest.raises(ValueError, match="risk_cap 段 used"):            # provenance 對得上，只有 used 檢查能擋
+        AssembledDigest(digest=a.digest, coverage=forged)
+
+
+def test_envelope_rejects_market_used_when_facts_not_all_ok():
+    a = assemble_digest(**full_kwargs(2, macro_state=macro(health=float("nan"))))
+    prov = A._oldest(A._segment_facts(a.digest, SEGMENT_MARKET))
+    forged = _swap_seg(a.coverage, SEGMENT_MARKET, used=True, source=prov[0], as_of=prov[1], withheld_reason=None)
+    with pytest.raises(ValueError, match="market 段 used"):
+        AssembledDigest(digest=a.digest, coverage=forged)
+
+
+def test_envelope_rejects_market_unused_when_facts_all_ok():
+    a = _good_complete()
+    with pytest.raises(ValueError, match="market 段 used"):
+        AssembledDigest(digest=a.digest, coverage=_swap_seg(a.coverage, SEGMENT_MARKET, used=False,
+                                                            withheld_reason="stale"))
+
+
+def test_envelope_rejects_holdings_unused_but_digest_carries_facts():
+    a = _good_complete()
+    with pytest.raises(ValueError, match="holdings 段 used=False 但 digest.holdings 帶有行動事實"):
+        AssembledDigest(digest=a.digest, coverage=_swap_seg(a.coverage, SEGMENT_HOLDINGS, used=False,
+                                                            withheld_reason="stale"))
+
+
+def test_envelope_rejects_actions_unused_but_digest_carries_actions():
+    a = _good_complete()
+    forged = _swap_seg(a.coverage, SEGMENT_ACTIONS, used=False, withheld_reason="stale")
+    forged = dataclasses.replace(forged, actions_total_eligible=None, actions_omitted_count=None,
+                                 excluded_invalid_rows=None, actions_unmatched_dropped=None,
+                                 holdings_without_station_row=None)            # coverage 本身合法
+    assert validate_coverage(forged) == ()
+    with pytest.raises(ValueError, match="actions 段 used=False 但 digest.actions 帶有行動"):
+        AssembledDigest(digest=a.digest, coverage=forged)
+
+
+def test_envelope_rejects_unkeyed_none_when_digest_holdings_available():
+    a = _good_complete()
+    forged = _swap_seg(a.coverage, SEGMENT_HOLDINGS, used=False, withheld_reason="not_loaded")
+    forged = dataclasses.replace(forged, unkeyed_held_count=None)
+    assert validate_coverage(forged) == ()
+    with pytest.raises(ValueError, match="unkeyed_held_count 為 None"):
+        AssembledDigest(digest=a.digest, coverage=forged)
+
+
+def test_envelope_rejects_unkeyed_count_that_differs_from_digest():
+    _forge(_good_complete(), r"unkeyed_held_count\(1\)", unkeyed_held_count=1)
+
+
+def test_envelope_rejects_shown_not_equal_min_total_max():
+    a = _good_complete()                                                   # shown=2
+    _forge(a, "必須等於 min", actions_total_eligible=5, actions_omitted_count=3)   # coverage 合法，但 digest 只有 2 個
+
+
+def test_envelope_rejects_actions_shown_mismatch():
+    a = assemble_digest(**full_kwargs(5))                                  # shown=3
+    _forge(a, r"actions_shown\(2\)", actions_shown=2, actions_omitted_count=3)
+
+
+def test_envelope_rejects_digest_availability_flag_mismatch():
+    a = _good_complete()
+    _forge(a, "digest_holdings_available", digest_holdings_available=False)
+    _forge(a, "digest_actions_available", digest_actions_available=False)
+    z = assemble_digest(**full_kwargs(0, station_rows=[], holdings_rows=[]))
+    _forge(z, "digest_actions_available", digest_actions_available=True)
+
+
+def test_envelope_rejects_segment_provenance_that_differs_from_digest_facts():
+    a = _good_complete()
+    for name in (SEGMENT_MARKET, SEGMENT_RISK_CAP, SEGMENT_HOLDINGS, SEGMENT_ACTIONS):
+        for kw in (dict(as_of=D - timedelta(days=1)), dict(source="forged-source")):
+            with pytest.raises(ValueError, match=f"{name} 段 source／as_of"):
+                AssembledDigest(digest=a.digest, coverage=_swap_seg(a.coverage, name, **kw))
+
+
+def test_envelope_unverifiable_counts_are_a_documented_limitation_not_a_guard():
+    """據實：total／excluded／unmatched／holdings_without_station_row 在 digest 內看不到 → envelope 無法驗證。
+    本測試把這個限制釘住（自洽的偽造值會通過；它們只靠 builder parity 與測試保證）。見模組 docstring「已知限制」。"""
+    a = _good_complete()
+    forged = dataclasses.replace(a.coverage, excluded_invalid_rows=0, actions_unmatched_dropped=0,
+                                 holdings_without_station_row=0)           # 與真值相同，僅示範：這些欄位不被 digest 驗證
+    assert AssembledDigest(digest=a.digest, coverage=forged).coverage == a.coverage
+    assert "不防惡意偽造" in (A.AssembledDigest.__doc__ or "")
+    assert "不可能存在" not in (A.AssembledDigest.__doc__ or "")
+
+
+# ── 最舊 provenance（fresh macro＋舊 snapshot_ts 不得讓 coverage 看起來比 cap 事實新）──────────
+def test_risk_cap_segment_as_of_is_oldest_ok_fact_not_the_fresh_macro_stamp():
+    ms = macro(risk_cap_disclosure=disclosure("2026-10-20 18:30:00"))
+    a = assemble_digest(**full_kwargs(2, macro_state=ms, allocation=alloc(ms)))
+    rc, mk = seg(a, SEGMENT_RISK_CAP), seg(a, SEGMENT_MARKET)
+    assert rc.used is True and (rc.source, rc.as_of) == ("risk_cap_snapshot", date(2026, 10, 20))
+    assert (mk.source, mk.as_of) == ("macro_state.json", D)               # market 仍是 macro 戳日期
+    assert rc.as_of == a.digest.risk_cap.cap_pct.provenance.as_of
+
+
+def test_envelope_rejects_risk_cap_segment_claiming_the_newer_macro_stamp_date():
+    ms = macro(risk_cap_disclosure=disclosure("2026-10-20 18:30:00"))
+    a = assemble_digest(**full_kwargs(2, macro_state=ms, allocation=alloc(ms)))
+    with pytest.raises(ValueError, match="risk_cap 段 source／as_of"):
+        AssembledDigest(digest=a.digest, coverage=_swap_seg(a.coverage, SEGMENT_RISK_CAP, source="macro_state.json", as_of=D))
+
+
+# ── minor：全無事實時不用 partial ─────────────────────────────────────
+def test_all_facts_missing_is_not_loaded_not_partial():
+    ms = macro(regime="unknown", light="⬜", health=None, exposure_limit_pct=None)
+    a = assemble_digest(**full_kwargs(2, macro_state=ms, allocation=None))
+    assert not any(f.status is DataStatus.OK for f in a.digest.market.facts)
+    assert seg(a, SEGMENT_MARKET).withheld_reason == WITHHELD_NOT_LOADED
+    assert seg(a, SEGMENT_RISK_CAP).withheld_reason == WITHHELD_NOT_LOADED
+
+
+def test_partial_only_when_some_but_not_all_facts_ok():
+    a = assemble_digest(**full_kwargs(2, macro_state=macro(health=None)))   # regime／light OK，health 缺
+    assert seg(a, SEGMENT_MARKET).withheld_reason == WITHHELD_PARTIAL
+
+
+def test_station_rows_row_level_type_error_is_not_loud_when_evidence_withheld_documented_limit():
+    """已知限制（模組 docstring）：證據被拒用時，station_rows 列層級型別錯誤不會 fail loud；證據可用時會。"""
+    bad_rows = [row("A", "cut", held="yes")]
+    a = assemble_digest(**full_kwargs(0, station_rows=bad_rows, holdings_rows=holdings_for("A"),
+                                      holding_keys=keys_for("A"),
+                                      station_evidence=EvidenceInput(STATION_STAMP, F.STALE)))
+    assert a.coverage.is_complete is False
+    with pytest.raises(TypeError):
+        assemble_digest(**full_kwargs(0, station_rows=bad_rows, holdings_rows=holdings_for("A"),
+                                      holding_keys=keys_for("A")))
+    assert "已知限制" in (A.__doc__ or "")
