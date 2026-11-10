@@ -1357,3 +1357,6 @@ DEC-086 規則已於 main，本表已落地。
 | 已知限制（nits，未改） | 第二週未合併時覆寫會丟失中間的歷史躍遷並重蓋 `detected_at`；持續失敗的 ticker 因 `last_seen` 被忽略而不可見；workflow 守衛測試為文字／regex 型。 |
 | 其他直推 workflow | `update_forward_test`（下次 2026-12-02）、`update_fundamentals`（2026-11-21）、`calibrate_health_weights`（2027-01）、`update_health_history`（cron 已停用）**未變更**，很可能遇到同樣的 GH006；**不在 Issue #1116 授權內**，建議另案取得客戶授權。`recalibrate_macro` 2026-10-01 排程失敗原因未解釋（NOT VERIFIED）。 |
 | **下一個唯一安全接手點** | **無已授權的施工。** 2026-11-16 20:00 UTC 該次排程發生後，查驗 Actions run 結果與 `auto/data-etf-managers` PR 是否出現；D1–D5 仍**未授權**。下次接手仍須先重新 GitHub Gate。 |
+
+
+> 📌 **2026-11-10 更正（只追加；取代上方「需 repo admin 確認『Allow GitHub Actions to create and approve pull requests』」的客戶待辦）**：依 repo 擁有者在 PR #1118 留言（https://github.com/linchen-20200325/my-stock-dashboard/pull/1118 ，comment_id 6767308916，「GitHub 獨立覆核」）所附 Settings → Actions → General → Workflow permissions 截圖：該設定**已勾選**（原本即為此狀態，擁有者未更動），預設權限為「Read repository contents and packages permissions」（與 YAML job 層級 `contents: write` ＋ `pull-requests: write` 不矛盾）。**此為擁有者自述，截圖未存入 repo，非 repo／CI 獨立驗證。** 客戶**不再需要**確認此設定，上方該項待辦已被取代。**仍為 NOT VERIFIED**：(a) 真實 Actions job 以 GITHUB_TOKEN 成功建立資料 PR（首次排程 2026-11-16 週一 20:00 UTC；手動 dispatch 不算 PR required-check 證據）；(b) 該 PR 是否自動觸發 ui2-browser-gate（否則由有權限者 Close→Reopen／Update branch，不得繞過）。⚠️「設定已啟用」**不是**端到端成功的證據。

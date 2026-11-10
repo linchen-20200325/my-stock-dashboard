@@ -2160,3 +2160,6 @@
 - `ETF-MGR-DATA-PR-NIT-2`：持續失敗的 ticker 因 `last_seen` 為揮發鍵被忽略而在 PR diff 中不可見。低優先；**needs-client-authorization／非授權工作**。
 - `ETF-MGR-DATA-PR-NIT-3`：workflow 守衛測試為文字／regex 型，非語意解析。低優先；**needs-client-authorization／非授權工作**。
 - `GH006-OTHER-DIRECT-PUSH-WORKFLOWS`：`update_forward_test`（下次 2026-12-02）、`update_fundamentals`（2026-11-21）、`calibrate_health_weights`（2027-01）、`update_health_history`（cron 已停用）仍為直推 main，**很可能遇到同樣的 GH006**；**不在 Issue #1116 授權範圍內**，建議另案由客戶授權後處理。低優先；**needs-client-authorization／非授權工作**（§-1）。另 `recalibrate_macro` 2026-10-01 排程失敗原因未解釋（**NOT VERIFIED**）。
+
+
+- `ETF-MGR-DATA-PR-1` 更正（2026-11-10，只追加；取代上方「客戶待辦 (a) 由 repo admin 確認『Allow GitHub Actions to create and approve pull requests』」）：依擁有者在 PR #1118 留言（comment_id 6767308916）所附截圖，該設定**已勾選**、預設為 Read repository contents and packages permissions（與 job 層級 `contents: write`＋`pull-requests: write` 不矛盾）；**擁有者自述，截圖未存入 repo，非 repo／CI 獨立驗證**；客戶不再需要確認此設定。**仍為 NOT VERIFIED**：(a) 真實 Actions job 以 GITHUB_TOKEN 成功建立資料 PR（首次排程 2026-11-16 週一 20:00 UTC；手動 dispatch 不算 PR required-check 證據）；(b) 該 PR 是否自動觸發 ui2-browser-gate（否則由有權限者 Close→Reopen／Update branch，不得繞過）。「設定已啟用」不是端到端成功的證據。
