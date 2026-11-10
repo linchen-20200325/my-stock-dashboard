@@ -1344,3 +1344,16 @@ DEC-086 規則已於 main，本表已落地。
 
 
 > 📌 **2026-11-10 追記（只追加）｜Issue #1116**：ETF 經理人週更 workflow 已改走資料 PR（`auto/data-etf-managers`，`scripts/publish_data_pr.py --job etf-managers`），取代被 GH006 擋下的裸 `git push`；範圍僅限該 workflow 發布步驟＋helper 一個路徑鍵登記＋`tests/test_etf_managers_data_pr.py`＋本類文件。**執行期效果 NOT VERIFIED**——要等一次真實排程（下次 2026-11-16 週一 20:00 UTC）實際開出 PR；手動 workflow_dispatch 結果不可當 PR required-check 證據。首個 PR 需有權限者 Close→Reopen／Update branch 觸發 required check 後人工合併，不得繞過。
+
+
+> 📌 **2026-11-10 追記（只追加；取代上方 Issue #1116 追記中「合併前／待 QA」的措辭）｜PR #1117 已合併**：
+
+| 項目 | 內容 |
+|---|---|
+| 合併事實 | PR #1117（Issue #1116 ETF 經理人 GH006 最小修補）已 squash-merge → main `aa69d99e8674da17c23e1153aa677551b5837704`（head `2cb2fb7ea8f8d276cee42ec9e91c22f23fcf9a80`）。同 head 五項 CI 全 success（run 42810373018）。 |
+| 非作者 QA | **PASS**：https://github.com/linchen-20200325/my-stock-dashboard/pull/1117#issuecomment-6767043147 （7 項突變皆被測試抓到；fast lane 38576 passed／0 failed；browser lane 41 passed；以 workflow 實際安裝的 pip 套件建 clean venv，helper 可正常 import）。 |
+| 變更內容 | `update_etf_managers.yml` 改以 `scripts/publish_data_pr.py --job etf-managers` 發布（分支 `auto/data-etf-managers` ＋ PR；不直推 main；job 權限 contents＋pull-requests write；concurrency；fetch-depth 0）。helper registry 新增 `src/data/etf/etf_managers.json` → 揮發鍵 `{updated_at, last_seen, tenure_days}`。 |
+| NOT VERIFIED（客戶待辦） | (1) 尚無任何一次真實 Actions 發布；下次排程 **2026-11-16（週一）20:00 UTC**；手動 dispatch 不等於 PR required-check 證據。(2) 倉庫設定「Allow GitHub Actions to create and approve pull requests」QA 提示可能未勾選，**需 repo admin 確認**；未勾選時 `gh pr create` 會大聲失敗、job 轉紅（分支仍已推送）。(3) GITHUB_TOKEN 建立的 PR 是否會觸發 ui2-browser-gate 未證實；PR 內文已指示有權限者以 Close→Reopen 或 Update branch 觸發，不繞過。 |
+| 已知限制（nits，未改） | 第二週未合併時覆寫會丟失中間的歷史躍遷並重蓋 `detected_at`；持續失敗的 ticker 因 `last_seen` 被忽略而不可見；workflow 守衛測試為文字／regex 型。 |
+| 其他直推 workflow | `update_forward_test`（下次 2026-12-02）、`update_fundamentals`（2026-11-21）、`calibrate_health_weights`（2027-01）、`update_health_history`（cron 已停用）**未變更**，很可能遇到同樣的 GH006；**不在 Issue #1116 授權內**，建議另案取得客戶授權。`recalibrate_macro` 2026-10-01 排程失敗原因未解釋（NOT VERIFIED）。 |
+| **下一個唯一安全接手點** | **無已授權的施工。** 2026-11-16 20:00 UTC 該次排程發生後，查驗 Actions run 結果與 `auto/data-etf-managers` PR 是否出現；D1–D5 仍**未授權**。下次接手仍須先重新 GitHub Gate。 |

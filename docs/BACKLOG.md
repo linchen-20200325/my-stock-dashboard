@@ -2153,3 +2153,10 @@
 
 
 - `ETF-MGR-DATA-PR-1`（2026-11-10，Issue #1116 客戶授權之最小修補；只追加）：`update_etf_managers.yml` 發布步驟已改走 `publish_data_pr.py --job etf-managers`。**NOT VERIFIED**：真實 Actions 發布 PR（下次排程 2026-11-16 週一 20:00 UTC）；首次 PR 出現後須由有權限者以原生 pull_request 事件觸發 required check（Close→Reopen／Update branch）再人工合併，手動 dispatch 不算 PR 證據。已知取捨（未改）：揮發鍵含 `tenure_days`，故兩次 PR 之間 main 上的 `tenure_days`／`last_seen` 可能落後最多一個 PR 週期；helper 對既有分支上的 JSON 為「以最新腳本輸出覆寫」（非 parquet 式 union），重跑僅時間戳不同時會多一個刷新 commit（不重開 PR）。未經客戶授權不調整。
+
+
+- `ETF-MGR-DATA-PR-1` 更新（2026-11-10，只追加；取代上方「待 QA／合併前」措辭）：PR #1117 已 squash-merge → main `aa69d99e8674da17c23e1153aa677551b5837704`；同 head 五項 CI success（run 42810373018）；非作者 QA PASS（https://github.com/linchen-20200325/my-stock-dashboard/pull/1117#issuecomment-6767043147）。**客戶待辦（NOT VERIFIED）**：(a) 由 repo admin 確認「Allow GitHub Actions to create and approve pull requests」已勾選（未勾選則 `gh pr create` 大聲失敗、job 轉紅、分支仍已推送）；(b) 觀察 2026-11-16 週一 20:00 UTC 排程：Actions run 結果與 `auto/data-etf-managers` PR 是否出現；(c) GITHUB_TOKEN 建立之 PR 是否觸發 ui2-browser-gate 未證實，必要時由有權限者 Close→Reopen／Update branch，不繞過。
+- `ETF-MGR-DATA-PR-NIT-1`：第二週前一個 PR 未合併即再次發布時，helper 以最新輸出覆寫分支，會丟失中間歷史躍遷並重蓋 `detected_at`。低優先；**needs-client-authorization／非授權工作**（§-1，無實際 bug 觸發不動）。
+- `ETF-MGR-DATA-PR-NIT-2`：持續失敗的 ticker 因 `last_seen` 為揮發鍵被忽略而在 PR diff 中不可見。低優先；**needs-client-authorization／非授權工作**。
+- `ETF-MGR-DATA-PR-NIT-3`：workflow 守衛測試為文字／regex 型，非語意解析。低優先；**needs-client-authorization／非授權工作**。
+- `GH006-OTHER-DIRECT-PUSH-WORKFLOWS`：`update_forward_test`（下次 2026-12-02）、`update_fundamentals`（2026-11-21）、`calibrate_health_weights`（2027-01）、`update_health_history`（cron 已停用）仍為直推 main，**很可能遇到同樣的 GH006**；**不在 Issue #1116 授權範圍內**，建議另案由客戶授權後處理。低優先；**needs-client-authorization／非授權工作**（§-1）。另 `recalibrate_macro` 2026-10-01 排程失敗原因未解釋（**NOT VERIFIED**）。
