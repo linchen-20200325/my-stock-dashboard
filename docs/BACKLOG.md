@@ -2141,3 +2141,12 @@
 - `ISSUE1110-NOT-VERIFIED`：Cloud 端 Secret 載入／API 可達與認證／資料日全部 NOT VERIFIED；關閉方式＝Cloud 管理員提供一張只含布林／HTTP 狀態／資料日的表，不含 Key、尾碼或 Secrets 截圖。
 
 - 📌 **2026-11-10 追記（只追加）｜`ISSUE1110-SEC-LEGACY-PARTIAL-KEY-MASK`（D6）已有實作分支**（客戶 D6 授權見 `docs/DECISIONS.md` 2026-11-10 紀錄／Issue #1113）：分支 `fix/legacy-diagnostic-secret-display-20261110`，未合併前狀態＝「實作完成、待獨立 QA／CI」。內容＝舊診斷頁只顯示固定 Key 名稱＋已設定／未設定／解析失敗＋來源標籤；探測結果只顯示成功／失敗＋整數 HTTP 狀態＋固定錯誤類別；側欄 Proxy 只顯示已設定／未設定。**NOT VERIFIED**：Cloud 端 Secrets 是否載入、各 API 的真實認證結果（沙箱無憑證、不連網）。**另列、未處理**：診斷頁探測 `verify=False`（請求語意，D6 授權範圍外）可能需獨立 Gate；`proxy_helper.get_proxy_config` 在 secrets 讀取失敗時會把例外原文印到 stderr（本頁以 stderr 導向丟棄擋住，來源模組未動）。D1–D5 仍未授權。
+
+📌 **2026-11-10｜PR #1114（Issue #1113，D6）已合併；殘留資安項登記（只追加；以下皆為低優先、`needs-client-authorization`，不是已授權工作，CLAUDE.md §-1）**：PR #1114 squash-merge → main `da675689e5010795bc87f5a56d3136ff1747d1cf`（head `04317f81965341db200b0855215bc0eb19ace3dd`；同 head 五項 CI success，run 42786020284；非作者資安 QA 第一輪 FAIL→回修→delta QA PASS，見 PR #1114 comment 6763597615）。上方「已有實作分支、待獨立 QA／CI」措辭以本條為準。fast lane 38536 passed／0 failed；browser lane 41 passed。
+- `SEC-D6-RESIDUAL-FINMIND-TOKEN-LEN`：`tab_macro.py` 仍顯示 FinMind token 長度。低優先；**needs-client-authorization**。
+- `SEC-D6-RESIDUAL-PROXY-STDERR`：`proxy_helper.get_proxy_config` 將例外原文印到 stderr；診斷頁以鎖＋stderr 導向擋住，但該鎖只序列化本函式的交換，呼叫視窗內他執行緒的 stderr 輸出會被一併吞掉。低優先；**needs-client-authorization**（來源模組在 D6 範圍外）。
+- `SEC-D6-RESIDUAL-HEALTH-INSPECTOR-PROXY-MSG`：`health_inspector.py` proxy 測試訊息（已經 scrub）。低優先；**needs-client-authorization**。
+- `SEC-D6-RESIDUAL-VERIFY-FALSE`：診斷探測使用 `verify=False`（請求語意，D6 授權範圍外，可能需獨立 Gate）。低優先；**needs-client-authorization**。
+- `SEC-D6-RESIDUAL-URLLIB3-DEBUG-QUERY`：urllib3 DEBUG 日誌可能帶出 FRED query string（既有問題，非顯示面）。低優先；**needs-client-authorization**。
+- **AI 建議（需客戶授權；非授權工作）— 可能的後續資安批次（建議順序）**：(1) 移除 token 長度顯示（`tab_macro.py`）；(2) `proxy_helper` 改為不印例外原文（只記固定類別），即可拿掉診斷頁的 stderr 導向與鎖；(3) 診斷探測改為驗證憑證（移除 `verify=False`），先評估對 NAS／自簽 proxy 的相容性；(4) 在日誌設定層對 urllib3 DEBUG 做 query string 遮罩或固定層級。理由＝依風險由「直接顯示」到「間接日誌」。**未經客戶授權不得動工**；若授權，每項各自走獨立 Gate／QA。
+- `SEC-D6-NOT-VERIFIED`：Streamlit Cloud 真實 Secrets 載入／API 認證／真實多 session 並行，以及舊側欄洩漏是否曾在 production 發生，皆 **NOT VERIFIED**。D1–D5 仍未授權；#1107 仍 PARTIAL；Issues #1110／#1113／#1108 保持開啟由客戶決定是否關閉。
