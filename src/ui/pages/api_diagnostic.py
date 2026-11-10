@@ -20,9 +20,10 @@ from __future__ import annotations
 
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 
-import contextlib
 import io
 import os
+import sys
+import threading
 import time
 import streamlit as st
 
@@ -68,6 +69,20 @@ def _safe_secret(key: str):
         return None, True
 
 
+def _secrets_path_exists() -> bool | None:
+    """設定的 secrets 路徑裡是否至少有一個真的存在？（讀不出設定 → None）
+
+    Streamlit 對「沒有 secrets 檔」與「檔案 TOML 壞掉」丟同一種例外
+    （都是 StreamlitSecretNotFoundError），只能靠檔案是否存在區分。⛔ 只回布林，路徑不外流。
+    """
+    try:
+        from streamlit import config as _st_config
+        return any(os.path.exists(os.path.expanduser(str(p)))
+                   for p in (_st_config.get_option('secrets.files') or []))
+    except Exception:
+        return None
+
+
 def _resolve_key(key: str) -> dict:
     """回傳一把 key 的解析結果：名稱、來源、狀態、值（僅供探測用，⛔ 不上畫面）。"""
     sec_val, sec_failed = _safe_secret(key)
@@ -76,8 +91,10 @@ def _resolve_key(key: str) -> dict:
         return {'name': key, 'source': SRC_SECRETS, 'val': sec_val, 'state': STATE_SET}
     if env_val:
         return {'name': key, 'source': SRC_ENV, 'val': env_val, 'state': STATE_SET}
+    # 讀取失敗且「根本沒有任何 secrets 檔」＝ 單純沒設定；有檔但讀不了（或判不出來）才是解析失敗
+    failed = sec_failed and _secrets_path_exists() is not False
     return {'name': key, 'source': SRC_NONE, 'val': '',
-            'state': STATE_PARSE_FAIL if sec_failed else STATE_UNSET}
+            'state': STATE_PARSE_FAIL if failed else STATE_UNSET}
 
 
 def _classify_exception(e: BaseException) -> str:
@@ -134,16 +151,37 @@ def _probe(label: str, url: str, params: dict | None = None,
         return False, _classify_exception(e)
 
 
+#: 序列化「save → swap → call → restore」整段（QA M1）：`sys.stderr` 是行程全域，
+#: 多個 Streamlit session（執行緒）同時進來時，沒有鎖會交錯成「B 存到 A 的暫存緩衝、A 還原、B 再還原成 A 的緩衝」，
+#: 讓 `sys.stderr` 永遠停在一個 StringIO 上。
+_STDERR_LOCK = threading.Lock()
+
+
 def _get_proxy_config_quiet():
-    """取 proxy 設定；⛔ 吞掉 `get_proxy_config` 內部可能印到 stderr 的例外原文。
+    """取 proxy 設定；⛔ 吞掉 `get_proxy_config` 內部可能印到 stderr 的例外原文。回傳 (cfg, read_failed)。
 
     `proxy_helper.get_proxy_config` 在 st.secrets 讀取失敗時會把例外原文印到 stderr
     （不在本頁修補範圍）；本頁呼叫它時把 stderr 暫時導向丟棄，避免診斷頁觸發該輸出。
-    回傳值與呼叫語意不變。
+
+    - 鎖只包住「換 stderr → 呼叫 → 還原」這一小段；import 在鎖外。還原一律在 `finally`、還原的是
+      **當初存下的那個物件**（不用 `contextlib.redirect_stderr`：它在多執行緒下會交錯）。
+    - 若 `get_proxy_config` 本身丟例外：不讓例外原文跑到 Streamlit 的紅色 traceback 框
+      （訊息可能夾帶 URL／金鑰）；回傳 (None, True)，由頁面顯示固定文字。
+    - ⚠️ 殘留限制（據實）：鎖只能序列化**本函式**的交換；(a) 視窗內其他執行緒印到 stderr 的內容會被一併丟棄
+      （視窗只含這一次 `get_proxy_config` 呼叫）；(b) 若行程內**別的程式**也在交換 `sys.stderr`
+      （例如 pytest capture、外部 `contextlib.redirect_stderr`），本鎖管不到它們。repo 內 app／src／shared／scripts
+      沒有其他交換 stderr 的程式碼（2026-11-10 grep）。
     """
     from src.data.proxy import get_proxy_config
-    with contextlib.redirect_stderr(io.StringIO()):
-        return get_proxy_config()
+    with _STDERR_LOCK:
+        saved = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            return get_proxy_config(), False
+        except Exception:
+            return None, True   # ⛔ 不保留、不顯示例外原文
+        finally:
+            sys.stderr = saved
 
 
 def render_api_diagnostic():
@@ -191,8 +229,10 @@ def render_api_diagnostic():
     # ── §3 PROXY 配置診斷（最容易害死全站的兇手）─────────
     st.markdown('---')
     st.markdown('#### 🚧 Proxy 配置診斷（最常見的「全部抓不到」根因）')
-    proxy_cfg = _get_proxy_config_quiet()
-    if proxy_cfg:
+    proxy_cfg, proxy_read_failed = _get_proxy_config_quiet()
+    if proxy_read_failed:
+        st.warning('⚠️ Proxy 設定讀取失敗（無法判定是否已設定），以下實測只做直連')
+    elif proxy_cfg:
         st.warning(
             '⚠️ Proxy 已設定\n\n'
             '**警告**：Streamlit Cloud（美/歐機房）走家用 NAS proxy 經常不通——\n'
@@ -257,7 +297,7 @@ def render_api_diagnostic():
             with col1:
                 st.markdown(f'**{label} — 走 Proxy** ({t_p:.1f}s)')
                 if not proxy_cfg:
-                    st.info('未設定 proxy，略過')
+                    st.info('略過（proxy 設定讀取失敗）' if proxy_read_failed else '未設定 proxy，略過')
                 elif ok_p:
                     st.success(msg_p)
                 else:

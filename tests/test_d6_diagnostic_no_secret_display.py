@@ -291,16 +291,42 @@ def test_env_fallback_reports_source_without_value(monkeypatch, capsys, caplog):
     assert tbl["PROXY_URL"]["狀態"] == "未設定" and tbl["PROXY_URL"]["使用來源"] == "none"
 
 
-def test_no_secrets_object_at_all_still_renders_states_only(monkeypatch, capsys, caplog):
-    """CI／本機常見：根本沒有 secrets 檔。key 只在 env → 已設定(os.environ)；其餘 → 未設定／解析失敗（固定字）。"""
-    _clean_env(monkeypatch)
-    _stub_proxy(monkeypatch, None)
-    at, blob = _run_page(monkeypatch, capsys, caplog, env={"FRED_API_KEY": LONG})
+def test_no_secrets_file_at_all_unset_keys_say_unset_not_parse_failure(monkeypatch, capsys, caplog, tmp_path):
+    """CI／本機常見：根本沒有 secrets 檔（真的 Secrets 物件，路徑指向不存在的檔）。
+    env 有的 → 已設定(os.environ)；env 沒有的 → **未設定**（不是「解析失敗」）。精確斷言，不再接受兩種。"""
+    import streamlit as st
+    from streamlit import config as st_config
+    from streamlit.runtime.secrets import Secrets
+    orig = st_config.get_option("secrets.files")
+    st_config.set_option("secrets.files", [str(tmp_path / "nope" / "secrets.toml")])
+    try:
+        secrets_obj = Secrets()
+        with pytest.raises(Exception):                       # 前提：這個物件對任何 key 都會丟例外
+            "GEMINI_API_KEY" in secrets_obj
+        _clean_env(monkeypatch)
+        monkeypatch.setattr(st, "secrets", secrets_obj)
+        _stub_proxy(monkeypatch, None)
+        at, blob = _run_page(monkeypatch, capsys, caplog, env={"FRED_API_KEY": LONG})
+    finally:
+        st_config.set_option("secrets.files", orig)
     assert leaks_in(blob) == [], leaks_in(blob)
+    assert str(tmp_path) not in blob
     tbl = _table(at)
     assert tbl["FRED_API_KEY"]["狀態"] == "已設定" and tbl["FRED_API_KEY"]["使用來源"] == "os.environ"
-    assert tbl["GEMINI_API_KEY"]["狀態"] in ("未設定", "解析失敗")
-    assert tbl["GEMINI_API_KEY"]["使用來源"] == "none"
+    for name in ("GEMINI_API_KEY", "FINMIND_TOKEN", "PROXY_URL", "PROXY_HOST", "PROXY_PORT"):
+        assert tbl[name]["狀態"] == "未設定" and tbl[name]["使用來源"] == "none", (name, tbl[name])
+    assert "解析失敗" not in "".join(r["狀態"] for r in tbl.values())
+
+
+def test_existing_but_broken_secrets_file_stays_parse_failure(monkeypatch, capsys, caplog, broken_secrets):
+    """對照組：檔案存在但壞掉 → 沒有 env 的 key 仍是「解析失敗」（不得被上面的修正吃成「未設定」）。"""
+    import streamlit as st
+    monkeypatch.setattr(st, "secrets", broken_secrets[0])
+    _clean_env(monkeypatch)
+    _stub_proxy(monkeypatch, None)
+    at, _ = _run_page(monkeypatch, capsys, caplog)
+    tbl = _table(at)
+    assert all(r["狀態"] == "解析失敗" for r in tbl.values())
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -670,3 +696,151 @@ def test_unmutated_page_passes_the_same_check(monkeypatch, capsys, caplog):
     _install_requests(monkeypatch, _plan)
     _, blob = _run_page(monkeypatch, capsys, caplog, secrets=dict(_ALL_SET), click=True)
     assert leaks_in(blob) == []
+
+
+# ══════════════════════════════════════════════════════════════════
+# 6. QA M1：stderr 交換必須執行緒安全，且例外原文到不了 Streamlit 的紅色 traceback 框
+# ══════════════════════════════════════════════════════════════════
+import threading
+import time
+
+
+def _hammer_quiet(monkeypatch, AD, n=6, hold=0.15, stagger=0.02):
+    """n 個執行緒（錯開 `stagger` 秒、每次呼叫在 get_proxy_config 內停 `hold` 秒）同時走 `_get_proxy_config_quiet`。
+    回傳 (交換前的 sys.stderr, 交換後的 sys.stderr, 視窗內各執行緒看到的 sys.stderr 是否都是 StringIO)。"""
+    import io
+    import src.data.proxy.proxy_helper as ph
+    seen: list[bool] = []
+
+    def _slow():
+        seen.append(isinstance(sys.stderr, io.StringIO))
+        time.sleep(hold)
+        return {"http": PROXY_URL, "https": PROXY_URL}
+
+    monkeypatch.setattr(ph, "get_proxy_config", _slow)
+    before = sys.stderr
+    results: list = []
+
+    def _worker(i):
+        time.sleep(i * stagger)
+        results.append(AD._get_proxy_config_quiet())
+
+    ts = [threading.Thread(target=_worker, args=(i,)) for i in range(n)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(timeout=30)
+    assert not any(t.is_alive() for t in ts)
+    assert len(results) == n
+    return before, sys.stderr, seen, results
+
+
+def test_concurrent_sessions_leave_sys_stderr_exactly_as_found(monkeypatch):
+    import src.ui.pages.api_diagnostic as AD
+    before, after, seen, results = _hammer_quiet(monkeypatch, AD)
+    assert after is before, "多執行緒交錯後 sys.stderr 不是原本那個物件（M1）"
+    assert all(seen), "視窗內 stderr 應被導向丟棄緩衝"
+    assert all(r == ({"http": PROXY_URL, "https": PROXY_URL}, False) for r in results), "回傳值語意不變"
+
+
+def test_mutation_without_the_lock_the_same_scenario_corrupts_stderr(monkeypatch):
+    """突變：把鎖換成空操作（＝舊的 redirect_stderr 交錯行為）→ 同一情境必須留下被污染的 sys.stderr。
+    證明上一條真的有鑑別力（鎖被拿掉它會紅），而不是情境太鬆。"""
+    import contextlib
+    import src.ui.pages.api_diagnostic as AD
+    monkeypatch.setattr(AD, "_STDERR_LOCK", contextlib.nullcontext())
+    before = sys.stderr
+    try:
+        _, after, _, _ = _hammer_quiet(monkeypatch, AD)
+        assert after is not before, "無鎖版本沒有被污染——情境沒有鑑別力"
+    finally:
+        sys.stderr = before   # 把被突變污染的全域還原，免得拖累後面的測試
+
+
+def test_old_redirect_stderr_implementation_would_also_fail_this_scenario(monkeypatch):
+    """對照舊實作（contextlib.redirect_stderr 無鎖）本身：同一情境下同樣被污染（M1 的原始重現）。"""
+    import contextlib
+    import io
+    import src.ui.pages.api_diagnostic as AD
+
+    def _old_quiet():
+        from src.data.proxy import get_proxy_config
+        with contextlib.redirect_stderr(io.StringIO()):
+            return get_proxy_config(), False
+
+    monkeypatch.setattr(AD, "_get_proxy_config_quiet", _old_quiet)
+    before = sys.stderr
+    try:
+        _, after, _, _ = _hammer_quiet(monkeypatch, AD)
+        assert after is not before
+    finally:
+        sys.stderr = before
+
+
+def test_stderr_restored_when_get_proxy_config_raises_and_text_never_escapes(monkeypatch):
+    import src.data.proxy.proxy_helper as ph
+    import src.ui.pages.api_diagnostic as AD
+
+    def _boom():
+        raise RuntimeError(f"boom {LONG} {PROXY_URL} {BODY_MARK}")
+
+    monkeypatch.setattr(ph, "get_proxy_config", _boom)
+    before = sys.stderr
+    got = AD._get_proxy_config_quiet()          # 不得把例外拋出去（否則文字會進 Streamlit 的紅色 traceback 框）
+    assert got == (None, True)
+    assert sys.stderr is before
+    assert not AD._STDERR_LOCK.locked(), "例外後鎖必須釋放"
+    assert AD._get_proxy_config_quiet() == (None, True)   # 鎖沒卡死，可再進入
+
+
+def test_stderr_restored_even_for_baseexception(monkeypatch):
+    import src.data.proxy.proxy_helper as ph
+    import src.ui.pages.api_diagnostic as AD
+
+    def _kb():
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(ph, "get_proxy_config", _kb)
+    before = sys.stderr
+    with pytest.raises(KeyboardInterrupt):
+        AD._get_proxy_config_quiet()
+    assert sys.stderr is before and not AD._STDERR_LOCK.locked()
+
+
+def test_page_when_proxy_config_raises_shows_fixed_text_only(monkeypatch, capsys, caplog):
+    import src.data.proxy.proxy_helper as ph
+    _clean_env(monkeypatch)
+
+    def _boom():
+        raise RuntimeError(f"boom {LONG} {PROXY_URL} {BODY_MARK}")
+
+    monkeypatch.setattr(ph, "get_proxy_config", _boom)
+    calls = _install_requests(monkeypatch, lambda host, proxied: _Resp(200, f"{BODY_MARK}{LONG}"))
+    at, blob = _run_page(monkeypatch, capsys, caplog, secrets={"FRED_API_KEY": LONG}, click=True)
+    assert not at.exception                                   # 沒有紅色 traceback 框
+    assert leaks_in(blob) == [], leaks_in(blob)
+    assert "RuntimeError" not in blob and "boom" not in blob
+    assert "Proxy 設定讀取失敗" in blob
+    assert "Proxy 未設定" not in blob, "讀取失敗不得被說成『未設定』"
+    assert len(calls) == 5 and all(c.get("proxies") is None for c in calls), "失敗時只做直連，不假裝有 proxy"
+    assert "略過（proxy 設定讀取失敗）" in blob
+
+
+def test_premise_still_holds_stderr_leak_vector_is_real_and_page_contains_it(monkeypatch, capsys, broken_secrets):
+    """保留的前提測試（再確認一次）：未包裝時確實外洩；經 `_get_proxy_config_quiet` 後 stderr 乾淨且被還原。"""
+    import streamlit as st
+    import src.data.proxy.proxy_helper as ph
+    import src.ui.pages.api_diagnostic as AD
+    _clean_env(monkeypatch)
+    monkeypatch.setattr(st, "secrets", broken_secrets[0])
+    monkeypatch.setattr(ph, "_PROXY_CFG_CACHE", None)
+    monkeypatch.setattr(ph, "_PROXY_CFG_TS", 0.0)
+    capsys.readouterr()
+    ph.get_proxy_config()
+    assert PATH_USER in capsys.readouterr().err
+    monkeypatch.setattr(ph, "_PROXY_CFG_CACHE", None)
+    monkeypatch.setattr(ph, "_PROXY_CFG_TS", 0.0)
+    before = sys.stderr
+    AD._get_proxy_config_quiet()
+    assert sys.stderr is before
+    assert PATH_USER not in capsys.readouterr().err

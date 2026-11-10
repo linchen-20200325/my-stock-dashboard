@@ -1328,3 +1328,5 @@ DEC-086 規則已於 main，本表已落地。
 | NOT VERIFIED | Streamlit Cloud 上 Secrets 是否載入、各 API 實際認證結果；沙箱無憑證、未連網。 |
 | 未處理（另列） | `verify=False`（請求語意，授權範圍外，可能需獨立 Gate）；`proxy_helper.get_proxy_config` 於 secrets 讀取失敗時將例外原文印到 stderr（來源模組不在授權範圍；本頁以 stderr 導向丟棄擋住）。 |
 | 下一個唯一安全接手點 | 等本分支獨立 QA／CI 與 PR 流程；D1–D5 仍**未授權**，無其他已授權施工。下次接手仍須先重新 GitHub Gate。 |
+
+> 📌 **2026-11-10 追記（只追加；Issue #1113 獨立資安 QA 回修）**：QA 指出診斷頁 `_get_proxy_config_quiet` 的 `contextlib.redirect_stderr` 在多 session 並行下會讓 `sys.stderr` 永久停在緩衝上（M1，已示範）。回修：以模組層 `threading.Lock` 序列化「換→呼叫→還原」，`finally` 還原當初存下的物件；`get_proxy_config` 丟例外時頁面只顯示固定文字、不外洩原文；無任何 secrets 檔時未設定的 key 改顯「未設定」。**殘留（據實）**：鎖管不到行程內他人對 `sys.stderr` 的交換，且視窗內他執行緒的 stderr 輸出會被一併丟棄（視窗僅含單次 `get_proxy_config` 呼叫）。
