@@ -2129,3 +2129,13 @@
 - `NUI2-MARKET-ORDER-B-NIT-DEC157-OWNER`：DEC-157「決策者」欄寫 AI 總管，而授權來源為客戶 Cloud 截圖回饋；以 DECISIONS 末的追加註釋釐清（不改原行）。
 - `NUI2-MARKET-ORDER-B-NIT-GITSHA`：commit 進 repo 的證據 JSON `meta.git_sha`＝base `1f3c489`（`source_hash` 正確）。
 - `NUI2-MARKET-ORDER-B-NOT-VERIFIED`：OneBrain 缺席情境在真實瀏覽器 NOT VERIFIED（僅單元測試＋突變）；Streamlit Cloud 線上實況 NOT VERIFIED（需客戶重看三張 Cloud 截圖）；QA 未自行執行 Streamlit 1.56.0（以 CI 該腿 success 為據）。
+
+📌 **2026-11-10｜Issue #1110 研究紀錄落盤（只追加；docs-only；以下皆為「需客戶授權」，不是已授權工作，CLAUDE.md §-1）**：證據文件 `docs/vnext/ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md`（基準 main `db04dac`）。
+- `ISSUE1110-D1-US10Y-CALIBER`：美債 10 年期殖利率口徑（AI 推薦：官方 FRED DGS10＋資料日）；裁示後才可評估單一 FRED 最小唯讀 adapter。**未授權**。
+- `ISSUE1110-D2-VIX`：VIX 先留空，待 `VN1-PG-VIX-ASOF`（只用已完成收盤）實作並驗證後再議。**未授權**。
+- `ISSUE1110-D3-SPREAD`：利差定義（10Y-2Y／10Y-3M）與是否授權新增取數（AI 推薦：先留空；repo 內目前無任何利差取數）。**未授權**。
+- `ISSUE1110-D4-PMI`：台灣 PMI vs 景氣燈號（AI 推薦：留空，或僅在標示「proxy／抓取未確認」下顯示；須先於 `CACHE_DATASET_CADENCE` 登錄 `tw_pmi`；DEC-155 禁止 proxy PMI 成為正式訊號）。**未授權**。
+- `ISSUE1110-D5-LANDING-CRON`：是否為 VIX／US10Y 新增每日落地排程（AI 推薦：不授權，除非客戶需要首屏即時顯示）。**未授權**。
+- `ISSUE1110-SEC-LEGACY-PARTIAL-KEY-MASK`（D6，資安）：舊 UI `src/ui/pages/api_diagnostic.py` 顯示 Secret 前後 4 字元＋長度＋全部 Secret 名，`app.py` 側欄在 `PROXY_HOST` 空而 `PROXY_URL`、`PROXY_PORT` 有值時可能印出整段 `PROXY_URL`。建議最小 PR：只顯示名稱＋來源＋布林、proxy 只顯示已設定／未設定、探測結果只顯示通過／失敗＋HTTP 狀態且不顯示 body 片段；動手前先查 `tests/test_sec3_scrub_legacy_pages.py` 期望。涉及舊 UI，**須客戶授權**；授權前不要截圖該頁與側欄。
+- `ISSUE1110-DXY-UUP-LABEL`：舊戰情 `daily_data_fetchers` 備援鏈 `DX-Y.NYB→DX=F→UUP` 回傳無 `source`／`is_proxy` 標籤；顯示卡片路徑是否擋 UUP **NOT VERIFIED**。低優先，無實際 bug 觸發前不動。
+- `ISSUE1110-NOT-VERIFIED`：Cloud 端 Secret 載入／API 可達與認證／資料日全部 NOT VERIFIED；關閉方式＝Cloud 管理員提供一張只含布林／HTTP 狀態／資料日的表，不含 Key、尾碼或 Secrets 截圖。
