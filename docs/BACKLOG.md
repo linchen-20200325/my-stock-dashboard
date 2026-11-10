@@ -2139,3 +2139,5 @@
 - `ISSUE1110-SEC-LEGACY-PARTIAL-KEY-MASK`（D6，資安）：舊 UI `src/ui/pages/api_diagnostic.py` 顯示 Secret 前後 4 字元＋長度＋全部 Secret 名，`app.py` 側欄在 `PROXY_HOST` 空而 `PROXY_URL`、`PROXY_PORT` 有值時可能印出整段 `PROXY_URL`。建議最小 PR：只顯示名稱＋來源＋布林、proxy 只顯示已設定／未設定、探測結果只顯示通過／失敗＋HTTP 狀態且不顯示 body 片段；動手前先查 `tests/test_sec3_scrub_legacy_pages.py` 期望。涉及舊 UI，**須客戶授權**；授權前不要截圖該頁與側欄。
 - `ISSUE1110-DXY-UUP-LABEL`：舊戰情 `daily_data_fetchers` 備援鏈 `DX-Y.NYB→DX=F→UUP` 回傳無 `source`／`is_proxy` 標籤；顯示卡片路徑是否擋 UUP **NOT VERIFIED**。低優先，無實際 bug 觸發前不動。
 - `ISSUE1110-NOT-VERIFIED`：Cloud 端 Secret 載入／API 可達與認證／資料日全部 NOT VERIFIED；關閉方式＝Cloud 管理員提供一張只含布林／HTTP 狀態／資料日的表，不含 Key、尾碼或 Secrets 截圖。
+
+- 📌 **2026-11-10 追記（只追加）｜`ISSUE1110-SEC-LEGACY-PARTIAL-KEY-MASK`（D6）已有實作分支**（客戶 D6 授權見 `docs/DECISIONS.md` 2026-11-10 紀錄／Issue #1113）：分支 `fix/legacy-diagnostic-secret-display-20261110`，未合併前狀態＝「實作完成、待獨立 QA／CI」。內容＝舊診斷頁只顯示固定 Key 名稱＋已設定／未設定／解析失敗＋來源標籤；探測結果只顯示成功／失敗＋整數 HTTP 狀態＋固定錯誤類別；側欄 Proxy 只顯示已設定／未設定。**NOT VERIFIED**：Cloud 端 Secrets 是否載入、各 API 的真實認證結果（沙箱無憑證、不連網）。**另列、未處理**：診斷頁探測 `verify=False`（請求語意，D6 授權範圍外）可能需獨立 Gate；`proxy_helper.get_proxy_config` 在 secrets 讀取失敗時會把例外原文印到 stderr（本頁以 stderr 導向丟棄擋住，來源模組未動）。D1–D5 仍未授權。

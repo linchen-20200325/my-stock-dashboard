@@ -302,7 +302,10 @@ def test_api_diagnostic_secrets_parse_error_is_scrubbed(monkeypatch, broken_secr
     assert "st.secrets 解析失敗" in _st.text
     _assert_no_leak(_st.text)
     assert str(_path.parent) not in _st.text
-    assert "StreamlitSecretNotFoundError" in _st.text  # 型別名照留
+    # D6（Issue #1113）：更嚴——例外原文與型別名都不再上畫面，只剩固定的「解析失敗」狀態字
+    assert "StreamlitSecretNotFoundError" not in _st.text
+    assert "Unbalanced" not in _st.text and "TOMLDecodeError" not in _st.text
+    assert "解析失敗" in _st.text
 
 
 def test_api_diagnostic_probe_error_is_scrubbed(monkeypatch, broken_secrets):
@@ -318,7 +321,11 @@ def test_api_diagnostic_probe_error_is_scrubbed(monkeypatch, broken_secrets):
 
     monkeypatch.setattr(requests, "get", _boom)
     AD.render_api_diagnostic()
-    assert "ConnectionError" in _st.text
+    # D6（Issue #1113）：只顯示固定錯誤類別；例外型別名／原文／URL 都不得上畫面（比 SEC-3 更嚴）
+    assert "連線失敗" in _st.text
+    # （說明文字本來就會提到 `ConnectionError` 這個詞；要擋的是「<型別>: <訊息>」的回顯格式與訊息內容）
+    assert "ConnectionError:" not in _st.text and "Max retries" not in _st.text
+    assert "api_key=" not in _st.text and "x.test" not in _st.text
     _assert_no_leak(_st.text)
 
 
@@ -346,7 +353,10 @@ def test_api_diagnostic_probe_via_proxy_both_columns_scrubbed(monkeypatch, broke
 
     monkeypatch.setattr(requests, "get", _get)
     AD.render_api_diagnostic()
-    assert ("HTTP 200" if ok else "ProxyError") in _st.text
+    # D6（Issue #1113）：成功分支只剩整數狀態碼（回應本文不上畫面）；失敗分支只剩固定類別「代理錯誤」
+    assert ("HTTP 200" if ok else "代理錯誤") in _st.text
+    assert "ProxyError:" not in _st.text
+    assert _body not in _st.text and "Bearer" not in _st.text and "client_secret" not in _st.text
     assert _st.text.count("走 Proxy") >= 1
     _assert_no_leak(_st.text)
 
@@ -364,6 +374,7 @@ def test_api_diagnostic_probe_truncates_after_scrubbing(monkeypatch):
     _ok, _m = AD._probe("t", "https://x.test")
     assert _ok is False
     assert _TOKEN[:8] not in _m, _m
+    assert _m == "連線失敗", _m  # D6：訊息只剩固定類別，不再含任何例外原文（比「先洗再截」更嚴）
 
 
 def test_api_diagnostic_probe_plain_message_unchanged(monkeypatch, broken_secrets):
@@ -376,7 +387,9 @@ def test_api_diagnostic_probe_plain_message_unchanged(monkeypatch, broken_secret
 
     monkeypatch.setattr(requests, "get", _boom)
     AD.render_api_diagnostic()
-    assert f"ConnectionError: {_PLAIN_MSG}" in _st.text
+    # D6（Issue #1113）：連一般例外原文也不再上畫面（舊版逐字回顯 `ConnectionError: <訊息>`）；只剩固定類別
+    assert "連線失敗" in _st.text
+    assert _PLAIN_MSG not in _st.text and "ConnectionError:" not in _st.text
 
 
 # ══════════════════════════════════════════════════════════════════

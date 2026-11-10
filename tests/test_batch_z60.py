@@ -895,7 +895,17 @@ class TestOldFilesUntouched:
     # 📌 FIN-A QA 回修（2026-11-08，非作者 QA 有條件通過後，AI 總管指派，⛔ 不是漏改）：只動 `src/ui/tabs/tab_stock_grp.py`（「🛠️ 逐檔細節」標題行改走 `_detail_headline`，
     #   不具資格列不再印標籤／合分）、`src/ui/tabs/stock_sections/section_strategy_conclusion.py`（橫幅 HTML 原樣抽成純函式 `build_fin_trend_banner_html` 以便行為測試，輸出不變）、
     #   `src/ui/tabs/tab_stock.py`（AI prompt 財報趨勢一行抽成 `_fin_trend_ai_line`，內容不變）。其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
-    _BASE_DIGEST = "c929874893e6413a0c5c76ae68de924e058de5b50608006276414f497e878bc6"
+    # ~~"c929874893e6413a0c5c76ae68de924e058de5b50608006276414f497e878bc6"~~（FIN-A QA 回修後）
+    # 📌 D6 舊診斷頁／側欄資安最小修補（2026-11-10，Issue #1113；客戶 D6 授權，見 docs/DECISIONS.md 2026-11-10 紀錄；核准過的舊檔改動，⛔ 不是漏改）：
+    #   只動 `src/ui/pages/api_diagnostic.py`（只顯示固定 Key 名稱＋已設定／未設定／解析失敗＋來源標籤；探測結果只顯示整數 HTTP 狀態＋固定錯誤類別；
+    #   不改任何請求語意）與 `app.py` 側欄 Proxy 區塊（只顯示「Proxy 已設定／未設定」；＋一行註解內的變數名同步）。其餘 89 檔一個字都沒動。
+    #   指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）；行為守衛見 `tests/test_d6_diagnostic_no_secret_display.py`。
+    # ~~"b3b664401437431d6963ef5ed6a17c282c9429790dbb21f1f4cf21444eeaf334"~~（D6 首版 937e002）
+    # 📌 D6 QA M1 回修（2026-11-10，Issue #1113 獨立資安 QA；核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/pages/api_diagnostic.py` ——
+    #   `_get_proxy_config_quiet` 改為鎖住「換 stderr → 呼叫 → 還原」（`threading.Lock`＋`finally` 還原當初存下的物件，不再用
+    #   `contextlib.redirect_stderr`）、`get_proxy_config` 丟例外時不外洩原文（頁面顯示固定文字）；「沒有任何 secrets 檔」時未設定的 key
+    #   顯示「未設定」而非「解析失敗」。請求語意不變；其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
+    _BASE_DIGEST = "e7a38cc858135e8187b1af7a00926543de55693ec1ba51a97914d3c966332907"
 
     def test_no_diff_against_base(self):
         import hashlib
