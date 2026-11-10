@@ -13,7 +13,11 @@ Digest v1 凍結（`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` §5
 Digest 的版本**互相獨立**；Digest v2 日後若吸收這些欄位，側車可退役，而不影響 v1 消費者。
 
 ═══ 設計鐵則（寫死）══════════════════════════════════════════════════
-1. **`is_complete` 是「唯一」的完整性判定**：omitted==0 且 excluded==0 且 unkeyed==0 且四段證據皆 used。
+1. **`is_complete` 是「唯一」的完整性判定**：omitted==0 且 excluded==0 且 unkeyed==0 且 unmatched==0
+   且 holdings_without_station_row==0 且 `digest_holdings_available`／`digest_actions_available` 皆 True 且四段證據皆 used。
+   ⚠️ 最後兩個旗標是 **v1 限制**，不是「沒完成」：v1 builder 的 holdings／actions 段只有在「至少一項行動事實」時
+   才 AVAILABLE，**無法區分「沒事做」與「判不出來」**。所以「零行動」一律 `is_complete=False`（保守 fail-closed）——
+   它的意思是「v1 Digest 不能證明沒有遺漏」，**不是**「有東西漏了」。Digest v2 若能區分，這兩個旗標才可放寬。
    物件本身不合法（`validate_coverage` 有違規）→ `is_complete` 為 False（fail-closed）。
 2. **未知不是零**：不能評估的計數一律 `None`（不是 0）。None 使 `is_complete` 為 False。
    ⛔ 以 0 表示「沒有」會把「不知道」偽裝成「沒有被省略」——比沒有數字更危險（CLAUDE.md §1）。
@@ -85,6 +89,12 @@ class DigestCoverage:
     - `excluded_invalid_rows`：站內持有列因 `_invalid_lights`／`_invalid_inputs`／`_detail.error` 被排除的數；
       不能評估 → None。
     - `unkeyed_held_count`：持有但無 `HoldingKey` 的列數；`holdings_rows` 沒給 → None。
+    - `actions_unmatched_dropped`：站內 held、無異常旗標、有行動碼，卻因 ticker 對不上持股鍵（大小寫／空白不符、
+      不在 `holdings_rows`、沒有 `HoldingKey`）而被 builder 靜默丟棄的列數；不能評估 → None。
+    - `holdings_without_station_row`：held 持股中，站內列沒有同 ticker held 列者（＝沒有任何站內證據）的數量；
+      不能評估 → None。
+    - `digest_holdings_available`／`digest_actions_available`：Digest 的 holdings／actions 段 availability 是否為
+      AVAILABLE（由 digest 推得，`AssembledDigest` 與 digest 交叉驗證）。
     - `segments`：恰為 market／risk_cap／holdings／actions 四段，固定順序。
     """
     actions_total_eligible: int | None
@@ -93,6 +103,10 @@ class DigestCoverage:
     actions_max: int
     excluded_invalid_rows: int | None
     unkeyed_held_count: int | None
+    actions_unmatched_dropped: int | None
+    holdings_without_station_row: int | None
+    digest_holdings_available: bool
+    digest_actions_available: bool
     segments: tuple
     schema_version: str = COVERAGE_SCHEMA_VERSION
 
@@ -102,7 +116,10 @@ class DigestCoverage:
         if validate_coverage(self):
             return False
         return (self.actions_omitted_count == 0 and self.excluded_invalid_rows == 0
-                and self.unkeyed_held_count == 0 and all(s.used is True for s in self.segments))
+                and self.unkeyed_held_count == 0 and self.actions_unmatched_dropped == 0
+                and self.holdings_without_station_row == 0
+                and self.digest_holdings_available is True and self.digest_actions_available is True
+                and all(s.used is True for s in self.segments))
 
     def to_dict(self) -> dict:
         """JSON 友善 dict（決定性：欄位順序固定、date 轉 ISO）。先 `assert_coverage_valid`。"""
@@ -115,6 +132,10 @@ class DigestCoverage:
             "actions_max": self.actions_max,
             "excluded_invalid_rows": self.excluded_invalid_rows,
             "unkeyed_held_count": self.unkeyed_held_count,
+            "actions_unmatched_dropped": self.actions_unmatched_dropped,
+            "holdings_without_station_row": self.holdings_without_station_row,
+            "digest_holdings_available": self.digest_holdings_available,
+            "digest_actions_available": self.digest_actions_available,
             "segments": [
                 {"segment": s.segment, "used": s.used, "source": s.source,
                  "as_of": s.as_of.isoformat() if s.as_of is not None else None,
@@ -195,6 +216,11 @@ def _validate(c: Any) -> list:
     omitted_ok = _opt_count("actions_omitted_count", c.actions_omitted_count, out)
     _opt_count("excluded_invalid_rows", c.excluded_invalid_rows, out)
     _opt_count("unkeyed_held_count", c.unkeyed_held_count, out)
+    _opt_count("actions_unmatched_dropped", c.actions_unmatched_dropped, out)
+    _opt_count("holdings_without_station_row", c.holdings_without_station_row, out)
+    for _flag in ("digest_holdings_available", "digest_actions_available"):
+        if type(getattr(c, _flag)) is not bool:
+            out.append(f"{_flag}_type: 必須是 bool：{type(getattr(c, _flag)).__name__} {getattr(c, _flag)!r}")
 
     shown_ok = False
     if c.actions_shown is None or not _is_strict_int(c.actions_shown):
@@ -239,14 +265,17 @@ def _validate(c: Any) -> list:
 
     # 跨欄位：actions 段完整採用 ⇒ 計數已評估；holdings 段完整採用 ⇒ unkeyed 已知
     act = seg_by_name.get(SEGMENT_ACTIONS)
+    _eval_counts = (c.actions_total_eligible, c.actions_omitted_count, c.excluded_invalid_rows,
+                    c.actions_unmatched_dropped, c.holdings_without_station_row)
     if act is not None and act.used is True:
-        if c.actions_total_eligible is None or c.excluded_invalid_rows is None:
-            out.append("actions_used_with_unknown_counts: actions 段 used=True 時 total／omitted／excluded 必須已評估（不得為 None）")
+        if any(v is None for v in _eval_counts):
+            out.append("actions_used_with_unknown_counts: actions 段 used=True 時 total／omitted／excluded／"
+                       "unmatched／holdings_without_station_row 必須已評估（不得為 None）")
     elif act is not None and act.used is False:
-        if (c.actions_total_eligible is not None or c.actions_omitted_count is not None
-                or c.excluded_invalid_rows is not None):
-            out.append("actions_unused_with_known_counts: actions 段 used=False（證據未採用）時 total／omitted／excluded "
-                       "必須是 None（未採用的證據之上的計數不可信；未知不是 0）")
+        if any(v is not None for v in _eval_counts):
+            out.append("actions_unused_with_known_counts: actions 段 used=False（證據未採用）時 total／omitted／"
+                       "excluded／unmatched／holdings_without_station_row 必須全部是 None"
+                       "（未採用的證據之上的計數不可信；未知不是 0）")
     hold = seg_by_name.get(SEGMENT_HOLDINGS)
     if hold is not None and hold.used is True and c.unkeyed_held_count is None:
         out.append("holdings_used_with_unknown_unkeyed: holdings 段 used=True 時 unkeyed_held_count 必須已知（不得為 None）")
