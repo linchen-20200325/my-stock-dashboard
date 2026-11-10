@@ -53,7 +53,9 @@ ai_participation  一律 RULE_ONLY。
 輸入型別：`macro_state` 須為 Mapping 或 None；`allocation` 須為 None 或帶 `is_loaded`／`final_lo`／`final_hi`
 的物件；`*_rows` 須為 list／tuple 或 None；`holding_keys` 須為 Mapping 或 None；`*_stamp` 須為
 `SourceStamp` 或 None —— 型別不對 → `TypeError`（Fail Loud，不默默當成「沒給」）。
-帶 `_invalid_lights`／`_invalid_inputs`（非空）的站內列整列不搬行動（不揭露：AB-0 無對應欄位）。
+帶 `_invalid_lights`／`_invalid_inputs`（非空）的站內列整列不搬行動（Digest 內不揭露：AB-0 無對應欄位；
+排除數與被 `MAX_ACTIONS` 截掉的候選數，改由 `plan_action_selection` 供**側車** coverage 揭露，見
+`src/services/decision_digest_assembly.py`／`shared/decision_digest_coverage.py`，Issue #1127）。
 `held` 非 bool／None、`is_loaded` 非 bool／None → `TypeError`。上游 L4 缺口（cap 與 final_hi 交叉、health 範圍、
 舊 snapshot_ts 不推 STALE）屬規格明言／上游責任，本檔不補。
 可搬運的行動列若 `建議動作` 不是非空 str → `ValueError`（分支碼在、文字不在＝規則層契約漂移，
@@ -289,21 +291,31 @@ def _key_for(ticker: str | None, holding_keys: Mapping | None) -> HoldingKey | N
     return k
 
 
-def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: SourceStamp | None,
-                       keyed: frozenset, holding_keys: Mapping | None) -> list:
-    """合格行動候選：(HoldingKey, branch_code, 原樣文字)，保持輸入順序。"""
+def _scan_action_rows(station_rows: Sequence[Mapping] | None, station_stamp: SourceStamp | None,
+                      keyed: frozenset, holding_keys: Mapping | None) -> tuple:
+    """單一掃描迴圈：回 (合格行動候選 list, 因資料異常被排除的持有列數)。
+
+    ⚠️ 這是 `_action_candidates`（`build_decision_digest` 的路徑）與 `plan_action_selection`
+    （Issue #1127 S8 的省略揭露）**共用的唯一判定**——兩者不得各自重寫一份（會漂移）。
+    排除計數只數「held 且帶 `_invalid_lights`／`_invalid_inputs`（非空）或 `_detail.error`」的列
+    （不論其 `_action` 是什麼：資料異常的持有列即使本來不是行動，也屬於「有一列沒被讀」）。
+    `station_rows`／`station_stamp` 為 None 時不掃描 → ([], 0)。
+    """
     if station_rows is None or station_stamp is None:
-        return []
+        return [], 0
     out: list = []
+    excluded = 0
     for row in station_rows:
         if not isinstance(row, Mapping) or not _is_held(row):
             continue
         # 帶資料異常標記（非空）的列整列不搬：不用壞資料給建議（fail-safe）。契約沒有「列被排除」的欄位可揭露，
-        # 故不揭露；空 list／空 dict 視為無異常。
+        # 故不揭露；空 list／空 dict 視為無異常。（排除數由 `plan_action_selection` 以側車 coverage 揭露。）
         if row.get(KEY_INVALID_LIGHTS) or row.get(KEY_INVALID_INPUTS):
+            excluded += 1
             continue
         detail = row.get("_detail")
         if isinstance(detail, Mapping) and detail.get("error"):
+            excluded += 1
             continue
         code = row.get("_action")
         if code not in ACTION_RULE_IDS:
@@ -316,17 +328,22 @@ def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: So
             raise ValueError(f"站內列 {key.symbol!r} 的 _action={code!r} 但 建議動作 不是非空 str：{text!r}"
                              "（規則層契約漂移；不得默默丟掉行動）")
         out.append((key, code, text))
-    return out
+    return out, excluded
 
 
-def _holdings_and_actions(holdings_rows: Sequence[Mapping] | None, holding_keys: Mapping | None,
-                          station_rows: Sequence[Mapping] | None,
-                          station_stamp: SourceStamp | None) -> tuple:
-    if holdings_rows is None:
-        return (HoldingsSection(availability=Availability.UNAVAILABLE, entries=(),
-                                missing_reason=MissingReason.NO_INPUT, unkeyed_count=0),
-                ActionsSection(availability=Availability.UNAVAILABLE, items=(),
-                               missing_reason=MissingReason.NO_INPUT))
+def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: SourceStamp | None,
+                       keyed: frozenset, holding_keys: Mapping | None) -> list:
+    """合格行動候選：(HoldingKey, branch_code, 原樣文字)，保持輸入順序。"""
+    return _scan_action_rows(station_rows, station_stamp, keyed, holding_keys)[0]
+
+
+def _order_candidates(cands: list) -> list:
+    """Q4 序（stable）。`build_decision_digest` 與 `plan_action_selection` 共用。"""
+    return sorted(cands, key=lambda c: q4_sort_index(c[1]))
+
+
+def _keyed_holdings(holdings_rows: Sequence[Mapping], holding_keys: Mapping | None) -> tuple:
+    """持有列 → (有鍵的 HoldingKey 依輸入順序（保留重複）, 無鍵持有列數)。"""
     keys_in_order: list = []   # 保留重複，讓契約檢查（duplicate_holding_key）看得到，不默默去重
     unkeyed = 0
     for row in holdings_rows:
@@ -337,10 +354,22 @@ def _holdings_and_actions(holdings_rows: Sequence[Mapping] | None, holding_keys:
             unkeyed += 1
         else:
             keys_in_order.append(key)
+    return keys_in_order, unkeyed
+
+
+def _holdings_and_actions(holdings_rows: Sequence[Mapping] | None, holding_keys: Mapping | None,
+                          station_rows: Sequence[Mapping] | None,
+                          station_stamp: SourceStamp | None) -> tuple:
+    if holdings_rows is None:
+        return (HoldingsSection(availability=Availability.UNAVAILABLE, entries=(),
+                                missing_reason=MissingReason.NO_INPUT, unkeyed_count=0),
+                ActionsSection(availability=Availability.UNAVAILABLE, items=(),
+                               missing_reason=MissingReason.NO_INPUT))
+    keys_in_order, unkeyed = _keyed_holdings(holdings_rows, holding_keys)
     keyed = frozenset(keys_in_order)
 
     cands = _action_candidates(station_rows, station_stamp, keyed, holding_keys)
-    ordered = sorted(cands, key=lambda c: q4_sort_index(c[1]))  # stable
+    ordered = _order_candidates(cands)  # stable
     chosen = ordered[:MAX_ACTIONS]
 
     facts_by_key: dict = {}
@@ -401,6 +430,63 @@ def _validate_inputs(macro_state: Any, macro_stamp: Any, allocation: Any, statio
              "Mapping 或 None")
 
 
+# ── 行動選取計畫（Issue #1127 S8：省略揭露的資料來源；純加性，不改 build_decision_digest 輸出）──────────
+@dataclass(frozen=True)
+class ActionSelectionPlan:
+    """`build_decision_digest` 在行動段做的選取，攤開來看（不改任何輸出，只讓「被省略多少」可被數出來）。
+
+    - `evaluated`：能否評估。`holdings_rows`／`station_rows`／`station_stamp` 任一為 None → False
+      （builder 此時行動段 UNAVAILABLE；**未知不是零**）。
+    - `ordered`：**全部**合格候選 (HoldingKey, branch_code, 原樣文字)，Q4 序（stable）；未評估 → ()。
+    - `chosen`：`ordered[:MAX_ACTIONS]`，與 `build_decision_digest` 實際搬進 Digest 的行動逐一相同
+      （parity 由測試以固定種子隨機輸入守住）。
+    - `excluded_invalid_rows`：held 且因 `_invalid_lights`／`_invalid_inputs`／`_detail.error` 整列被排除的列數；
+      未評估 → None（不是 0）。
+    - `unkeyed_held_count`：held 但無鍵的持有列數（與 `HoldingsSection.unkeyed_count` 同判定）；
+      `holdings_rows is None` → None（builder 對此情形的 `unkeyed_count=0` 是「未知」，不是零）。
+    """
+    evaluated: bool
+    ordered: tuple
+    chosen: tuple
+    excluded_invalid_rows: int | None
+    unkeyed_held_count: int | None
+
+    @property
+    def total_eligible(self) -> int | None:
+        return len(self.ordered) if self.evaluated else None
+
+    @property
+    def omitted_count(self) -> int | None:
+        return len(self.ordered) - len(self.chosen) if self.evaluated else None
+
+
+def plan_action_selection(*, station_rows: Sequence[Mapping] | None = None,
+                          station_stamp: SourceStamp | None = None,
+                          holdings_rows: Sequence[Mapping] | None = None,
+                          holding_keys: Mapping[str, HoldingKey] | None = None) -> ActionSelectionPlan:
+    """純函式：重用 `build_decision_digest` 同一套判定（`_keyed_holdings`／`_scan_action_rows`／
+    `_order_candidates`），回傳完整候選、實際選取與排除計數。輸入型別驗證與 builder 相同（型別不對 → TypeError）。"""
+    _require("station_stamp", station_stamp, station_stamp is None or type(station_stamp) is SourceStamp,
+             "SourceStamp 或 None")
+    _require("station_rows", station_rows, station_rows is None or type(station_rows) in (list, tuple),
+             "list／tuple 或 None")
+    _require("holdings_rows", holdings_rows, holdings_rows is None or type(holdings_rows) in (list, tuple),
+             "list／tuple 或 None")
+    _require("holding_keys", holding_keys, holding_keys is None or isinstance(holding_keys, Mapping),
+             "Mapping 或 None")
+    if holdings_rows is None:
+        return ActionSelectionPlan(evaluated=False, ordered=(), chosen=(), excluded_invalid_rows=None,
+                                   unkeyed_held_count=None)
+    keys_in_order, unkeyed = _keyed_holdings(holdings_rows, holding_keys)
+    if station_rows is None or station_stamp is None:
+        return ActionSelectionPlan(evaluated=False, ordered=(), chosen=(), excluded_invalid_rows=None,
+                                   unkeyed_held_count=unkeyed)
+    cands, excluded = _scan_action_rows(station_rows, station_stamp, frozenset(keys_in_order), holding_keys)
+    ordered = tuple(_order_candidates(cands))
+    return ActionSelectionPlan(evaluated=True, ordered=ordered, chosen=ordered[:MAX_ACTIONS],
+                               excluded_invalid_rows=excluded, unkeyed_held_count=unkeyed)
+
+
 # ── 入口 ─────────────────────────────────────────────────────────────────
 def build_decision_digest(*, generated_at: datetime,
                           macro_state: Mapping | None = None,
@@ -430,4 +516,4 @@ def build_decision_digest(*, generated_at: datetime,
     return digest
 
 
-__all__ = ["SourceStamp", "build_decision_digest"]
+__all__ = ["SourceStamp", "build_decision_digest", "ActionSelectionPlan", "plan_action_selection"]
