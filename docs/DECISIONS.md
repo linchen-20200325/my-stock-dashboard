@@ -7997,3 +7997,19 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 
 > 📌 **2026-11-10 指標（只追加；記錄客戶裁示，非 AI 決策、非新的 DEC 編號）**：客戶於 Issue #1119 留言（https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486）裁示「Action等儀表板好了 刪死碼時候再一起刪除」：#1119 **HOLD**，待新儀表板完成並開始死碼 Removal Gate 時再與之合併處理並重新驗證；現在不做任何 workflow 刪除／停用／合併。取代上方 2026-11-10 Issue #1119 指標中「盤點與提案」的後續動作；細節見 `docs/HANDOFF.md` 同日更正。
+
+
+### DEC-158｜Issue #1121 客戶裁示轉錄：Issue #1110 題號 D1～D5 現狀、方案 A 文件、EPS 僅唯讀研究、Digest F／OneBrain G 暫列切換前置、#1119 HOLD（2026-11-10；docs-only）
+
+- **來源／效力（據實，不誇大）**：決策者＝客戶；來源＝GitHub Issue #1121（docs-only 授權）。本條是 AI 總管依 Issue #1121 對「客戶口頭同意 ChatGPT 四項建議」的**轉錄**，**非客戶逐字原文、非 QA PASS**；原始逐字對話不在 repo（**NOT VERIFIED by repo**）。本條是**記錄**，不授權任何施工。
+- **⚠️ 編號澄清（避免混淆）**：下文的 **D1～D5 是 Issue #1110 的「題號」**（US10Y 口徑／VIX／利差／台灣 PMI／每日落地 cron），**不是** `DEC-*` 條文編號。本條的 DEC 編號是 **DEC-158**；題號 D1～D5 與 DEC-001 起的任何 DEC 無對應關係。（D6 資安最小修補已由 Issue #1113／PR #1114 處理，不在本條範圍。）
+- **六項裁示（轉錄）**：
+  1. **D1（US10Y 口徑）**：採官方 FRED `DGS10`，應標示 `source`、`as_of` 與 missing／stale 狀態。**僅核准「資料口徑」**；**不核准**新增 adapter、新增來源、fetcher、排程或正式 UI 接線（實作須另行授權）。
+  2. **D2（VIX）、D3（利差）、D4（台灣 PMI）**：維持空槽。D2 先完成「已收盤日」PIT Gate、不接線；D3 定義與來源暫不選定、不新取數；D4 不將 proxy／`UNDETERMINED` 當正式訊號。
+  3. **D5（新增每日落地 cron）**：**不核准**，不新增 cron／workflow。
+  4. **方案 A 文件**：本批僅 docs-only 文件（CAPMAP 三欄能力對照、C1～C7 切換缺口矩陣、EPS／Digest／OneBrain 研究），不改程式、測試、資料、workflow。
+  5. **EPS 預估大盤**：僅准**唯讀研究**；不新增 EPS 來源、公式或 runtime，不得宣稱任何估值或指數預測已可計算。**Digest Stage F／OneBrain Stage G**：沿現有契約**暫列 cutover 前置**，未經新裁示不改（客戶可推翻；該列為前置之轉述未對照 Issue 原文）。
+  6. **#1119（workflow 瘦身）維持 HOLD**（見先前客戶留言紀錄）。
+- **D1～D5 現狀（截至 2026-11-10）**：UI2 真資料 feed 仍只接 TWII 卡片、TWII 日 K、市場位階三項事實；US10Y 為空槽（口徑已定、實作未授權）；VIX／利差／PMI 為空槽；無新增落地 cron。故 C5（真資料）在現行授權下仍未滿足。
+- **仍 NOT VERIFIED（不得因本條轉為 PASS）**：ETF Managers 2026-11-16 20:00 UTC 真實 GitHub Actions 發布 PR；Streamlit Cloud 上的 New UI2；以上皆無本批證據。
+- **證據文件**：`docs/vnext/NEWUI2_CAPMAP_3COL_2026-11-10.md`、`docs/vnext/NEWUI2_CUTOVER_GAP_MATRIX_2026-11-10.md`、`docs/vnext/NEWUI2_EPS_AND_DIGEST_ONEBRAIN_RESEARCH_2026-11-10.md`（皆單組產出、未經第二組獨立複驗）。待辦見 `docs/BACKLOG.md` 2026-11-10 Issue #1121 追加段。
