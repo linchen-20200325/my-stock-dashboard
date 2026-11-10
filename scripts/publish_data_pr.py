@@ -31,6 +31,8 @@ GITHUB_TOKEN 的 push／PR 事件通常不會觸發 pull_request workflow ⇒ re
     data_cache/sector_flow/bubble_latest.json   updated_at（頂層）
     data_cache/sector_flow/industry_raw.json    fetched_at（頂層）
     data_cache/macro_last_good/tw_pmi.json      cached_at（頂層；macro_core._macro_durable_save 每次蓋 now()）、fetched_at
+    src/data/etf/etf_managers.json              updated_at、managers.*.last_seen／tenure_days（2026-11-10，Issue #1116；
+                                                name／since／first_seen／history 為實質）
   其餘鍵（last_error / last_updated / row_count / per_day / warnings …）全是實質，
   特別是 `last_error` 變化代表來源失敗，**不可濾**。其他 JSON 預設只忽略頂層 updated_at / fetched_at。
 - parquet：以 DataFrame 內容比較；忽略 `VOLATILE_PARQUET_COLS`（列級 fetched_at / captured_at）。
@@ -129,6 +131,11 @@ VOLATILE_JSON_KEYS: dict[str, frozenset[str]] = {
     # macro_core._macro_durable_save 每次寫入都蓋 cached_at = now()（實讀 src/data/macro/macro_core.py）
     # fetched_at 與 cached_at 同理（重抓時間戳）；value／date／source 等欄位變動仍為實質
     "data_cache/macro_last_good/tw_pmi.json": frozenset({"cached_at", "fetched_at"}),
+    # 2026-11-10（Issue #1116）：update_etf_managers.main 每次執行都蓋頂層 updated_at = now()，
+    # 並對每個標的蓋 last_seen = today、tenure_days = today - since（皆純隨執行日而變）。
+    # 登記路徑 ⇒ 巢狀同名鍵一併忽略（managers.<ticker>.last_seen／tenure_days）。
+    # name／since／first_seen／history（換手紀錄）與標的增減仍是實質；since 變動才算到職日異動。
+    "src/data/etf/etf_managers.json": frozenset({"updated_at", "last_seen", "tenure_days"}),
 }
 _DEFAULT_VOLATILE = frozenset({"updated_at", "fetched_at"})
 VOLATILE_PARQUET_COLS = frozenset({"fetched_at", "captured_at"})

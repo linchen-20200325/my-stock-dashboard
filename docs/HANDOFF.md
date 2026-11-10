@@ -1341,3 +1341,6 @@ DEC-086 規則已於 main，本表已落地。
 | NOT VERIFIED | Streamlit Cloud 真實 Secrets 載入、API 認證、真實多 session 並行；舊側欄洩漏是否曾在 production 發生。 |
 | 其他 | D1–D5 仍**未授權**、等客戶裁示；#1107 Cloud 驗收仍 **PARTIAL**；Issues #1110／#1113／#1108 保持開啟，由客戶決定是否關閉。不要截圖任何含 Secret 樣貌的畫面。 |
 | **下一個唯一安全接手點** | **無已授權的施工。** 等客戶：(a) 裁示 D1–D5；(b) 決定上列殘留資安項是否授權後續批次。下次接手仍須先重新 GitHub Gate。 |
+
+
+> 📌 **2026-11-10 追記（只追加）｜Issue #1116**：ETF 經理人週更 workflow 已改走資料 PR（`auto/data-etf-managers`，`scripts/publish_data_pr.py --job etf-managers`），取代被 GH006 擋下的裸 `git push`；範圍僅限該 workflow 發布步驟＋helper 一個路徑鍵登記＋`tests/test_etf_managers_data_pr.py`＋本類文件。**執行期效果 NOT VERIFIED**——要等一次真實排程（下次 2026-11-16 週一 20:00 UTC）實際開出 PR；手動 workflow_dispatch 結果不可當 PR required-check 證據。首個 PR 需有權限者 Close→Reopen／Update branch 觸發 required check 後人工合併，不得繞過。
