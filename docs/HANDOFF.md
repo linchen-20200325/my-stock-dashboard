@@ -1397,3 +1397,12 @@ DEC-086 規則已於 main，本表已落地。
 > | 開放 Issues | **#1099 已於 2026-11-09T23:05Z 關閉（completed）**，不屬待客戶決定關閉者。仍開啟、等客戶自行決定是否關閉的是 **#1107、#1108、#1110、#1113、#1116、#1119**（#1119＝HOLD）。取代 snapshot 第 7 列的清單。 |
 > | 第 1 列「Open PR 0」 | 為撰寫當時、**本 PR（#1120）自己尚未開出前**的數字，即「除 #1120 外為 0」；分支清單也**漏列本 PR 自己的分支 `docs/session-end-handoff-20261110`**。新對話仍須重新核對。 |
 > | SHA `9e7014c` | git 可確認該 commit 存在（2026-11-06，標題「總經燈號落地：2026-11-05」）；它是否即 2026-11-05 forward-test 列的證據 commit，**依先前證據，未重新驗證**。`d7ad231`（2026-11-09，標題「總經燈號落地：2026-11-06」）可於 git 確認存在。 |
+
+
+## 最新接手點（2026-11-10 晚，Issue #1121；只追加）
+
+- **基準**：main `f4d86b4f`（`f4d86b4f9b45832cb784895342cecd5f9305c48b`）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：docs-only PR（**PR #1122，Draft；合併後補一行結果**）。內容＝三份新文件 `docs/vnext/NEWUI2_CAPMAP_3COL_2026-11-10.md`、`docs/vnext/NEWUI2_CUTOVER_GAP_MATRIX_2026-11-10.md`、`docs/vnext/NEWUI2_EPS_AND_DIGEST_ONEBRAIN_RESEARCH_2026-11-10.md`，加上 DECISIONS（DEC-158）／BACKLOG／本檔的純追加。三份文件皆單組產出、未經第二組獨立複驗；客戶裁示為轉錄，非逐字、非 QA PASS。
+- **不可動項**：D1 僅定 FRED `DGS10` 口徑，不得實作 adapter／來源／排程／UI 接線；VIX、利差、PMI 維持空槽；不新增 cron；EPS 僅唯讀研究；Digest F／OneBrain G 暫列切換前置，OneBrain runtime 不動；#1119 HOLD；不 cutover、不刪碼。ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR 與 Cloud UI2 仍 **NOT VERIFIED**。
+- **下一個唯一安全工作**：等 QA／合併後，由客戶裁示下一階段；無裁示前不動工（`CLAUDE.md` §-1）。
+- **舊快照說明**：前段快照（如 2026-11-09 的「Open PR 0」、#1038 Draft 等）已被本段取代，**僅為歷史紀錄，未刪除**。

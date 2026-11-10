@@ -2176,3 +2176,12 @@
 
 
 - 📌 **2026-11-10 更正之二（只追加）**：Issue #1099 已於 2026-11-09 關閉；仍開啟等客戶決定是否關閉者為 #1107、#1108、#1110、#1113、#1116、#1119（#1119＝HOLD）。取代上方 `WORKFLOW-SLIM-AUDIT-1` 追加中列出的 Issue 清單（含 #1099 的部分）。
+
+
+- 📌 **2026-11-10｜Issue #1121 docs-only 批次指標（只追加；不改既有列；以下皆非施工授權，依據 `docs/DECISIONS.md` DEC-158 轉錄）**：
+  - `NUI2-CAPMAP-3COL`（完成狀態指標）：三欄對照表已落盤於 `docs/vnext/NEWUI2_CAPMAP_3COL_2026-11-10.md`，共 **100 列**，缺口等級 critical **8**／major **49**／minor **34**／none **9**。**缺口等級為暫定、非客戶核准；單組產出，未經第二組獨立複驗。**
+  - C1～C7 缺口矩陣指標：`docs/vnext/NEWUI2_CUTOVER_GAP_MATRIX_2026-11-10.md`；**0 條已滿足**（C2、C5、C6、C7 未滿足；C1、C3、C4 部分）；結論為目前不可提 cutover（記錄缺口，非新規則）。
+  - `EPS-GATE-E0-E6`：大盤 EPS 預估 Gate E-0～E-6 的方案研究見 `docs/vnext/NEWUI2_EPS_AND_DIGEST_ONEBRAIN_RESEARCH_2026-11-10.md` Part 1；**待客戶裁示、未啟動**，僅准唯讀研究，不新增 EPS 來源／公式。
+  - `DIGEST-F-ONEBRAIN-G-MIN-PLAN`：Digest F／OneBrain G 最小驗收方案 P-1～P-4 待客戶裁示；**AI 推薦 P-4 後接 P-1，為推薦、非裁示**。F／G 暫列 cutover 前置（沿現有契約，客戶可推翻）。
+  - `ISSUE1110` 更新（取代上方 D1～D5 各列的「未授權」措辭，原列不改）：**D1** 口徑已定為 FRED `DGS10`，**實作（adapter／來源／排程／UI 接線）未授權**；**D2 VIX、D3 利差、D4 PMI 維持空槽**；**D5 不核准**新增每日落地 cron。
+  - 維持 NOT VERIFIED：ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR、Cloud UI2。#1119 維持 HOLD。
