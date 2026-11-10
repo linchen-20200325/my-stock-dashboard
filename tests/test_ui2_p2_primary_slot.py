@@ -1,7 +1,7 @@
 """New UI2 UI Correction P2（客戶 2026-11-04 (19)；DEC-133）：OneBrain 位置＋台股 Primary 誠實空槽＋一行 SPEC。
 
 驗收對象：
-  (a) DOM 順序：今日主要風險 → OneBrain → 台股趨勢空槽 → 指標卡（FAKE 六場景＋Real 固定 snapshot）。
+  (a) DOM 順序：今日主要風險 → 台股趨勢空槽 → 指標卡 → OneBrain（Issue #1108 方向 B／DEC-157；原 DEC-133 G-3 為 OneBrain 在空槽之前）（FAKE 六場景＋Real 固定 snapshot）。
   (b) SPEC 的來源／資料日與 TWII 卡 freshness **逐字一致**；缺值不顯示偽資料日。
   (c) SPEC 含「最新收盤參考」、不含「日頻」；空槽 0 個圖形元素、含 `⬜ 尚未提供`、不是紅色。
   (d) OneBrain 內容與位置前後只差位置（文字集合相同）。
@@ -64,22 +64,34 @@ def _slot_of(chunks: list[str]) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════ (a) 順序
-def test_dom_order_risk_then_onebrain_then_primary_slot_then_cards(monkeypatch):
+def test_dom_order_risk_then_primary_slot_then_cards_then_onebrain(monkeypatch):
+    """Issue #1108 方向 B（DEC-157 取代 DEC-133 G-3 的 OneBrain 位置）：今日主要風險 → 台股 Primary → 核心指標卡 → OneBrain。"""
     for label, vm in _all_vms():
         chunks = _render_chunks(vm, monkeypatch)
         blob = "\n".join(chunks)
-        pos = {k: blob.index(k) for k in ('class="ui2-pagetitle"', 'class="ui2-m-l1"', 'class="ui2-risk"',
-                                          'data-ui2-l1="onebrain"', 'data-ui2-l1="primary_slot"', 'class="ui2-grid"')}
-        order = ['class="ui2-pagetitle"', 'class="ui2-m-l1"', 'class="ui2-risk"', 'data-ui2-l1="onebrain"',
-                 'data-ui2-l1="primary_slot"', 'class="ui2-grid"']
+        order = ['class="ui2-pagetitle"', 'class="ui2-m-l1"', 'class="ui2-risk"', 'data-ui2-l1="primary_slot"',
+                 'class="ui2-grid"', 'data-ui2-l1="onebrain"']
+        pos = {k: blob.index(k) for k in order}
         assert [pos[k] for k in order] == sorted(pos[k] for k in order), label
-        # 今日主要風險在 L1 容器內（與 OneBrain 之間沒有別的區塊）；OneBrain 緊接 L1 容器，空槽緊接 OneBrain
+        # 今日主要風險在 L1 容器內；空槽緊接 L1 容器，指標卡緊接空槽，OneBrain 緊接指標卡（中間沒有別的區塊）
         i_l1 = next(i for i, c in enumerate(chunks) if 'class="ui2-m-l1"' in c)
         assert 'class="ui2-risk"' in chunks[i_l1], label
-        assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 1], label
-        assert 'data-ui2-l1="primary_slot"' in chunks[i_l1 + 2], label
-        assert 'class="ui2-grid"' in chunks[i_l1 + 3], label
-        assert blob.count("OneBrain Outlook") == 1, label
+        assert 'data-ui2-l1="primary_slot"' in chunks[i_l1 + 1], label
+        assert 'class="ui2-grid"' in chunks[i_l1 + 2], label
+        assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 3], label
+        assert pos['data-ui2-l1="onebrain"'] > pos['class="ui2-grid"'], label          # OneBrain 在指標卡之後（明確斷言）
+        assert blob.count("OneBrain Outlook") == 1 and blob.count('data-ui2-l1="onebrain"') == 1, label   # 不重複
+
+
+def test_onebrain_absent_means_no_empty_frame_and_no_duplicate(monkeypatch):
+    """VM 無 OneBrain L1 區塊 → 不畫空框、不重複；Primary → 指標卡順序不變；render_sections 不 skip。"""
+    import dataclasses
+    for label, vm in _all_vms():
+        ctx = dataclasses.replace(vm.context, sections=tuple(s for s in vm.context.sections if s.section_id != "onebrain"))
+        chunks = _render_chunks(dataclasses.replace(vm, context=ctx), monkeypatch)
+        blob = "\n".join(chunks)
+        assert 'data-ui2-l1="onebrain"' not in blob and "ui2-m-onebrain" not in blob and "OneBrain Outlook" not in blob, label
+        assert blob.index('data-ui2-l1="primary_slot"') < blob.index('class="ui2-grid"'), label
 
 
 def test_dom_order_in_the_real_streamlit_page_default_lane():
@@ -87,8 +99,9 @@ def test_dom_order_in_the_real_streamlit_page_default_lane():
     at = AppTest.from_file(str(APP_UI2), default_timeout=60).run(timeout=60)
     assert not at.exception
     blob = "\n".join(m.value for m in at.markdown)
-    idx = [blob.index(k) for k in ('class="ui2-risk"', 'data-ui2-l1="onebrain"', 'data-ui2-l1="primary_slot"', 'class="ui2-grid"')]
+    idx = [blob.index(k) for k in ('class="ui2-risk"', 'data-ui2-l1="primary_slot"', 'class="ui2-grid"', 'data-ui2-l1="onebrain"')]
     assert idx == sorted(idx)
+    assert blob.count('data-ui2-l1="onebrain"') == 1
     assert "SPEC｜" in blob
 
 
@@ -245,8 +258,8 @@ def _good(mobile=True, scenario="loaded") -> dict:
             "nav": {"top": 791.0}, "first_block_after_l1_top": 600.0,
             "risk": {"top": 500.0, "bottom": 560.0},
             "elements": [{"q": "q2", "bottom": 300.0}, {"q": "q3", "bottom": 340.0}],
-            "p2": {"onebrain": {"top": 570.0, "bottom": 620.0}, "slot": {"top": 630.0, "bottom": 720.0},
-                   "grid": {"top": 730.0, "bottom": 900.0}, "slot_graphics": 0, "slot_danger": 0,
+            "p2": {"onebrain": {"top": 910.0, "bottom": 960.0}, "slot": {"top": 570.0, "bottom": 660.0},
+                   "grid": {"top": 670.0, "bottom": 900.0}, "slot_graphics": 0, "slot_danger": 0,
                    "slot_text": "🇹🇼 台股趨勢 ⬜ 尚未提供 此項目尚未開放 SPEC｜最新收盤參考｜X｜資料日 2026-11-02｜缺值不補",
                    "spec_text": "SPEC｜最新收盤參考｜X｜資料日 2026-11-02｜缺值不補"}}
 
@@ -263,11 +276,16 @@ def test_viewport_p2_checker_passes_the_good_layout_and_ignores_other_pages():
 
 def test_viewport_p2_checker_has_teeth():
     k = "p2_onebrain_primary_slot_order"
-    m = _good(); m["p2"]["grid"] = {"top": 640.0, "bottom": 800.0}                    # 手機指標卡跑到空槽之前
+    m = _good(); m["p2"]["grid"] = {"top": 600.0, "bottom": 800.0}                    # 手機指標卡跑到空槽之前
     assert _p2_eval(m)[k] != []
-    m = _good(); m["p2"]["onebrain"] = {"top": 700.0, "bottom": 750.0}               # OneBrain 在空槽之後
+    m = _good(); m["p2"]["onebrain"] = {"top": 700.0, "bottom": 750.0}               # OneBrain 在指標卡之前（舊 DEC-133 順序的反面）
+    assert _p2_eval(m)[k] != []
+    m = _good(); m["p2"]["onebrain"] = {"top": 560.0, "bottom": 600.0}               # OneBrain 在空槽之前（舊順序：OneBrain → 空槽 → 指標卡）
+    m["p2"]["slot"] = {"top": 610.0, "bottom": 660.0}
     assert _p2_eval(m)[k] != []
     m = _good(); m["p2"]["onebrain"] = {"top": 300.0, "bottom": 350.0}               # OneBrain 在今日主要風險之前
+    assert _p2_eval(m)[k] != []
+    m = _good(); m["p2"]["slot"] = {"top": 400.0, "bottom": 480.0}                   # Primary 在今日主要風險之前
     assert _p2_eval(m)[k] != []
     m = _good(mobile=False); m["p2"]["onebrain"] = {"top": 320.0, "bottom": 360.0}   # 桌機：在 q3 之前
     assert _p2_eval(m)[k] != []

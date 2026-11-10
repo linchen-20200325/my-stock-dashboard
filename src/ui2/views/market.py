@@ -2,7 +2,8 @@
 
 版面（Wireframes §2／Freeze §0.1.6／§16.1-M；P2 起依客戶 2026-11-04 (19)／DEC-133）：
 標題 → [今日結論 → 市場目前狀態 → Risk Cap → 是否需要行動 → 下一步 → 主 CTA] → **緊接**「今日主要風險」（L1，⛔ 被插隊）
-→ 🤖 OneBrain Outlook（內容不變，只改位置）→ 🇹🇼 台股趨勢**誠實空槽**＋一行 SPEC → 核心指標卡 → 其餘區塊。
+→ 🇹🇼 台股日 K 主圖／**誠實空槽**＋一行 SPEC → 核心指標卡 → 🤖 OneBrain Outlook（內容不變，只改位置）→ 其餘區塊。
+（Issue #1108 方向 B 起 OneBrain 移到指標卡之後；DEC-133 G-3 的舊順序「OneBrain → Primary → 指標卡」被 DEC-157 有意識取代，見 docs/DECISIONS.md。）
 （Active Contract §3.1：📊 整頁不承載完整 evidence 摺疊——P3 起 L2／L3 evidence 區塊不渲染，VM 完整保留。）
 桌機（≥769px）由 CSS 把 狀態／Risk Cap／今日主要風險 排成三 tile（見 shell/css.py）；手機堆疊。
 
@@ -25,14 +26,14 @@ TWII_CARD_ID = "twii"
 def render(vm: PageVM) -> None:
     render_title(vm)
     _md(market_l1_html(vm.context.first_screen, vm.context.main_risk))
-    # P2-1：OneBrain Outlook 移到核准位置（今日主要風險之後、Primary 空槽之前、核心指標卡之前）；內容原樣。
-    onebrain = next((s for s in vm.context.sections if s.section_id == ONEBRAIN_SECTION_ID and s.level == "L1"), None)
-    if onebrain is not None:
-        _md(f'<div class="ui2-m-onebrain" data-ui2-l1="onebrain">{section_l1_html(onebrain)}</div>')
-    # P2-2：台股 Primary 誠實空槽＋一行 SPEC（來源／資料日＝TWII 卡 freshness）。
+    # Issue #1108（方向 B）：台股 Primary（日 K 主圖／誠實空槽）→ 核心指標卡 → 🤖 OneBrain Outlook（內容不變，只動位置）。
+    # 台股 Primary 誠實空槽＋一行 SPEC（來源／資料日＝TWII 卡 freshness）。
     # Issue #1099 PR-2（DEC-156）：VM 帶日 K 事實（Real-data Preview）時，同一位置改畫日 K 主圖（含灰／紅誠實狀態）；
-    # 沒有日 K 事實（FAKE 示意軸）→ 照舊誠實空槽（⛔ FAKE K 棒）。版面其餘不動。
+    # 沒有日 K 事實（FAKE 示意軸）→ 照舊誠實空槽（⛔ FAKE K 棒）。
     twii = next((c for c in vm.context.cards if c.card_id == TWII_CARD_ID), None)
     _md(kbar_chart_html(vm.context.kbar) if vm.context.kbar is not None else primary_slot_html(twii))
     render_cards(vm)
+    onebrain = next((s for s in vm.context.sections if s.section_id == ONEBRAIN_SECTION_ID and s.level == "L1"), None)
+    if onebrain is not None:
+        _md(f'<div class="ui2-m-onebrain" data-ui2-l1="onebrain">{section_l1_html(onebrain)}</div>')
     render_sections(vm, skip={ONEBRAIN_SECTION_ID} if onebrain is not None else frozenset())

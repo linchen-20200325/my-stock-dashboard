@@ -139,10 +139,11 @@ THRESHOLDS: list[dict[str, str]] = [
              "且全部預設收合；📊／💼 必為 0 個。L2／L3 evidence expander（為什麼／指標明細／原始資料表／完整表／明細…）不得出現。",
      "source": "客戶 2026-11-03 (17) A2 第 1 項；Active Presentation Contract §3／§8"},
     {"id": "p2_onebrain_primary_slot_order",
-     "rule": "（P2）📊 市場：DOM 與座標上依序為 今日主要風險 → 🤖 OneBrain Outlook → 🇹🇼 台股趨勢空槽 → 核心指標卡（手機與桌機皆然；"
-             "桌機另要求 OneBrain 在 是否需要行動／下一步 之後）。手機指標卡必須在 Primary 空槽**之後**。"
+     "rule": "（P2／Issue #1108 方向 B）📊 市場：DOM 與座標上依序為 今日主要風險 → 🇹🇼 台股日 K 主圖／空槽 → 核心指標卡 → 🤖 OneBrain Outlook（手機與桌機皆然；"
+             "桌機另要求 OneBrain 在 是否需要行動／下一步 之後）。指標卡必須在 Primary **之後**、OneBrain 必須在指標卡**之後**（真瀏覽器 lane 的 VM 恆帶 OneBrain 區塊，缺＝判紅；缺席時不畫空框由 tests/test_ui2_p2_primary_slot.py 單元測試守）。"
              "空槽 0 個 svg／polyline／canvas／img（⛔ 假走勢）、含 `⬜ 尚未提供`、SPEC 行含『最新收盤參考』且不含『日頻』。",
-     "source": "客戶 2026-11-04 (19) P2（G-1=A／G-2=B／G-3=A）；Wireframes §2.1／§2.2；P2 文字線框 C 節"},
+     "source": "客戶 2026-11-04 (19) P2（G-1=A／G-2=B／G-3=A；OneBrain 位置段已由 DEC-157 取代）；Wireframes §2.1／§2.2；P2 文字線框 C 節；"
+               "Issue #1108 方向 B（客戶截圖回饋＋『繼續』；DEC-157）"},
     {"id": "p2_nav_margin_160",
      "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791"
              "（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；"
@@ -153,7 +154,7 @@ THRESHOLDS: list[dict[str, str]] = [
              "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px"
              "（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、"
              "不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。"
-             "排序沿用 p2（OneBrain → Primary → 指標卡）；水平捲動沿用 no_horizontal_scroll。",
+             "排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
      "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
@@ -366,8 +367,12 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
         for q in ("q2", "q3"):
             if q in els and ob["top"] < els[q]["bottom"] - 0.5:
                 out[k].append(f"桌機：OneBrain top {ob['top']:.0f} 早於 {q} 底緣 {els[q]['bottom']:.0f}")
-    if ob and slot and slot["top"] < ob["bottom"] - 0.5:
-        out[k].append(f"空槽 top {slot['top']:.0f} 早於 OneBrain 底緣 {ob['bottom']:.0f}")
+    if ob and slot and ob["top"] < slot["bottom"] - 0.5:
+        out[k].append(f"OneBrain top {ob['top']:.0f} 早於 Primary（空槽／日 K）底緣 {slot['bottom']:.0f}（方向 B：OneBrain 在 Primary 之後）")
+    if ob and grid and ob["top"] < grid["bottom"] - 0.5:
+        out[k].append(f"OneBrain top {ob['top']:.0f} 早於核心指標卡底緣 {grid['bottom']:.0f}（方向 B：OneBrain 在指標卡之後）")
+    if slot and risk and slot["top"] < risk["bottom"] - 0.5:
+        out[k].append(f"Primary top {slot['top']:.0f} 早於今日主要風險底緣 {risk['bottom']:.0f}")
     if slot and grid and grid["top"] < slot["bottom"] - 0.5:
         out[k].append(f"指標卡 top {grid['top']:.0f} 早於空槽底緣 {slot['bottom']:.0f}（{'手機' if mobile else '桌機'}指標卡必須在空槽之後）")
     if slot and slot is not chart:

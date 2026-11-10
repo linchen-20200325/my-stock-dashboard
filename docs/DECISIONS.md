@@ -7963,3 +7963,17 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **合併補註（2026-11-09 追加；非新客戶裁示）**：PR-2 #1101 已 squash 合併 → main `31acbe8`（完整 `31acbe878be2d3a055307d1e090d65c13f6f6fc0`；CI run 42677530800 全 success；非作者 QA PASS https://github.com/linchen-20200325/my-stock-dashboard/pull/1101#issuecomment-6749470261）；上一則實作註記「merge pending QA/CI」狀態已過時，原文保留不改。
 
 - **治理裁示紀錄（2026-11-10 追加；僅紀錄 owner 於 #1105 留言所給裁示，非 AI 新決策）**：PR #1105（macro-forward-test，2026-11-06 列）已於 2026-11-09T23:41Z 關閉未合併；owner／ChatGPT 治理裁示見 https://github.com/linchen-20200325/my-stock-dashboard/pull/1105#issuecomment-6754457744 ——PIT 不接受、未授權改寫歷史或 PIT 豁免、日後補列須另設 PIT 契約設計＋來源證據 Gate。本註記不改寫上方任何條文。
+
+### DEC-157｜New UI2 📊 市場頁順序改為 日 K 主圖／Primary → 核心指標卡 → OneBrain Outlook（方向 B；Issue #1108；2026-11-10）
+
+- **來源／效力（據實，不誇大）**：客戶於 2026-11-10 提供 Streamlit Cloud 實際手機截圖並回饋「這圖放在 OneBrain 這邊滿奇怪的」，之後回覆「繼續」；協作 ChatGPT 依前一輪推薦以**方案 B 作為優先修正方向**，記錄於 GitHub Issue #1108。**repo 內沒有客戶逐字點選 B 的裁示**——本條**不得**描述為「客戶逐字選了 B」，只能寫「客戶截圖回饋＋『繼續』，ChatGPT 轉達 B 為優先方向（Issue #1108）」。原始對話為轉述，**NOT VERIFIED by repo**。
+- **有意識的政策變更，不是漏刪（決策者：AI 總管依 Issue #1108 授權範圍執行；來源見上）**：DEC-133 G-3＝A（客戶 2026-11-04 (19)，fence 逐字）寫明的已核准順序為「今日主要風險 → OneBrain Outlook → 台股 Primary 空槽 → 核心指標卡」。**本條只取代其中『OneBrain 的位置』**，DEC-133 其餘（G-1＝A 空槽依內容高度、G-2＝B SPEC 省略頻率、「最新收盤參考」誠實性、導覽餘裕 ≥160px、首屏四必要項不變、P2 僅兩項施工範圍之外不做項）**全部維持**；DEC-133 原文（含 sha256 釘住的 fence）與 DEC-156、Wireframes、Active Contract 等舊文件**一字未改**，保留為歷史。
+- **舊順序 vs 新順序**：
+  - 舊（DEC-133 G-3；至 main `1f3c489`）：頁首 → 〔今日結論／狀態／Risk Cap／是否需要行動／下一步／主 CTA〕＋今日主要風險 → 🤖 OneBrain Outlook → 台股日 K 主圖／誠實空槽 → 核心指標卡 → 其餘區塊。
+  - 新（本條）：同一組首屏（內容與位置**不變**）＋今日主要風險 → **台股日 K 主圖／誠實空槽 → 核心指標卡（TWII、VIX、US10Y、DXY、利差、PMI，VM 原狀）→ 🤖 OneBrain Outlook**（無資料＝原樣『未提供』，不捏造推論；缺席＝不畫空框、不重複）→ 其餘區塊。
+- **兩邊理由並陳**：
+  - **舊順序的理由（仍然成立，不是寫錯）**：AI 解讀（OneBrain）是客戶最想先看到的『所以呢』，放在今日主要風險之後、數據之前，能維持 AI 摘要的顯著度；且那是客戶 2026-11-04 逐字核准的順序。
+  - **新順序為何勝出**：台股 K 棒與核心指標卡屬**客觀市場資料**，彼此相鄰才讀得連貫；OneBrain 是**推論／解讀**，緊貼在 K 棒之下（客戶實機截圖回饋『放在 OneBrain 這邊滿奇怪』）會讓使用者把資料與推論混為一談。資料先、解讀後，資訊層分離。此為被權衡掉，不是舊規則寫錯。
+- **範圍／不做**：只動 `src/ui2/views/market.py` 渲染順序，以及依賴該順序的測試／viewport 判定器與證據（`tests/ui2_viewport/measure_viewport.py` 的 `p2_onebrain_primary_slot_order` 判定改為 Primary → 指標卡 → OneBrain，並新增突變 teeth）。**不改**：feed（real／FAKE）、K 棒契約與驗證器、20 根、紅綠灰、svg 220px、Risk Cap、OneBrain 模型／推論／VM、投資公式、其它頁、cron／secrets／OAuth／Sheet、G2／G2F／G4／G9 守衛、`render_sections(skip={onebrain})` 去重與 L2／L3 不顯示政策。
+- **與其他裁示的關係**：#1107（Cloud 實機驗收）**仍為 PARTIAL**（僅部分看到真實資料日 K，未驗證項仍未驗證），**本條與其施工不關閉 #1107**，也不是 production cutover；Streamlit Cloud 線上實況 **NOT VERIFIED**。
+- **證據限制**：新順序的版面量測（390×844、1440×900，FAKE 與 Real-data Preview）由 `tests/ui2_viewport/measure_viewport.py` 於沙箱 Chromium 量得；非 Cloud 線上驗證。

@@ -1286,3 +1286,13 @@ DEC-086 規則已於 main，本表已落地。
 | 下次 cron | 自 main 起算：main 的 `macro_forward_test/signals.parquet` 末日仍為 2026-11-03 |
 | 未驗證／限制 | (a) TWII 2026-11-09 收盤（較 11-06 +4.94%，約 2.7σ）無第二獨立來源：**NOT VERIFIED**（已標示、未改值）；(b) `foreign_buy` 單位無文件：**NOT VERIFIED**；(c) sector_flow 2026-10-23／10-26 無列原因 **NOT VERIFIED**（既有）；(d) Streamlit Cloud 部署端 **NOT VERIFIED** |
 | **下一個唯一安全接手點** | **無進行中授權工作；等客戶指示**。先前待客戶事項不變（見上一則補註）。下次接手仍須先重新 GitHub Gate |
+
+### 2026-11-10 接手點補註｜Issue #1108 市場頁順序 B（只追加；DEC-157）
+
+| 項目 | 接手事實／限制 |
+|---|---|
+| 目前任務 | `feat/ui2-market-order-b-20261110`：`src/ui2/views/market.py` 順序改為 Primary（日 K／空槽）→ 核心指標卡 → OneBrain；測試與 viewport 證據同步。**未開 PR、未合併**（等總管指示、獨立 QA、同一 head 五項原生 CI）。 |
+| 授權來源 | 客戶 Cloud 截圖回饋＋「繼續」，ChatGPT 轉達 B 為優先方向（Issue #1108）；**repo 無客戶逐字點選 B**。DEC-133 G-3 的 OneBrain 位置由 DEC-157 有意識取代（其餘 DEC-133 不變、原文未改）。 |
+| 未動 | feed、K 棒契約／20 根／紅綠灰／220px、Risk Cap、OneBrain 模型、其它頁、cron／secrets／OAuth／Sheet、G2／G2F／G4／G9。 |
+| 未驗證 | Streamlit Cloud 線上實況 NOT VERIFIED；#1107 Cloud 驗收仍 PARTIAL，不因本項關閉。 |
+| **下一個唯一安全接手點** | 本分支 push 後：獨立 QA（含突變）→ 同一 head 五項原生 CI → 依 Auto-Ship Gate；合併後再同步 PROJECT_STATE。 |
