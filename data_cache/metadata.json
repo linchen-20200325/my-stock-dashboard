@@ -1,27 +1,23 @@
 {
-  "updated_at": "2026-11-08T15:53:14.916957+00:00",
+  "updated_at": "2026-11-09T19:40:36.880246+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
-      "last_updated": "2026-11-06",
-      "row_count": 4912,
+      "last_updated": "2026-11-09",
+      "row_count": 4913,
       "last_error": null
     },
     "finmind_inst": {
       "name": "finmind_inst",
-      "last_updated": "2026-11-06",
-      "row_count": 4938,
-      "last_error": "抓取結果為空",
-      "fetch_outcome": "NO_NEW_DATA",
-      "fetch_evidence": "FinMind TaiwanStockTotalInstitutionalInvestors: HTTP 200, status 200, data=[]"
+      "last_updated": "2026-11-09",
+      "row_count": 4939,
+      "last_error": null
     },
     "finmind_margin": {
       "name": "finmind_margin",
-      "last_updated": "2026-11-06",
-      "row_count": 4938,
-      "last_error": "抓取結果為空",
-      "fetch_outcome": "NO_NEW_DATA",
-      "fetch_evidence": "FinMind TaiwanStockTotalMarginPurchaseShortSale: HTTP 200, status 200, data=[]"
+      "last_updated": "2026-11-09",
+      "row_count": 4939,
+      "last_error": null
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
