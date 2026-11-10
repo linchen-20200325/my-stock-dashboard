@@ -1360,3 +1360,40 @@ DEC-086 規則已於 main，本表已落地。
 
 
 > 📌 **2026-11-10 更正（只追加；取代上方「需 repo admin 確認『Allow GitHub Actions to create and approve pull requests』」的客戶待辦）**：依 repo 擁有者在 PR #1118 留言（https://github.com/linchen-20200325/my-stock-dashboard/pull/1118 ，comment_id 6767308916，「GitHub 獨立覆核」）所附 Settings → Actions → General → Workflow permissions 截圖：該設定**已勾選**（原本即為此狀態，擁有者未更動），預設權限為「Read repository contents and packages permissions」（與 YAML job 層級 `contents: write` ＋ `pull-requests: write` 不矛盾）。**此為擁有者自述，截圖未存入 repo，非 repo／CI 獨立驗證。** 客戶**不再需要**確認此設定，上方該項待辦已被取代。**仍為 NOT VERIFIED**：(a) 真實 Actions job 以 GITHUB_TOKEN 成功建立資料 PR（首次排程 2026-11-16 週一 20:00 UTC；手動 dispatch 不算 PR required-check 證據）；(b) 該 PR 是否自動觸發 ui2-browser-gate（否則由有權限者 Close→Reopen／Update branch，不得繞過）。⚠️「設定已啟用」**不是**端到端成功的證據。
+
+
+> 📌 **2026-11-10 session-end handoff snapshot（只追加；彙整上方各日期追記，不取代、不改寫任何既有行；新對話請從這一節開始讀，再跳到各追記看細節）**：本節回答 CLAUDE.md §35 十問。所有事實皆已合併於 main 並記錄在上方分散追記，此處僅整理。
+
+| 問題 | 內容 |
+|---|---|
+| 1. 現在在哪裡 | 本 session 結束於 2026-11-10；Open PR 0；分支僅 `ccr-*`、`claude/stock-dashboard-handoff-*`、`data`、`docs/newui2-*`（3 條）、`docs/stock-github-memory-governance-sync-20261106`、`v2`、`main`（`auto/data-macro-forward-test` 已由客戶刪除）。 |
+| 2. main 是什麼 | 撰寫時 main = `48d7c28f672010e026339d08c2ca5279f13d0777`（docs: #1118）。新對話必須重新核對，不得沿用本值。 |
+| 3. 已完成（皆已合併、同 head 五項 CI 綠、非作者 QA） | Issue #1099 台股日 K（#1100 PR-1 契約 `e5a429c`、#1101 PR-2 圖表 `31acbe8`，DEC-156）；Issue #1108 市場頁順序 B（#1109 → `81db063`，DEC-157）；資料 PR #1103／#1104 已合併；#1105 **未合併即關閉**（PIT 不接受；2026-11-05／06 forward-test 列僅作 SHA 證據 `9e7014c`／`d7ad231`；分支已由客戶刪除）；Issue #1110 資料可得性研究（#1112，`docs/vnext/ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md`）；Issue #1113 D6 資安顯示修補（#1114 → `da67568`）；Issue #1116 ETF 經理人 GH006 修補（#1117 → `aa69d99`；文件 #1118 → `48d7c28`）。 |
+| 4. 未完成／NOT VERIFIED | (a) ETF 經理人 `auto/data-etf-managers` 的**真實 Actions 發布仍 NOT VERIFIED**：下次排程 **2026-11-16（週一）20:00 UTC**；手動 dispatch 不是 required-check 證據；GITHUB_TOKEN 建立的 PR 是否會觸發 `ui2-browser-gate` 尚未驗證，若未觸發由有權限的人類 Close→Reopen 或 Update branch，**不得繞過保護**。倉庫設定「Allow GitHub Actions to create and approve pull requests」依擁有者回報**已勾選**（螢幕截圖不在 repo），**不得再列為待客戶確認**，也**不得宣稱為端到端證明**。(b) Streamlit Cloud 真實執行（Secrets 載入、API 認證、部署分支／commit、線上資料日）NOT VERIFIED。(c) New UI2 真實資料接線僅 TWII＋regime；VIX／US10Y／DXY／利差／PMI／OneBrain／持股／我的 未提供（可登陸的唯讀 adapter 候選：finmind_inst／margin、sector_flow、fundamentals、metadata.json）。(d) #1107 Cloud 驗收 **PARTIAL**（未關閉）。(e) `recalibrate_macro` 2026-10-01 失敗原因未解釋。 |
+| 5. 目前任務 | Issue #1119（https://github.com/linchen-20200325/my-stock-dashboard/issues/1119）：19 個 workflow 瘦身的**唯讀深度稽核**。盤點已完成（Issue 本文＋留言 6768254813）：保留核心 12（pr-check、update_macro_history、update_sector_flow、update_etf_managers、update_fundamentals、export_db、push_holdings_daily、push_weekly_report、update_forward_test、update_macro_forward_test、calibrate_health_weights、recalibrate_macro）；排程停用但可手動 3（push_daily_signals、push_watchlist_signals、update_health_history，優先清理**候選**）；手動研究 2（probe_finmind_monthrev、probe_tw_sources）；資安閘 2（risk_cap_history_poc、risk_cap_wif_negative_r5）。 |
+| 6. 下一個唯一安全接手點 | 繼續 Issue #1119 的**唯讀**稽核（**尚未開始施工**）：逐 workflow 最近 3 次 run、消費者（scripts／docs／其他 workflow／tests）、完整引用矩陣，再做 A（停用但保留 YAML）／B（移除確認不需要的 YAML 並同步相依測試）／C（合併手動診斷）比較，並產出給客戶的「可安全移除**候選**清單」。授權狀態：**僅盤點與提案**；不得刪除或停用任何 workflow、不得改排程、不得刪除執行歷史、不得動 Secrets／分支保護。候選**絕不**寫成已核准工作。注意：刪 YAML 未必清掉 Actions UI 歷史項目，驗收須區分「檔案不在 main」與「UI 清單消失」。 |
+| 7. 待客戶裁示（皆未授權） | D1 US10Y 口徑（AI 建議 FRED DGS10＋as-of）；D2 VIX（建議在「已完成 bar 規則」前保持空）；D3 利差定義／新抓取（建議保持空）；D4 PMI vs 景氣燈號（建議保持空或標 proxy／UNDETERMINED）；D5 新增每日落地 cron（建議不授權）；殘留資安項（`tab_macro.py` FinMind token 長度顯示、診斷探測 `verify=False`、`proxy_helper` stderr 例外輸出、`health_inspector` proxy 訊息、urllib3 DEBUG 查詢字串日誌）需另行授權；其他直推 main 的 workflow（`update_fundamentals` 下次 2026-11-21、`update_forward_test` 2026-12-02、`calibrate_health_weights` 2027-01；`update_health_history` cron 已停用）很可能同樣遇到 GH006，**未授權、不得施工**。客戶可自行決定關閉的開放 Issues：#1099、#1107、#1108、#1110、#1113、#1116、#1119。 |
+| 8. AI 不得在無新授權下做的事 | 刪除／停用 workflow、改排程／Secrets／分支保護、碰 Risk Cap／OneBrain／投資公式、接線 D1–D5 資料源、新增 cron、在缺少獨立 QA 與同 head 五項 CI 時合併資料 PR、動 `risk_cap_history_poc`／`risk_cap_wif_negative_r5`（WIF 屬性條件綁定 workflow_ref，未經明確風險接受絕不刪）、放寬「無重複排程」守衛（`tests/test_push_holdings_daily.py::test_redundant_push_workflows_schedule_disabled`）。 |
+| 9. 風險 | 刪 workflow 會連動相依測試（`test_probe_finmind_monthrev.py`、`test_vn1_*`、`test_push_holdings_daily.py`）與 `scripts/probe_tw_sources.py` 的 push 觸發；GH006 類失敗尚有其他直推 workflow 潛伏；以上 NOT VERIFIED 項不得被當成已驗證引用。 |
+| 10. 先讀什麼 | 先做完整 GitHub Verification Gate（main、Open PR、head、diff、CI、分支、討論串），再讀 Issue #1119 本文與留言 6768254813，接著讀本節、`docs/BACKLOG.md` 與 `docs/DECISIONS.md` 尾端的 2026-11-10 追記，最後讀 `PROJECT_RULES.md`。 |
+
+
+> 📌 **2026-11-10 更正（只追加；取代上方 session-end handoff snapshot 的第 5 列「目前任務」與第 6 列「下一個唯一安全接手點」，以及第 4／7／8 列中與之矛盾的措辭）**：客戶裁示（原話：「Action等儀表板好了 刪死碼時候再一起刪除」，見 https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486，亦轉述於 PR #1120 留言 6768496987）。
+
+| 項目 | 內容 |
+|---|---|
+| Issue #1119 狀態 | **HOLD（暫停）**。待新儀表板（UI2）正式完成／切換、死碼 Removal Gate 開始時才重啟；屆時把 19 個 workflow 盤點與相依測試併入該批次，並**對當時的 main 重新驗證**（舊盤點**不是**刪除許可）。 |
+| 現在禁止 | 不再做稽核、不開清理 PR、不刪除／停用／合併任何 workflow；19 個 YAML 維持現狀。不受影響：已知故障或資安問題的獨立修補（但不得繞過既有授權流程）。 |
+| **新的唯一接手點（取代第 6 列）** | 新對話第一步＝完整 GitHub Verification Gate（main、Open／Draft PR、head／diff、CI／QA、review threads、分支）。之後才可挑選 New UI2 開發 backlog 與**尚未授權**的 Decision Gates（D1–D5、殘留資安項、其他直推 main 的 GH006 workflow）——每一項動工前仍須客戶明確授權。 |
+| 施工狀態 | **目前沒有任何已授權的施工任務。** #1119 不再是「單一立即接手點」。 |
+| 持續進行（既有規則下） | 監看 ETF 經理人首次排程發布（2026-11-16 20:00 UTC，**NOT VERIFIED**）與資料發布／安全監看。 |
+| 不授權 | 本裁示不授權 D1–D5，也不授權任何新施工。 |
+
+
+> 📌 **2026-11-10 更正之二（只追加；獨立 QA 對 PR #1120 的 must-fix／nits，取代上方 snapshot 對應措辭）**：
+>
+> | 項目 | 更正 |
+> |---|---|
+> | 開放 Issues | **#1099 已於 2026-11-09T23:05Z 關閉（completed）**，不屬待客戶決定關閉者。仍開啟、等客戶自行決定是否關閉的是 **#1107、#1108、#1110、#1113、#1116、#1119**（#1119＝HOLD）。取代 snapshot 第 7 列的清單。 |
+> | 第 1 列「Open PR 0」 | 為撰寫當時、**本 PR（#1120）自己尚未開出前**的數字，即「除 #1120 外為 0」；分支清單也**漏列本 PR 自己的分支 `docs/session-end-handoff-20261110`**。新對話仍須重新核對。 |
+> | SHA `9e7014c` | git 可確認該 commit 存在（2026-11-06，標題「總經燈號落地：2026-11-05」）；它是否即 2026-11-05 forward-test 列的證據 commit，**依先前證據，未重新驗證**。`d7ad231`（2026-11-09，標題「總經燈號落地：2026-11-06」）可於 git 確認存在。 |
