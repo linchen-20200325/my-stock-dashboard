@@ -2170,3 +2170,9 @@
   - 仍待蒐集的證據：每個 workflow 最近 3 次 run；消費者（scripts／docs／其他 workflow／tests）；完整引用矩陣；A（停用但保留 YAML）／B（移除確認不需要的 YAML 並同步相依測試）／C（合併手動診斷）比較；給客戶的安全移除候選清單。
   - 驗收注意：刪 YAML 未必移除 Actions UI 歷史項目，須區分「檔案不在 main」與「UI 清單消失」。
   - 狀態：盤點完成、深度稽核**尚未開始施工**；摘要見 `docs/HANDOFF.md` 2026-11-10 session-end handoff snapshot。
+
+
+- 📌 **2026-11-10 更正（只追加；取代上方 `WORKFLOW-SLIM-AUDIT-1` 中「深度稽核待繼續」「仍待蒐集的證據」「狀態：尚未開始施工」的措辭）**：客戶裁示「Action等儀表板好了 刪死碼時候再一起刪除」（https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486）。`WORKFLOW-SLIM-AUDIT-1` 改為 **HOLD**：待 UI2 正式完成／切換、死碼 Removal Gate 開始時才重啟，屆時併入該批次並對當時 main 重新驗證（舊盤點非刪除許可）。**現在**不再稽核、不開清理 PR、不刪除／停用／合併任何 workflow。原分類與證據清單僅保留作日後參考，**不是**待辦。獨立的已知故障／資安修補不受影響，但不得繞過授權流程。
+
+
+- 📌 **2026-11-10 更正之二（只追加）**：Issue #1099 已於 2026-11-09 關閉；仍開啟等客戶決定是否關閉者為 #1107、#1108、#1110、#1113、#1116、#1119（#1119＝HOLD）。取代上方 `WORKFLOW-SLIM-AUDIT-1` 追加中列出的 Issue 清單（含 #1099 的部分）。

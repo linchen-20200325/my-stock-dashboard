@@ -7994,3 +7994,6 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 
 > 📌 **2026-11-10 指標（只追加；非新決策、非新的 DEC 編號）**：Issue #1119（workflow 瘦身唯讀稽核）僅授權**盤點與提出清單**，**不是**刪除或停用任何 workflow 的授權，也不是新的決策；AI 做出的分類（保留核心／排程停用候選／手動研究／資安閘）皆為**提案**，待客戶另行裁示。摘要見 `docs/HANDOFF.md` 2026-11-10 session-end handoff snapshot 與 `docs/BACKLOG.md` `WORKFLOW-SLIM-AUDIT-1`。
+
+
+> 📌 **2026-11-10 指標（只追加；記錄客戶裁示，非 AI 決策、非新的 DEC 編號）**：客戶於 Issue #1119 留言（https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486）裁示「Action等儀表板好了 刪死碼時候再一起刪除」：#1119 **HOLD**，待新儀表板完成並開始死碼 Removal Gate 時再與之合併處理並重新驗證；現在不做任何 workflow 刪除／停用／合併。取代上方 2026-11-10 Issue #1119 指標中「盤點與提案」的後續動作；細節見 `docs/HANDOFF.md` 同日更正。

@@ -1376,3 +1376,24 @@ DEC-086 規則已於 main，本表已落地。
 | 8. AI 不得在無新授權下做的事 | 刪除／停用 workflow、改排程／Secrets／分支保護、碰 Risk Cap／OneBrain／投資公式、接線 D1–D5 資料源、新增 cron、在缺少獨立 QA 與同 head 五項 CI 時合併資料 PR、動 `risk_cap_history_poc`／`risk_cap_wif_negative_r5`（WIF 屬性條件綁定 workflow_ref，未經明確風險接受絕不刪）、放寬「無重複排程」守衛（`tests/test_push_holdings_daily.py::test_redundant_push_workflows_schedule_disabled`）。 |
 | 9. 風險 | 刪 workflow 會連動相依測試（`test_probe_finmind_monthrev.py`、`test_vn1_*`、`test_push_holdings_daily.py`）與 `scripts/probe_tw_sources.py` 的 push 觸發；GH006 類失敗尚有其他直推 workflow 潛伏；以上 NOT VERIFIED 項不得被當成已驗證引用。 |
 | 10. 先讀什麼 | 先做完整 GitHub Verification Gate（main、Open PR、head、diff、CI、分支、討論串），再讀 Issue #1119 本文與留言 6768254813，接著讀本節、`docs/BACKLOG.md` 與 `docs/DECISIONS.md` 尾端的 2026-11-10 追記，最後讀 `PROJECT_RULES.md`。 |
+
+
+> 📌 **2026-11-10 更正（只追加；取代上方 session-end handoff snapshot 的第 5 列「目前任務」與第 6 列「下一個唯一安全接手點」，以及第 4／7／8 列中與之矛盾的措辭）**：客戶裁示（原話：「Action等儀表板好了 刪死碼時候再一起刪除」，見 https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486，亦轉述於 PR #1120 留言 6768496987）。
+
+| 項目 | 內容 |
+|---|---|
+| Issue #1119 狀態 | **HOLD（暫停）**。待新儀表板（UI2）正式完成／切換、死碼 Removal Gate 開始時才重啟；屆時把 19 個 workflow 盤點與相依測試併入該批次，並**對當時的 main 重新驗證**（舊盤點**不是**刪除許可）。 |
+| 現在禁止 | 不再做稽核、不開清理 PR、不刪除／停用／合併任何 workflow；19 個 YAML 維持現狀。不受影響：已知故障或資安問題的獨立修補（但不得繞過既有授權流程）。 |
+| **新的唯一接手點（取代第 6 列）** | 新對話第一步＝完整 GitHub Verification Gate（main、Open／Draft PR、head／diff、CI／QA、review threads、分支）。之後才可挑選 New UI2 開發 backlog 與**尚未授權**的 Decision Gates（D1–D5、殘留資安項、其他直推 main 的 GH006 workflow）——每一項動工前仍須客戶明確授權。 |
+| 施工狀態 | **目前沒有任何已授權的施工任務。** #1119 不再是「單一立即接手點」。 |
+| 持續進行（既有規則下） | 監看 ETF 經理人首次排程發布（2026-11-16 20:00 UTC，**NOT VERIFIED**）與資料發布／安全監看。 |
+| 不授權 | 本裁示不授權 D1–D5，也不授權任何新施工。 |
+
+
+> 📌 **2026-11-10 更正之二（只追加；獨立 QA 對 PR #1120 的 must-fix／nits，取代上方 snapshot 對應措辭）**：
+>
+> | 項目 | 更正 |
+> |---|---|
+> | 開放 Issues | **#1099 已於 2026-11-09T23:05Z 關閉（completed）**，不屬待客戶決定關閉者。仍開啟、等客戶自行決定是否關閉的是 **#1107、#1108、#1110、#1113、#1116、#1119**（#1119＝HOLD）。取代 snapshot 第 7 列的清單。 |
+> | 第 1 列「Open PR 0」 | 為撰寫當時、**本 PR（#1120）自己尚未開出前**的數字，即「除 #1120 外為 0」；分支清單也**漏列本 PR 自己的分支 `docs/session-end-handoff-20261110`**。新對話仍須重新核對。 |
+> | SHA `9e7014c` | git 可確認該 commit 存在（2026-11-06，標題「總經燈號落地：2026-11-05」）；它是否即 2026-11-05 forward-test 列的證據 commit，**依先前證據，未重新驗證**。`d7ad231`（2026-11-09，標題「總經燈號落地：2026-11-06」）可於 git 確認存在。 |
