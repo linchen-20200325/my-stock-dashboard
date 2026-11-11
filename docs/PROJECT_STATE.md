@@ -1175,3 +1175,29 @@
 - **2026-11-08 補（DEC-153 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 ~~main `35c08d2`，#1075～#1078 已 merge，~~ ~~現行 main `b01db69`，#1075～#1079 已 merge，~~（已更新：main `476529d`，#1075～#1084 部分已合併，見本檔下一則；有意識的更新，不是漏刪）#1038 Draft NO MERGE，#1034 Draft 待核銷。**Batch A**：FinMind 真實取樣 **BLOCKED**（無 token、無真實／錄製樣本；欄位語意 NOT VERIFIED；全市場 STRONG 仍恆 0，不得宣稱恢復）。**Batch B**：C4 未驗證月份鍵上限~~實作完成＋非作者 QA 通過（commit `93904d0`＋`964f717`），**待 PR／CI／merge，尚未合併**~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）**已合併 #1079**；~~待客戶確認詮釋點（5 分 vs 0 分）。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）**Batch C**：缺貨缺值唯讀研究（單組、合成資料），推薦 A 先行、資格規則進 Decision Gate、不建議數值門檻。詳見 BACKLOG `NUI2-DEC153`、HANDOFF 最新接手點、DECISIONS DEC-153 ③。
 
 - **2026-11-08 補（DEC-154 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 main `476529d`；#1082（`412d15b`）、#1083（G1，`b6a20b6`）、#1084（FinMind 唯讀探針，`476529d`）已合併，皆原生 CI 全綠、有非作者 QA；#1038 NO MERGE、#1034 待核銷。**G1**：缺貨 n_ok＜4 不再寫確定「缺貨弱」而顯示「部分證據 n/4」，排名／百分位／composite／權重逐位元不變。**探針合併≠執行，尚未執行**（`run_workflow` 403），FinMind 欄位語意與方案可取性仍 NOT VERIFIED，不得翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`，全市場 STRONG 仍恆 0、不得宣稱恢復。候選視窗研究與 `SHORTAGE_VERSION` 設計（皆未施工）見 DECISIONS DEC-154 ③。
+
+
+### 70.6 Issue #1140／#1144 後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-164／DEC-165 轉錄，非客戶逐字、非 QA PASS）
+
+> 依 `PROJECT_RULES.md` §0.3／§15／§32：只收「目前仍有效且會影響下一個 AI 判斷」的知識；待辦在 BACKLOG、current／next safe point 在 HANDOFF、正式裁示在 DECISIONS。本檔檔首「量測」行屬 2026-10-29 歷史值（cron 會推進 main）；本節以 GitHub 實況為準，**不在此寫最新 main SHA**。
+
+**FACT（main，各 PR 已合併）**
+
+- 新增兩支**唯讀 L3** service：`src/services/margin_fact_service.py`（融資）、`src/services/sector_flow_fact_service.py`（板塊資金；#1142，`1e5542a87cdc0006a6535b34457f8b59a85f6baa`）。實查：**目前除自身與測試外無 production caller、未接任何 UI**（本節撰寫時以 grep `margin_fact_service|sector_flow_fact_service` 對 `*.py` 檢視；窮舉性單組，NOT VERIFIED 第二組）。外資 L3 **不存在**（另案）。
+- 新增 L1 純讀函式 `src/data/sector_flow/reader.py::read_sector_daily_net_latest`（讀 `daily_net.parquet`）與 `read_sector_flow_cron_coverage`；新常數檔 `shared/sector_flow_fact_thresholds.py`（舊常數檔被 `test_batch_z42` sha256 釘住，故另立新檔）。
+- 安全修復（#1141，`907322aa0af9570fdcca9a496ffdc83e275bfdd3`）：價格≤0 於卡片與日 K 一致拒用；未來 `as_of` 不再顯示負過期天數（卡片層與日 K 處理**不對稱**，已登記 `I1140-FUTURE-ASOF-ASYM`）。
+- 板塊口徑（G-10，DEC-164）：「三大法人合計（外資＋投信＋自營商），依個股張數×收盤價彙總至板塊」，**與「大盤外資淨買賣超（僅外資）」不同、不可直接比較**。#1142 實測 coverage：板塊 41、觀測 38、未觀測 3（**非全市場完整覆蓋**；最低 coverage 門檻**未裁示**）。
+- Digest regime／light 缺口（研究文件 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`）：`decision_digest_builder.py::_market_section` 對 `market.regime`／`market.light` 無白名單，非空垃圾值可被當合法 `Fact`；`get_macro_state` 會把非 canonical regime 洗成 `neutral` 且 `is_loaded=True`；`market.health` 僅檢查有限數、無 0–100 範圍。
+
+**授權狀態（Approved ≠ 已完成）**
+
+| 項目 | 狀態 | 出處 |
+|---|---|---|
+| Digest builder A2（白名單驗證＋反例測試，不改凍結 Schema） | **已授權（客戶同意方案 A）、尚未實作** | DEC-165；Issue #1144 |
+| UI2 runtime 接線**前置 Gate**（唯讀研究：coverage／PIT／授權／缺口） | **已授權、尚未施工**（docs-only） | DEC-165 |
+| Digest A3 配對一致性、`market.health` 範圍驗證 | **未授權，獨立 Gate** | DEC-165 三 |
+| UI2 市場頁「市場資金與籌碼」runtime 接線／上線 | **仍未授權**，需新 Gate（含 G-F2～G-F6、coverage 門檻） | DEC-164 G-9；DEC-165 |
+
+**限制與 NOT VERIFIED**：TWSE／TPEX／FinMind 再散布授權原文、parquet 缺 `release_date` 的 PIT、Streamlit Cloud、iOS／Android 真機、Playwright／viewport、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT 皆**未驗**。#1119 維持 HOLD；#1124～#1126 未處置。
+
+**出處**：`docs/DECISIONS.md` DEC-164、DEC-165；`docs/BACKLOG.md`『Issue #1140』『Issue #1144』；`docs/HANDOFF.md` Issue #1144 接手點。與出處不一致時**以出處為準**。
