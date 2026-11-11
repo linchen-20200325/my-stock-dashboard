@@ -2252,3 +2252,46 @@
     - **i. 風險上限句為固定措辭**（DEC-081 Q2-2）；cap MISSING 與 OK 同文字。
   - **(3) 日後接線『市場資金與籌碼』前應補的守衛清單（INFERENCE：建議，非授權）**：`SHOWN_FOLDS` 不變；DOM 順序 OneBrain→新區塊；單位缺欄位不顯示 0；真 0 與 missing 區分；禁詞表區分『買超／賣超』事實與『買進／賣出／加碼』動作，並補看多／看空／排名／推薦；Real／FAKE 對稱；新欄位納入 `_all_fields`／`_paths`／`WIRED_PATHS`。
   - **(4) NOT VERIFIED**：瀏覽器／viewport 測試（沙箱無 Playwright，未跑）；`DataStatus` 六態與 schema candidate 五態措辭不一致，**未裁決**。
+
+### Issue #1140｜三批完成登記與新缺口（2026-11-11；只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-164 轉錄，非客戶逐字、非 QA PASS；以下皆非施工授權，無 bug 觸發／無客戶指派不動工，`CLAUDE.md` §-1）
+
+**有效讀法（歷史衝突補註）**：DEC-163 的 G-1～G-10「待確認」與上方『UI2 市場頁「市場資金與籌碼」文字線框（Issue #1136）』列之 `A2 步驟 2 待客戶拍板`，**以 DEC-164 正式裁示為準**（G-3 方案 A、不折疊、不做 Top／Bottom 排名、本批僅融資＋板塊 L3、外資 L3 另案）；原列保留不改。runtime UI 接線**仍需新 Gate**。
+
+#### 1. 完成登記（FACT：作者端／獨立 QA 數字依各批回報轉錄；原生 CI 以 PR 頁為準）
+
+| 批 | PR／SHA | 內容 | 測試證據 |
+|---|---|---|---|
+| 批 1 | #1141（main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`） | **C1** 價格≤0 一致拒用（卡片與日 K 一致）；**C2** 未來 `as_of` 不再顯示負過期天數 | 新增 85 項測試；QA 20 個突變全殺；廣範圍 5438 passed |
+| 批 2 | #1142（`<MERGE_SHA_1142>`） | 融資唯讀 L3 service、板塊資金唯讀 L3 service（含既有 `reader.py` 新增純讀 `daily_net.parquet` 的 L1 函式）、新常數檔 `shared/sector_flow_fact_thresholds.py`；**不接 UI、不啟用新來源** | 融資 97／板塊 149／reader 11；QA 三輪；廣範圍 5781 passed |
+| 批 3 | 本 docs PR（SHA 待補） | `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，不實作）；DEC-164；本登記；HANDOFF | docs-only |
+
+**真實 `data_cache` 交叉比對（批 2，FACT：作者端實測，單組）**：融資 **5399.15741 億 @ 2026-11-09**；板塊 N=41、觀測 38、未觀測 3、合計 **−920.248**、正 11／負 27／持平 0、標準化軸。
+
+#### 2. 新登記缺口（ID 前綴 `I1140-`；觸發條件未成立前不動）
+
+| ID | 缺口（FACT／INFERENCE 已標） | 觸發條件 |
+|---|---|---|
+| **I1140-PRICE-WORDING** | 卡片層價格不合格字樣沿用 `_UNREADABLE_TEXT`（FACT）；需專用文案 → 屬 L1 文字常數 | 客戶要求專用文案（需 L1 文字常數 Gate） |
+| **I1140-FUTURE-ASOF-ASYM** | 未來 `as_of`：TWII 卡片（Stale＋不顯示負天數＋「⚠ 可能已過期」）與日 K（`FUTURE_DATE` 拒用）**不對稱**（FACT，已知設計取捨；DEC-164 內部拍板 3） | 客戶要求兩者一致 |
+| **I1140-TODAY-TZ** | `get_twii_trend_view(today=None)` 用主機 `date.today()`，日 K 路徑用台北日（FACT） | 部署主機時區 ≠ 台北造成日期差 bug |
+| **I1140-OHLC-GUARD** | `with_ohlc=True` 路徑的 `view.close` 未套卡片價格守衛（FACT） | 該路徑接線／有實際錯誤 |
+| **I1140-AI-FUTURE-ASOF** | `ai_qa_service`／`ai_structured_summary` 對未來日不標過期（FACT） | AI 問答／摘要路徑實際出現未來日資料 |
+| **I1140-COVERAGE-MIN** | `complete` 非全覆蓋，且**無最低覆蓋率門檻**（FACT；門檻值屬業務語意，**待客戶裁示**） | runtime 接線前須裁示 |
+| **I1140-ETF-FAMILY-ABSENT** | ETF 家族部分成員缺席時 L3 未揭露（承襲 L2 Z43；FACT） | 接線 Gate 重審 |
+| **I1140-SECTOR-CRON-SCOPE** | `n_excluded_foreign_ccy`／`n_unclassified_stock_days` 為**上次 cron 範圍**統計，非全歷史（FACT） | 接線 Gate 重審文案 |
+| **I1140-MARGIN-NAT** | `get_margin_fact(today=pd.NaT)` 歸 `read_exception`（FACT） | 有 caller 傳 NaT |
+| **I1140-MARGIN-SOURCE-TEXT** | `MARGIN_SOURCE_TEXT` 含「全市場融資」描述性字樣（FACT；G-3 要求不得誤稱全市場的是**板塊聚合**） | 接線 Gate 重審 |
+| **I1140-MARGIN-UNIT-MIX** | 融資歷史**內部單位混用**僅驗最新點（FACT；v3 §02「資料疑義」逐列旗標缺口，承 DEC-162） | 取用歷史序列／趨勢前 |
+| **I1140-SECTOR-UNOBS-LABELS** | 板塊 **3 個長期未觀測標籤**之成因 **NV**（NOT VERIFIED） | 有任務碰到板塊分類 |
+| **I1140-SECTOR-DROPPED-PRICE** | `n_dropped_missing_price=15761` 的含義 **NV**（NOT VERIFIED） | 同上 |
+| **I1140-DIGEST-A2-IMPL** | Digest regime／light 方案 A2 實作待客戶裁示（`DG-DIGEST-A2`；見 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §9）。**AI 推薦 A2，非客戶裁示** | 客戶裁示 |
+| **I1140-DIGEST-HEALTH-RANGE** | Digest `market.health` 僅檢查有限數，無 0..100 範圍檢查（FACT：`150`、`-5` 仍 OK） | 併 A2 裁示 |
+| **I1140-MACRO-STATE-NONCANON** | `get_macro_state` 對非 canonical `effective_regime` 洗成 `neutral` 且 `is_loaded=True`；`light` 直通 `warroom['light']` 不驗（FACT）。不建議動 `normalize_regime`（被測試釘住、舊 UI 大量使用） | 有實際錯誤／客戶裁示 |
+| **I1140-REGIME-SET-EQ** | 四份 regime 集合（`REGIME_LIGHT`、`REGIME_LABEL`、`STATE_WORDS_LATIN`、`_REGIME_EN`）無等式守衛（FACT） | 併 A2 測試規格 #8 |
+| **I1140-MACRO-BARREL-ST** | macro barrel eager 載入 streamlit（既有性質；FACT） | 有 headless 需求時評估 lazy（NV） |
+
+#### 3. 仍阻塞／NOT VERIFIED
+
+- **Gate**：G-F2～G-F6（UI2 feed／section runtime 接線需新 Gate；外資 L3 另案）仍待客戶裁示。
+- **NOT VERIFIED**：資料來源授權／再散布／PIT、Streamlit Cloud、真機、Playwright／瀏覽器 viewport、ETF Managers 2026-11-16 20:00 UTC 首次排程。
+- **維持**：#1119 HOLD；#1124～#1126 未處置（#1126 PIT 未驗）；禁止順手合併／改寫／rebase。
