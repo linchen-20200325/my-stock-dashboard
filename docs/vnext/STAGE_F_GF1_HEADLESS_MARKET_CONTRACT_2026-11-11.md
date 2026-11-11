@@ -58,17 +58,17 @@
 ### 1.5 廣度
 
 - 廣度旗標：`BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds.py`）。出處 DEC-074 B（客戶 2026-10-23）；DEC-075 D-1(a)：位階一併⬜，**不得靜默 fallback 到另一套規則引擎**。（FACT）
-- **復活條件**實掛在上方 `M1B_M2_LEG_ENABLED` 註解下（非旗標註解本身）：
-  1. `update_macro_history` 餘額／流量解析修正，並過 sanity gate（m1b>0 且 |gap|<30）；
-  2. 重跑 AUC 顯著 >0.55；
-  3. 線上路徑能回報 as-of 與是否走代理；
-  4. 同批重跑門檻校準。（FACT）
+- **復活條件**（旗標註解自帶，`git show origin/main:shared/signal_thresholds.py` 原文；缺一不可，與 DEC-074 對齊）：
+  1. 正式（真實）漲跌家數資料來源接上並帶 `is_proxy=False` 的 provenance，**或**另一套經客戶核准的計算方式；
+  2. 客戶裁示可計分。
+  ⛔ 不得為了讓健康分「有數字」而把旗標翻 True。（FACT）
+- 另註：`update_macro_history` 餘額／流量解析 sanity gate（m1b>0 且 |gap|<30）、AUC>0.55、線上路徑回報 as-of、重跑門檻校準，是**另一旗標** `M1B_M2_LEG_ENABLED`（M1B-M2 腿）的條件，與廣度旗標無關。
 - **目前缺口**：`fetch_adl` 由 `^TWII` 日內漲跌反推（`is_proxy=True`）；`data_cache` 無逐日漲跌家數序列；`tw_macro.fetch_twse_breadth` 只給單日值且非正式口徑（5 日均）。（FACT）
 - **「恢復」是否等於「新增來源」須客戶裁示**：走 `fetch_twse_breadth` 逐日落地即新增 fetcher＋cron，本批禁止。（INFERENCE，待裁示）
 
 ### 1.6 前進驗證帳本 `data_cache/macro_forward_test/signals.parquet`
 
-- **事實**：47 列（date 2026-08-20～11-03，25 欄）；`effective_regime` bull 22／neutral 18／unknown 6／bear 1；`schema_version` 1:37／2:4／3:6；`date_source=backfill_from_captured_at` 37 列、`live_as_of` 10 列；`captured_at` 晚於 `date` 最多約 2 天。（FACT，量測日 2026-11-11）
+- **事實**：47 列（date 2026-08-20～11-03，25 欄）；`effective_regime` bull 22／neutral 18／unknown 6／bear 1；`schema_version` 1:37／2:4／3:6；`date_source=backfill_from_captured_at` 37 列、`live_as_of` 10 列；`captured_at` 晚於 `date` 最多約 3 天（實測）。（FACT，量測日 2026-11-11）
 - **PIT 缺口**：BACKLOG `NUI2-PIT-1038-BLOCK`、`DATA-FWDTEST-PIT-BACKFILL`（缺逐列來源發布時間、回填列）；#1124～#1126 PIT 仍 NOT VERIFIED。
 - **用途**＝前進驗證帳本。**不得充當 live 市場判斷**，理由：歷史凍結且最新列 11-03；37/47 為回填；PIT 被拒；旗標生效前 v1／v2 的 bull／neutral 為舊規則值；授權作 live＝NOT VERIFIED。
 - **引用**：`src/ui`、`src/ui2`、`app.py`、`app_ui2.py`、`src/services/ui2` 皆無引用。但**沒有「禁止讀取」測試，僅靠無 caller**（INFERENCE）。
@@ -85,10 +85,10 @@
 
 前一份：`docs/vnext/STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md`。**原文件不改，以本段為準。**
 
-- (a) 原稱「`signals.parquet` 引用者為 `macro_forward_test.py`、`macro_fwd_test_store.py`、`macro_refresh_service.py`、`macro_session_patch.py`」**不完全屬實**。production 唯一 import 是 `scripts/update_macro_forward_test.py`；`compute/macro/macro_forward_test.py`、`data/macro/macro_fwd_test_store.py` 是被它呼叫的模組；`macro_refresh_service` 僅註解提到。
+- (a) 原稱「`signals.parquet` 引用者為 `macro_forward_test.py`、`macro_fwd_test_store.py`、`macro_refresh_service.py`、`macro_session_patch.py`」**不完全屬實**。production 唯一 import 是 `scripts/update_macro_forward_test.py`；`compute/macro/macro_forward_test.py`、`data/macro/macro_fwd_test_store.py` 是被它呼叫的模組；`macro_refresh_service` 在該檔註解提到；另 `scripts/risk_cap_history_poc.py`、`scripts/publish_data_pr.py` 亦被提及，是否為 import 未逐一確認（NOT VERIFIED）。
 - (b) 原稱「無任何 headless 位階」**需修正**：`update_macro_forward_test` cron 確實 headless 產位階（與畫面同一組 L3 函式，bare-mode）。但旗標 False 下輸出 `unknown`，**不等於**存在 headless 有效位階。
 - (c) 前份未載：`signals` 的 `date_source` 37 回填／10 live。
-- (d) 旗標註解只寫 DEC-074 B；復活條件掛在 `M1B_M2_LEG_ENABLED` 註解下。
+- (d) 前一份研究與本文件初稿曾誤把 `M1B_M2_LEG_ENABLED` 的復活條件當成廣度旗標的條件；廣度旗標自帶復活條件（真實漲跌家數來源 `is_proxy=False` 或客戶核准的另一套計算方式，且須客戶裁示可計分）。
 - 其餘宣稱經複驗屬實：9 鍵無 `as_of`、gitignore、`PRODUCTION_WRITE_APPROVED`、`allocation_service` 模組層 import streamlit、metadata 現值、parquet 無 `release_date`。
 
 ---
@@ -128,7 +128,7 @@ Token 欄為 INFERENCE，以預估改動檔數／測試量／QA 輪數表示。
 **AI 推薦（非客戶裁示）**：
 
 1. 先做方案 1 的最小可推進項：讓 UI2 市場頁以「既有 canonical 事實」呈現，即 TWII 日 K ＋ as_of／stale（已接），再加 inst／margin／sector_flow 的唯讀 service，先做 **Old-UI-First 盤點**。仍需 Gate，本批不施工。
-2. 同時請客戶裁示方案 2 的前置問題：「恢復」是否等於「新增來源」。
+2. 同時請客戶裁示方案 2：依旗標自帶復活條件，「恢復」必然需要「真實漲跌家數來源」或「客戶核准的另一套計算方式」＝新來源／新算法，不是既有資料可直接恢復；故前置問題（「恢復是否等於新增來源」）已由旗標自身條件回答為「是，需客戶核准」，仍待客戶裁示。
 3. **方案 3 不建議**：高風險、未授權，且與 DEC-074／075 的凍結語意直接衝突。
 
 ---
