@@ -2203,3 +2203,10 @@
 - 📌 **2026-11-11｜P-4 合併後更新（只追加；取代上方 P-4 指標「待合併，PR 號待補」之效力，舊句不改）**：#1128 已 squash 合併，main `720ccbed420da1e7c6066d81c20ce71698f4bf1d`（head `05d2733c`）；同 head 原生 CI 5 項全 success、第四輪獨立 QA PASS；最後一個日期相依測試修復 commit（`TEST-DATE-DEP-1`）僅作者端驗證，未另送獨立 QA（據實）。
   - 仍 NOT VERIFIED：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR、資料 PR #1124～#1126（PIT）；P-4 完成 ≠ Stage F／C1～C7 通過，無 production caller。#1119 HOLD。
   - 下一步：等客戶裁示（P-1 其餘、v2 嵌入式 coverage Gate、EPS Gate、D1 實作授權），無裁示不動工（§-1）。
+
+- 📌 **2026-11-11｜Issue #1130 Stage F Gate 指標（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-160 轉錄，非客戶逐字、非 QA PASS；以下皆非施工授權；研究見 `docs/vnext/STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md`，單組撰寫未經第二組複驗）**：
+  - **Stage F Gate G-F1～G-F6（待客戶裁示，未啟動）**：**G-F1** headless 市場輸入供應（是否授權新增位階來源）；**G-F2** headless 持股授權（Digest 可否消費私有持股、沿用 SA 推播授權或專用唯讀憑證、單人／多人部署 BP-DR-06、持股 `as_of` 由誰提供）；**G-F3** A2 取向（A2-i：STALE 僅進 audit／coverage；A2-ii：STALE 進 Digest 段但 validator＋grounding 禁用）；**G-F4** v2 schema／compat／PIT Gate（B＋M1 實作授權，須 Effort High＋獨立 QA）；**G-F5** production caller 建立時機（前置：G-F1／G-F2 裁示、`XV-C05` 驗證、`AB4R-WIRE-BUILDER`、`P1R-FIVE-BUCKET-L3`、契約 §9 測試）；**G-F6** `NUI2-AUTH-CONTRACT-GATE`／Active Sheet 是否為 Digest 持股段前置。
+  - **headless 輸入 MISSING 清單**：市場位階／light／health；`exposure_limit_pct`／allocation；`macro_state.json` 任何 headless 副本；真實市場廣度（`BREADTH_PROXY_SCORING_ENABLED=False`）；PIT `release_date` 欄；持股 `as_of`；FinMind 等公共資料再散布授權（NOT VERIFIED）；SA 推播 secret 現況（NOT VERIFIED）。
+  - **Digest v2 B＋M1**：方向已記錄、**未授權施工**（不得實作 v2、`schema_version`、新欄、升降版轉換、v1 移除、production caller、OneBrain）。
+  - **`TEST-DATE-DEP-1` 後續（Issue #1130 裁示 4，僅最小測試修復）**：結果待本 PR 補。
+  - 維持 NOT VERIFIED：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。#1119 維持 HOLD。P-4 完成 ≠ Stage F／C1～C7 通過。

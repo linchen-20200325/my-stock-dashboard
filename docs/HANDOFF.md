@@ -1433,3 +1433,9 @@ DEC-086 規則已於 main，本表已落地。
 - **據實揭露**：最後一個 commit（`tests/test_d3e_mrev_fail_cache.py` 的 `frozen_now` 補釘 `tw_now`，6 行，日期相依測試缺陷，2026-11-11 起 main 紅燈；`TEST-DATE-DEP-1` 已登記）僅由作者端驗證＋突變，**未另送獨立 QA**。
 - **仍 NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。P-4 完成 ≠ Stage F ≠ C1～C7 通過；`assemble_digest` 無 production caller。#1119 維持 HOLD。
 - **下一個唯一安全工作**：等客戶裁示（P-1 其餘、v2 嵌入式 coverage Decision Gate、EPS Gate、D1 實作授權）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1130；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-160 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `8df4797d898f7002ff6c55a3fa6c3b2371a93720`；**本批 PR 號待補**。本批為 docs-only 研究：新增 `docs/vnext/STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md`（headless 輸入／授權矩陣、A2 stale 語意、Digest v2 B＋M1 方向、Gate G-F1～G-F6）；單組撰寫，未經第二組複驗。
+  - **不可動項**：Open 資料 PR **#1124／#1125／#1126** 禁止順手合併／改寫／rebase；**#1119 維持 HOLD**；OneBrain、EPS、D1～D5、UI2 切換、舊 UI 刪除一律未授權；Digest v1 凍結契約未動、無 production caller。
+  - **仍 NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。P-4 完成 ≠ Stage F ≠ C1～C7 通過。
+  - **下一個唯一安全工作**：等客戶裁示 G-F1～G-F6；無裁示前不動工（`CLAUDE.md` §-1）。
