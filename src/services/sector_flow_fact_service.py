@@ -365,7 +365,8 @@ def _compute(today: date | None) -> SectorFlowFact:
     raw: pd.DataFrame = daily["rows"]
     # 6 (date, 原始 sector) 重複 → 重用 L2 canonicalize 的 raise(不靜默相加、不 drop_duplicates)
     try:
-        canon, canon_meta = canonicalize_sector_daily(raw)
+        # n_stocks 由本層自行加總(見 _sum_n_stocks):不交給 L2 的 `int(round())`(會把 3.7 靜默四捨五入、inf 直接炸)
+        canon, canon_meta = canonicalize_sector_daily(raw.drop(columns=["n_stocks"], errors="ignore"))
     except ValueError as e:
         return _fail("integrity_duplicate_rows", data_date=obs_iso, is_stale=is_stale,
                      stale_reason=stale_reason, diagnostic=str(e))
