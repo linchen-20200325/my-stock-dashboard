@@ -1474,3 +1474,15 @@ DEC-086 規則已於 main，本表已落地。
 - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；Digest v2／Stage G；舊 UI。
 - **NOT VERIFIED**：瀏覽器／viewport 測試（沙箱無 Playwright）；`DataStatus` 六態與 schema candidate 五態措辭不一致未裁決。
 - **下一個唯一安全工作**：等客戶對 G 表（見 Issue #1138 留言）裁示；無裁示前不動工（`CLAUDE.md` §-1）。
+
+## 最新接手點（2026-11-11，Issue #1140；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-164 轉錄，非客戶逐字、非 QA PASS）
+
+- **現在做到哪**：Issue #1140 三批完成——批 1 #1141（C1 價格≤0 一致拒用、C2 未來 `as_of` 不顯示負天數；main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`）；批 2 #1142（融資＋板塊唯讀 L3 service，不接 UI；`1e5542a8`）；批 3 本 docs PR（Digest regime/light 相容性 Gate 研究＋DEC-164＋BACKLOG＋本段）。
+- **main SHA**：#1141 合併為 `907322aa`、#1142 合併為 `1e5542a8`；本 docs PR 合併後的 SHA 以 GitHub main 為準。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **Current Task**：無進行中施工。G-1～G-10 已裁（DEC-164）；兩個 L3 已有但**未接任何 UI**。
+- **下一個唯一安全接手點**：**等待客戶裁示，無裁示則停手**（`CLAUDE.md` §-1）。需裁示項：
+  1. **Digest A2 實作與否**（`DG-DIGEST-A2`）：見 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §9；AI 推薦 A2（**非客戶裁示**）。
+  2. **UI2 市場頁「市場資金與籌碼」runtime 接線 Gate**（需新 Gate，含 G-F2～G-F6；**外資 L3 另案**；最低覆蓋率門檻 `I1140-COVERAGE-MIN` 待裁示）。
+- **禁止事項**：不接 UI2 feed／section runtime、不上線、不做外資 L3、不改資料來源；不改 Digest v1 凍結檔、不升 v2、不建 production caller／OneBrain；不改位階／燈號／公式／PIT、Risk Cap、D1–D5、EPS、登入／OAuth／Sheet、舊 UI；不動 Actions／cron／Secrets；#1119 HOLD；#1124～#1126 禁止順手合併／改寫／rebase（#1126 PIT 未驗）；不得把 AI 推薦寫成客戶裁示。
+- **先讀哪些 SSOT**：`CLAUDE.md`（§-2、§-1.5、§-1、§1）→ `PROCESS.md` → `docs/DECISIONS.md` DEC-164（並回看 DEC-157／DEC-160～163）→ `docs/BACKLOG.md`『Issue #1140』段（`I1140-*` 缺口）→ `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（G 表原題）→ `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`。
+- **仍 NOT VERIFIED**：Cloud UI2、真機、Playwright／瀏覽器、資料來源授權／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程。

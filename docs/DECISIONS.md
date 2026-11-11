@@ -8095,3 +8095,53 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **本批產物**：`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；上報點與待確認項 G-1～G-10 見該文）。**線框不是經驗證畫面，未做真機／Cloud／瀏覽器驗收（NOT VERIFIED）。**
 - **與 DEC-157／DEC-162 的關係**：**不取代**。DEC-157 市場頁順序與 `MARKET_CARD_IDS` 固定 6 張維持有效；DEC-162 Mapping 文件 §4 AI 推薦新 section 放日 K 之後，**客戶 Issue #1136 指定改為 OneBrain 下方，以客戶指定為準**（AI 推薦非客戶裁示，兩者不衝突於客戶原文）。
 - **不授權**：A2 步驟 2 程式施工；不改 production code／tests／UI2 VM／feed／section、資料讀寫、fetcher、source／API、PIT／公式／權重／燈號、Risk Cap、D1–D5、EPS、OAuth／Sheet、Digest v2、P-1、OneBrain、Actions、cron／Secrets；#1119 HOLD；#1124～#1126 不處置。
+
+### DEC-164｜Issue #1140 客戶裁示轉錄：G-1～G-10 正式裁示、融資＋板塊唯讀 L3 與兩項獨立安全修復授權、Digest regime/light 相容性 Gate（2026-11-11）
+
+- **來源／效力（據實，不誇大）**：決策者＝客戶；來源＝GitHub Issue #1140（客戶裁示轉錄）。本條再依該 Issue 轉錄，**非逐字展開、非 QA PASS**；僅下列「客戶原文」引號內為 Issue 所載客戶語句，其餘為依 Issue 整理（原始逐字對話不在 repo，NOT VERIFIED by repo）。基準 main `1e5542a8`（#1142 合併後；#1141 為 `907322aa`）。
+- **客戶原文（Issue #1140 所載）**：「同意你的六項 G 表建議，G-4、G-6～G-8 沿用既有方向。授權融資＋板塊唯讀 L3 service 和單元測試（不接 UI、不啟用新來源），以及價格≤0、未來 as_of 的獨立安全修復；Digest regime/light 先做相容性 Gate，不改凍結 Schema。」（引文略去 Issue 後半『請正式寫入 GitHub，給 Claude Code 完整提示語，維持靜默自主巡航。』）
+
+#### 一、G-1～G-10 正式裁示表（依 Issue #1140 轉錄；題號沿用 `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`／DEC-163）
+
+| 題號 | 議題 | 裁示（客戶） |
+|---|---|---|
+| **G-1** | 區塊名稱與文案 | 區塊稱「**市場資金與籌碼**」；文案「**客觀數據，不構成買賣建議；缺值不補**」；位置在 **OneBrain 下方**、六張核心卡不變（承 DEC-163／DEC-157） |
+| **G-2** | 折疊 | **不折疊**；不改 `SHOWN_FOLDS`；Human UI 不增完整 evidence expander |
+| **G-3** | 板塊摘要 | **方案 A**：有標示、可驗證的**衍生聚合**，只對合格資料計算。須驗：去重、口徑、一致性、缺值；**正＋負＋持平＋未觀測＝應涵蓋總數**；coverage／上市上櫃不完整時**不得稱全市場**、不得給誤導性合計；**不做依淨額排序的 Top／Bottom／排名**；衍生聚合**必須揭露**；完整來源列保留於 canonical／Evidence |
+| **G-4** | 正負號與色彩 | 以 **＋／−** 與「**淨買超／淨賣超**」標籤表達；**中性色**，不以負值紅暗示賣出建議 |
+| **G-5** | 單位／sanity 不通過文案 | 原則上顯示原有 `⬜ 資料未取得`；**僅**在已由資料檢查判定 sanity 未過時才附「**資料檢查未通過**」；**不得**在原因未知時假稱單位錯誤 |
+| **G-6** | 資料延遲 | 一般延遲**不另加推測文字**，資料日外露；真 stale 照既有規則警示 |
+| **G-7** | Secondary Visual | **不算** Secondary Visual（純文字，**不新增圖表**） |
+| **G-8** | 無障礙 | 採 `role="group"`＋可辨識 `aria-label`；實作階段以無障礙測試驗證 |
+| **G-9** | 授權範圍 | **明確核准僅**：兩個獨立唯讀 L3（融資、板塊）與其單元測試，以及兩項獨立安全修復（價格≤0、未來 as_of）。**未核准**：UI2 feed／section runtime 接線、上線、外資 L3、資料來源變更 |
+| **G-10** | 板塊口徑 | 「**三大法人合計（外資＋投信＋自營商），依個股張數×收盤價彙總至板塊**」；**不拆分項**；與「大盤外資淨買賣超（僅外資）」**不同、不能直接比較或加減** |
+
+- 文字線框**方向**獲核准；**正式 runtime UI 接線仍需新 Gate**（不得擅自進入）。
+
+#### 二、授權範圍與 Digest 相容性 Gate
+
+- **授權施工（僅此）**：(1) 融資唯讀 L3 service＋單元測試；(2) 板塊資金唯讀 L3 service＋單元測試（皆**不接 UI、不啟用新來源**）；(3) 獨立安全修復：價格≤0 一致拒用、未來 `as_of` 不再顯示負過期天數。
+- **Digest regime/light：先做相容性 Gate（研究；Issue 另允許新增獨立反例測試，本批未新增）**，**不改凍結 Schema**：不改 v1 schema／validator／action semantics、不升 v2、不建 production caller、不建 OneBrain runtime。
+- **永久禁止清單（分兩組；本條記錄並沿用，與 DEC-160／DEC-163 不授權事項疊加，不取代）**：
+  - **(甲) Issue #1140 原清單逐項（轉錄，非逐字）**：不修改舊 UI；不切換正式 app；不動 Risk Cap；不動 D1–D5；不動 EPS／廣度／公式；不新增 API／MCP／source／fetcher／cron／Secrets；不動 OAuth／Sheet；不做外資 L3；不接 UI2 real_feed／section runtime；不實作 Digest v2；不建 OneBrain AI Provider／成本機制；不做 #1119 Actions 精簡（#1119 維持 HOLD）；不處置 #1124～#1126（#1126 PIT 未驗，不得順手合併／改寫／rebase）；上游 TWSE／TPEX／FinMind 再散布權利、Streamlit Cloud、真機、Playwright 皆 **NOT VERIFIED**。
+  - **(乙) 沿用 DEC-160／162／163，Issue #1140 未重述**（為避免遺失而一併列出，**不是**本 Issue 新增的客戶語句）：不改位階／燈號／權重／PIT；不實作 P-1；不產生買賣建議、法人強弱、融資趨勢、訊號分數、排名；不建 production caller。
+
+#### 三、本批 AI 總管內部拍板（**技術實作細節，內部自決，依 v3 §03-1；非客戶裁示**）
+
+| # | 決定 | 理由（FACT／INFERENCE 已標） |
+|---|---|---|
+| 1 | 板塊 L3 需「最新交易日淨額」，而既有 `read_sector_flow_cache` 只有近 5 日累計 `x_yi`（FACT）→ 在**既有** `reader.py` 新增**純讀** `daily_net.parquet` 的 L1 函式（Q-a） | 未改變指標定義、無新來源、不新增 fetcher／cron；L1 讀取留在 L1，L3 不直讀檔 |
+| 2 | 新容差常數放**新檔** `shared/sector_flow_fact_thresholds.py` | `test_batch_z42` 以 sha256 釘住舊常數檔（FACT），改舊檔會破壞該守衛；新檔符合 §3.3 SSOT |
+| 3 | 未來 `as_of`：TWII 卡片層採「Stale＋不顯示負天數＋『⚠ 可能已過期』」；日 K 維持 `FUTURE_DATE` 拒用；**兩者不對稱**（已知）；融資 L3 對未來日 **fail closed** | 卡片是「提示可能過期」、日 K 是「拒用不可信資料」，語意不同；不對稱登記於 BACKLOG 待辦 |
+| 4 | 價格不合格沿用既有「讀不到」灰態字樣（`_UNREADABLE_TEXT`），**不新增文案** | 專用文案屬 L1 文字常數，需另 Gate；已登記 |
+
+- 以上四點為**總管技術拍板**，已在交付報告揭露，**不得引用為客戶裁示**；客戶若認為其中任一點涉及業務語意，以客戶為準。
+
+#### 四、與既有 DEC 的有效讀法（只追加；舊文不改）
+
+- **DEC-163「待確認 G-1～G-10」**：本條為其**正式裁示**；DEC-163 文中「初版三項含外資淨買賣超」的**初版範圍**，有效讀法為：**本批只授權融資＋板塊兩個 L3，外資 L3 另案**（G-9）。DEC-163 BACKLOG 上報點 (b)「板塊 Top／Bottom N 屬新排名語意，需另 Gate」維持有效，G-3 已明確**不做**排名。
+- **DEC-162 §4「新 section 放日 K 之後」**：維持被 DEC-163 以客戶指定「OneBrain 下方」取代；本條 G-1 再確認。
+- **DEC-157／DEC-161／DEC-160**：不取代；Gate G-F2～G-F6、方案 2 前置問題**仍待裁示**；市場頁 `MARKET_CARD_IDS` 固定 6 張維持。
+- **本批施工與研究產物（據實，詳見 BACKLOG／HANDOFF）**：批 1＝#1141（main `907322aa`）C1／C2 安全修復；批 2＝#1142（`1e5542a8`）融資／板塊唯讀 L3；批 3＝`docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，**不實作**）。
+- **Digest A2 實作與否＝待客戶裁示**：研究文件的 AI 推薦（方案 A2）**不是客戶裁示**；未獲裁示前不動 `decision_digest_builder.py`。
+- **仍 NOT VERIFIED**：Cloud UI2、真機、Playwright／瀏覽器 viewport、資料來源授權／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126（PIT）。
