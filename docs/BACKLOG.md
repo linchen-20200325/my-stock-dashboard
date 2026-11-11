@@ -2337,3 +2337,14 @@
 - **既有阻塞（沿用，未解）**：`G-F2～G-F6` 待裁示；最低 coverage 門檻未裁示；PIT／上游授權 NOT VERIFIED；Cloud／真機／Playwright NOT VERIFIED；#1119 HOLD；#1124～#1126 未處置且 #1126 PIT 未驗（禁止順手合併／改寫／rebase）。
 - **下一步（唯一安全順序）**：先 LIVE GitHub Verification Gate → A 線 `I1144-A2-IMPL`（Sonnet 5.5、Effort High、靜默巡航）→ B 線 `I1144-UI2-PREGATE`（docs-only）；各自走獨立 PR／非作者 QA／同 head CI。範圍外（A3、health 範圍、UI2 接線、外資 L3）一律停手並上報。
 - **NOT VERIFIED（本段）**：Issue #1144 內 PR head／CI 編號為快照轉錄，未由本 docs 撰寫組另行查驗。
+
+
+### Issue #1144 結果｜A2 已完成、B 線研究文件已產出（2026-11-11；只追加；不改既有列；依據 DEC-166，AI 總管事實更新，非客戶裁示）
+
+| ID | 項目 | 狀態 | 備註 |
+|---|---|---|---|
+| **I1144-A2-IMPL** | Digest builder A2 白名單驗證＋反例測試 | **已完成**（PR #1146，main `d4f7b3f`；同 head 五項 CI success；獨立 QA PASS） | 取代上方『Issue #1144』段「已授權、尚未實作」；範圍僅 `_market_section` |
+| **I1144-UI2-PREGATE** | UI2 runtime 接線前置 Gate 研究 | **研究文件已產出、待客戶裁示**（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`；獨立 QA PASS 附三項小修已修） | AI 推薦方案 B 屬 RECOMMENDATION；Gate：DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE |
+
+**仍開放（保留，未改）**：`I1140-COVERAGE-MIN`（最低 coverage）、`G-F2～G-F6`、`I1144-WIRING-GATE`（接線，未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`I1144-BRANCH-CLEANUP`（僅候選，非刪除授權）、`I1140-*` 其餘各項。
+**NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：待補。
