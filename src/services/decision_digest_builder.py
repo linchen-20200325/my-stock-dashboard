@@ -84,7 +84,7 @@ from shared.decision_digest import (
 from shared.decision_digest_rules import (
     ACTION_RULE_IDS, ACTION_RULE_VERSION, assert_strict, q4_sort_index,
 )
-from shared.regime_arbiter import UNLOADED_VERDICT
+from shared.regime_arbiter import REGIME_LIGHT, UNLOADED_VERDICT
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION
 from shared.station_specs import KEY_INVALID_INPUTS, KEY_INVALID_LIGHTS
 
@@ -99,6 +99,11 @@ _SRC_RISK_CAP = "risk_cap_snapshot"
 #: 上游「未評估」佔位值（SSOT：`shared.regime_arbiter.UNLOADED_VERDICT`）；見 `_text_or_none`（大小寫變體由 AB-0 佔位字判定接住）。
 _UNEVALUATED_REGIME = frozenset({UNLOADED_VERDICT.regime})
 _UNEVALUATED_LIGHT = frozenset({UNLOADED_VERDICT.light})
+
+#: `market.regime`／`market.light` 的合法詞彙（Issue #1144 A2；SSOT＝`shared.regime_arbiter.REGIME_LIGHT`，
+#: 推導而來、不另存第六份手寫真相源）。比對用 `strip().lower()`；名單外的非空值 → INVALID（佔位字／未載入／無 stamp 仍 MISSING）。
+_VALID_REGIMES = frozenset(set(REGIME_LIGHT) - {UNLOADED_VERDICT.regime})
+_VALID_LIGHTS = frozenset(REGIME_LIGHT[r] for r in _VALID_REGIMES)
 
 _RISK_CAP_RULE = RuleRef("risk_cap", RISK_CAP_RULESET_VERSION)
 
@@ -190,14 +195,16 @@ def _market_section(macro_state: Mapping | None, stamp: SourceStamp | None) -> F
     usable = loaded and stamp is not None
     src = stamp.source if stamp is not None else _SRC_MACRO
 
-    def text_fact(fid: str, raw: Any, banned: frozenset) -> Fact:
+    def text_fact(fid: str, raw: Any, banned: frozenset, valid: Any) -> Fact:
         t = _text_or_none(raw, banned) if loaded else None
         if t is None or not usable:
-            return _missing(fid, src)
+            return _missing(fid, src)                       # MISSING 優先於 INVALID
+        if t.strip().lower() not in valid:                  # 名單外的非空值：有值但不合法（值丟棄）
+            return _invalid(fid, src)
         return Fact(fact_id=fid, status=DataStatus.OK, provenance=_prov_from(stamp), text=t)
 
-    regime = text_fact("market.regime", _get(macro_state, "regime"), _UNEVALUATED_REGIME)
-    light = text_fact("market.light", _get(macro_state, "light"), _UNEVALUATED_LIGHT)
+    regime = text_fact("market.regime", _get(macro_state, "regime"), _UNEVALUATED_REGIME, _VALID_REGIMES)
+    light = text_fact("market.light", _get(macro_state, "light"), _UNEVALUATED_LIGHT, _VALID_LIGHTS)
 
     h = _get(macro_state, "health") if loaded else None
     if h is None:
