@@ -2297,3 +2297,43 @@
 - **Gate**：G-F2～G-F6（UI2 feed／section runtime 接線需新 Gate；外資 L3 另案）仍待客戶裁示。
 - **NOT VERIFIED**：資料來源授權／再散布／PIT、Streamlit Cloud、真機、Playwright／瀏覽器 viewport、ETF Managers 2026-11-16 20:00 UTC 首次排程。
 - **維持**：#1119 HOLD；#1124～#1126 未處置（#1126 PIT 未驗）；禁止順手合併／改寫／rebase。
+
+### Issue #1144｜Digest A2 施工授權＋UI2 runtime 前置 Gate（唯讀）＋雙端交接（2026-11-11；只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-165 轉錄，非客戶逐字、非 QA PASS；**「已授權」≠「已完成」**）
+
+**有效讀法（歷史衝突補註）**：上方『Issue #1140』段 `I1140-DIGEST-A2-IMPL`（「Digest A2 實作待客戶裁示 `DG-DIGEST-A2`」）與 `I1140-DIGEST-HEALTH-RANGE`（「併 A2 裁示」），**以 DEC-165 為準**：`DG-DIGEST-A2` **已關閉——客戶同意方案 A（A2）**；`market.health` 0–100 範圍與 A3 配對一致性**不在授權內，維持獨立 Gate、仍未授權**。原列保留不改。
+
+#### 1. 已授權、尚未施工（ID 前綴 `I1144-`）
+
+| ID | 項目 | 狀態 | 規格／約束（出處） | 產出 |
+|---|---|---|---|---|
+| **I1144-A2-IMPL** | Digest builder A2：白名單驗證＋反例測試 | **已授權、尚未實作** | 僅 `src/services/decision_digest_builder.py::_market_section`；白名單由 `shared/regime_arbiter.py::REGIME_LIGHT` 推導 `_VALID_REGIMES`／`_VALID_LIGHTS`；`strip().lower()` 比對、合法 `Fact.text` 逐字保留；名單外非空值→`INVALID`；placeholder／`is_loaded=False`／無 stamp 維持 `MISSING`（不得洗成 `INVALID`／0／neutral）。測試規格引用 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` **§7.2**（#1–#8、#10；**#9 屬 A3，不做**）。不改 `shared/decision_digest*.py` 凍結檔、`normalize_regime`、`get_macro_state`、regime／light 推導、Risk Cap、System Action。若原型「0 測試轉紅」不成立或會破壞合法值契約 → **先停止該部分並上報**。實作前以最新 main 與實際測試為準 | A2 builder 變更＋反例／正例／mutation 測試＋獨立非作者 QA＋同 head 原生 CI |
+| **I1144-UI2-PREGATE** | UI2 市場頁「市場資金與籌碼」runtime 接線**前置 Gate 研究**（docs-only） | **已授權、尚未施工** | 唯讀；不改 `real_feed.py`／VM／views／allowlist／程式／測試；不接 UI、不上線、不做外資 L3、不用新來源／API／排程。查核項見下方 §2 | 一份 `docs/vnext/` 研究文件（含最小候選方案與 **3 方案比較：風險／速度／Token**）；欄位區分 FACT／INFERENCE／RECOMMENDATION／NOT VERIFIED |
+
+#### 2. I1144-UI2-PREGATE 查核項清單（每項最終須標 VERIFIED／NOT VERIFIED，不得推論）
+
+| # | 查核項 | 備註（已知，沿 DEC-164／BACKLOG `I1140-*`） |
+|---|---|---|
+| 1 | coverage：必要完整性、缺值、ETF 家族成員缺席；衍生聚合的合法顯示條件；缺值不充 0 | #1142 量測：板塊 41／觀測 38／未觀測 3，**非全市場**；**最低 coverage 門檻未裁示，不得自設百分比**（`I1140-COVERAGE-MIN`、`I1140-ETF-FAMILY-ABSENT`） |
+| 2 | PIT：觀測日、來源發布日／可得日、fetch 時點、假日、stale／partial／未來日期 | `daily_net.parquet`／`data_cache` **缺 `release_date` → NOT VERIFIED**，不用 commit time 假冒；未來日期 L3 融資 fail closed、卡片層與日 K 不對稱（`I1140-FUTURE-ASOF-ASYM`） |
+| 3 | 資料授權：TWSE／TPEX／FinMind 使用與再散布條件 | 僅能取得官方原文者標 VERIFIED；找不到→ **NOT VERIFIED**，禁止推論「已獲授權」 |
+| 4 | `G-F2～G-F6` 與 `I1140-*` 阻塞盤點 | G-F2～G-F6 仍待裁示（DEC-157／160／161／164） |
+| 5 | G2F allowlist、FAKE／Real 對稱、新欄位納入 `_all_fields`／`_paths`／`WIRED_PATHS`（承上方 Issue #1136 段 (3) 守衛清單） | 只盤點，不改白名單 |
+| 6 | 版面約束：OneBrain **下方** section、六張核心卡固定（`MARKET_CARD_IDS` 6 張）、`SHOWN_FOLDS` 不變、五頁頂部導航 | 承 DEC-163／164 G-1／G-2 |
+| 7 | 390／1440 首屏／捲動；Streamlit Cloud；iOS／Android 真機；Playwright／瀏覽器 viewport | 沙箱未測 → 一律 **NOT VERIFIED** |
+| 8 | 最小候選施工方案＋3 方案比較（風險／速度／Token） | 屬 RECOMMENDATION，非客戶裁示 |
+
+#### 3. 新登記項
+
+| ID | 項目 | 狀態 |
+|---|---|---|
+| **DG-DIGEST-A2** | 是否授權 Digest A2 實作 | **已關閉**：客戶同意方案 A（DEC-165；Issue #1144）。實作本身見 `I1144-A2-IMPL`（未完成） |
+| **I1144-DG-A3** | Digest A3 配對一致性（`light == REGIME_LIGHT[regime]`；研究文件 §7.1「可選 A3」） | **未授權、獨立 Gate**；Issue #1144 明確不含 |
+| **I1144-DG-HEALTH** | `market.health` 0–100 範圍驗證（承 `I1140-DIGEST-HEALTH-RANGE`） | **未授權、獨立 Gate**；不得夾帶進 A2 |
+| **I1144-WIRING-GATE** | UI2 市場頁 runtime 接線（feed／section） | **仍未授權**；需新 Gate；前置研究完成≠接線授權 |
+| **I1144-BRANCH-CLEANUP** | 遠端 branch cleanup 候選（見 HANDOFF Issue #1144 段） | **僅列候選，不是刪除授權**；皆未經核查是否可清理 |
+
+#### 4. 阻塞與下一步
+
+- **既有阻塞（沿用，未解）**：`G-F2～G-F6` 待裁示；最低 coverage 門檻未裁示；PIT／上游授權 NOT VERIFIED；Cloud／真機／Playwright NOT VERIFIED；#1119 HOLD；#1124～#1126 未處置且 #1126 PIT 未驗（禁止順手合併／改寫／rebase）。
+- **下一步（唯一安全順序）**：先 LIVE GitHub Verification Gate → A 線 `I1144-A2-IMPL`（Sonnet 5.5、Effort High、靜默巡航）→ B 線 `I1144-UI2-PREGATE`（docs-only）；各自走獨立 PR／非作者 QA／同 head CI。範圍外（A3、health 範圍、UI2 接線、外資 L3）一律停手並上報。
+- **NOT VERIFIED（本段）**：Issue #1144 內 PR head／CI 編號為快照轉錄，未由本 docs 撰寫組另行查驗。

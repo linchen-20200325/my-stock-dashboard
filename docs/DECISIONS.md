@@ -8145,3 +8145,38 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **本批施工與研究產物（據實，詳見 BACKLOG／HANDOFF）**：批 1＝#1141（main `907322aa`）C1／C2 安全修復；批 2＝#1142（`1e5542a8`）融資／板塊唯讀 L3；批 3＝`docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，**不實作**）。
 - **Digest A2 實作與否＝待客戶裁示**：研究文件的 AI 推薦（方案 A2）**不是客戶裁示**；未獲裁示前不動 `decision_digest_builder.py`。
 - **仍 NOT VERIFIED**：Cloud UI2、真機、Playwright／瀏覽器 viewport、資料來源授權／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126（PIT）。
+
+### DEC-165｜Issue #1144 客戶裁示轉錄：同意方案 A——授權 Digest builder A2（白名單驗證＋反例測試，不改凍結 Schema）；UI2 runtime 接線僅前置 Gate 研究；雙端對話交接（2026-11-11；只追加）
+
+- **來源／效力（據實，不誇大）**：決策者＝客戶；來源＝GitHub Issue #1144（2026-11-11，作者 `linchen-20200325`，OWNER）。本條依該 Issue 轉錄，**非 QA PASS、非施工完成**；僅下列引號內為 Issue 所載客戶原文，其餘為依 Issue 整理（原始逐字對話不在 repo，NOT VERIFIED by repo）。基準 main `7060cafe618ab93b0afd3d871397aec2071b2034`（#1143 合併後）。
+- **客戶原文（Issue #1144 所載，逐字）**：「同意方案 A：授權 Digest builder A2 白名單驗證與反例測試，不改凍結 Schema；UI2 只做 runtime 接線前置 Gate，查核 coverage、PIT、資料授權及缺口，不接正式 UI。請記錄 GitHub、完成交接文件查核，並給 GPT 與 Claude Code 的新對話接手提示語。」
+
+#### 一、授權範圍表（**已授權 ≠ 已完成**）
+
+| 線 | 已授權內容（依 Issue #1144 轉錄） | 明確不含／限制 | 狀態 |
+|---|---|---|---|
+| **A 線 Digest A2** | 僅 `src/services/decision_digest_builder.py::_market_section` 輸入邊界：由**既有** `shared/regime_arbiter.py::REGIME_LIGHT` 推導 `_VALID_REGIMES`／`_VALID_LIGHTS` 白名單；比對只用 `strip().lower()`；合法 `Fact.text` **逐字保留**；名單外**非空**值（載入中／待評估／pending／loading／foo／TBD／異常 emoji 等）判 `INVALID`；既有 placeholder、`is_loaded=False`、無 stamp **維持 `MISSING`**，**不得洗成 `INVALID`、0、neutral**；附反例／正例、大小寫與空白、legacy placeholder／missing、summary／assembly fail-closed、等式 SSOT、mutation tests | 不改 `shared/decision_digest*.py` 凍結 Schema／validator／grounding；不改 `normalize_regime`、`get_macro_state`、regime／light deterministic 推導、Risk Cap、System Action；**不納入 A3 配對一致性**；**不夾帶 `market.health` 0–100 範圍驗證**（獨立 Gate）；若調整會破壞意外的合法值契約，或原型「0 測試轉紅」不成立 → **先停止該部分並上報**，不擅自改 Schema；實作前以**最新 main 與實際測試**為準（研究文件 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §7.1／§7.2 為規格來源，不是結果） | **已授權、尚未實作**（本條撰寫時 0 行 production／test 變更） |
+| **B 線 UI2 runtime 接線前置 Gate-only** | **唯讀**查核：既有 `margin_fact_service`／`sector_flow_fact_service` 與 canonical reader／`data_cache` 的 coverage（#1142 量測：板塊 41、觀測 38、未觀測 3，**非全市場完整覆蓋**）、PIT（觀測日／來源發布日或可得日／fetch 時點／假日／stale／partial／未來日期）、TWSE／TPEX／FinMind 使用與再散布條件、`G-F2～G-F6`、`I1140-*` 阻塞、G2F allowlist、FAKE／Real 對稱、OneBrain 下方 section、六張核心卡固定、390／1440 首屏／捲動／Cloud／真機／Playwright、五頁頂部導航；產出**最小候選施工方案與 3 方案比較（風險／速度／Token）** | **只研究／文件**：不改 `src/services/ui2/real_feed.py`、VM、views／section、白名單、程式、測試；不接 UI、不上線、不做外資 L3、不用新來源／API／排程；**最低 coverage 門檻未裁示，不得自設百分比**；parquet 缺 `release_date` → **NOT VERIFIED**（不得用 commit time 假冒）；上游授權找不到官方原文 → **NOT VERIFIED**（禁止推論「已獲授權」）；Cloud／真機／Playwright 未測一律標 NOT VERIFIED | **已授權、尚未施工**（UI2 runtime 接線**本身仍未授權**，需新 Gate） |
+| **C 線 交接／SSOT** | 本 docs 同步（DECISIONS／BACKLOG／HANDOFF／PROJECT_STATE，append-only）；GPT 與 Claude Code 各一份新對話接手提示語；依 `PROJECT_RULES.md` 第 32 節先落盤再換對話；Auto-Ship（獨立非作者 QA、原生同 head CI、mergeable clean、0 unresolved、合併後重查 main） | 不另立第二份 handoff／memory／狀態檔（`PROJECT_RULES.md` 第 32 節第 3 點）；三批可在**已授權範圍內**靜默巡航，範圍外停手 | 同步本身為**已授權工作**；本條所在 PR 合併前**不得宣稱完成** |
+
+#### 二、長期禁止清單（沿用並重申；與 DEC-160～164 疊加，不取代）
+
+Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／付費；production caller（**A2 僅 builder 為例外**）；UI2 runtime 接線／正式 UI 上線；公式／燈號／Risk Cap／D1–D5／EPS／廣度；OAuth／Sheet；舊 UI；正式路由；#1119 維持 HOLD；#1124～#1126 不碰（不得順手 merge／rebase／改寫；#1126 PIT 未驗）；L3（#1142 已合併、未接 UI）不重做；外資 L3 另案。
+
+#### 三、與既有 DEC／文件的有效讀法（只追加；舊文不改）
+
+- **「Digest A2 待客戶裁示（`DG-DIGEST-A2`）」已過期**：DEC-164 四、末條「Digest A2 實作與否＝待客戶裁示」、BACKLOG `I1140-DIGEST-A2-IMPL`、HANDOFF Issue #1140 接手點第 1 項、研究文件 §9 `DG-DIGEST-A2`（問題：是否授權實作 A2）——自本 DEC 起**有效讀法為：客戶已裁示＝同意方案 A（A2）**。實作範圍以**本 DEC＋Issue #1144** 為準。研究文件原文保留不改。
+- **A3 與 `market.health` 0–100 範圍**：研究文件 §9「附帶」列與 §7.1「可選 A3」——Issue #1144 **明確不含**，維持**獨立 Gate、仍未授權**（BACKLOG `I1140-DIGEST-HEALTH-RANGE` 不再「併 A2 裁示」，改為獨立 Gate）。
+- **「UI2 接線新 Gate」仍未授權**：DEC-164 G-9／四「runtime UI 接線仍需新 Gate」維持；本條僅授權**前置 Gate 研究**，不是接線授權。`G-F2～G-F6`（DEC-157／160／161）**仍待裁示**；`I1140-COVERAGE-MIN` 最低覆蓋率門檻**仍未裁示**。
+- **推薦 vs 裁示**：研究文件的 AI 推薦（方案 A2）與本條「客戶同意方案 A」對應；但**實作細節**（白名單推導方式、測試形狀）仍是 AI 總管依 v3 §03-1 的內部拍板，不得引用為客戶裁示。
+
+#### 四、狀態分欄（防止把授權寫成完成）
+
+| 類別 | 內容 |
+|---|---|
+| **已完成（FACT，GitHub main）** | #1141 `907322aa0af9570fdcca9a496ffdc83e275bfdd3`（C1 價格≤0 一致拒用、C2 未來 `as_of`）；#1142 `1e5542a87cdc0006a6535b34457f8b59a85f6baa`（融資＋板塊唯讀 L3，未接 UI）；#1143 `7060cafe618ab93b0afd3d871397aec2071b2034`（DEC-164＋Digest 相容性 Gate 研究文件） |
+| **已授權、尚未完成** | A 線 A2 builder 實作＋反例測試；B 線前置 Gate 研究文件；C 線本 docs 同步（本 PR）與雙端接手提示語 |
+| **未授權** | A3、`market.health` 範圍驗證、UI2 runtime 接線、外資 L3、Digest v2、OneBrain、production caller |
+| **NOT VERIFIED** | Streamlit Cloud UI2、iOS／Android 真機、Playwright／瀏覽器 viewport、TWSE／TPEX／FinMind 再散布授權、parquet `release_date`／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT |
+
+- **證據出處**：Issue #1144 本文（LIVE Gate 快照：#1141 head `4fefb9f0` CI 42993625770；#1142 head `7c7532ad` CI 43002344807；#1143 head `87e1170bf7c186adf2a47cb1d46c4b5f8cf691ad` CI 43005805156；Open PR 僅 #1124／#1125／#1126）。⚠️ 以上 head／CI 編號為 Issue 撰寫時快照轉錄，本撰寫組未於本回合另行查驗 PR 頁，**NOT VERIFIED by this docs author**；接手者須重查 LIVE GitHub。
