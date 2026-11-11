@@ -1,9 +1,12 @@
 """src/data/sector_flow/reader.py — 板塊資金潮汐本地快取讀取(L1 Data).
 
-讀 `data_cache/sector_flow/` 三檔(cron `scripts/update_sector_flow.py` 每交易日凍結):
+讀 `data_cache/sector_flow/` 四檔(cron `scripts/update_sector_flow.py` 每交易日凍結):
   - bubble_latest.json  秒讀泡泡座標(**必要**;缺/壞 → ok=False sentinel)
-  - metadata.json       `last_updated`=資料觀測日(判 staleness);`updated_at`=cron 執行時戳(僅供顯示)
+  - metadata.json       `last_updated`=資料觀測日(判 staleness);`updated_at`=cron 執行時戳(僅供顯示);
+                        `coverage`=上一次 cron 所抓天數的診斷計數(`read_sector_flow_cron_coverage` 唯讀取用)
   - ticker_sector.json  {裸股號: 產業別}(持股→板塊對映;缺 → 空 dict,highlight 略過)
+  - daily_net.parquet   每日各板塊淨額長表(`read_sector_daily_net_latest` 唯讀取最新交易日原始列;
+                        缺檔 / 空檔 / 缺欄 / 壞檔以不同 status 區分,Issue #1140 板塊事實)
 
 §8.2 L1:純檔案 I/O,無 streamlit、無業務邏輯、無跨層上行 import(對齊
 `forward_test_store.py` / `macro_cache_reader.py`)。以 repo root 相對定位,免受 CWD 影響。

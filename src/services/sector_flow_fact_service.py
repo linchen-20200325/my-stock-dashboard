@@ -20,6 +20,16 @@
 G-3 方案 A 衍生聚合(`derived`;`is_derived=True`,與 `rows` 分離標示):資料日、涵蓋板塊數、合計淨額、
     淨額為正／負／持平板塊數。**只對「完整且通過對帳」的資料計算**;partial/unknown → `derived=None`(rows 照給)。
     ⛔ 不做依淨額排序的 Top/Bottom／排名(rows 固定依板塊名排序,不隱含 Top-N);⛔ 沒有任何「全市場」欄位。
+⚠️ 完整性 ≠ 覆蓋度(F1,契約):`completeness='complete'` **只代表來源旗標完整**
+    (最新日 twse_ok／tpex_ok／industry_ok 皆 True 且視窗 `tpex_complete is True`),
+    **不代表板塊全覆蓋**。覆蓋度以 `coverage.n_observed`／`n_universe`／`n_unobserved`
+    (`derived` 亦同帶 `n_observed`)為準 —— 最新日只有 1/N 板塊有列時仍可能是 complete。本層不設最低覆蓋率門檻。
+⚠️ `derived` 自帶 `as_of`／`is_stale`(轉述 fact),消費端單拿 derived 也不會漏看資料日與過期。
+⚠️ `coverage.n_excluded_foreign_ccy`／`n_unclassified_stock_days`／`cron_coverage_n_days` 來自
+    metadata.coverage = **上一次 cron 抓取天數**的診斷計數,**非綁定 data_date**,也不是整個視窗。
+⚠️ 對帳備註(M7):步驟 9「原始合計 vs 標準化後合計」與後段「Σrows vs 原始合計」在 universe 檢查通過後
+    數學上等價(rows 的觀測列即標準化列);步驟 9 保留為冗餘縱深防禦(可在建 rows 前就擋下 L2 輸出異常,
+    並附帶檢查標準化列非空、有限),**不是**獨立的第二個對帳來源。
 本層**不產出任何使用者可見文案**:只回 reason／caveat 碼與數值(文案屬後續 UI Gate)。
 """
 from __future__ import annotations
@@ -69,10 +79,12 @@ CAVEAT_TPEX_WINDOW_INCOMPLETE = "tpex_window_incomplete"
 CAVEAT_TPEX_WINDOW_FLAG_MISSING = "tpex_window_flag_missing"
 CAVEAT_DAY_FLAG_NOT_TRUE = "data_date_flag_not_true"
 CAVEAT_FLAG_COLUMNS_ABSENT = "flag_columns_absent"
-CAVEAT_FOREIGN_CCY_EXCLUDED = "foreign_ccy_etf_excluded"
+#: 來源 = metadata.coverage = 上一次 cron 抓取天數的診斷計數,**非綁定 data_date**(碼名即敘述範圍)。
+CAVEAT_FOREIGN_CCY_EXCLUDED = "foreign_ccy_etf_excluded_last_cron_run_scope"
 CAVEAT_SECTORS_UNOBSERVED = "sectors_unobserved_on_data_date"
 CAVEAT_ABSENT_CELLS = "absent_cells_in_window"
-CAVEAT_UNCLASSIFIED_STOCK_DAYS = "unclassified_stock_days_present"
+CAVEAT_UNCLASSIFIED_STOCK_DAYS = "unclassified_stock_days_present_last_cron_run_scope"
+CAVEAT_N_STOCKS_INVALID = "n_stocks_invalid"   # 原始 n_stocks 非整數 / 負 / 非有限 / bool → 該板塊 n_stocks=None
 CAVEAT_CRON_COVERAGE_UNAVAILABLE = "cron_coverage_unavailable"
 
 #: reason → state 的**唯一**對映(集中單一 dict;`SectorFlowFact.__post_init__` 強制一致,測試窮舉)。
@@ -130,8 +142,9 @@ class SectorFlowCoverage:
     tpex_complete_window: bool | None
     tpex_ok_on_data_date: bool | None
     n_absent_cells_window: int | None
-    n_excluded_foreign_ccy: int | None      # 來自 metadata.coverage(上一次 cron 所抓天數;非整個視窗)
+    n_excluded_foreign_ccy: int | None      # 來自 metadata.coverage(上一次 cron 抓取天數的診斷計數;非綁定 data_date、非整個視窗)
     n_unclassified_stock_days: int | None   # 同上
+    cron_coverage_n_days: int | None = None  # metadata.coverage.n_days(上述兩計數涵蓋的天數;缺 → None,供稽核)
 
 
 @dataclass(frozen=True)
@@ -147,14 +160,27 @@ class SectorFlowDerived:
     n_universe: int
     reconciled: bool
     raw_total_yi: float
+    n_observed: int = 0                     # 恆等式:n_observed == 正+負+持平;n_observed + n_unobserved == n_universe
+    as_of: str = ""                         # 資料日 YYYY-MM-DD(轉述 fact.data_date,消費端單拿 derived 不致漏看)
+    is_stale: bool = False                  # 轉述 fact.is_stale
 
     def __post_init__(self):
         if self.is_derived is not True:
             raise ValueError("SectorFlowDerived.is_derived 必須為 True")
+        if not (isinstance(self.as_of, str) and self.as_of):
+            raise ValueError("SectorFlowDerived.as_of 必須為非空資料日字串")
+        if not isinstance(self.is_stale, bool):
+            raise ValueError("SectorFlowDerived.is_stale 必須為 bool")
+        if (self.n_positive + self.n_negative + self.n_flat != self.n_observed
+                or self.n_observed + self.n_unobserved != self.n_universe):
+            raise ValueError("SectorFlowDerived 計數恆等式不成立")
 
 
 @dataclass(frozen=True)
 class SectorFlowFact:
+    """板塊事實。`completeness='complete'` 只代表**來源旗標完整**,**不代表板塊全覆蓋**;
+    覆蓋度以 `coverage.n_observed`／`n_universe`／`n_unobserved` 為準(F1)。"""
+
     state: FieldState
     reason: str
     data_date: str | None                   # YYYY-MM-DD(可信觀測日)
@@ -236,6 +262,32 @@ def _parse_universe(view: dict) -> list:
         members = (tuple(sorted(str(m) for m in mem)) if isinstance(mem, (list, tuple)) else ())
         out.append((name.strip(), members))
     return out
+
+
+def _sum_n_stocks(raw: pd.DataFrame, raw_to_canon: dict) -> tuple:
+    """原始 n_stocks → ({標準板塊: 成員加總 int | 不在表內=None}, 是否出現「無效」值)。
+
+    缺(NA / 無此欄)→ 該板塊 None(不 caveat);無效(非整數浮點如 3.7、負數、非有限、bool、不可解析)→ None 並回報 invalid。
+    """
+    if "n_stocks" not in raw.columns:
+        return {}, False
+    totals: dict = {}
+    bad: set = set()
+    invalid_seen = False
+    for lab, v in zip(raw["sector"], raw["n_stocks"]):
+        name = raw_to_canon.get(str(lab).strip())
+        if name is None:
+            continue
+        if v is None or v is pd.NA or (isinstance(v, float) and math.isnan(v)):
+            bad.add(name)                                      # 缺:該板塊 None,不當 0
+            continue
+        n = _as_count(v)
+        if n is None:
+            bad.add(name)
+            invalid_seen = True
+            continue
+        totals[name] = totals.get(name, 0) + n
+    return {k: (None if k in bad else v) for k, v in totals.items() if k not in bad}, invalid_seen
 
 
 def _flag_evidence(raw: pd.DataFrame) -> tuple:
@@ -350,10 +402,14 @@ def _compute(today: date | None) -> SectorFlowFact:
                      stale_reason=stale_reason)
 
     # ── rows:固定依板塊名排序(⛔ 不依金額;不隱含 Top-N/排名)──────────────
+    # n_stocks:不信任 L2 的 `int(round())`(3.7 會被靜默四捨五入)—— 由原始列自行加總,
+    # 任一成員缺 / 無效(非整數、負、非有限、bool)→ 該板塊 n_stocks=None;無效(非「缺」)另加 caveat。
+    raw_to_canon = {lab: canon_name for canon_name, labs in canon_meta.get("members", {}).items()
+                    for lab in labs}
+    n_stocks_by, n_stocks_invalid = _sum_n_stocks(raw, raw_to_canon)
     canon_by = {}
     for i, name in enumerate(canon_names):
-        ns = canon["n_stocks"].iloc[i] if "n_stocks" in canon.columns else pd.NA
-        canon_by[name] = (float(canon_net.iloc[i]), None if pd.isna(ns) else int(ns))
+        canon_by[name] = (float(canon_net.iloc[i]), n_stocks_by.get(name))
     members_by = dict(universe_rows)
     rows = []
     for name in sorted(universe_set):
@@ -390,6 +446,8 @@ def _compute(today: date | None) -> SectorFlowFact:
     n_uncls = _as_count((cron_cov or {}).get("n_unclassified_stock_days"))
 
     caveats = []
+    if n_stocks_invalid:
+        caveats.append(CAVEAT_N_STOCKS_INVALID)
     if tpex_window is False:
         caveats.append(CAVEAT_TPEX_WINDOW_INCOMPLETE)
     elif tpex_window is not True:
@@ -425,12 +483,14 @@ def _compute(today: date | None) -> SectorFlowFact:
         unobserved_sectors=tuple(r.sector for r in rows if r.sign == SIGN_UNOBSERVED),
         tpex_complete_window=tpex_window if isinstance(tpex_window, bool) else None,
         tpex_ok_on_data_date=tpex_day, n_absent_cells_window=n_absent_cells,
-        n_excluded_foreign_ccy=n_excl, n_unclassified_stock_days=n_uncls)
+        n_excluded_foreign_ccy=n_excl, n_unclassified_stock_days=n_uncls,
+        cron_coverage_n_days=_as_count((cron_cov or {}).get("n_days")))
     derived = None
     if completeness == COMPLETE:
         derived = SectorFlowDerived(
             is_derived=True, total_net_yi=total, n_positive=n_pos, n_negative=n_neg, n_flat=n_flat,
-            n_unobserved=n_unobs, n_universe=n_universe, reconciled=True, raw_total_yi=raw_total)
+            n_unobserved=n_unobs, n_universe=n_universe, reconciled=True, raw_total_yi=raw_total,
+            n_observed=n_obs, as_of=obs_iso, is_stale=is_stale)
 
     reason = "stale" if is_stale else "ok"
     return SectorFlowFact(

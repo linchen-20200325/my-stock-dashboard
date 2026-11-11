@@ -253,7 +253,7 @@ def get_margin_fact(*, today=None, cache_dir=None) -> MarginFact:
             ⛔ 不 fail closed 成 MarginFact，避免把呼叫端 bug 偽裝成「資料缺」）。
         cache_dir: data_cache 目錄（測試注入 tmp_path）；None → repo root 絕對路徑。
     """
-    _today = _to_date(today) if today is not None else _taipei_today()
+    _today = _parse_today(today) if today is not None else _taipei_today()
     _dir = Path(cache_dir) if cache_dir is not None else _default_cache_dir()
     try:
         return _evaluate(_today, _dir)
