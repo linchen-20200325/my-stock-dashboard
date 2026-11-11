@@ -1411,3 +1411,20 @@ DEC-086 規則已於 main，本表已落地。
 - PR #1122 已 squash 合併，main `e43482188145b9dc4d75786dd32c151013f41a09`；取代前一段「PR #1122 Draft」措辭。同 head `4945c9d1` 原生 CI 5 項全 success（pytest fast、AppTest slow、ui2-browser 1.56.0／1.59.2、gate）；非作者獨立 QA PASS（14 項抽查，3 項 minor 措辭已修於 `4945c9d1`）；mergeable clean、0 未解決討論串。
 - 仍 **NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR。
 - **下一個唯一安全工作**：等客戶裁示（EPS Gate E-0~E-6、Digest F／G 方案 P-1~P-4、D1 實作授權）；#1119 HOLD。
+
+
+## 最新接手點（2026-11-11，Issue #1127 P-4；只追加）
+
+- **基準**：main `5f98154c`（`5f98154c5bf4c4df3279855298e7778427420403`，Issue #1127 授權時的 main）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：P-4 S7/S8 程式＋文件同步的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`；原版 `7cfeb31d`，獨立 QA 共三輪皆發現問題並回修：第一、二輪 `571302e1`／`95bcf809`，第三輪 `50da5574`／`8dc1ddf0`）。授權範圍轉錄自 Issue #1127（非逐字）；設計決定見 `docs/DECISIONS.md` DEC-159（採側車、不升 Digest v2；設計決定為 AI 總管內部技術決策，非客戶裁示）。
+- **第三輪重點（DEC-159 第 3、4 點）**：builder 每個站內掃描列必歸入互斥窮盡分類（分割恆等式 `rows_total == 候選 + non_action + not_held + excluded_invalid + unrecognized + unmatched + non_mapping`；`duplicate_rows` 為疊加計數）。`DigestCoverage` 欄位：`station_rows_unmatched`（由 `actions_unmatched_dropped` 更名，未發布）、`station_non_mapping_rows`、`holdings_non_mapping_rows`、`unrecognized_action_code_rows`、`duplicate_station_ticker_rows`、`holdings_without_station_row`、`digest_holdings_available`／`digest_actions_available`。`is_complete` 要求九個計數全 0＋兩旗標 True＋四段 used，**不判斷新鮮度**。
+- **新檔／改動清單**：
+  - 新增 `shared/decision_digest_coverage.py`（L0；`DigestCoverage`，`digest_coverage.v1`，尚未發布、三輪回修皆無升版）
+  - 新增 `src/services/decision_digest_assembly.py`（L3；`assemble_digest`、`AssembledDigest`，建構時交叉驗證 coverage 與 digest）
+  - 修改 `src/services/decision_digest_builder.py`（純加性：`plan_action_selection`、`ActionSelectionPlan`、共用掃描 `_scan_action_rows`／`_ScanResult`；24000 組隨機輸入與舊版逐位元相同）
+  - 新增 `tests/test_decision_digest_coverage.py`、`tests/test_decision_digest_assembly.py`（合計 364 條）
+  - 文件純追加：`docs/DECISIONS.md`（DEC-159）、`docs/BACKLOG.md`、本檔
+- **測試狀態（據實）**：作者自跑 1361 passed（digest 相關＋c3 分層）。**獨立 QA 第四輪與原生 CI 結果待補**；三輪 QA 皆為發現問題非 PASS；尚未合併，不得寫成已通過。
+- **不可動項**：Open 資料 PR **#1124（macro-history）、#1125（sector-flow）、#1126（macro-forward-test）禁止順手合併／改寫／rebase**（#1126 歷史曾有 PIT 失敗契約，須獨立驗證）；**#1119 維持 HOLD**；Digest v1 凍結契約（`SCHEMA_VERSION`／`MAX_ACTIONS`／列舉／既有 `shared/decision_digest*.py`）不得動；不建 production caller；不碰舊 UI、正式路由、Actions、Secrets、Risk Cap、D1～D5、EPS、OneBrain。
+- **已知限制**：裸 `DecisionDigest` v1 仍無 omitted 欄位，完整性只在 coverage 側車；嵌入 Digest 屬未來 v2 Decision Gate。`AssembledDigest` 不防惡意偽造（total／omitted／excluded／unmatched 等在 digest 看不到）；零行動／`station_rows=[]` 一律 `is_complete=False`（v1 無法區分「沒事做」與「判不出來」，需 Digest v2）；證據被拒用時 `station_rows` 列層級型別錯誤不 fail loud；ticker 精確字串比對；`held` 缺失視為 not_held（與 builder 既有行為相同）；premium／cruise 在 builder 內為字串複本（有一致性測試）；risk_cap 舊快照仍 complete、`as_of` 如實揭露（`is_complete` 不判斷新鮮度）；無 production caller。側車的 `excluded_invalid_rows` 與契約 §6 A7、`segments` 與 A6／A1 語意部分重疊，A6／A7 仍未完成，不得形成第二個 SSOT。P-4 完成 ≠ Stage F／C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 PIT 皆 **NOT VERIFIED**。
+- **下一個唯一安全工作**：等客戶裁示（P-1 其餘、v2 嵌入式 coverage 的 Decision Gate）；無裁示前不動工（`CLAUDE.md` §-1）。

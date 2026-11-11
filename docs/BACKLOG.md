@@ -2185,3 +2185,18 @@
   - `DIGEST-F-ONEBRAIN-G-MIN-PLAN`：Digest F／OneBrain G 最小驗收方案 P-1～P-4 待客戶裁示；**AI 推薦 P-4 後接 P-1，為推薦、非裁示**。F／G 暫列 cutover 前置（沿現有契約，客戶可推翻）。
   - `ISSUE1110` 更新（取代上方 D1～D5 各列的「未授權」措辭，原列不改）：**D1** 口徑已定為 FRED `DGS10`，**實作（adapter／來源／排程／UI 接線）未授權**；**D2 VIX、D3 利差、D4 PMI 維持空槽**；**D5 不核准**新增每日落地 cron。
   - 維持 NOT VERIFIED：ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR、Cloud UI2。#1119 維持 HOLD。
+
+
+- 📌 **2026-11-11｜Issue #1127 P-4（S7/S8）指標（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-159 轉錄，非客戶逐字、非 QA PASS）**：
+  - **完成指標（待合併，PR 號待補）**：P-4 S7（headless 組裝 `assemble_digest`）與 S8（省略揭露側車 `DigestCoverage`，`digest_coverage.v1`，尚未發布、回修無升版）程式與測試已寫於分支 `ccr-588f897e-7wzywe`（原版 `7cfeb31d`；獨立 QA 共三輪皆發現問題並回修：第一、二輪 `571302e1`／`95bcf809`，第三輪 `50da5574`／`8dc1ddf0`）。
+  - **第三輪修法（取代逐例補丁）**：第三位 QA 發現未識別行動碼、非 Mapping 項、同 ticker 重複站內列、非行動列 ticker 不在 holdings 仍 complete；改為 **builder 每個掃描列必歸入互斥窮盡分類**（分割恆等式 `rows_total == 候選 + non_action + not_held + excluded_invalid + unrecognized + unmatched + non_mapping`；`duplicate_rows` 為疊加計數、不在分割內）。`DigestCoverage` 欄位：`station_rows_unmatched`（由 `actions_unmatched_dropped` 更名，未發布）、`station_non_mapping_rows`、`holdings_non_mapping_rows`、`unrecognized_action_code_rows`、`duplicate_station_ticker_rows`、`holdings_without_station_row`、`digest_holdings_available`／`digest_actions_available`。`is_complete` 要求**九個計數全 0**（omitted／excluded／unkeyed／`station_rows_unmatched`／`holdings_without_station_row`／兩個 non_mapping／`unrecognized_action_code_rows`／`duplicate_station_ticker_rows`）＋兩旗標 True＋四段 used；**不判斷新鮮度**。**零行動／`station_rows=[]` 一律 `is_complete=False`**（v1 builder 無法區分「沒事做」與「判不出來」，要 Digest v2 才能放寬）。`AssembledDigest` 交叉驗證 used 段 source／as_of 與 digest 可用旗標。builder 僅純加性。
+  - **數字（作者自跑，非獨立驗證）**：1361 passed（digest 相關＋c3 分層），兩個新測試檔共 364 條；builder 新舊 24000 組隨機輸入逐位元相同。**獨立 QA 第四輪與原生 CI 待補**（不得寫成已通過）。Digest v1 凍結契約未動、無 production caller、無 UI、無新資料來源。
+  - **已知限制**：裸 Digest v1 仍無 omitted 欄位；`AssembledDigest` 不防惡意偽造（total／omitted／excluded／unmatched 等在 digest 看不到）；零行動／`station_rows=[]` 一律 `is_complete=False`；證據被拒用時 `station_rows` 列層級型別錯誤不 fail loud；ticker 精確字串比對；`held` 缺失視為 not_held（與 builder 既有行為相同）；premium／cruise 在 builder 內為字串複本（有一致性測試）；risk_cap 舊快照仍 complete、`as_of` 如實揭露；無 production caller。
+  - **仍待（皆未授權施工；待客戶裁示）**：
+    - **A2 stale 入 Digest**：需 Digest v2。
+    - **A5／A6／A7 嵌入式 coverage**（把 coverage 嵌入 Digest 本體）：需 v2 Decision Gate；目前 coverage 只是側車，裸 Digest 仍無 omitted 欄位。⚠️ 側車的 `excluded_invalid_rows` 與契約 §6 A7、`segments` 與 A6／A1 語意**部分重疊**（QA-A 要求）；**A6／A7 仍未完成**，側車**不得**形成第二個 SSOT，v2 吸收後側車退役。
+    - **`AB4R-WIRE-BUILDER`／`XV-C05` 前置**：接線前仍須先修 `XV-C05`（見上方該兩列）。
+    - **S9**（G1～G6 與 OneBrain 結構化輸出之間的缺口）：未動。
+  - **未啟動**：P-1 其餘、P-2、P-3、OneBrain Stage G。
+  - **維持 NOT VERIFIED**：P-4 完成 ≠ Stage F 完成 ≠ C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 的 PIT。#1119 維持 HOLD。
+- **TEST-DATE-DEP-1｜`tests/test_d3e_mrev_fail_cache.py` 日期相依測試缺陷**（2026-11-11 main 起失敗；根因＝`frozen_now` fixture 未釘 `shared.macro_compute.tw_now`，被測 `shortage_screener_service._as_of_today()` 讀 tw_now，fixture 月份寫死 2025-02~2026-08，2026-11-11 起月份契約判資料不足→修前模型④月營收=0，斷言前提不成立；已於 PR #1128 以測試端 6 行修〔僅測試，非正式邏輯〕）。全 repo 其他測試的同類日期相依**未掃**；低優先待辦，無客戶指派不動（§-1）。
