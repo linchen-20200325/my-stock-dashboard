@@ -97,6 +97,23 @@ def _as_float(v) -> Optional[float]:
         return None
 
 
+def price_problem(v) -> Optional[str]:
+    """單一「價格」值的有效性（canonical 規則；日 K 與收盤卡共用，⛔ 另寫一份）。
+
+    Returns:
+        `None` ＝ 有效（有限正值）；`NOT_FINITE` ＝ 缺／非數值／bool／NaN／±inf；`NON_POSITIVE` ＝ ≤ 0。
+
+    ⚠️ 只適用於**價格類**欄位（收盤價、開高低收）：價格 0／負值不是合法觀測。⛔ 不得套在淨買超、
+    漲跌幅、持平等「0 或負值本來就合法」的欄位（Issue #1140 C1：不一刀切禁 0）。
+    """
+    _f = _as_float(v)
+    if _f is None or not math.isfinite(_f):
+        return NOT_FINITE
+    if _f <= 0:
+        return NON_POSITIVE
+    return None
+
+
 def validate_ohlc_window(
     dates: Sequence[str],
     opens: Sequence[float],
@@ -140,12 +157,11 @@ def validate_ohlc_window(
 
         _vals = {}
         for _name, _seq in (("open", opens), ("high", highs), ("low", lows), ("close", closes)):
-            _f = _as_float(_seq[_i])
-            if _f is None or not math.isfinite(_f):
+            if price_problem(_seq[_i]) == NOT_FINITE:
                 return False, NOT_FINITE, f"{_ds} {_name}={_seq[_i]!r} 不是有限數值"
-            _vals[_name] = _f
+            _vals[_name] = _as_float(_seq[_i])
         for _name in ("open", "high", "low", "close"):
-            if _vals[_name] <= 0:
+            if price_problem(_vals[_name]) == NON_POSITIVE:
                 return False, NON_POSITIVE, f"{_ds} {_name}={_vals[_name]!r} 不是正值"
 
         _o, _h, _l, _c = _vals["open"], _vals["high"], _vals["low"], _vals["close"]
