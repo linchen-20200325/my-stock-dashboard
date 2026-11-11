@@ -8248,3 +8248,24 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 | **已授權** | 唯讀參考舊 UI NAS 中繼做法、在已配置前提下唯讀 GET 官方條款頁（本 DEC） |
 | **未授權** | 網路架構／Secrets／NAS Server／端點／認證／排程變更、第二套 Proxy、UI2 runtime 接線、coverage 門檻值 |
 | **NOT VERIFIED** | TWSE／TPEX 授權全部；FinMind 官網條款；OGDL 原文；NAS 實際部署設定；GitHub secrets 是否已設；PIT 發布日 |
+
+
+### DEC-169｜Issue #1144 後續：客戶裁示——先收斂 Coverage 母體並補上 TWSE、TPEX、FinMind 官方條款證據（2026-11-11；只追加；依客戶對話原文轉錄；僅 docs-only 查證與 SSOT 更新；非 QA PASS）
+
+- **客戶原文（2026-11-11 對話）**：「同意先收斂 Coverage 母體並補上 TWSE、TPEX、FinMind 官方條款證據。僅授權 docs-only 查證與 GitHub SSOT 更新；其餘 Gate 保持 HOLD。」
+- **授權範圍（僅此）**：(1) Coverage 母體定義的唯讀研究與收斂；(2) TWSE／TPEX／FinMind 官方條款證據補查；(3) 以 docs-only 方式更新 GitHub SSOT（補充文件、DECISIONS、BACKLOG、HANDOFF、PROJECT_STATE，只追加）。
+- **未授權（限制）**：任何程式、投資規則、資料來源、UI runtime、Schema 修改；不接線、不改 `G2F_IMPORT_ALLOWLIST`／real_feed／VM／views；**不採用新母體**、**不設任何 coverage 百分比或門檻值**；不修改 `data_cache` 任何檔（含不刪 `industry_raw.json`）、Actions、Secrets、網路架構；不新增資料來源或儲存；COV-A／B／C 僅研究候選，**不是施工授權**。**本裁示不是 runtime 接線授權，`I1144-WIRING-GATE` 仍未授權。其餘 Gate 保持 HOLD。**
+- **結果摘要（FACT；本批 docs-only；詳見補充文件 §10～§12）**：
+  - **Coverage 母體（§10）**：現行母體＝近 20 交易日窗口內任一天出現的標準板塊（41）；組成依研究員自訂規則為 34 官方產業名＋4 證券類別標籤＋3 偶發標籤（化學生技醫療、電子工業、未分類；窗口內合計 7 股日、全 37 日 15 股日；成因 NOT VERIFIED）。四種覆蓋中**僅「板塊標籤覆蓋」可算**，個股／交易金額／市值覆蓋全部 NOT VERIFIED（`net_amt_yi` 是三大法人淨買賣超，不是成交金額）。比較 COV-A／B／C 後，**RECOMMENDATION：暫不改母體；日後揭露合計至少 COV-A 強制揭露；若要避免偶發標籤誤導，研究候選為 COV-C「標註不剔除」；不選 COV-B**（缺 ETF 家族、無版本／適用日／授權證據、剔除即丟證據）。現有資料**沒有穩定分母**，不具備以比例設門檻的基礎；歷史列用回補當下的產業對映而非各日 PIT 對映。
+  - **官方條款（§11）**：TWSE、TPEX、data.gov.tw 官方站在沙箱不可連，**零頁原文，維持 NOT VERIFIED**。FinMind 取得官方 GitHub Pages 條款原文（版本日期 2026-10-31）→ **PARTIALLY VERIFIED**：授權不含對外再散布、轉售、建置鏡像；對外公開須自行向原資料來源機關取得授權且「非 FinMind 所能授予」；Free／Backer／Sponsor 限非商業；任何方案皆禁止再散布原始資料；須標示「FinMind」。**FinMind 條款≠TWSE／TPEX 條款；Apache-2.0 只管 SDK 程式碼；OGDL 來自 SPDX 轉錄本，只 PARTIALLY。** repo 為公開，`data_cache` 追蹤 29 檔，`industry_raw.json`（875,758 位元組）含 FinMind 與 TWSE／TPEX 原始列——僅陳述事實，**是否構成再散布、是否商業、是否須標示來源，須客戶／法律專業判斷，AI 不下結論**。
+  - **抽查與降級（§12）**：撰寫組抽查關鍵數字並降級數項（官方查無 4 位數碼 190→約 186～190、1188 內部分項不引用、34＋4＋3 標明規則依賴、「UI 未標示 FinMind」降為未見／NOT VERIFIED 等）；FinMind 引文與原檔一致，並對官方 GitHub 原始檔即時重抓比對。**證據仍為單組，未經第二組獨立複驗**（§-2 規則 6）。
+- **仍 HOLD／待客戶裁示**：`DG-COV`（含母體口徑與覆蓋口徑）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH` 等全部維持；本批**未關閉任何 Gate**。
+- **有效讀法**：條款存在≠特定資料集適用≠本專案已取得再散布權；網路可達（DEC-168）≠授權；`fetched_at`≠`release_date`；沉默不等於同意。
+
+| 類別 | 項目 |
+|---|---|
+| **已完成** | Coverage 母體收斂研究與官方條款證據補查（補充文件 §10～§12，docs-only） |
+| **已授權** | docs-only 查證與 GitHub SSOT 更新（本 DEC 客戶原文） |
+| **未授權** | 採用新母體、任何 coverage 門檻值／百分比、COV-A／B／C 施工、UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller、任何程式／資料／Actions／Secrets／網路架構／`data_cache` 變更、刪檔 |
+| **仍 HOLD** | DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE／G-F2～G-F6 等其餘 Gate |
+| **NOT VERIFIED** | TWSE／TPEX／data.gov.tw 授權原文；OGDL 原頁；FinMind 官網即時版本、方案等級、與來源機關的另行契約；3 偶發標籤個股成因；15761 組成；來源發布日／PIT／修訂；缺日是否休市；UI 是否顯示來源標示；Cloud、真機、Playwright；本批結論的第二組獨立複驗 |

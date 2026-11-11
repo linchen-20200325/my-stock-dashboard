@@ -308,3 +308,304 @@
 > 備註：repo 內既有 `probe_tw_sources.yml` 為手動探針，但其腳本不含條款頁網址（`grep` 條款／版權關鍵字 0 命中）；要用它抓條款頁需改腳本，**屬程式修改，本批未授權**，僅記錄不執行。
 
 **DG-LIC 維持 NOT VERIFIED；WIRING-GATE 仍未授權；B8 不改變任何 Gate。**
+
+
+---
+
+## 10. Coverage 母體定義收斂（2026-11-11；只追加；不改 §1～§9 任何字）
+
+> **客戶裁示（2026-11-11 對話原文，DEC-169）**：「同意先收斂 Coverage 母體並補上 TWSE、TPEX、FinMind 官方條款證據。僅授權 docs-only 查證與 GitHub SSOT 更新；其餘 Gate 保持 HOLD。」
+> **性質**：docs-only 研究；**不是**採用新母體、**不是**設定門檻、**不是**接線授權。本節**不提任何 coverage 百分比**。
+> **複驗程度**：本節由一份單組研究員證據（未入 repo）彙整；撰寫組已抽查其關鍵數字（見 §12），**仍是單組，未經第二組獨立複驗**（§-2 規則 6），其全稱結論只能當待驗事項。符號引用＝檔案＋符號，不寫行號。
+> **標籤**：VERIFIED FACT（本回合實跑／讀檔）／INFERENCE／NOT VERIFIED／RECOMMENDATION（非裁示）。
+
+### 10.1 現行母體的形成過程（可追溯鏈）
+
+| 步 | 內容（檔案＋符號） | 標籤 |
+|---|---|---|
+| a | 兩條來源併用：FinMind `TaiwanStockInfo` 原始列（`market_close_fetcher::_finmind_industry_rows`）；官方 openapi 公司基本資料（`_official_industry_codes`；上市 `t187ap03_L` 1099 檔、上櫃 `mopsfin_t187ap03_O` 897 檔；只讀「代號」「產業別代碼」兩欄）。`industry_raw.json` 存全部原始列＋官方列＋選列結果，共 **3174 碼** | VERIFIED（撰寫組抽查：官方非空 1996＝1099＋897） |
+| b | 選列 `select_industry_records`：官方碼→官方名（`shared/industry_codes.py::OFFICIAL_INDUSTRY_CODE_NAMES`）；FinMind 有相符列用 FinMind 名，否則官方名；官方查無→FinMind 決定論選列。分布：`official_match_finmind` 1977／`finmind_no_official` 1188／`official_name` 9 | VERIFIED（抽查重現） |
+| c | 股日→板塊 `src/compute/sector_flow.py::compute_sector_daily_net`：法人列∩有效收盤（>0）；無對映→「未分類」；外幣 ETF 排除 | VERIFIED（讀程式＋metadata） |
+| d | 別名標準化 `canonicalize_sector_daily`＋`SECTOR_CANONICAL_ALIASES`（版本 `z43-v1`，8 組合併）；不丟列 | VERIFIED |
+| e | 母體＝窗口（20 交易日）內**任一天出現過**的標準板塊（`scripts/update_sector_flow.py::_write_bubble_json`）＝**41**；觀測＝最新日有列＝**38** | VERIFIED |
+| 追溯斷點 | ① `daily_net.parquet` 不存個股代碼；② `industry_raw.json` 只存最新一份快照（git 追蹤歷史僅 2 個 commit，repo 為 shallow，更早版本 NOT VERIFIED）；③ 37 個資料日中 **19 日**的列 `fetched_at` 皆為 2026-10-12（Z43 回補批）——**歷史列用的是回補當下的產業對映，不是各日的 PIT 對映** | VERIFIED（①③抽查重現；②讀 `git log`） |
+
+**母體組成（分類算術）**：41＝**34 個官方產業名**（名稱屬官方碼表 36 個非空名之一，且官方快照內≥1 成員）＋**4 個證券類別標籤**（ETF、ETN、受益證券、存託憑證；存託憑證的官方碼 91 其官方名稱為空）＋**3 個偶發標籤**（不屬前兩類）。**標籤：VERIFIED（算術；抽查依同一規則重現 34／4／3）；該規則是研究員自訂的判別，不是官方分類。**
+
+### 10.2 三個偶發標籤：證據與未解
+
+| 標籤 | 37 日內出現日 | 檔數／金額 | 與官方分類的關係 | 未解（NOT VERIFIED） |
+|---|---|---|---|---|
+| 化學生技醫療 | 僅 2026-10-20（1 日） | 1 檔、+0.843 億 | **不是官方產業名**（官方有「化學工業」21、「生技醫療業」22）；成員碼 8 個，皆 `finmind_no_official`；FinMind 同碼各回 2 列（舊名＋此標籤） | 哪一檔、為何僅 1 日、為何官方查無 |
+| 電子工業 | 10-27、10-30（2 日） | 各 1 檔、金額 ≤0.008 億 | **是官方碼表名（代碼 13），但官方現況 0 成員**（`industry_codes.py` 自陳 ISIN 查無、保留只因下拉有）；成員碼 46 個，皆 `finmind_no_official` | 哪一檔產生金額微小的列；46 碼為何多數官方查無 |
+| 未分類 | 12 日（09-14～10-16；窗口內 4 日） | 每日 1 檔、金額 ≤0.0004 億 | 哨兵值（有法人列＋收盤但代碼不在對映）；`industry_raw` 內無任何碼標為未分類 | 哪一檔；為何 10-16 後消失（碼被補入？下市？）；前 9 筆在 10-12 回補批寫入 |
+
+| 補充事實 | 標籤 |
+|---|---|
+| 窗口總股日 **44769**，3 偶發標籤合計 **7 股日**；全 37 日總股日 82768、3 標籤合計 **15 股日**；最新日（11-09）3 標籤無列，合計不受影響。**僅算術，非業務結論。** | VERIFIED（抽查重現） |
+| 3 標籤出現日 `twse_ok／tpex_ok／industry_ok` 皆 True；窗口 `tpex_complete`＝True。故非「TPEx 缺」；「非缺抓」為 INFERENCE（`unresolved_days` 只留最近一次 cron） | VERIFIED／INFERENCE |
+| 機制（INFERENCE）：「母體＝窗口內出現過」＋FinMind 對同碼多列且互相矛盾（`industry_raw`：3174 碼中 **1000** 碼回≥2 種標籤，其中官方有收錄 **810** 碼；例 2330 同回「半導體業」「電子工業」）＝偶發標籤進入母體的機制。研究員另推測「化學生技醫療」「電子工業」可能是證交所類股指數類別名被 FinMind 同時當個股標籤（`industry_raw` 內有 32 個 FinMind `Index` 類股指數鍵）——**未證實** | VERIFIED（計數）／INFERENCE（機制） |
+| 規則性判別：「標準板塊名∈官方產業名且官方快照≥1 成員」不靠人工名單即可把 3 標籤分出來 | VERIFIED（抽查重現） |
+
+### 10.3 四種「覆蓋」的區分（本文不估算任何一種的比率）
+
+| 覆蓋 | 分子／分母 | 現有資料能否算 | 標籤 | 要算還需要什麼（皆屬新儲存／新來源，**未授權**） |
+|---|---|---|---|---|
+| **板塊標籤覆蓋** | 最新日有列的標準板塊數／母體標準板塊數 | **可算**：38／41（恆等式建構時強制）；**分母隨母體定義而變** | VERIFIED | 母體定義經客戶裁示 |
+| **個股覆蓋** | 進入板塊個股數／應涵蓋個股數 | **不可算**：分子只有各板塊 `n_stocks` 加總（2265），無代碼清單；分母（官方可交易普通股清單＋上市／下市日）repo 無 canonical 形式 | NOT VERIFIED | 每日逐檔落地（股號、板塊、是否有法人列、是否有有效收盤）＋官方上市櫃清單與適用日期＋授權確認 |
+| **交易金額覆蓋** | 進入板塊成交金額／全市場成交金額 | **不可算**：`daily_net` 的 `net_amt_yi` 是**三大法人淨買賣超金額，不是成交金額**；repo 無被丟棄 15761 股日的成交金額，也無全市場成交金額落地 | NOT VERIFIED | 逐檔成交金額（含被丟棄列）與大盤成交金額；分子分母需同口徑 |
+| **市值覆蓋** | 進入板塊市值／全市場市值 | **不可算**：無股本／流通股數／市值欄 | NOT VERIFIED | 逐檔股本（PIT）×價；上市日期；ETF 是否計入需客戶定義 |
+
+> 「38／41」「15761」「2265」皆**不是**個股／金額／市值覆蓋。15761 僅最近一次 cron（`coverage.n_days`＝1）的有法人列但無有效收盤股日數，非累計，組成 NOT VERIFIED。
+
+### 10.4 COV-A／B／C 比較表
+
+> 三者皆**僅為研究候選，不是施工授權**（DEC-167／DEC-169）。
+
+| 驗收維度 | **COV-A** 近 20 日動態聯集＋強制揭露（現況） | **COV-B** 官方分類當候選母體 | **COV-C** 只用已驗證穩定分類集合，「標註不剔除」 |
+|---|---|---|---|
+| 母體有明確來源 | 有（窗口內標準標籤）；但來源含 FinMind 偶發標籤 | 官方碼表有；**僅涵蓋公司**，ETF／ETN／受益證券無官方產業碼 | 有：官方名集合＋證券類別標籤＋原始證據；每個板塊附來源類別 |
+| 分子分母可重現 | 可（`daily_net`＋別名表；恆等式強制） | 分母可由 `industry_raw` 重算；**逐檔分子不可** | 板塊層可重現；個股層同 B 不可 |
+| PIT／版本可追溯 | 母體**每日可能不同**；對映非 PIT（§10.1 斷點③） | 無生效日／版本 | 規則可版本化，但輸入快照無 PIT |
+| 新上市／下市／分類變動 | 自動進出母體（偶發標籤同理） | 官方家數相對探針時點已漂移（上市＋4、上櫃＋4，引自研究員對 repo 內探針紀錄的比對；未獨立重驗）；repo 不存上市日期 | 新標籤自動歸入「未驗證」而非靜默吸收 |
+| TWSE／TPEX 差異 | `daily_net` 無市場欄，看不到 | 兩 openapi 共用同一代碼體系（repo 內引述，**本回合無法重驗上游**）；以官方碼為鍵可免別名 | 同 B（需新程式） |
+| ETF／ETN／存託憑證口徑 | 全納入合計（已有 caveat） | **無官方產業碼**，需另採證券類別（未進資料） | 單列「證券類別型」，不與產業混算 |
+| 缺價／缺漏可觀測性 | 缺席格有（53），但**全數來自 3 偶發板塊**，判別力低 | 同左；另需補官方母體缺席 | 缺席可分「驗證類／未驗證類」，53 格可歸因 |
+| 全市場合計誤讀風險 | 中：38／41 看似缺 3 個大類 | 高：易被讀成「官方全市場」 | 低～中：仍非全市場，須揭露 |
+| 保留原始 Evidence | 是（不丟列） | 若剔除官方查無者＝**丟證據** | 是：未驗證者保留原始標籤、天數、檔數 |
+| 正確性 | 中（口徑清楚、母體含噪音） | 低（涵蓋與證據皆不足） | 中高（理論），**需新增實作與驗證** |
+| 風險 | 低（現況） | 高（授權 NOT VERIFIED、覆蓋不全） | 中（分類規則誤判；FinMind 標籤易變） |
+| 速度／Token（INFERENCE） | 最快、最低（零改動） | 慢：需新來源、授權、儲存 | 中：純函式＋測試，不需新來源 |
+| 授權狀態 | 現況，不需新授權 | 需資料來源／儲存（**未授權**） | 需程式變更（**未授權**） |
+
+**COV-B 不可採的依據（撰寫組抽查重現）**：官方產業代碼只涵蓋 1996 家公司（上市 1099＋上櫃 897），**不含 ETF／ETN／受益證券**；現行最新日 378／2265 股日落在 ETF 家族六個標籤（ETF 238、上櫃ETF 115、ETN 11、指數投資證券(ETN) 3、受益證券 4、存託憑證 7）；官方查無的碼另有 1188（其中興櫃 394 碼、4 位數上市櫃碼約 186～190〔見 §12 降級〕）。純官方當母體會得到「看似完整的分類」卻掩蓋這些無歸屬者，違反 §1。
+
+### 10.5 推薦（RECOMMENDATION；非裁示）
+
+| 項 | 內容 |
+|---|---|
+| 現階段 | **暫不改母體**：維持「近 20 交易日窗口內任一天出現的標準板塊」＝41；不改別名、不改算法、不改門檻 |
+| 日後揭露合計的最低限度 | **COV-A 強制揭露**：資料日、採樣窗口（20 交易日）、觀測數／母體數、未觀測清單、「不代表全市場」、診斷計數為最近一次 cron 範圍、板塊合計≠大盤外資淨額（G-10） |
+| 若客戶要求避免偶發標籤誤導 | 研究候選＝**COV-C「標註不剔除」**：母體＝窗口聯集不變；每個標準板塊附規則化「來源類別」——① 官方產業 ② 證券類別型 ③ **未驗證**（保留原始標籤、出現天數、n_stocks，單列計數，**不刪、不併、不補零**）；合計＝全部列，另附分類小計。優點：「是否偶發」從人工判斷改為可重現規則；新怪標籤自動落入③；維持 G-3 恆等式 |
+| **不選 COV-B 的理由** | 缺 ETF 家族；無版本／適用日／授權證據；剔除官方查無者＝丟證據；易被誤讀為官方全市場 |
+| 也不推薦「直接排除偶發標籤」 | 排除＝丟證據，違反 §1 |
+
+### 10.6 PIT／分類版本必要條件（若日後走 COV-C 或 COV-B）
+
+| # | 條件 | 現況 |
+|---|---|---|
+| 1 | 每份分類快照帶抓取時間＋來源端點＋版本標記，且可回溯「某日的列使用了哪一份」 | 有 `industry_raw.fetched_at`／`industry_scheme`，但**只留最新一份**；**歷史列用回補當下的對映，而非各日 PIT 對映**（§10.1 斷點③） |
+| 2 | 官方分類的適用／上市日期（或明示無此資訊並降級揭露） | 無（repo 只讀兩欄；官方 openapi 是否提供上市日期欄 NOT VERIFIED） |
+| 3 | 規則版本號（類比 `z43-v1`）；規則變動遞增 | 「來源類別」規則尚不存在 |
+| 4 | 新標籤預設落入「未驗證」，不得自動併入或刪除 | 無（現行：自動進母體） |
+| 5 | 逐檔層級要有每日個股清單才能談個股覆蓋 | 無（未授權） |
+| 6 | 上游條款（TWSE／TPEx／ISIN／FinMind）確認 | 見 §11：FinMind PARTIALLY；TWSE／TPEx NOT VERIFIED |
+
+### 10.7 是否具備設定 coverage 門檻的基礎
+
+| 門檻型態 | 判斷 | 標籤 |
+|---|---|---|
+| 現有**可計算**的量 | 板塊標籤層：觀測數、母體數、未觀測清單、`n_absent_cells`、`tpex_complete`、`is_stale` | VERIFIED |
+| 以比例設門檻（38／41） | **沒有穩定分母**：分母含偶發標籤，且各板塊大小差異懸殊（最新日每板塊 3～238 檔），標籤數比例對大小板塊一視同仁 | INFERENCE |
+| 以類別條件設門檻（非百分比） | 有基礎但**需 COV-C 先落地**（例如「未觀測板塊是否全落在『未驗證』類」＝布林條件） | RECOMMENDATION |
+| 以個股／金額／市值設門檻 | **無基礎**（§10.3 全 NOT VERIFIED） | NOT VERIFIED |
+| 門檻值本身 | 屬業務語意，**須客戶裁示**；**本文不建議任何數值** | — |
+
+### 10.8 尚缺證據
+
+1. 3 偶發標籤各是哪一檔、哪天、為何出現與消失（需逐檔落地或回溯當日 FinMind 快照）。
+2. 15761 缺價列的證券組成；2384（有收盤碼）與 2265（進板塊）相差 119 的原因。
+3. 官方 openapi 是否含上市日期／異動欄；官方產業碼表新增、改名的生效日。
+4. 官方查無的 4 位數上市櫃碼是否為下市／更名／未收錄；FinMind `date` 欄語意。
+5. 興櫃 394 碼是否可能出現在法人來源。
+6. ETF 家族 FinMind 標籤與交易所證券類別是否一致。
+7. TWSE／TPEx 使用與再散布條款（§11）。
+8. origin 上是否已有比 2026-11-09 更新的 canonical data（研究員與撰寫組皆未 `git fetch` 比對）。
+9. 本節全部判斷的第二組獨立複驗。
+
+### 10.9 下一個需客戶裁示的問題（商業語言；附 AI 推薦，非裁示）
+
+| # | 問題 | 選項 | AI 推薦 |
+|---|---|---|---|
+| 1 | 日後若顯示板塊資金，「涵蓋多少」你想看哪一種數字？ | ① 板塊個數（現況，可算）／② 個股檔數／③ 成交金額／④ 市值（②③④目前**算不出**，需先授權逐檔資料落地與官方母體來源） | ①，並明確標示「不是個股涵蓋率」；②～④ 暫不做 |
+| 2 | 對「只出現 1～2 天的怪標籤」要怎麼處理？ | A 維持現況計入母體＋揭露／B 計入但標為「未驗證類別」不刪（COV-C）／C 直接排除 | A（現階段不改）；若要處理選 B，**不選 C**（排除＝丟證據） |
+| 3 | 若選 B：是否授權之後（另案、另 Gate）實作「來源類別」規則與測試？ | 授權／暫不 | 暫不；待 #1、#2、授權（DG-LIC）與時間語意（DG-PIT）有結論 |
+
+---
+
+## 11. 官方授權對照矩陣（2026-11-11；只追加；不改 §1.4／§3／§9 任何字）
+
+> **性質**：授權條款**原文蒐證**，**不是法律意見**，不宣告任何用途合法或違法，不構成「已取得再散布授權」。
+> **複驗程度**：由一份單組研究員證據彙整；撰寫組已抽查 FinMind 引文與原檔一致，並**對 FinMind 官方 GitHub 原始檔做了即時重抓、位元組比對**（見 §12）。**仍是單組，未經第二組獨立複驗。**
+> **與 §1.4／§3 N-3 的關係**：§1.4 寫「FinMind 僅 README 三句」、§3 N-3 寫「官網條款 NOT VERIFIED」是**當時的事實**；本節因取得 FinMind 官方 GitHub Pages 原始檔而**更新讀法**（FinMind 由「僅 README」升為 PARTIALLY VERIFIED）。§1.4／§3 原文不改；TWSE／TPEX／data.gov.tw 的 N-1、N-2、N-4 **維持**。
+> **證據等級**：VERIFIED／PARTIALLY VERIFIED／NOT VERIFIED／INFERENCE／RECOMMENDATION。
+
+### 11.1 取得途徑與限制
+
+| 途徑 | 結果 |
+|---|---|
+| TWSE（`www.twse.com.tw`、`openapi.twse.com.tw`）、TPEX（`www.tpex.org.tw`）、`data.gov.tw`、`finmindtrade.com`、`finmind.github.io` 官網 | 沙箱 agent proxy 一律 `CONNECT` 被拒（HTTP 403／連線失敗）；撰寫組抽查重測 4 個主機（TWSE、TPEX、data.gov.tw、finmindtrade）皆失敗。**零頁原文**。NAS 中繼未配置（§9），未使用 |
+| `raw.githubusercontent.com`（官方 GitHub） | **成功**：FinMind 官方 GitHub 組織下 `FinMind/FinMind`（README、LICENSE）與 `FinMind/FinMind.github.io`（`master` 分支，即官網 `finmind.github.io` 的發布原始檔；README 本身連到該網站）的 Disclaimer、PrivacyPolicy、CommercialUse、Pricing、逐資料集說明頁 |
+| SPDX 授權清單（`spdx/license-list-data`） | 成功，取得 OGDL-Taiwan-1.0 **轉錄本**；**不是** data.gov.tw 原頁 |
+| WebSearch | 僅摘要；列為 INFERENCE 線索，**不當原文** |
+
+### 11.2 FinMind 條款原文（逐字；版本日期 2026-10-31；來源＝官方 GitHub Pages 原始檔，非官網即時頁）
+
+> 頁內版本日期 2026-10-31 與 2026-11-11 官網即時頁是否相同：**NOT VERIFIED**（官網不可連）。
+
+| ID | 出處 | 逐字摘錄 | 等級 |
+|---|---|---|---|
+| Q1 | 「免責聲明與資料授權說明」§一 | 「其餘資料，FinMind 依各資料來源機關公布之公開揭露或開放資料規範使用。」 | VERIFIED（FinMind 條款） |
+| Q2 | 同上「臺灣證券交易所交易資訊」 | 「本服務所提供之臺灣證券交易所交易資訊，資訊來源：臺灣證券交易所「TWSE」，本資訊由芬麥數據股份有限公司處理提供。」「使用者須遵守臺灣證券交易所『交易資訊使用管理辦法』等交易資訊管理相關規定。」 | VERIFIED |
+| Q3 | 同上 §二 來源標示 | 「使用者如將透過本服務取得之資料用於對外用途，亦應依相關授權條款，以適當方式標示原資料提供機關。」 | VERIFIED |
+| Q4 | 同上 §三 使用者之授權範圍 | 「本服務之授權不包含將本服務提供之資料對外再散布、轉售，或建置實質等同於本服務之鏡像服務。」 | VERIFIED |
+| Q5 | 同上 §三 | 「使用者如有將資料對外公開、再散布或提供予第三方之需求，應自行確認並取得原資料來源機關所要求之相應授權；此類授權非 FinMind 所能授予或代為取得。」 | VERIFIED |
+| Q6 | 同上 §三 | 「券商分點類資料之來源機關對其利用另有限制：該類資料僅供使用者自行使用，不論所訂閱之方案為何，均不得以任何形式再傳輸或提供予第三人。」 | VERIFIED（**僅分點類**；本專案未使用） |
+| Q7 | 同上 §四 | 「FinMind 不就資料之正確性、完整性或時效性，於原始揭露形式之範圍外另作保證。」「本文件不構成法律意見。」 | VERIFIED |
+| Q8 | 「使用條款與隱私權政策」§4 | 「使用者不得將即時資料直接呈現於 web、App 等對外介面，亦不得對外再散布原始資料或建立實質等同於本服務之鏡像服務。」 | VERIFIED |
+| Q9 | 「方案與價格」使用授權表 | Free／Backer／Sponsor：個人、學術、web／app 開發等**非商業**用途 ✅；SaaS、AI、web／app、公司內部系統等**商業**用途 ❌；整合至產品用於商業行為 ❌。Sponsor Pro 商業 ✅。**「再散布原始資料、建立鏡像 API」兩欄皆 ❌**；「將即時資料直接呈現於 web、App 等對外介面」兩欄皆 ❌；「需標示資料來源『FinMind』」兩欄皆「需要」 | VERIFIED |
+| Q10 | 「商業使用 Q&A」 | 「請勿直接再散布原始資料，或架設鏡像 API。」「請標示資料來源「FinMind」。」 | VERIFIED |
+| Q11 | FinMind README（GitHub） | 「本專案提供的所有內容均用於教育、非商業用途。」；LICENSE＝Apache-2.0 | VERIFIED（字面；Apache-2.0 **只管 SDK 程式碼，不是資料授權**） |
+| Q12 | 逐資料集說明頁 | 「如需對外展示，請自行向來源機關取得相應授權」**僅出現在券商分點／大額類資料頁**（Chip 頁 9 處，抽查計數一致）；本專案所用資料集頁內**未見**此額外限制句 | VERIFIED（出現處）／單組不存在性判斷（未見處） |
+| Q13 | OGDL-Taiwan-1.0（**SPDX 轉錄本**） | 「各機關所提供之開放資料，授權使用者不限目的、時間及地域、非專屬、不可撤回、免授權金進行利用，利用之方式包括重製、散布、公開傳輸……編輯、改作」；「應以符合附件所示「顯名聲明」要求之方式，明確標示原資料提供機關之相關聲明；未盡顯名標示義務者，視為自始未取得開放資料之授權。」 | **PARTIALLY VERIFIED**（轉錄本，非 data.gov.tw 原頁；是否適用本專案取數 NOT VERIFIED） |
+
+**FinMind 自述（非證據）**：Disclaimer §一稱其合法使用基礎含「與資料來源機關另行簽訂之資訊使用契約」。這是 FinMind 的自述；**契約內容與是否涵蓋本專案的轉載＝NOT VERIFIED**，不得推論本專案受其保護。
+
+### 11.3 逐資料集對照矩陣
+
+「—」＝無原文可引；凡「個人使用／Cloud 公開顯示／重製／改作／衍生聚合／再散布」格無原文者＝**未確認**。
+
+#### 11.3.1 TWSE／TPEX／data.gov.tw（全部無原文）
+
+| 資料集 | 來源（程式實證） | 落地檔（git 追蹤） | 官方條款原文 | 證據等級 | 備註 |
+|---|---|---|---|---|---|
+| TWSE T86（三大法人買賣超日報） | `www.twse.com.tw` rwd 網頁 JSON | 聚合入 `sector_flow/daily_net.parquet` | — | **NOT VERIFIED** | 僅有二手線索：FinMind 稱須遵守『交易資訊使用管理辦法』（Q2）。**不得以 FinMind 通則回推 TWSE 授權** |
+| TWSE MI_INDEX（收盤行情） | 同上 | 僅用於換算金額，不存個股列 | — | **NOT VERIFIED** | 同上 |
+| TWSE BFI82U／FMTQIK／MI_MARGN | 同上 | 落地情形未逐一確認 | — | **NOT VERIFIED** | 同上 |
+| TWSE openapi（`t187ap03_L`、holidaySchedule、exchangeReport） | `openapi.twse.com.tw` | `sector_flow/industry_raw.json`（官方列）、`ticker_sector.json` | — | **NOT VERIFIED** | 該 API 站是否自有授權聲明、是否掛 data.gov.tw 並適用 OGDL：未知。**不得把 OGDL 套到 T86／MI_INDEX** |
+| TWSE MOPS（`t163sb04`）／mis `all_etf` | `mops.twse.com.tw`、`mis.twse.com.tw` | `fundamentals/{sii,otc}_*.parquet` 等（個股級） | — | **NOT VERIFIED** | MOPS 條款獨立於 TWSE 主站，未查 |
+| TPEX insti／afterTrading | `www.tpex.org.tw` 網頁 JSON | 聚合入 `daily_net.parquet` | — | **NOT VERIFIED** | 不得把 TWSE 條款套 TPEX；網頁 JSON 與 openapi 授權是否一致未知 |
+| TPEX openapi（`mopsfin_t187ap03_O`） | `www.tpex.org.tw/openapi/` | `industry_raw.json`、`ticker_sector.json` | — | **NOT VERIFIED** | 搜尋摘要稱上櫃公司基本資料在 data.gov.tw 標 OGDL v1（INFERENCE，**未見原頁**）；該端點是否即該資料集未知 |
+| data.gov.tw 6100（國發會 PMI） | `data.gov.tw/api/v2/rest/dataset/6100` | `tw_pmi.parquet`、`macro_last_good/tw_pmi.json` | — | **NOT VERIFIED**（OGDL 文字 PARTIALLY） | 需看**該資料集頁**的授權欄與顯名文字 |
+
+**WebSearch 線索（INFERENCE，非原文）**：搜尋摘要稱 TWSE 網站使用條款禁止未經同意以自動化裝置、指令碼、爬蟲程式下載網站資料，並稱出版品載明資訊用戶不得轉讓他人、須與證交所簽使用契約；稱 TPEX 另有獨立網站使用條款含類似自動化下載禁止。若屬實，與本專案 cron 程式化抓取 rwd JSON 直接相關，**但屬摘要線索，未見原文，不得據以下結論**。TAIFEX 條款不適用本專案。
+
+#### 11.3.2 FinMind（官方 GitHub 原始檔；PARTIALLY VERIFIED）
+
+| 資料集 | 逐資料集頁可證事實 | 個人使用 | Cloud 公開顯示 | 重製／改作 | 衍生聚合 | 再散布原始資料 | 來源標示 | 未確認 | 等級 |
+|---|---|---|---|---|---|---|---|---|---|
+| `TaiwanStockTotalInstitutionalInvestors`（外資日序列 → `finmind_inst.parquet`） | 資料區間 2004-04-01 起；FinMind 自述更新時間「星期一至五 15:00，實際更新時間以 API 資料為主」；頁內無來源機關限制聲明 | 非商業方案 ✅（Q9） | Q5：對外公開須**自行**取得原資料來源機關授權；Q8：禁「即時資料」於對外介面（本資料非即時分類）。**是否構成「對外介面」文字未定義** | 條款未逐項列 | 條款未明文禁止聚合；Q4／Q8 禁「原始資料再散布／鏡像」 | **禁**（Q4、Q8、Q9 兩欄皆 ❌） | 須標「FinMind」（Q9、Q10）；TWSE 資訊字樣見 Q2；對外用途須標原資料提供機關（Q3） | 本專案所持方案／Token 等級；專案是否商業；此資料集的實際來源機關（頁內未寫明） | **PARTIALLY VERIFIED** |
+| `TaiwanStockTotalMarginPurchaseShortSale`（融資 → `finmind_margin.parquet`） | 資料區間 2001-01-01 起；FinMind 自述更新「星期一至五 21:00」；頁內無額外限制 | 同上 | 同上 | 同上 | 同上 | 同上 | 同上 | 同上；單位混用屬資料品質議題（`I1140-MARGIN-UNIT-MIX`），非授權議題 | **PARTIALLY VERIFIED** |
+| `TaiwanStockInfo`（板塊產業別 → `industry_raw.json` 的 FinMind 原始列、`ticker_sector.json`） | 「列出台灣所有上市、上櫃、興櫃的股票名稱、代碼和產業類別」；自述更新「每天 1:30」；頁內無限制聲明 | 同上 | 同上 | 同上 | `industry_raw.json` 內含 FinMind **全部原始列**（個股級）＝原始列落地於公開 repo | 同上 | 同上 | 原始列入 git 是否為「再散布原始資料」＝**法律判斷**，不下結論 | **PARTIALLY VERIFIED** |
+| 券商分點類（9 頁） | 「僅供訂閱用戶自行使用……」；對外展示須取得來源機關授權 | ✅ 自用 | **禁** | — | — | **禁** | — | **本專案未使用**（grep 無 TradingDailyReport）；**分點條款不自動套用至他資料集** | VERIFIED（範圍） |
+| `finmind_m1m2`、`twii_ohlcv` | `finmind_m1m2.parquet` 的 `source` 欄為 CBC EF15M01，`twii_ohlcv.parquet` 為 Yahoo `^TWII` | — | — | — | — | — | — | **不在 TWSE／TPEX／FinMind 三家範圍**，各自條款**另查**（央行、Yahoo） | **NOT VERIFIED** |
+
+> **FinMind 自述更新時間**（15:00／21:00／1:30）是其服務排程宣稱，**不是官方發布時點，不等於 `release_date`**，不得用來滿足 DG-PIT。
+
+**FinMind 條款≠TWSE／TPEX 條款**：FinMind 條款約束的是「使用者與 FinMind 之間」；Q4／Q5 明講對外公開須由使用者向**原資料來源機關**取得授權，且「非 FinMind 所能授予」。因此 FinMind 條款的取得**不能**替代 TWSE／TPEX 條款，也**不能**證明本專案已獲再散布權。Apache-2.0 只涵蓋 FinMind SDK 程式碼（Q11），不涵蓋資料。
+
+**教育／非商業聲明的解讀**：README 稱「教育、非商業」（Q11）；方案表區分非商業與商業（Q9）。「Cloud 公開展示個人儀表板」是否屬非商業、是否算「對外介面」，文字**未定義**，須客戶／法律專業判斷，不得直接當允許或禁止。
+
+### 11.4 repo 公開與 `data_cache` 落地面（僅陳述事實；不做法律結論）
+
+| 事實 | 值／內容 | 標籤 |
+|---|---|---|
+| repo 可見性 | 公開（`gh api` 查 repo `.private` 欄位回 `false`；撰寫組抽查重現） | VERIFIED |
+| `data_cache` 追蹤檔數 | `git ls-files data_cache` ＝ **29** 檔（含 `.gitkeep`） | VERIFIED（抽查重現） |
+| `sector_flow/industry_raw.json` | **875,758 位元組**、3174 碼；含 **FinMind `TaiwanStockInfo` 全部原始列**＋TWSE `t187ap03_L`／TPEX `mopsfin_t187ap03_O` **官方原始列**＋選列紀錄；**個股級** | VERIFIED |
+| `sector_flow/ticker_sector.json` | 代碼→產業標籤（選列結果，個股級對照） | VERIFIED |
+| `sector_flow/daily_net.parquet`、`bubble_latest.json`、`metadata.json` | 板塊層**聚合**，不含個股列 | VERIFIED |
+| `finmind_inst.parquet`、`finmind_margin.parquet` | FinMind 市場級日序列（各 4939 列） | VERIFIED（形狀見 §1.2） |
+| `fundamentals/{sii,otc}_*.parquet`（12 檔） | 個股季財報欄位；來源 MOPS `t163sb04`；MOPS 條款未查 | VERIFIED（來源）／NOT VERIFIED（條款） |
+| `tw_pmi.parquet`、`macro_last_good/tw_pmi.json` | data.gov.tw 6100 PMI 序列 | VERIFIED（來源） |
+| `finmind_m1m2.parquet`、`twii_ohlcv.parquet`、`forward_test/picks.parquet`、`macro_forward_test/signals.parquet`、`health_watchlist.json` | 非三家來源或內部運算 | VERIFIED |
+| UI 是否已顯示 FinMind 要求的來源標示（Q9、Q10：「FinMind」；Q2：TWSE 資訊字樣） | 撰寫組 grep `芬麥` 於 repo `.py`／`.md`／`.html`／`.json` **0 命中**；僅 grep，**未目視各頁面** | **未見／NOT VERIFIED** |
+| FinMind 本專案方案等級（Free／Backer／Sponsor／Sponsor Pro） | repo 內無法判定 | **NOT VERIFIED** |
+| Streamlit Cloud 公開網址與是否收費 | repo 內本輪未確認 | **NOT VERIFIED** |
+
+> **以上僅是事實陳述。** 「公開 repo 內保留 FinMind 個股級原始列／官方 openapi 原始列」與 FinMind Q4／Q8／Q9「再散布原始資料」之間的界線、聚合檔與市場級日序列是否屬「原始資料」、非商業認定、是否須標示來源——**皆為需客戶／法律專業判斷**，本文不下結論，也不建議任何刪檔或改檔（那是客戶範圍決策，§8.4 step 4）。
+
+### 11.5 對 DG-LIC 的影響
+
+| 項 | 結論 |
+|---|---|
+| FinMind | 由「僅 README 三句」升為 **PARTIALLY VERIFIED**：取得官方 GitHub Pages 條款原文，但**不含**方案等級、來源機關另行契約、官網即時版本；且條款本身說對外再散布須自行取得原資料機關授權 |
+| TWSE、TPEX、data.gov.tw | **維持 NOT VERIFIED** |
+| DG-LIC | **維持待客戶／法務裁示；未關閉**。網路可達≠授權；條款存在≠特定資料集適用≠本專案已取得再散布權 |
+
+---
+
+## 12. 本輪抽查與降級紀錄、殘餘阻塞、下一步（2026-11-11；只追加）
+
+### 12.1 抽查範圍與結果
+
+**抽查方式**：撰寫組對 `data_cache/sector_flow/*`、`industry_raw.json`、`shared/industry_codes.py`、`shared/sector_flow_thresholds.py` 實跑計算；對 FinMind 官方 GitHub Pages 原始檔做**即時重抓並以 SHA-1 位元組比對**；並重測 TWSE／TPEX／data.gov.tw／finmindtrade 連線。**抽查不等於第二組獨立複驗。**
+
+| # | 項目 | 研究員原述 | 撰寫組抽查結果 | 處置 |
+|---|---|---|---|---|
+| 1 | 41／38／3、53 缺席格、2265、−920.248 億、`window_size`＝20 | 同 §1.1 | **重現**（41 板塊；最新日 46 原始標籤、Σ`n_stocks`＝2265、合計 −920.248、外資分項 −942.438；`n_absent_cells`＝53） | 維持 VERIFIED |
+| 2 | 15761／18026／4／`n_days`＝1 | metadata `coverage` | **重現**（`n_dropped_missing_price`＝15761；`n_stock_days_with_net`＝18026；`n_excluded_foreign_ccy_stock_days`＝4；`n_days`＝1；18026−15761＝2265） | 維持 |
+| 3 | 7 股日（窗口）／15 股日（全 37 日） | 3 偶發標籤股日 | **重現**（窗口總股日 44769 中 3 標籤 7；全 37 日 82768 中 15；三標籤出現日數 1／2／12 與窗口內 4 日） | 維持 |
+| 4 | 34＋4＋3 組成 | 41＝34 官方＋4 證券類別＋3 偶發 | **依同一規則重現**；但分類屬研究員自訂判別（存託憑證因官方碼 91 名稱為空而歸證券類別；若改依「有官方成員」則為 35＋3＋3）。電子工業與綜合在官方快照 0 成員 | 維持，**註明規則依賴**（§10.1），不寫成官方分類 |
+| 5 | `industry_raw.json` 分布 | 官方碼 1996、查無 1188、興櫃 394 | **重現**（官方非空 1996＝上市 1099＋上櫃 897；rule 分布 1977／1188／9；興櫃 394；3174 碼中 1000 碼回≥2 標籤、其中官方有收錄 810；2330 雙標籤） | 維持 |
+| 6 | 官方查無的 4 位數上市櫃碼 | **190**（上市 154＋上櫃 36）；其中 FinMind `date` 在 2024-12 者 **86** | 以「官方查無、4 位數碼、FinMind type 為 twse／tpex」重算＝**186**（twse 150＋tpex 36）、2024-12 者＝**82**；標籤前四名（電子工業 43、半導體業 17、金融保險 15、ETF 14）**重現** | **降級**：數字改寫「約 186～190（依碼型啟發式分組，撰寫組重算為 186／82；差 4 與 4 原因未釐清）」，**不採 190／86 為已驗證數字**；成因（下市／更名／未收錄）本就 NOT VERIFIED |
+| 7 | 1188 的內部分項（興櫃 394＋ETF 樣式 414＋4 位數 190＋特別股 39＋ETN／受益 42＋TDR 25＋其餘 84） | 碼型啟發式分組 | **僅興櫃 394 與 ETF 樣式約 428（撰寫組啟發式）部分驗證；其餘分項未逐項抽查**；ETF 樣式 414 與撰寫組重算 428 不一致 | **降級**：分項數字不引用，僅引用 1188 總數與興櫃 394 |
+| 8 | 37 日中 19 日 `fetched_at`＝2026-10-12（回補批） | 同 | **重現**（19／37） | 維持 |
+| 9 | `industry_raw.json` git 歷史僅 2 commit、兩份比對 0 增減 0 變動 | 同 | `git log` 重現 2 個 commit（repo 為 shallow）；**兩份內容比對未重做** | 「0 增減」降為研究員原述，未抽查 |
+| 10 | 最新日 ETF 家族 378／2265 | 同 | **重現**（ETF 238、上櫃ETF 115、ETN 11、指數投資證券(ETN) 3、受益證券 4、存託憑證 7＝378） | 維持 |
+| 11 | 上市／上櫃家數相對探針漂移（＋4／＋4）、兩 openapi 共用代碼體系、6 個官方碼上市櫃拼寫不同 | repo 內引述／研究員重算 | **未抽查**（探針紀錄與上游皆不可重驗） | 標為研究員原述，於 §10.4 已註明 |
+| 12 | FinMind 條款引文 Q1～Q13 | 逐字 | 對 scratchpad 內原檔**逐句 grep 一致**（Q1～Q5、Q6、Q7、Q8、Q9、Q10、Q11、Q13）；Q12 「僅分點頁 9 處」計數一致。**另對 `raw.githubusercontent.com/FinMind/FinMind.github.io/master/{Disclaimer,CommercialUse,Pricing}/index.html` 即時重抓：Disclaimer、Pricing 與原檔 SHA-1 完全相同，CommercialUse 位元組大小相同**；頁內版本日期 2026-10-31 重現 | 維持 PARTIALLY VERIFIED；**來源為官方 GitHub 原始檔，非官網即時頁** |
+| 13 | Q9 引文 | 研究員摘要 | 抽查補出原表兩列研究員未列：「整合至產品用於商業行為」Free／Backer／Sponsor 為 ❌；「將即時資料直接呈現於 web、App 等對外介面」兩欄皆 ❌ | 已補入 §11.2 Q9 |
+| 14 | OGDL-Taiwan-1.0 | SPDX 轉錄本 | 轉錄本兩條引文重現 | 維持 **PARTIALLY**（轉錄本，非原頁） |
+| 15 | repo 公開、`data_cache` 29 檔、`industry_raw.json` 875,758 B | 同 | **重現**（`gh api` `.private`＝false；`git ls-files data_cache` ＝29；檔案大小 875758） | 維持 |
+| 16 | TWSE／TPEX／data.gov.tw／finmindtrade 官網 | 全不可連 | 撰寫組重測 4 主機皆失敗（agent proxy 拒絕） | 維持 NOT VERIFIED |
+| 17 | 「UI 未見 FinMind 來源標示」 | grep `芬麥` | 撰寫組 grep `芬麥` 0 命中；**僅 grep，未目視頁面** | **降為「未見／NOT VERIFIED」**，不寫成「已確認未標示」 |
+| 18 | 「FinMind 逐資料集頁無額外限制」 | 不存在性判斷 | 僅 Chip 頁見 9 處分點限制句（計數一致）；**其餘頁未逐頁重做** | 維持單組不存在性判斷，不得當窮舉 |
+| 19 | 兩份證據全文結論 | — | **未做第二組獨立複驗** | 維持「單組、未複驗」 |
+
+**未抽查**：官方碼表 36 個非空名逐項、`SECTOR_CANONICAL_ALIASES` 8 組合併的逐組成員、1188 內部其餘分項、TDR 10 檔、32 個 `Index` 鍵、FinMind 其餘逐資料集頁、Streamlit Cloud 部署設定。
+
+### 12.2 本輪「降級／修正」彙整
+
+1. 官方查無的 4 位數碼：190／86 → **約 186～190／約 82～86**，不採為已驗證數字（#6）。
+2. 1188 內部分項（ETF 樣式 414 等）：**不引用**（#7）。
+3. 34＋4＋3：標明**規則依賴**，非官方分類（#4）。
+4. 「UI 未標示 FinMind 來源」：降為**未見／NOT VERIFIED**（#17）。
+5. 「兩份 industry_raw 快照比對 0 增減」：降為研究員原述（#9）。
+6. 「兩 openapi 共用代碼體系」「家數漂移」：降為研究員／repo 內引述，上游**不可重驗**（#11）。
+
+### 12.3 殘餘阻塞（本輪**未關閉**任何客戶 Gate）
+
+| Gate | 狀態 | 本輪進展 |
+|---|---|---|
+| **DG-COV** | **HOLD** | 母體形成過程與三偶發標籤證據釐清；COV-A／B／C 比較完成；**未設任何門檻或百分比**；母體口徑待客戶裁示 |
+| **DG-PIT** | **HOLD** | 補出「歷史列用回補當下對映」這一 PIT 缺口；`release_date` 仍無；FinMind 自述更新時間≠發布時點 |
+| **DG-LIC** | **HOLD** | FinMind PARTIALLY VERIFIED；TWSE／TPEX／data.gov.tw 仍 NOT VERIFIED；repo 公開與 `data_cache` 落地面僅陳述事實，**待客戶／法律專業判斷** |
+| **DG-SCOPE** | **HOLD** | 未動 |
+| **WIRING-GATE**（`I1144-WIRING-GATE`） | **HOLD／未授權** | 未動 |
+| **G-F2～G-F6**、`I1144-DG-A3`、`I1144-DG-HEALTH` 等其餘 Gate | **HOLD** | 未動 |
+
+**仍 NOT VERIFIED**：TWSE／TPEX／data.gov.tw 授權原文與適用資料集；OGDL 原頁；FinMind 官網即時版本、方案等級、與來源機關的另行契約；來源發布日／PIT／修訂；3 偶發標籤個股成因；15761 組成；缺日是否休市；UI 來源標示是否顯示；Cloud、iOS／Android 真機、Playwright／viewport；本節全部結論的第二組獨立複驗。
+
+**本節不得被讀成**：已採新母體、已設門檻、已取得任何資料的再散布授權、已驗證 PIT、已同意接線、「FinMind 條款已涵蓋 TWSE／TPEX」、「repo 公開不構成問題」或「repo 公開構成違規」。
+
+### 12.4 下一步推薦（RECOMMENDATION；非裁示）
+
+1. **維持停點**：不寫程式、不接線，停在 `WIRING-GATE`；其餘 Gate 保持 HOLD。
+2. **DG-LIC 解封路徑**（沿用 §9.6，現再補一條）：(a) 客戶貼上 TWSE『交易資訊使用管理辦法』與 TWSE／TPEX 網站使用條款原文；(b) 客戶放行沙箱網域（`www.twse.com.tw`、`openapi.twse.com.tw`、`www.tpex.org.tw`、`data.gov.tw`）；(c) 客戶提供已合法配置 NAS 的環境並明確授權唯讀 GET；(d) **新**：客戶或法務就「是否商業／是否公開對外／是否保留個股級原始列於公開 repo」三問給出判斷（FinMind 條款顯示這三問決定方案等級與是否需向來源機關另取授權）。
+3. **DG-COV**：先裁「覆蓋要用哪一種口徑」（§10.9 #1）與「偶發標籤怎麼處理」（#2），再談門檻；數值由客戶定，AI 不提。
+4. 若客戶要求最小風險面，個股級原始列是否繼續落地於公開 repo 屬**客戶範圍決策**（§8.4 step 4），本輪不動；AI 推薦僅在客戶明確要求時再另案提方案（附推薦），不主動動工（§-1）。
+5. 若日後要求顯示 FinMind 來源標示，屬畫面變更，須先出線框草稿（§-1.5 UI 草稿先行）。
+
+### 12.5 待客戶裁示
+
+| # | 問題（商業語言） | 選項 | AI 推薦（非裁示） |
+|---|---|---|---|
+| 1 | 覆蓋要看哪一種數字？ | 板塊個數／個股檔數／成交金額／市值（後三者目前算不出） | 板塊個數，並標明非個股涵蓋率 |
+| 2 | 怪標籤怎麼處理？ | 維持＋揭露／計入但標「未驗證」不刪／直接排除 | 維持＋揭露；若要處理選「標未驗證」，不選「排除」 |
+| 3 | 是否先取得 TWSE／TPEX 條款原文再決定？ | 貼條款原文／放行網域／提供已配置 NAS 環境／風險自負先行 | 先取得原文 |
+| 4 | 本專案是否屬商業？是否要公開對外？公開 repo 內保留個股級原始列是否可接受？ | 客戶／法務判斷 | 交法務；AI 不下結論 |
+| 5 | 沒有發布時間，只顯示「資料日＋系統抓取時間」可以嗎？ | 接受（明示非發布時點）／不接受 | 接受並明示；屬客戶語意 |
+| 6 | 是否另開新 Gate 授權 UI2 runtime 接線？ | 授權／暫不 | 暫不，待 1～5 |
+
+**沉默不等於同意。** 其餘 Gate 保持 HOLD。
