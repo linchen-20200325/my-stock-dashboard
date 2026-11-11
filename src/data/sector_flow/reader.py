@@ -1,9 +1,12 @@
 """src/data/sector_flow/reader.py — 板塊資金潮汐本地快取讀取(L1 Data).
 
-讀 `data_cache/sector_flow/` 三檔(cron `scripts/update_sector_flow.py` 每交易日凍結):
+讀 `data_cache/sector_flow/` 四檔(cron `scripts/update_sector_flow.py` 每交易日凍結):
   - bubble_latest.json  秒讀泡泡座標(**必要**;缺/壞 → ok=False sentinel)
-  - metadata.json       `last_updated`=資料觀測日(判 staleness);`updated_at`=cron 執行時戳(僅供顯示)
+  - metadata.json       `last_updated`=資料觀測日(判 staleness);`updated_at`=cron 執行時戳(僅供顯示);
+                        `coverage`=上一次 cron 所抓天數的診斷計數(`read_sector_flow_cron_coverage` 唯讀取用)
   - ticker_sector.json  {裸股號: 產業別}(持股→板塊對映;缺 → 空 dict,highlight 略過)
+  - daily_net.parquet   每日各板塊淨額長表(`read_sector_daily_net_latest` 唯讀取最新交易日原始列;
+                        缺檔 / 空檔 / 缺欄 / 壞檔以不同 status 區分,Issue #1140 板塊事實)
 
 §8.2 L1:純檔案 I/O,無 streamlit、無業務邏輯、無跨層上行 import(對齊
 `forward_test_store.py` / `macro_cache_reader.py`)。以 repo root 相對定位,免受 CWD 影響。
@@ -38,6 +41,11 @@ _CACHE_DIR = _REPO_ROOT / "data_cache" / "sector_flow"
 BUBBLE_PATH = _CACHE_DIR / "bubble_latest.json"
 META_PATH = _CACHE_DIR / "metadata.json"
 TICKER_SECTOR_PATH = _CACHE_DIR / "ticker_sector.json"
+#: 每日各板塊淨額長表(cron 凍結;`read_sector_daily_net_latest` 唯讀取用,Issue #1140 板塊事實)。
+DAILY_NET_PATH = _CACHE_DIR / "daily_net.parquet"
+#: daily_net.parquet 必要欄(缺任一 ⇒ status="missing_columns");旗標欄 twse_ok/tpex_ok/industry_ok 與
+#: n_stocks 為選用 —— 缺欄只讓 caller 把完整性標 unknown,不讓整份資料不可用。
+DAILY_NET_REQUIRED_COLUMNS = ("date", "sector", "net_amt_yi", "foreign_yi", "trust_yi", "dealer_yi")
 
 
 def _load_json(path: Path):
@@ -198,3 +206,56 @@ def read_sector_flow_cache(*, strict: bool = False, today: date | None = None) -
         "tpex_complete": bubble.get("tpex_complete"),
         "n_absent_cells": bubble.get("n_absent_cells"),
     }
+
+
+def read_sector_daily_net_latest() -> dict:
+    """唯讀:`daily_net.parquet` 最新交易日的原始列(Issue #1140 板塊事實)。
+
+    純檔案讀取 —— 不 fetch、不寫檔、不快取、不新增資料來源;**不**做任何標準化 / 補值 / 去重
+    (原始 `sector` 標籤與型別原樣交給 L3 / L2 處理)。缺檔、空檔、缺欄、壞檔以不同 `status` 區分,
+    **絕不**把它們都折成同一種「沒資料」(§1)。
+
+    Returns 一個 dict,`status` 為下列之一:
+      - "ok":      + `data_date`(date,檔內最大日)、`rows`(DataFrame,**僅**該日的原始列,所有欄原樣)、
+                     `n_rows_total`(整檔列數)
+      - "missing": 檔案不存在(尚未產生)
+      - "empty":   檔案可讀、0 列
+      - "missing_columns": + `missing`(缺的必要欄名 list)
+      - "corrupt": 檔存在但讀不出 / `date` 欄含無法解析的日期 / 全無有效日期;+ `reason`
+    """
+    if not DAILY_NET_PATH.exists():
+        return {"status": "missing", "reason": f"{DAILY_NET_PATH.name} 不存在"}
+    try:
+        import pandas as pd
+        df = pd.read_parquet(DAILY_NET_PATH)
+    except Exception as _e:  # noqa: BLE001 — 壞檔不炸,以 status 明示(不假裝缺檔)
+        print(f"[sector_flow_reader] 讀取失敗 {DAILY_NET_PATH.name}: {type(_e).__name__}: {_e}")
+        return {"status": "corrupt", "reason": f"{type(_e).__name__}: {_e}"}
+    if len(df) == 0:
+        return {"status": "empty", "reason": f"{DAILY_NET_PATH.name} 0 列"}
+    _missing = [c for c in DAILY_NET_REQUIRED_COLUMNS if c not in df.columns]
+    if _missing:
+        return {"status": "missing_columns", "missing": _missing,
+                "reason": f"{DAILY_NET_PATH.name} 缺必要欄 {_missing}"}
+    try:
+        _dates = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    except Exception as _e:  # noqa: BLE001
+        return {"status": "corrupt", "reason": f"date 欄無法解析: {type(_e).__name__}: {_e}"}
+    if _dates.isna().any():
+        return {"status": "corrupt",
+                "reason": f"date 欄有 {int(_dates.isna().sum())} 列無法解析"}
+    _latest = _dates.max()
+    _rows = df.loc[_dates == _latest].copy()
+    _rows["date"] = _latest
+    return {"status": "ok", "data_date": _latest.date(), "rows": _rows.reset_index(drop=True),
+            "n_rows_total": int(len(df))}
+
+
+def read_sector_flow_cron_coverage() -> dict | None:
+    """唯讀:`metadata.json` 的 `coverage` 區塊(**上一次 cron 執行所抓天數**的診斷計數,不是整個視窗)。
+
+    缺檔 / 壞檔 / 無 `coverage` dict ⇒ None(caller 據此標「診斷計數不可得」,不當 0)。
+    """
+    meta = _load_json(META_PATH)
+    cov = meta.get("coverage") if isinstance(meta, dict) else None
+    return dict(cov) if isinstance(cov, dict) else None
