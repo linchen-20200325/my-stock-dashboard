@@ -2347,7 +2347,7 @@
 | **I1144-UI2-PREGATE** | UI2 runtime 接線前置 Gate 研究 | **研究文件已產出、待客戶裁示**（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`；獨立 QA PASS 附三項小修已修） | AI 推薦方案 B 屬 RECOMMENDATION；Gate：DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE |
 
 **仍開放（保留，未改）**：`I1140-COVERAGE-MIN`（最低 coverage）、`G-F2～G-F6`、`I1144-WIRING-GATE`（接線，未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`I1144-BRANCH-CLEANUP`（僅候選，非刪除授權）、`I1140-*` 其餘各項。
-**NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：待補。
+**NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：#1147。
 
 
 ### Issue #1144 後續｜「同意 B」證據補強完成（2026-11-11；只追加；不改既有列；依據 DEC-167；以下皆非施工授權）
@@ -2356,3 +2356,18 @@
 - **仍開放（直接阻塞市場資金與籌碼區塊）**：`DG-COV`（`I1140-COVERAGE-MIN`，含母體口徑；不自設百分比）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）；接線前文案項 `I1140-MARGIN-SOURCE-TEXT`／`-ETF-FAMILY-ABSENT`／`-SECTOR-CRON-SCOPE`；成因查證 `I1140-SECTOR-UNOBS-LABELS`／`-DROPPED-PRICE`（範圍已釐清，成因仍 NOT VERIFIED）。
 - **歸類更正（INFERENCE）**：G-F2、G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH` 屬 Digest／持股／登入範圍，**不是**市場資金與籌碼區塊的前提；G-F3／G-F4／G-F5 為間接關係；仍待裁示。
 - **NOT VERIFIED**：TWSE／TPEX 授權、FinMind 官網條款、OGDL 原文、來源發布日／PIT、缺日是否休市、Cloud／真機／Playwright／390／1440。本批證據單組、未經第二組獨立複驗。
+
+
+### Issue #1144 後續｜B8 NAS 中繼站備援查證（2026-11-11；只追加；不改既有列；依據 DEC-168；非施工授權）
+
+- **I1144-B8-NAS-RELAY-PROBE**：已完成（docs-only）補充文件 §9；本 docs PR 號：#1149。結果：Direct 失敗；既有 Proxy 與 NAS 中繼**本環境未配置、未測試**；官方 GitHub 成功（僅 FinMind README）。授權結論無變動，`DG-LIC` 維持 NOT VERIFIED。
+- **仍開放**：`DG-LIC`（客戶可選貼條款原文／放行網域／提供已配置 NAS 的執行環境並授權唯讀 GET）、`DG-COV`、`DG-PIT`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）。
+- **未授權**：網路架構、Secrets、NAS Server、新端點、放寬認證、新排程、第二套 Proxy。
+
+
+### Issue #1144 後續｜Coverage 母體收斂與官方條款證據（2026-11-11；只追加；不改既有列；依據 DEC-169；非施工授權）
+
+- **I1144-COV-POP-LICENSE-EVIDENCE**：已完成（docs-only）補充文件 §10（Coverage 母體定義收斂）、§11（官方授權對照矩陣）、§12（抽查與降級紀錄）；本 docs PR 號：#1149。結果：RECOMMENDATION 暫不改母體、日後至少 COV-A 強制揭露、候選 COV-C「標註不剔除」、不選 COV-B；僅板塊標籤覆蓋可算；FinMind PARTIALLY VERIFIED、TWSE／TPEX／data.gov.tw 仍 NOT VERIFIED。**未設任何門檻或百分比，未關閉任何 Gate。**
+- **仍 HOLD**：`DG-COV`（含覆蓋口徑與偶發標籤處理）、`DG-PIT`、`DG-LIC`（含「是否商業／是否公開／公開 repo 保留個股級原始列」三問，待客戶／法律專業判斷）、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、G-F2～G-F6 及其餘 Gate。
+- **未授權**：採用新母體、coverage 門檻值、COV-A／B／C 施工、任何程式／資料／Actions／Secrets／`data_cache` 變更、刪檔、UI runtime 接線。
+- **NOT VERIFIED**：TWSE／TPEX／data.gov.tw 授權原文、OGDL 原頁、FinMind 方案等級與官網即時版本、3 偶發標籤個股成因、15761 組成、PIT 發布日、UI 來源標示是否顯示；證據單組、未經第二組獨立複驗。

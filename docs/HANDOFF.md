@@ -1538,7 +1538,7 @@ DEC-086 規則已於 main，本表已落地。
 
 ---
 
-## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：待補）
+## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：#1147）
 
 > **更正**：前段『Issue #1144 接手點』所寫「A2／研究已授權、尚未施工」**已過期**——A2 已完成（PR #1146，main `d4f7b3f6a64d177b7ee0953dc22563adf59120e4`），B 線研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`，獨立 QA PASS）。前段其餘內容（含完整 GPT／Claude Code 提示語）保留不改。
 
@@ -1560,3 +1560,27 @@ DEC-086 規則已於 main，本表已落地。
 - **NOT VERIFIED**：上游授權（TWSE／TPEX 全部；FinMind 僅 README 三句）、PIT 發布日、休市表、Cloud、真機、Playwright。證據單組、未經獨立複驗。
 
 **一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-167／DEC-166 與補充文件；無客戶新裁示不動工。
+
+
+## 最新接手點（2026-11-11，Issue #1144 B8「NAS 中繼站備援」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-168）
+
+- **客戶指示 B8**：「如果連不上線，記得要用 NAS 中繼站，可以參考舊 UI 的方式。」僅授權唯讀查證，**不授權**改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
+- **已完成**：補充文件 §9（PR 號：#1149）。本環境 NAS 連線資訊**全未設定**（NAS_BASE_URL／NAS_RELAY_URL／NAS_API_KEY／NAS_PROXY_URL／PROXY_URL＝False）；沙箱 `HTTPS_PROXY` 是 agent proxy，不是 NAS，勿冒充。Direct 失敗、NAS 未測試、官方 GitHub 成功（僅 FinMind README）。
+- **授權結論無變動**；`DG-LIC` 維持 NOT VERIFIED。**停點仍是 `WIRING-GATE`。**
+- **待客戶**：貼條款原文／放行沙箱網域／提供已配置 NAS 的環境並授權唯讀 GET，三擇一或另議；以及 DG-COV／DG-PIT／DG-SCOPE。
+- **一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-168／DEC-167 與補充文件 §9；無客戶新裁示不動工。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「Coverage 母體收斂＋官方條款證據」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-169；本 docs PR 號：#1149）
+
+> **更正前段**：前段（DEC-166／167／168 接手點）寫「等客戶裁 Gate」仍有效；本段補述客戶已授權的**第二批 docs-only 查證**已完成，Gate 一個都沒有關閉。**新的 GPT／Claude Code 接手點以本段為準。**
+
+- **客戶原文**：「同意先收斂 Coverage 母體並補上 TWSE、TPEX、FinMind 官方條款證據。僅授權 docs-only 查證與 GitHub SSOT 更新；其餘 Gate 保持 HOLD。」
+- **已完成**：補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md` §10（母體收斂）、§11（授權矩陣）、§12（抽查降級＋殘餘阻塞＋下一步）。只追加，§1～§9 未動。
+- **要點**：41 板塊＝窗口標籤聯集；3 偶發標籤窗口內僅 7 股日；個股／金額／市值覆蓋皆算不出（`net_amt_yi` 是法人淨買賣超，非成交金額）；RECOMMENDATION 暫不改母體、日後至少 COV-A 強制揭露、候選 COV-C、不選 COV-B。FinMind PARTIALLY VERIFIED（官方 GitHub Pages 原文，**≠TWSE／TPEX 條款**，其稱對外再散布須自行取得原資料機關授權）；TWSE／TPEX／data.gov.tw 官方站沙箱不可連，**維持 NOT VERIFIED**。
+- **停點**：`WIRING-GATE`。**不得**改程式／資料／Actions／Secrets／`data_cache`／allowlist／real_feed／VM／views；**不得**自設 coverage 百分比或採用新母體；**不得**據此宣稱已取得再散布授權、已驗證 PIT、已同意接線。repo 公開與 `data_cache` 落地面（含 `industry_raw.json`）只陳述事實，**不做法律結論**，待客戶／法律專業判斷。
+- **待客戶**：覆蓋口徑與偶發標籤處理（DG-COV）、是否商業／是否公開／原始列落地（DG-LIC）、時間語意（DG-PIT）、範圍（DG-SCOPE）、接線授權；解封條款查證的方式見補充文件 §12.4（貼條款原文／放行網域／提供已配置 NAS 環境並授權唯讀 GET／法務判斷）。
+- **NOT VERIFIED**：TWSE／TPEX／data.gov.tw 授權、OGDL 原頁、FinMind 方案等級與官網即時版本、PIT 發布日、3 偶發標籤個股成因、Cloud／真機／Playwright。證據單組、未經第二組獨立複驗。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-169／168／167 與補充文件 §10～§12；無客戶新裁示不動工。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶就 DEC-169 所列 Gate 裁示；不自設門檻、不把網路可達或條款存在當授權；完整提示語見前段，不重貼。

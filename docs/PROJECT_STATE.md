@@ -1220,3 +1220,23 @@
 - **待裁示**：DG-COV、DG-PIT、DG-LIC、DG-SCOPE、WIRING-GATE。
 - **NOT VERIFIED**：TWSE／TPEX 授權（全部）、FinMind 官網條款、OGDL 原文、PIT 發布日、休市表、Cloud／真機／Playwright。
 - **出處**：DEC-167；BACKLOG『Issue #1144 後續』；補充文件。不一致時以出處為準。
+
+
+### 70.9 B8「NAS 中繼站備援」後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-168，非客戶逐字）
+
+- **FACT**：客戶新增 B8——官方網站直連不通時，參考舊 UI 的 NAS 中繼方式查證；不授權改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
+- **FACT（本批實測）**：Direct 失敗（沙箱 agent proxy 對官方網域 CONNECT 403）；本環境 NAS 連線資訊與 Squid 設定皆未配置，故 NAS 路徑未測試；官方 GitHub raw 成功（僅 FinMind README）。補充文件 §9 記錄契約與安全限制（`/proxy` 無主機白名單、僅 SSRF 私網封鎖、`X-API-Key` 認證、範例 scheme 為 HTTP）。
+- **授權結論無變動**：TWSE／TPEX／OGDL 原文與 FinMind 官網條款仍 NOT VERIFIED；DG-LIC 維持 NOT VERIFIED。NAS 可達≠已授權≠PIT 合格。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、網路架構變更、第二套 Proxy。
+- **出處**：DEC-168；補充文件 §9；BACKLOG『Issue #1144 後續｜B8』。PR 號：#1149。不一致時以出處為準。
+
+
+### 70.10 Coverage 母體收斂與官方條款證據後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-169，非客戶逐字）
+
+- **FACT**：客戶授權 docs-only 的 Coverage 母體收斂與 TWSE／TPEX／FinMind 官方條款證據補查；補充文件新增 §10～§12（PR 號：#1149）。其餘 Gate 保持 HOLD，**未關閉任何 Gate**。
+- **FACT（抽查實跑）**：現行母體＝窗口標籤聯集 41；3 偶發標籤窗口內 7 股日（全 37 日 15 股日）；僅板塊標籤覆蓋可算，個股／金額／市值覆蓋 NOT VERIFIED；歷史列用回補當下的產業對映（非各日 PIT）。
+- **RECOMMENDATION（非裁示）**：暫不改母體；日後揭露至少 COV-A 強制揭露；候選 COV-C「標註不剔除」；不選 COV-B。**未設任何 coverage 百分比。**
+- **授權證據**：FinMind PARTIALLY VERIFIED（官方 GitHub Pages 原文，版本日期 2026-10-31；≠TWSE／TPEX 條款；Apache-2.0 只管 SDK）；TWSE／TPEX／data.gov.tw NOT VERIFIED；OGDL 僅 SPDX 轉錄本。repo 公開、`data_cache` 追蹤 29 檔（含 `industry_raw.json`）僅陳述事實，須客戶／法律專業判斷。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、新母體、門檻值、任何程式／資料／`data_cache` 變更、刪檔。
+- **NOT VERIFIED**：TWSE／TPEX 授權原文、PIT 發布日、3 偶發標籤個股成因、UI 來源標示是否顯示、Cloud／真機／Playwright；證據單組、未經第二組獨立複驗。
+- **出處**：DEC-169；補充文件 §10～§12；BACKLOG『Issue #1144 後續｜Coverage 母體收斂』。PR 號：#1149。不一致時以出處為準。
