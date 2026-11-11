@@ -1214,7 +1214,7 @@
 
 ### 70.8 「同意 B」後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-167，非客戶逐字）
 
-- **FACT**：客戶裁示「同意 B」＝UI2「市場資金與籌碼」先做唯讀證據補強、不進正式 runtime 接線；補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md` 已產出（PR 號：待補）。
+- **FACT**：客戶裁示「同意 B」＝UI2「市場資金與籌碼」先做唯讀證據補強、不進正式 runtime 接線；補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md` 已產出（PR 號：#1148）。
 - **FACT（抽查實跑）**：板塊 41／38／3 為窗口標籤聯集，未觀測 3 者為單檔偶發標籤；現有資料算不出個股覆蓋率；`n_dropped_missing_price` 僅最近一次 cron；三資料集無 `release_date`；融資 `fetched_at` 99.5% 為 bootstrap 批值。
 - **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、A3、health 範圍、外資 L3、方案 A／C 施工、任何 coverage 門檻值。
 - **待裁示**：DG-COV、DG-PIT、DG-LIC、DG-SCOPE、WIRING-GATE。

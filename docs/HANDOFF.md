@@ -1554,7 +1554,7 @@ DEC-086 規則已於 main，本表已落地。
 ## 最新接手點（2026-11-11，Issue #1144 後續「同意 B」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-167）
 
 - **更正前段**：前段『Issue #1144 接手點』與 DEC-166 結尾「等客戶裁 DEC-166 Gate」中的方案選擇，**客戶已裁示「同意 B」**（唯讀證據補強、不接線）；其餘 Gate 仍未裁。
-- **已完成**：補充證據文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md`（docs-only；PR 待補）。
+- **已完成**：補充證據文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md`（docs-only；PR #1148）。
 - **停點**：`WIRING-GATE`。**不得**改程式／allowlist／real_feed／VM／views；**不得**自設 coverage 百分比；方案 A／C 僅未來候選，非施工授權。
 - **待客戶**：`DG-COV`、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、接線授權。**不要把 Digest／OneBrain 的 Gate（G-F2、G-F6、A3、health）當成市場頁前提。**
 - **NOT VERIFIED**：上游授權（TWSE／TPEX 全部；FinMind 僅 README 三句）、PIT 發布日、休市表、Cloud、真機、Playwright。證據單組、未經獨立複驗。
