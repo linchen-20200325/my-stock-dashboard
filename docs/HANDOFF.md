@@ -1538,7 +1538,7 @@ DEC-086 規則已於 main，本表已落地。
 
 ---
 
-## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：待補）
+## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：#1147）
 
 > **更正**：前段『Issue #1144 接手點』所寫「A2／研究已授權、尚未施工」**已過期**——A2 已完成（PR #1146，main `d4f7b3f6a64d177b7ee0953dc22563adf59120e4`），B 線研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`，獨立 QA PASS）。前段其餘內容（含完整 GPT／Claude Code 提示語）保留不改。
 

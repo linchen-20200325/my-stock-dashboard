@@ -2347,7 +2347,7 @@
 | **I1144-UI2-PREGATE** | UI2 runtime 接線前置 Gate 研究 | **研究文件已產出、待客戶裁示**（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`；獨立 QA PASS 附三項小修已修） | AI 推薦方案 B 屬 RECOMMENDATION；Gate：DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE |
 
 **仍開放（保留，未改）**：`I1140-COVERAGE-MIN`（最低 coverage）、`G-F2～G-F6`、`I1144-WIRING-GATE`（接線，未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`I1144-BRANCH-CLEANUP`（僅候選，非刪除授權）、`I1140-*` 其餘各項。
-**NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：待補。
+**NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：#1147。
 
 
 ### Issue #1144 後續｜「同意 B」證據補強完成（2026-11-11；只追加；不改既有列；依據 DEC-167；以下皆非施工授權）

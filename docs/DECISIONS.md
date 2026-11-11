@@ -8184,7 +8184,7 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 
 ### DEC-166｜Issue #1144 執行結果：A2 已完成（PR #1146）；B 線前置 Gate 研究文件已產出；仍待客戶裁示事項（2026-11-11；只追加；AI 總管事實更新，非客戶裁示）
 
-- **來源／效力**：本條為 AI 總管對執行結果的事實記錄，**不是客戶新裁示**；其中「AI 推薦」屬 RECOMMENDATION。本 docs PR 號：待補。
+- **來源／效力**：本條為 AI 總管對執行結果的事實記錄，**不是客戶新裁示**；其中「AI 推薦」屬 RECOMMENDATION。本 docs PR 號：#1147。
 
 #### 一、已完成（FACT）
 
