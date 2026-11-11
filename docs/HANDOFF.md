@@ -1584,3 +1584,18 @@ DEC-086 規則已於 main，本表已落地。
 
 **Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-169／168／167 與補充文件 §10～§12；無客戶新裁示不動工。
 **GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶就 DEC-169 所列 Gate 裁示；不自設門檻、不把網路可達或條款存在當授權；完整提示語見前段，不重貼。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「CI 環境最小修復」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-170；本 docs PR 號：#1151）
+
+> **更正前段**：前段（含 DEC-169 接手點與更早段落）若寫「#1149 被 CI 環境阻塞／`ui2-browser` 因 apt 無法安裝 Chromium 而紅」——**已過期**。客戶已裁示「同意優先採 A，失敗再評估 B」並授權獨立最小修復；方案 A 經 CI 實證失效，方案 B（Playwright 官方容器，tag＋digest 固定）已由 PR #1150 完成並合併（main `96cb7614`）；#1149 內容未改，Update branch 後原生 CI 五項全綠並合併（main `d8d74ccd`）。**新的 GPT／Claude Code 接手點以本段為準；前段完整提示語保留不改、仍可沿用。**
+
+- **客戶原文**：「同意優先採 A，失敗再評估 B。授權專案 AI 獨立進行最小 CI workflow 安裝環境修復，另開 PR，保留全部 Browser required checks 與測試門檻，不碰 #1149 內容或業務程式。」
+- **已完成（CI 環境修復，已授權且已完成）**：`pr-check.yml` 的 `ui2-browser` 改在固定 digest 的 Playwright 容器內執行；全部 Browser 守衛保留；無 `continue-on-error`／`|| true`／skip／降門檻／新 Secret；未改 tests／production；獨立 QA PASS。
+- **維護注意**：容器映像升級時 image tag、digest、`playwright==` pip pin 須一併更新；不得改用 `latest`；不得降低 Browser 守衛。
+- **停點不變**：`WIRING-GATE`。Coverage 母體新算法／最低門檻（`DG-COV`）、PIT 正式語意（`DG-PIT`）、資料再散布最終授權（`DG-LIC`）、`DG-SCOPE`、UI2 接線、Digest A3／`market.health`／外資 L3 **全部仍 HOLD／未授權**；CI 修復**不構成**其中任何一項的核准。
+- **待客戶**：就 Coverage 門檻／母體口徑與資料授權風險裁示；無裁示即停手。
+- **NOT VERIFIED**：修復只證明在當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因（GitHub 或 Canonical 端）未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 required check（設定面）本工作階段無權限查證。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-170／169／168 與本段；CI 已修復、#1149 已合併，勿重做；無客戶新裁示不動工；完整提示語見前段『Issue #1144 接手點』，不重貼。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成（CI 環境修復 #1150）／已授權／未授權／NOT VERIFIED，等客戶就 `DG-COV`／`DG-LIC` 裁示；不自設門檻、不把 CI 綠燈或網路可達當授權；完整提示語見前段，不重貼。
