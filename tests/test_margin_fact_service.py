@@ -90,6 +90,35 @@ def test_today_none_uses_taipei_today_and_passes_it_to_l1(tmp_path, monkeypatch)
     assert f.state is FieldState.OK
 
 
+_TPE = dt.timezone(dt.timedelta(hours=8))
+
+
+def _spy_install(monkeypatch, taipei_now):
+    seen = {}
+
+    def _spy(cache_dir, *, today=None):
+        seen["today"] = today
+        return {"margin": _series([5000.0, 5399.15741], last="2026-11-09")}
+    monkeypatch.setattr(R, "load_v2_chart_series", _spy)
+    import shared.macro_compute as MC
+    monkeypatch.setattr(MC, "tw_now", lambda: taipei_now)
+    return seen
+
+
+def test_today_none_uses_taipei_calendar_day_not_host_or_utc(tmp_path, monkeypatch):
+    """台北已跨日（11-12 00:30+08 = UTC 11-11 16:30）：必須用台北日 11-12，不是 UTC 日或主機日。"""
+    seen = _spy_install(monkeypatch, dt.datetime(2026, 11, 12, 0, 30, tzinfo=_TPE))
+    S.get_margin_fact(cache_dir=tmp_path)
+    assert seen["today"] == dt.date(2026, 11, 12)
+
+
+def test_today_none_taipei_day_differs_from_any_host_date(tmp_path, monkeypatch):
+    """台北日取遠未來日期：主機 date.today() 不可能剛好等於它 ⇒ 只要實作改讀主機時鐘就必紅（與執行當天無關）。"""
+    seen = _spy_install(monkeypatch, dt.datetime(2031, 3, 5, 0, 30, tzinfo=_TPE))
+    S.get_margin_fact(cache_dir=tmp_path)
+    assert seen["today"] == dt.date(2031, 3, 5) != dt.date.today()
+
+
 def test_default_cache_dir_is_absolute_repo_root():
     d = S._default_cache_dir()
     assert d.is_absolute() and d == _REPO / "data_cache"
@@ -122,6 +151,88 @@ def test_corrupt_file(tmp_path):
 def test_all_nan_collapsed_by_l1(tmp_path):
     f = _fact(tmp_path, [("2026-11-06", np.nan), ("2026-11-09", np.nan)])
     assert f.reason == "source_absent_or_unreadable" and f.value_yi is None
+
+
+# ═════════════ A1 重複日期（fail closed）═════════════
+@pytest.mark.parametrize("order", ("5100_then_9000", "9000_then_5100"))
+def test_duplicate_last_date_real_path_fails_closed(tmp_path, order):
+    """尾日重複且值不同（兩值都在 sanity 區間內）：值取決於列序 ⇒ 兩種列序都必須 fail closed。"""
+    last = "2026-11-09"
+    dup = [(last, 5100.0 * _YI), (last, 9000.0 * _YI)]
+    if order == "9000_then_5100":
+        dup.reverse()
+    f = _fact(tmp_path, [("2026-11-06", 5000.0 * _YI)] + dup)
+    assert (f.state, f.reason, f.value_yi, f.as_of) == (FieldState.UNAVAILABLE, "duplicate_date_index", None, None)
+    assert "2026-11-09" in f.detail
+
+
+def test_duplicate_non_last_date_also_fails_closed(tmp_path):
+    f = _fact(tmp_path, [("2026-11-05", 5000.0 * _YI), ("2026-11-05", 5001.0 * _YI), ("2026-11-09", 5399.0 * _YI)])
+    assert f.reason == "duplicate_date_index" and f.value_yi is None
+
+
+def test_duplicate_check_precedes_value_checks(monkeypatch, tmp_path):
+    idx = pd.to_datetime(["2026-11-09", "2026-11-09"])
+    s = pd.Series([np.nan, 99999.0], index=idx, dtype=float)
+    _patch_series(monkeypatch, s)
+    assert S.get_margin_fact(today=_TODAY, cache_dir=tmp_path).reason == "duplicate_date_index"
+
+
+def test_no_dedup_formula_in_code():
+    attrs = {n.attr for n in ast.walk(ast.parse(_SRC)) if isinstance(n, ast.Attribute)}
+    assert not ({"drop_duplicates", "groupby", "duplicated_keep_last"} & attrs)
+    assert "is_unique" in attrs                      # 只偵測，不修
+
+
+# ═════════════ N8 stale 且超出 sanity ═════════════
+def test_stale_and_out_of_range_is_missing_not_stale(tmp_path):
+    last = dt.date(2026, 11, 1)                     # 距 today 10 天 ⇒ L1 判 stale
+    f = _fact(tmp_path, _rows_ending(last, last_yi=20000.0))
+    assert (f.state, f.reason, f.value_yi) == (FieldState.MISSING, "unit_sanity_failed", None)
+    g = S.get_margin_fact(today=_TODAY, cache_dir=tmp_path)
+    assert g.state is FieldState.MISSING          # 與 stale 無關：sanity 先於新鮮度
+
+
+# ═════════════ N7 尾端索引無法解析 ═════════════
+@pytest.mark.parametrize("idx", (["a", "b"], [pd.Timestamp("2026-11-06"), pd.NaT]))
+def test_unparseable_tail_index_is_source_unreadable(monkeypatch, tmp_path, idx):
+    s = pd.Series([5000.0, 5399.0], index=pd.Index(idx, dtype=object))
+    _patch_series(monkeypatch, s)
+    f = S.get_margin_fact(today=_TODAY, cache_dir=tmp_path)
+    assert (f.state, f.reason, f.value_yi) == (FieldState.MISSING, "source_absent_or_unreadable", None)
+
+
+# ═════════════ N3 L1 回傳型別異常 ═════════════
+@pytest.mark.parametrize("bad", ([], [("margin", 1)], "margin", 5, pd.Series([5000.0])))
+def test_l1_non_dict_fails_closed(monkeypatch, tmp_path, bad):
+    monkeypatch.setattr(R, "load_v2_chart_series", lambda *a, **k: bad)
+    f = S.get_margin_fact(today=_TODAY, cache_dir=tmp_path)
+    assert f.state is FieldState.MISSING and f.reason == "source_absent_or_unreadable" and f.value_yi is None
+
+
+def test_l1_margin_not_a_series_fails_closed(monkeypatch, tmp_path):
+    monkeypatch.setattr(R, "load_v2_chart_series", lambda *a, **k: {"margin": [5000.0, 5399.0]})
+    f = S.get_margin_fact(today=_TODAY, cache_dir=tmp_path)
+    assert f.state not in (FieldState.OK, FieldState.STALE) and f.value_yi is None
+
+
+# ═════════════ N2 today 無法解析 ═════════════
+@pytest.mark.parametrize("bad", ("not-a-date", "", 5, 20261111, 1.5, [2026, 11, 11]))
+def test_unparseable_today_raises_valueerror(tmp_path, bad):
+    with pytest.raises(ValueError):
+        S.get_margin_fact(today=bad, cache_dir=tmp_path)
+
+
+@pytest.mark.parametrize("ok", (dt.date(2026, 11, 11), dt.datetime(2026, 11, 11, 8, 0), pd.Timestamp("2026-11-11"),
+                                "2026-11-11", "2026-11-11T08:00:00"))
+def test_parseable_today_forms(tmp_path, ok):
+    f = _fact(tmp_path, _rows_ending(dt.date(2026, 11, 9)), today=ok)
+    assert f.state is FieldState.OK
+
+
+def test_inf_latest_real_path(tmp_path):
+    f = _fact(tmp_path, [("2026-11-06", 5000.0 * _YI), ("2026-11-09", float("inf"))])
+    assert (f.reason, f.value_yi) == ("value_not_finite", None)
 
 
 # ═════════════ 例外 ═════════════
@@ -322,8 +433,9 @@ def test_every_non_value_scenario_has_none_value(monkeypatch, tmp_path):
 def test_reason_state_mapping_exhaustive():
     reasons = {v for k, v in vars(S).items() if k.startswith("REASON_") and isinstance(v, str)}
     assert reasons == set(S._REASON_STATE), "每個 REASON_* 都必須在 _REASON_STATE 有對照，反之亦然"
-    assert len(reasons) == 9
+    assert len(reasons) == 10
     assert S._REASON_STATE[S.REASON_READ_EXCEPTION] is FieldState.UNAVAILABLE
+    assert S._REASON_STATE[S.REASON_DUPLICATE_DATE_INDEX] is FieldState.UNAVAILABLE
     assert S._REASON_STATE[S.REASON_OK] is FieldState.OK
     for r in (S.REASON_FRESHNESS_UNDETERMINED, S.REASON_STALE):
         assert S._REASON_STATE[r] is FieldState.STALE
@@ -423,12 +535,12 @@ def test_no_network_during_call(tmp_path, monkeypatch):
     assert S.get_margin_fact(today=_TODAY, cache_dir=tmp_path / "nope").reason == "source_absent_or_unreadable"
 
 
-def _referrers() -> list[str]:
+def _referrers(root: pathlib.Path = _REPO) -> list[str]:
     needle = "margin_fact_service"
     paths = []
     for pat in ("src/ui/**/*.py", "src/ui2/**/*.py", "src/ui_v2/**/*.py", "src/services/ui2/**/*.py", "app*.py"):
-        paths.extend(_REPO.glob(pat))
-    return sorted(str(p.relative_to(_REPO)) for p in set(paths)
+        paths.extend(root.glob(pat))
+    return sorted(str(p.relative_to(root)) for p in set(paths)
                   if p.is_file() and needle in p.read_text(encoding="utf-8", errors="ignore"))
 
 
@@ -443,11 +555,15 @@ def test_scope_guard_not_wired_to_ui_or_real_feed():
     assert "margin_fact_service" not in guards          # 未偷偷放進 G2F 白名單
 
 
-def test_scope_guard_has_teeth(tmp_path):
-    # 守衛本身要抓得到：對同一個掃描邏輯餵含引用的檔，必須命中
-    p = tmp_path / "x.py"
+@pytest.mark.parametrize("rel", ("src/ui/tabs/x.py", "src/ui2/views/x.py", "src/ui_v2/x.py",
+                                 "src/services/ui2/real_feed.py", "app.py", "app_ui2.py"))
+def test_scope_guard_has_teeth(tmp_path, rel):
+    """守衛本身要抓得到：在假 repo 的受保護路徑放一個引用，真實 `_referrers()` 必須命中；乾淨假 repo 為空。"""
+    assert _referrers(tmp_path) == []
+    p = tmp_path / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("from src.services.margin_fact_service import get_margin_fact\n", encoding="utf-8")
-    assert "margin_fact_service" in p.read_text(encoding="utf-8")
+    assert _referrers(tmp_path) == [rel]
 
 
 # ═════════════ 真實 data_cache（一次）═════════════

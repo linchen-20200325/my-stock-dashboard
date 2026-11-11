@@ -15,8 +15,13 @@
 
 判定順序（先到先贏；reason → state 集中於 `_REASON_STATE` 單一 dict）：
   1 L1 呼叫丟例外                              → UNAVAILABLE `read_exception`
-  2 結果無 `margin`／序列空／尾端日期無法解析   → MISSING     `source_absent_or_unreadable`
-  3 最新值非有限（NaN／±inf／非數值）           → MISSING     `value_not_finite`
+  2 結果非 dict／無 `margin`／序列空／尾端日期無法解析 → MISSING `source_absent_or_unreadable`
+  2b 序列索引有重複日期                         → UNAVAILABLE `duplicate_date_index`
+      （同一天多筆且值可能不同 ⇒ 「最新值」取決於列序，無法判定哪筆為真；fail closed。
+      ⛔ 只偵測 `index.is_unique`，不 drop_duplicates、不自選一筆；修資料是上游／L1 的事）
+  3 最新值非有限（±inf／非數值）                → MISSING     `value_not_finite`
+      （NaN 在 L1 真實路徑已被 dropna：尾點 NaN 會讓序列尾日前移，表現為順位 5 `as_of_mismatch`；
+      `value_not_finite` 對 NaN 只有 mock／直接注入序列時可達，對 ±inf 則真實路徑可達）
   4 `not margin_sanity_ok(v)`（500、10000 本身拒收）→ MISSING `unit_sanity_failed`
   5 attrs 有 as_of 且 ≠ 序列最後一點日期        → MISSING     `as_of_mismatch`
   6 最後一點日期 > 台北今日                     → MISSING     `future_as_of`（fail closed，不給值）
@@ -51,6 +56,7 @@ MARGIN_UNIT: str = "億元"
 REASON_OK: str = ""
 REASON_READ_EXCEPTION: str = "read_exception"
 REASON_SOURCE_ABSENT: str = "source_absent_or_unreadable"
+REASON_DUPLICATE_DATE_INDEX: str = "duplicate_date_index"
 REASON_VALUE_NOT_FINITE: str = "value_not_finite"
 REASON_UNIT_SANITY_FAILED: str = "unit_sanity_failed"
 REASON_AS_OF_MISMATCH: str = "as_of_mismatch"
@@ -63,6 +69,7 @@ _REASON_STATE: dict[str, FieldState] = {
     REASON_OK: FieldState.OK,
     REASON_READ_EXCEPTION: FieldState.UNAVAILABLE,
     REASON_SOURCE_ABSENT: FieldState.MISSING,
+    REASON_DUPLICATE_DATE_INDEX: FieldState.UNAVAILABLE,     # 資料本身自相矛盾（非「缺」），不給值
     REASON_VALUE_NOT_FINITE: FieldState.MISSING,
     REASON_UNIT_SANITY_FAILED: FieldState.MISSING,
     REASON_AS_OF_MISMATCH: FieldState.MISSING,
@@ -125,16 +132,33 @@ def _taipei_today() -> _dt.date:
     return tw_now().date()
 
 
+def _parse_today(v) -> _dt.date:
+    """呼叫端注入的 today → date。只收 date／datetime（含 Timestamp）／ISO 日期字串；
+    其餘（含 int、無法解析的字串）→ `ValueError`（⛔ 不讓 pd.Timestamp(5) 之類被當成 1970 年）。"""
+    if isinstance(v, _dt.datetime):
+        return v.date()
+    if isinstance(v, _dt.date):
+        return v
+    if isinstance(v, str):
+        try:
+            return _dt.date.fromisoformat(v.strip()[:10])
+        except ValueError:
+            pass
+    raise ValueError(f"today 無法解析為日期（只收 date／datetime／ISO 字串）：{v!r}")
+
+
 def _to_date(v) -> _dt.date | None:
     """date／datetime／Timestamp／ISO 字串 → date；解析不出 → None（⛔ 不用今天代替）。"""
     if v is None:
         return None
     try:
+        import pandas as pd
+        if v is pd.NaT:                 # NaT 是 datetime 子類，必須先擋（否則 .date() 回 NaT）
+            return None
         if isinstance(v, _dt.datetime):
             return v.date()
         if isinstance(v, _dt.date):
             return v
-        import pandas as pd
         _ts = pd.Timestamp(v)
         return None if pd.isna(_ts) else _ts.date()
     except Exception:  # noqa: BLE001 — 解析不出就當不可用，由呼叫端 fail closed
@@ -159,6 +183,11 @@ def _evaluate(today: _dt.date, cache_dir: Path) -> MarginFact:
     _last_date = _to_date(_s.index[-1])
     if _last_date is None:
         return _no_value(REASON_SOURCE_ABSENT, f"margin 序列尾端索引無法解析為日期：{_s.index[-1]!r}")
+
+    # 2b ── 重複日期：尾日若有多筆，「最新值」取決於列序 ⇒ fail closed（不 drop_duplicates、不自選）
+    if not _s.index.is_unique:
+        _dups = sorted({str(_i)[:10] for _i in _s.index[_s.index.duplicated(keep=False)]})
+        return _no_value(REASON_DUPLICATE_DATE_INDEX, f"margin 序列索引有重複日期：{_dups[:5]}")
 
     # 3 ── 非有限
     try:
@@ -220,11 +249,11 @@ def get_margin_fact(*, today=None, cache_dir=None) -> MarginFact:
 
     Args:
         today: 基準日（測試注入）；None → 台北今日。**顯式傳給 L1**（L1 預設為主機 `date.today()`）。
+            無法解析（非 date／datetime／ISO 字串）→ **raise `ValueError`**（呼叫端程式錯誤，不是資料問題；
+            ⛔ 不 fail closed 成 MarginFact，避免把呼叫端 bug 偽裝成「資料缺」）。
         cache_dir: data_cache 目錄（測試注入 tmp_path）；None → repo root 絕對路徑。
     """
     _today = _to_date(today) if today is not None else _taipei_today()
-    if _today is None:
-        raise ValueError(f"today 無法解析為日期：{today!r}")
     _dir = Path(cache_dir) if cache_dir is not None else _default_cache_dir()
     try:
         return _evaluate(_today, _dir)
