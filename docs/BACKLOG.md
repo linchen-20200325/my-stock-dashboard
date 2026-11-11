@@ -2384,7 +2384,7 @@
 
 ### Issue #1144 後續｜公開 Repository 資料曝露、來源授權與儲存架構唯讀稽核完成（2026-11-11；只追加；不改既有列；依據 DEC-171；以下皆非施工授權）
 
-- **I1144-PUBLIC-DATA-AUDIT**：已完成（docs-only）`docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`；PR 號：待補。結果：`data_cache` 29 檔、個股級 15 檔；授權僅 FinMind PARTIALLY VERIFIED、其餘 NOT VERIFIED、repo 內無授權證據；Git 歷史停止追蹤不減曝露；三方案 A／B／C 比較完成；**未下法律定論、未動任何檔**。
+- **I1144-PUBLIC-DATA-AUDIT**：已完成（docs-only）`docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`；PR 號：#1152。結果：`data_cache` 29 檔、個股級 15 檔；授權僅 FinMind PARTIALLY VERIFIED、其餘 NOT VERIFIED、repo 內無授權證據；Git 歷史停止追蹤不減曝露；三方案 A／B／C 比較完成；**未下法律定論、未動任何檔**。
 - **I1144-DATA-STORAGE-DECISION**（新；**待客戶裁示，非動工項**）：是否修改資料保存方式。RECOMMENDATION（非裁示）：先取授權書面答案；若要降低曝露面，優先評估可逆的方案 C 第一階段（`industry_raw.json` 來源列不再寫入公開 repo）。分階段候選見研究文件 §5.1（歷史改寫、改 repo 可見性為不可逆／最高等級，須客戶拍板）。
 - **I1144-LIC-THREE-QUESTIONS**（新；屬 `DG-LIC`）：本專案是否商業？是否公開對外？公開 repo 保留個股級來源列是否可接受？待客戶／法務。
 - **更正（INFERENCE→FACT）**：`industry_raw.json` 的 FinMind 列僅 3 欄、官方列僅 4 欄（非「全部原始列」）；補充文件 §11 原文保留。

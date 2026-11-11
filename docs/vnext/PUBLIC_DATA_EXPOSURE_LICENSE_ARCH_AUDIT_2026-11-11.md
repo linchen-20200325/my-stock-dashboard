@@ -15,10 +15,10 @@
 | # | 結論 | 標籤 |
 |---|---|---|
 | 1 | repo **公開**（非 fork、forks_count=0，查詢時點）。`data_cache/` 現行追蹤 **29 檔、2,298,741 位元組（約 2.30 MB）**；其中**個股級（含股票代碼）15 檔**。無 Secret、個人持股、帳號跡象（regex 範圍內，非專業掃描器） | FACT |
-| 2 | **授權證據 A／B／C 三層分開**：條款原文只有 **FinMind**（官方 GitHub Pages 原始檔，版本日期 2026-10-31）取得，且只算 **PARTIALLY VERIFIED**；TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo **零頁官方原文**；repo 內**找不到任何授權證據**（授權函、契約、方案憑證）。本專案是否商業、方案等級、Cloud 是否公開＝**NOT VERIFIED** | FACT／NOT VERIFIED |
+| 2 | **授權證據 A／B／C 三層分開**：條款原文只有 **FinMind**（官方 GitHub Pages 原始檔，版本日期 2026-10-31）取得，且只算 **PARTIALLY VERIFIED**；TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo **零頁官方原文**；在 grep 範圍內（單組）**找不到 repo 內授權證據**（授權函、契約、方案憑證；不證明 repo 外不存在）。本專案是否商業、方案等級、Cloud 是否公開＝**NOT VERIFIED** | FACT／NOT VERIFIED |
 | 3 | FinMind 條款明文：授權**不含**對外再散布、轉售、建置鏡像；對外公開須自行向原資料來源機關取得授權且「非 FinMind 所能授予」；Free／Backer／Sponsor 僅限非商業；任何方案皆禁再散布原始資料；須標示「FinMind」。**這些文字與公開 repo 內保留 FinMind 來源列／序列之間是否衝突，屬客戶／法律專業判斷，本文不下結論** | FACT（原文）／NOT VERIFIED（適用） |
 | 4 | **Git 歷史使「停止追蹤」不足以降低曝露**：`data_cache` 歷史共 **1,036 個相異 blob、約 80.0 MB（未壓縮）**，存在於 main、各 `auto/data-*`、`docs/*` 分支與 1,133 個 PR head；2026-06-28 曾 untrack、2026-07-11 又重新追蹤，**移除期間的舊版仍在歷史**。唯有改寫歷史＋GitHub 端清理才可能移除，且 fork／本機 clone／快取不受控 | FACT（clone＋refs/pull）／INFERENCE（GitHub 端行為） |
-| 5 | 網站（Streamlit Cloud）讀 **repo checkout 內的 `data_cache/`**（本地檔案 I/O）；程式無 raw.githubusercontent／GitHub API 的 runtime 抓取。若 `data_cache` 離開公開 repo，至少 **8 個 L1／L3 讀取模組＋約 61 個測試檔**直接受影響；現有資源（Google Sheets／NAS／`data` 分支／Artifact）**皆非現成可無縫替換的非公開資料倉** | FACT（受影響清單）／INFERENCE（影響程度） |
+| 5 | 網站（Streamlit Cloud）讀 **repo checkout 內的 `data_cache/`**（本地檔案 I/O）；程式無 raw.githubusercontent／GitHub API 的 runtime 抓取。若 `data_cache` 離開公開 repo，至少 **8 個主要 L1／L3 讀取模組（主要，非窮舉）**直接受影響；含 `data_cache` 字串的檔案 **src 約 23 個、tests 約 60 個（QA 實查）**；現有資源（Google Sheets／NAS／`data` 分支／Artifact）**皆非現成可無縫替換的非公開資料倉** | FACT（受影響清單）／INFERENCE（影響程度） |
 | 6 | **高優先級（可能與明文授權限制衝突，交客戶／法律裁示）**：`sector_flow/industry_raw.json`（FinMind＋TWSE＋TPEX 來源列，個股級，歷史 24 版）、`finmind_inst.parquet`／`finmind_margin.parquet`（FinMind 市場級日序列）。**非違規定論** | RECOMMENDATION（優先序） |
 | 7 | **更正先前說法**：`industry_raw.json` 內 FinMind 列**不是整列原樣**，每列只保留 `date`／`industry_category`／`type` 三欄；官方部分只保留 `code`／`endpoint`／`market`／`name` 四欄（§4.3）。是否仍屬「原始資料」＝法律判斷 | FACT |
 | 8 | **安全事件候選：無可確認事件**（Secret、個人資料）；僅 2 項低度本機路徑觀察與 1 項「選股偏好」觀察（§4.4）。是否另案由客戶決定 | FACT（regex 範圍）／NOT VERIFIED（非專業掃描器；PR-only 物件未掃） |
@@ -190,6 +190,8 @@
 
 ## 5. 三方案比較
 
+> **用語消歧**：客戶說的「方案 B」＝先做唯讀稽核（DEC-171）；本節的「方案 A／B／C」是三種**儲存架構候選**，與客戶的「方案 B」用語無關。
+
 方案定義（**僅研究候選，不是施工授權**）：
 - **A**：維持公開 repo 與現行保存方式；僅在確認授權允許後繼續使用（補標示、補授權證據）。
 - **B**：repo 維持公開，受限制資料（H1／H2 及客戶指定者）改存非公開儲存。
@@ -202,7 +204,7 @@
 | PIT／回測 | 現有 `fetched_at`≠`release_date` 缺口不變 | 不改善 PIT；**搬移不得丟 `fetched_at` 與版本** | 同左；聚合檔更不利日後重算 |
 | Git 歷史曝露 | 全部既有歷史維持公開 | 既有歷史維持公開；新增停止 | 同 B；另需決定是否改寫歷史（不可逆） |
 | Streamlit Cloud 相容 | 現行已可用 | **風險高**：Cloud 讀 checkout 內檔案；非公開來源需新增認證讀取；本專案 Cloud 設定 NOT VERIFIED | 公開聚合仍可用；原始層只給 cron／離線使用，Cloud 影響最小 |
-| 需改程式範圍 | 無（補標示屬畫面變更，須線框） | `src/data/sector_flow/reader.py`、`src/data/macro/macro_cache_reader.py`、`src/data/macro/macro_core.py`（durable）、`src/data/macro/macro_fwd_test_store.py`、`src/data/portfolio/forward_test_store.py`、`src/data/stock/fundamentals_snapshot_loader.py`；寫入端 `scripts/update_*.py`／`publish_data_pr.py`／`export_stock_db.py`；`pr-check` 及約 61 個測試檔含 `data_cache`；至少 3 個 service 鏈 | 最小：僅寫入端不再把來源列寫入公開 repo；讀取端（聚合）不變；`industry_raw.json` 無 runtime reader，**H1 可最小改動** |
+| 需改程式範圍 | 無（補標示屬畫面變更，須線框） | **主要受影響模組（主要，非窮舉；含 `data_cache` 字串的檔案 src 約 23 個、tests 約 60 個，QA 實查）**：`src/data/sector_flow/reader.py`、`src/data/macro/macro_cache_reader.py`、`src/data/macro/macro_core.py`（durable）、`src/data/macro/macro_fwd_test_store.py`、`src/data/portfolio/forward_test_store.py`、`src/data/stock/fundamentals_snapshot_loader.py`；寫入端 `scripts/update_*.py`／`publish_data_pr.py`／`export_stock_db.py`；`pr-check`；至少 3 個 service 鏈 | 最小：僅寫入端不再把來源列寫入公開 repo；讀取端（聚合）不變；`industry_raw.json` 無 runtime reader，**H1 可最小改動** |
 | 可重用資源 | — | **Google Sheets**：設計為使用者持股／清單，非時間序列倉，配額與大檔未評估；**NAS**：現為即時抓取中繼，**無儲存端點**，可用性無保證；**`data` 分支**：同為公開（force-push 後舊 SHA 仍可能可達）；**Artifact**：受 repo 可見性管控、有保留期、Streamlit 不能直接讀；Actions cache 不適合 | 同 B，但僅需承載來源列（體量小，非 Cloud 讀取路徑） |
 | 速度／維運／Token | 最低 | 高：新增儲存、認證、備份、失敗降級；需新 Secret（屬客戶授權） | 中：新增非公開落地位置與其保留規則 |
 | 資料遺失與回復風險 | 低 | 中：搬移失誤＝丟歷史；**不可重建檔案**（`picks.parquet`、`signals.parquet`）須先備份 | 低～中：公開端不刪、僅新增；刪除任何公開檔須客戶拍板 |
@@ -283,7 +285,7 @@
 | 19 | 「無 Secret／個資事件」「FinMind 條款不替代 TWSE／TPEX」等全稱句 | — | **未做第二組獨立複驗** | 維持「單組、未複驗」 |
 | 20 | 歷史 clone 來源 | 研究員 bare clone＋`refs/pull` | 本回合**重用該 bare clone 計算**，未重新對遠端 clone | 數字以 clone 當時為準；遠端之後的新 commit 不含 |
 
-**未抽查**：13 個 PR 的逐一內容、各分支「資料版本可達數」表、61 個測試檔清單、8 個讀取模組的逐檔失敗行為、其餘 553 張 PNG、Streamlit Cloud 設定。
+**未抽查**：13 個 PR 的逐一內容、各分支「資料版本可達數」表、tests 內含 `data_cache` 字串檔案的逐檔清單、8 個讀取模組的逐檔失敗行為、其餘 553 張 PNG、Streamlit Cloud 設定。
 
 ### 8.1 本文不得被讀成
 
