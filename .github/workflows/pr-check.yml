@@ -118,7 +118,7 @@ jobs:
 
       # DEC-170（客戶授權之 CI 環境最小修復，方案 A）：runner 的 apt 來源 mirror+file:/etc/apt/apt-mirrors.txt
       # 首選 azure.archive.ubuntu.com；該 mirror DNS 解析失敗時 `playwright install --with-deps` 會卡約 10 分鐘後 exit 100。
-      # 本步驟：輸出診斷 → 設 apt 重試／逾時上限 → 僅在 azure mirror 無法解析時改用 Ubuntu 官方來源
+      # 本步驟：輸出診斷 → 僅在 azure mirror 無法解析時：設 apt 重試／逾時上限並改用 Ubuntu 官方來源
       # （保留簽章驗證：Signed-By 沿用原檔；不加 --allow-unauthenticated；不使用非官方鏡像）。健康時不改動來源。
       - name: Prepare apt for Chromium system dependencies
         run: |
@@ -135,13 +135,6 @@ jobs:
           done
           echo "::endgroup::"
 
-          # 有上限的重試與逾時，避免 10 分鐘卡死（健康時亦無副作用）
-          sudo tee /etc/apt/apt.conf.d/99ui2-ci-retry >/dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "20";
-          Acquire::https::Timeout "20";
-          EOF
-
           azure_ok=0
           for i in 1 2 3; do
             if resolves azure.archive.ubuntu.com; then azure_ok=1; break; fi
@@ -154,6 +147,12 @@ jobs:
           fi
 
           echo "azure mirror unresolvable -> switching mirror+file entries to official Ubuntu archives (signatures still verified)."
+          # 僅失敗路徑：有上限的重試與逾時，避免 10 分鐘卡死（健康路徑不改任何 apt 設定）
+          sudo tee /etc/apt/apt.conf.d/99ui2-ci-retry >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          EOF
           backup_dir=/etc/apt/ui2-ci-backup
           sudo mkdir -p "$backup_dir"
           changed=0
