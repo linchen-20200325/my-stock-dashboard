@@ -2234,3 +2234,21 @@
   - **A2 步驟 2 待客戶拍板**：線框草案 `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`；待確認 G-1～G-10（區塊文案、折疊、板塊方案 A／B／C〔含是否保留衍生聚合〕、正負號格式、新 L1 字樣、外資落後提示、Secondary Visual、aria-label、是否授權步驟 2、板塊口徑文字與是否另拆分項）。
   - **步驟 2 scope 指標**：見該文 F 節（proposed 唯讀 L3 3 支、real_feed、G2F 白名單、real_canonical、market_vm 新 SectionVM〔不動 `MARKET_CARD_IDS`〕、FAKE 軸占位、tests 與 390／1440 量測）；**建議，非授權**。
   - **上報點**：(a) 折疊需 Active Contract §3.1 例外＋改 `SHOWN_FOLDS`；(b) 板塊 Top／Bottom N 屬新排名語意，需另 Gate；(c) 融資『資料疑義』資料層旗標缺口；(d) 位置在 OneBrain 下方須實測 `scroll_end_bottom` 與 `market_stress_reachable`（NOT VERIFIED）；(e) 板塊 `net_amt_yi` 為三大法人合計（外資＋投信＋自營），與外資項口徑不同，口徑文字與是否另拆分項顯示（更多欄位，需另 Gate）列 G-10。
+
+- **Issue #1138 雙線結果（2026-11-11；僅追加；不重述既有 DEC、不新增 DEC；依據 Issue #1138 授權轉錄，非逐字；以下事實為獨立審計單組核對，標 FACT／INFERENCE／NOT VERIFIED）**：
+  - **(1) 已新增 tests-only（FACT；僅新增測試檔，production 0 改動）**：
+    - `tests/test_decision_digest_invariants_guard.py`（31 測試，收集數已實測）：UI 狀態不變性 C1；repo 全域「0 production caller」守衛 C2（**Gate 開啟、有 caller 接線時須同步更新本守衛**）；L0 動態 import 閉包 C3。
+    - `tests/test_ui2_market_render_guards_extra.py`（27 測試，收集數已實測）：無值卡片渲染 blank＋『—』；真 0 vs missing；核心卡 id 多／少／顛倒／重複；kbar 狀態禁詞掃描。
+    - **獨立 QA 與原生 CI 結果：待補**（NOT VERIFIED；**不得**寫成已通過）。
+  - **(2) 審計發現：production 層設計限制／疑似缺陷（FACT：審計觀察，單組；均未修；皆需 Gate，不屬 tests-only；無客戶裁示不動工，`CLAUDE.md` §-1）**：
+    - **a. UI2 卡片路徑 close≤0 未檢查**：`load_twii_close` 只 `dropna`、`validate_twii_fact` 只查 `isfinite`；kbar 路徑拒 non-positive，卡片與日 K 不一致。
+    - **b. as_of 在未來時 `stale_text` 顯示『⚠ 過期 -44 天』**：`shared/ui2_contract/text.py::stale_text` 未處理負數；L1 已正確判 `is_stale=True`（只缺文字層）。
+    - **c. `field_from_spec` 對 `value=''`／NaN 產出 OK**：INFERENCE——`real_canonical` 前置驗證使目前不會發生，屬防禦深度缺口。
+    - **d. L1 Digest builder 對 regime／light 無詞彙白名單**：『待評估／載入中／pending／error／資料不足／⚪』等 37 個字串→`DataStatus.OK`（僅 AB-0 `PLACEHOLDER_TEXTS` 降級）；`macro_state_locker` 快路徑直接透傳 warroom 的 light。
+    - **e. Q4 階層 tie-break 依呼叫端 `station_rows` 順序**：5 檔 add 順序反轉結果不同；`holdings_rows` 順序改變 `to_dict`。
+    - **f. `EvidenceInput(stamp=None, upstream_state=FETCH_FAILED)` 的 coverage 原因為 `no_stamp`**（`_classify` 先到先得），與 docstring『記錄 fetch_failed』不一致；現有測試未涵蓋。
+    - **g. 摘要在站內證據被拒用時只寫『規則層未產出可引用依據』**，無法區分 stale／fetch_failed（Digest v1 無原因欄）。
+    - **h. `src/services/__init__.py` 急切 import**，使任何 `src.services.decision_digest_*` 動態載入 streamlit／requests／pandas（套件層既有性質；是否改 lazy：NOT VERIFIED，未評估）。
+    - **i. 風險上限句為固定措辭**（DEC-081 Q2-2）；cap MISSING 與 OK 同文字。
+  - **(3) 日後接線『市場資金與籌碼』前應補的守衛清單（INFERENCE：建議，非授權）**：`SHOWN_FOLDS` 不變；DOM 順序 OneBrain→新區塊；單位缺欄位不顯示 0；真 0 與 missing 區分；禁詞表區分『買超／賣超』事實與『買進／賣出／加碼』動作，並補看多／看空／排名／推薦；Real／FAKE 對稱；新欄位納入 `_all_fields`／`_paths`／`WIRED_PATHS`。
+  - **(4) NOT VERIFIED**：瀏覽器／viewport 測試（沙箱無 Playwright，未跑）；`DataStatus` 六態與 schema candidate 五態措辭不一致，**未裁決**。

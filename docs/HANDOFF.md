@@ -1461,3 +1461,16 @@ DEC-086 規則已於 main，本表已落地。
 - **更正（追加，舊段不改）**：上一段「Issue #1134」接手點寫「本批 PR 號待補」；實際 PR 為 **#1135**，已於 main `5eef8863` squash 合併（同 head `ba99bca5` 原生 CI 5 項 success、獨立 QA PASS）。
 - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換；A2 步驟 2 程式施工。
 - **下一個唯一安全工作**：等客戶對線框正式拍板（G-1～G-10）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+## 最新接手點（2026-11-11，Issue #1138；只追加；不改既有段落；依據 Issue #1138 轉錄，非客戶逐字、非 QA PASS）
+
+- **基準**：main `838f667a`（#1137 squash 合併後）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：Issue #1138 雙線 tests-only／docs 追加的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`）。獨立 QA 與原生 CI：**待補**（NOT VERIFIED，不得寫成已通過）。
+- **兩條線各自的 tests-only 檔（FACT，收集數已實測；production 0 改動）**：
+  - Digest 不變性線：`tests/test_decision_digest_invariants_guard.py`（31 測試；C1 UI 狀態不變性、C2 全域 0 production caller〔Gate 開啟時須同步更新〕、C3 L0 動態 import 閉包）。
+  - UI2 市場頁渲染線：`tests/test_ui2_market_render_guards_extra.py`（27 測試；無值卡片 blank＋『—』、真 0 vs missing、核心卡 id 多／少／顛倒／重複、kbar 狀態禁詞）。
+- **production 發現**：審計發現的設計限制／疑似缺陷（a～i）已登記 `docs/BACKLOG.md`『Issue #1138 雙線結果』，**均未修、均待 Gate**，不屬 tests-only。審計為單組，未經第二組驗證。
+- **#1137 已合併事實（FACT）**：squash 於 main `838f667a`；同 head `277292ea` 原生 CI 5 項 success。
+- **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；Digest v2／Stage G；舊 UI。
+- **NOT VERIFIED**：瀏覽器／viewport 測試（沙箱無 Playwright）；`DataStatus` 六態與 schema candidate 五態措辭不一致未裁決。
+- **下一個唯一安全工作**：等客戶對 G 表（見 Issue #1138 留言）裁示；無裁示前不動工（`CLAUDE.md` §-1）。
