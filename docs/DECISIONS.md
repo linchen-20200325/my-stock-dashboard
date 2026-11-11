@@ -8071,3 +8071,11 @@ Model：Claude Sonnet 5.5  Effort：Medium
   - **NOT VERIFIED**：真正 libfaketime／freezegun（環境無）；未掃全 repo；單組驗證；其他測試檔的日期相依未掃（QA-E 當時偽裝有缺陷）。**獨立 QA 待補。**
 - **與 DEC-159 的關係**：**不取代** DEC-159。DEC-159 的側車設計與 P-4 fail-closed 拒用維持有效；本條只是把「stale 保留於隔離記錄、不得用於決策」與「v2 長期方向 B＋M1」記為客戶方向，並要求後續 Gate。
 - **本批結論摘要（AI 單組撰寫，未經第二組複驗）**：新增 `docs/vnext/STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md`——(1) 公共市場資料僅「加權指數日 K 趨勢」有可重用 headless 讀取路徑；市場位階／light／health、`exposure_limit_pct`／allocation、`macro_state.json` 的 headless 副本、真實市場廣度、PIT `release_date` 欄均為 `MISSING`；(2) 私有持股僅登入脈絡可得，既有 SA 推播路徑授權範圍是「每日持股推播」，**不等於**授權 Digest；(3) A2 兩種解法（A2-i／A2-ii）列出優缺點，待 schema Decision Gate；(4) 列出 Gate G-F1～G-F6，皆待客戶裁示、未啟動。**本批未改任何程式、schema 或欄位，非施工授權。**
+
+### DEC-161｜Issue #1132 客戶裁示轉錄：G-F1 方案 A（既有 canonical 市場資料 headless 唯讀契約與缺口驗證）（2026-11-11；docs-only）
+
+- **決策者**：客戶。Issue #1132 轉錄，**非逐字、非 QA PASS**。
+- **裁示**：僅核准 G-F1「方案 A」——重用現有 canonical／L3 市場資料的唯讀契約設計、獨立證據核對與缺口登記；對尚無合法、PIT 合格、可 headless 來源的市場位階／light／health／曝險，明確顯示「無法判定」或「尚未提供」，不補 neutral／0／safe，不以過去 forward-test 快照代替 live 市場判斷；給出至少三種下一階段方案並比較。
+- **不授權**（照 Issue #1132）：不改位階算法／廣度 proxy 開關／風險曝險趨勢公式／D1–D5／PIT 例外；不新增 fetcher、API、source、pipeline、job、cron、Secret；不以 session 的 `macro_state.json` 或推播 SA 冒充 headless source；不實作 P-1、Digest v2、OneBrain、production caller、UI2 真資料接線；不動登入／OAuth／Sheet、Risk Cap、舊 UI、正式路由；不動資料 PR #1124–#1126、#1119 維持 HOLD。G-F2、G-F3／A2（現有 stale fail-closed 維持）、G-F4、G-F5／G-F6 仍待另行裁示。
+- **本批結論摘要（兩位獨立 agent 二次核對，仍屬 agent 產出、未經人工複驗）**：新增 `docs/vnext/STAGE_F_GF1_HEADLESS_MARKET_CONTRACT_2026-11-11.md`——(1) 唯一已具備 headless 唯讀路徑的是加權指數日 K（`get_twii_trend_view`，UI2 已接）；(2) inst／margin／sector_flow／m1m2／pmi 可讀 git 檔但 UI2 未接、五檔皆無 `release_date`；(3) 位階／light／health／曝險輸入只在 session，現行 production 為 `unknown`／⬜；(4) `signals.parquet` 不得充當 live 判斷；(5) 對 DEC-160 研究文件列出四點二次核對更正；(6) 下一階段三方案比較，AI 推薦（非客戶裁示）先方案 1 最小可推進項、並請客戶裁示方案 2 前置問題，不建議方案 3。**本批未改任何程式、schema、旗標，非施工授權。**
+- **與 DEC-160／DEC-159 的關係**：**不取代**。DEC-160 的 Gate G-F2～G-F6 與 DEC-159 的側車設計、P-4 fail-closed 維持有效；G-F2～G-F6 仍待裁示。

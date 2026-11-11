@@ -2214,3 +2214,11 @@
     - **複查 `frozen_now` 補釘**：只把 `as_of` 釘在 2026-09-28，未碰延遲常數或 PIT 邏輯；守衛在 `test_c4b_revenue_scoring`／`test_c4e_unverified_key_cap`／`test_g2_monthly_freshness` 等；延遲常數突變（0／9／11／12）使邊界測試紅 26／19／20／20 項，契約 grace 0→7 紅 7 項。
     - **NOT VERIFIED**：真正 libfaketime／freezegun（環境無）；未掃全 repo；單組驗證；其他測試檔的日期相依未掃（QA-E 當時偽裝有缺陷）。**獨立 QA 待補。**
   - 維持 NOT VERIFIED：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。#1119 維持 HOLD。P-4 完成 ≠ Stage F／C1～C7 通過。
+
+- **G-F1 已裁（方案 A；Issue #1132，DEC-161；僅追加）**：
+  - **本批結果**：新增 `docs/vnext/STAGE_F_GF1_HEADLESS_MARKET_CONTRACT_2026-11-11.md`（契約矩陣、缺口清單、二次核對更正、三方案比較）。兩位獨立 agent 二次核對，仍屬 agent 產出、未經人工複驗；docs-only，未改程式。
+  - **G-F1 後續待裁（方案 2 前置問題）**：「恢復既有有效市場廣度資料」是否等於「新增來源」？依旗標自帶復活條件（真實漲跌家數來源 `is_proxy=False` 或客戶核准的另一套計算方式，且須客戶裁示可計分），答案為「是，需客戶核准」，仍待裁示。走 `tw_macro.fetch_twse_breadth` 逐日落地即新增 fetcher＋cron，本批禁止；需客戶先裁示，才能開始方案 2 的研究。**不改 `BREADTH_PROXY_SCORING_ENABLED`。**
+  - **下一階段三方案**（見新檔 §4）：1）保留「未提供」並完善契約；2）凍結語意下研究恢復廣度資料；3）新位階／新來源（不建議）。**AI 推薦，非客戶裁示**：先方案 1 最小項（Old-UI-First 盤點 inst／margin／sector_flow 唯讀 service，仍需 Gate，未施工）。
+  - **`tw_pmi` staleness 登記缺口**（INFERENCE）：`tw_pmi` 不在 `CACHE_DATASET_CADENCE`，故預設 stale；補登記屬正式碼，**需另授權**。
+  - **`signals.parquet` 無禁讀測試**（INFERENCE；低優先建議）：目前僅靠無 caller 防止被當 live 判斷；無授權不動。
+  - 仍待裁示：G-F2～G-F6。
