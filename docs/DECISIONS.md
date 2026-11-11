@@ -8087,3 +8087,11 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **不授權（照 Issue #1134）**：不實作 UI2 接線或 adapter；不動任何 production 程式或測試；不切換 default；不改舊 UI；不碰登入／OAuth／Sheet、Actions／workflow、Secrets、Risk Cap、G-F2～G-F6、Digest v2、OneBrain、D1～D5、EPS、廣度開關、位階演算法、資料來源／API／cron；不授權新正式指標、法人強弱／融資趨勢／資金流信號、訊號分數、權重、排名。#1124～#1126 不得順手 merge／rebase／close／改寫（#1126 PIT NOT VERIFIED）；#1119 HOLD。
 - **本批結論摘要（四位 agent 唯讀盤點，agent 產出、未經人工複驗）**：新增 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md`——(1) 三項資料在 UI2（`shared/ui2_contract`、`src/ui2`、`src/services/ui2`）皆 0 命中，UI2 完全未呈現；(2) 舊 UI 三項皆耦合判讀語言（±100 億結論卡、3400／2500 融資燈、四象限白話），UI2 不應沿用；(3) `finmind_inst.parquet` 只有外資，三類法人只能來自 session 路徑；(4) 融資『資料疑義』目前只是 UI 寫死文字，資料層無逐列旗標（tab_macro_v2 另有 `hold_reason`／『⚠️ 圖表資料疑義』卡片層機制，非逐列旗標）；(5) 手機 390×844 Real feed p4_market `nav_margin_after_risk`＝168.8px（量測值）；160px 門檻僅套用 stale／unavailable 場景、不含 Real，故 8.8px 餘裕不作承重論據（INFERENCE／Real 合格門檻 NOT VERIFIED，以客戶線框與實測為準）；新 section AI 推薦放日 K 之後（不動既有首屏錨點），須先出文字線框草稿；(6) AI 推薦（非客戶裁示）A2 分兩步，不建議 A3。**本批未改任何程式、測試、schema、旗標，非施工授權。**
 - **與 DEC-157／DEC-161 的關係**：**不取代**。DEC-157 市場頁順序與 `MARKET_CARD_IDS` 固定 6 張維持有效；DEC-161 的 G-F1 契約與缺口維持有效，本批補能力對照與接線提案。
+
+### DEC-163｜Issue #1136 客戶裁示轉錄：市場頁「市場資金與籌碼」文字線框方向（2026-11-11；docs-only）
+
+- **決策者**：客戶。Issue #1136 轉錄，**非逐字、非 QA PASS**（客戶在對話回覆「同意」四項建議，不是逐字展開說明）。
+- **四項同意要點（照 Issue #1136）**：(1) A2 **步驟 1 僅 docs-only 文字線框**，草稿完成後回客戶正式拍板，不得擅自進入步驟 2 程式接線；(2) 新 section 置於 **OneBrain 下方**，不插入六張核心卡、不改 OneBrain 或首屏錨點，390／1440 首屏可達性與導覽不遮擋須驗證（真機／Cloud 未做標 NOT VERIFIED）；(3) 初版三項：外資淨買賣超（僅外資，不稱三大法人）、融資餘額（億元，不沿用 3400／2500）、板塊資金流最新交易日淨額（不含四象限、動能、Top-N 推薦排序）；(4) 配色中性色＋明確正負號＋文字標籤，不沿用舊 UI 負值紅與外資藍／投信綠／自營金作投資訊號，Dark-only 不變。
+- **本批產物**：`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；上報點與待確認項 G-1～G-10 見該文）。**線框不是經驗證畫面，未做真機／Cloud／瀏覽器驗收（NOT VERIFIED）。**
+- **與 DEC-157／DEC-162 的關係**：**不取代**。DEC-157 市場頁順序與 `MARKET_CARD_IDS` 固定 6 張維持有效；DEC-162 Mapping 文件 §4 AI 推薦新 section 放日 K 之後，**客戶 Issue #1136 指定改為 OneBrain 下方，以客戶指定為準**（AI 推薦非客戶裁示，兩者不衝突於客戶原文）。
+- **不授權**：A2 步驟 2 程式施工；不改 production code／tests／UI2 VM／feed／section、資料讀寫、fetcher、source／API、PIT／公式／權重／燈號、Risk Cap、D1–D5、EPS、OAuth／Sheet、Digest v2、P-1、OneBrain、Actions、cron／Secrets；#1119 HOLD；#1124～#1126 不處置。

@@ -2229,3 +2229,8 @@
   - **資料層缺口**：融資『資料疑義』旗標目前僅 UI 寫死文字，資料層無逐列旗標（v3 §02 強制標記未落實），建議由 sanity 失敗列產生，屬後續（tab_macro_v2 另有 `hold_reason`／『⚠️ 圖表資料疑義』卡片層機制，非逐列資料層旗標）。
   - **三類法人 headless 缺口**：`finmind_inst.parquet` 僅外資，投信／自營商只在 BFI82U 單日 session 路徑。
   - **憲法對齊建議**：`fetch_margin_balance` 實際備援鏈（FinMind→MI_MARGN→HiStock→Goodinfo→Yahoo→鉅亨）與憲法 §2.1 寫的『TWSE→HiStock→Wearn』不一致，以碼為準，待憲法對齊。
+
+- **UI2 市場頁「市場資金與籌碼」文字線框（Issue #1136；DEC-163；僅追加；皆未授權、無裁示前不動工）**：
+  - **A2 步驟 2 待客戶拍板**：線框草案 `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`；待確認 G-1～G-10（區塊文案、折疊、板塊方案 A／B／C〔含是否保留衍生聚合〕、正負號格式、新 L1 字樣、外資落後提示、Secondary Visual、aria-label、是否授權步驟 2、板塊口徑文字與是否另拆分項）。
+  - **步驟 2 scope 指標**：見該文 F 節（proposed 唯讀 L3 3 支、real_feed、G2F 白名單、real_canonical、market_vm 新 SectionVM〔不動 `MARKET_CARD_IDS`〕、FAKE 軸占位、tests 與 390／1440 量測）；**建議，非授權**。
+  - **上報點**：(a) 折疊需 Active Contract §3.1 例外＋改 `SHOWN_FOLDS`；(b) 板塊 Top／Bottom N 屬新排名語意，需另 Gate；(c) 融資『資料疑義』資料層旗標缺口；(d) 位置在 OneBrain 下方須實測 `scroll_end_bottom` 與 `market_stress_reachable`（NOT VERIFIED）；(e) 板塊 `net_amt_yi` 為三大法人合計（外資＋投信＋自營），與外資項口徑不同，口徑文字與是否另拆分項顯示（更多欄位，需另 Gate）列 G-10。
