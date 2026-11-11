@@ -84,6 +84,20 @@ jobs:
   ui2-browser:
     name: "ui2-browser (streamlit ${{ matrix.streamlit }})"
     runs-on: ubuntu-latest
+    # DEC-170（客戶授權之 CI 環境最小修復，方案 B；方案 A 已由 CI 實證失效：該 runner 的
+    # azure/archive/security.ubuntu.com 三個 host 皆 DNS 解析失敗）：本 job 改在固定「版本＋digest」的
+    # Playwright 官方容器內執行，系統相依套件與 Chromium 已預裝，runner 完全不需要 apt。
+    # 容器相容性說明：
+    #  - 映像為 Ubuntu 24.04(noble)/linux-amd64、預設 root、ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright；
+    #    內建 Node（GitHub 亦會掛載 runner 自帶 node 供 JS actions 使用）。
+    #  - tests 以 `p.chromium.launch()` 預設參數啟動（無自訂 args）；root 下 Playwright 預設
+    #    chromiumSandbox=false 會自動加 --no-sandbox，容器內可正常啟動，無須改測試。
+    #  - Playwright 官方文件建議 Docker 執行 Chromium 加 --ipc=host（避免共享記憶體不足導致崩潰），故設 options。
+    #  - actions/setup-python 於容器 job 可用（Ubuntu 基底，工具快取目錄由 runner 掛入）。
+    #  - 不使用 latest；tag 保留供閱讀，digest 為不可變的實際依據（升 Playwright 時 tag、digest、pip pin 一併更新）。
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -110,104 +124,16 @@ jobs:
           pip install -r requirements.txt
           pip install "streamlit==${{ matrix.streamlit }}" pytest "playwright==1.64.1"
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-1.64.1-chromium
-
-      # DEC-170（客戶授權之 CI 環境最小修復，方案 A）：runner 的 apt 來源 mirror+file:/etc/apt/apt-mirrors.txt
-      # 首選 azure.archive.ubuntu.com；該 mirror DNS 解析失敗時 `playwright install --with-deps` 會卡約 10 分鐘後 exit 100。
-      # 本步驟：輸出診斷 → 僅在 azure mirror 無法解析時：設 apt 重試／逾時上限並改用 Ubuntu 官方來源
-      # （保留簽章驗證：Signed-By 沿用原檔；不加 --allow-unauthenticated；不使用非官方鏡像）。健康時不改動來源。
-      - name: Prepare apt for Chromium system dependencies
-        run: |
-          set -euo pipefail
-          resolves() { getent hosts "$1" >/dev/null 2>&1; }
-
-          echo "::group::apt diagnostics (before)"
-          lsb_release -a 2>/dev/null || cat /etc/os-release
-          echo "ImageOS=${ImageOS:-?} ImageVersion=${ImageVersion:-?}"
-          echo "--- /etc/apt/apt-mirrors.txt"; cat /etc/apt/apt-mirrors.txt 2>/dev/null || echo "(absent)"
-          echo "--- apt sources"; grep -rn -E '^(URIs|Suites|deb )' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null || true
-          for h in azure.archive.ubuntu.com archive.ubuntu.com security.ubuntu.com; do
-            if resolves "$h"; then echo "DNS ok: $h ($(getent hosts "$h" | head -n1))"; else echo "DNS FAIL: $h"; fi
-          done
-          echo "::endgroup::"
-
-          azure_ok=0
-          for i in 1 2 3; do
-            if resolves azure.archive.ubuntu.com; then azure_ok=1; break; fi
-            echo "azure.archive.ubuntu.com unresolved (attempt $i/3)"; sleep 5
-          done
-
-          if [ "$azure_ok" = "1" ]; then
-            echo "azure mirror resolves; apt sources left unchanged."
-            exit 0
-          fi
-
-          echo "azure mirror unresolvable -> switching mirror+file entries to official Ubuntu archives (signatures still verified)."
-          # 僅失敗路徑：有上限的重試與逾時，避免 10 分鐘卡死（健康路徑不改任何 apt 設定）
-          sudo tee /etc/apt/apt.conf.d/99ui2-ci-retry >/dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "20";
-          Acquire::https::Timeout "20";
-          EOF
-          backup_dir=/etc/apt/ui2-ci-backup
-          sudo mkdir -p "$backup_dir"
-          changed=0
-          for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
-            [ -f "$f" ] || continue
-            grep -q 'mirror+file:/etc/apt/apt-mirrors.txt' "$f" || continue
-            sudo cp -n "$f" "$backup_dir/$(basename "$f").orig"
-            tmp="$(mktemp)"
-            case "$f" in
-              *.sources)
-                # deb822：以空行分段；僅含 security suite 的段落 -> security.ubuntu.com，其餘 -> archive.ubuntu.com
-                awk 'BEGIN{RS="";ORS="\n\n"}
-                  /mirror\+file:\/etc\/apt\/apt-mirrors\.txt/ {
-                    n=split($0, L, "\n"); sec=0; oth=0
-                    for (i=1;i<=n;i++) if (L[i] ~ /^Suites:/) { m=split(L[i], T, /[ \t]+/); for (j=2;j<=m;j++) if (T[j]!="") { if (T[j] ~ /security/) sec++; else oth++ } }
-                    host = (sec>0 && oth==0) ? "https://security.ubuntu.com/ubuntu/" : "https://archive.ubuntu.com/ubuntu/"
-                    sub(/mirror\+file:\/etc\/apt\/apt-mirrors\.txt/, host)
-                  }
-                  {print}' "$f" > "$tmp" ;;
-              *)
-                awk '/mirror\+file:\/etc\/apt\/apt-mirrors\.txt/ {
-                    host = ($0 ~ /security/) ? "https://security.ubuntu.com/ubuntu/" : "https://archive.ubuntu.com/ubuntu/"
-                    sub(/mirror\+file:\/etc\/apt\/apt-mirrors\.txt/, host)
-                  } {print}' "$f" > "$tmp" ;;
-            esac
-            sudo install -m 644 -o root -g root "$tmp" "$f"
-            rm -f "$tmp"
-            changed=1
-            echo "rewrote $f"
-          done
-          if [ "$changed" = "0" ]; then
-            echo "::error::azure mirror unresolvable but no mirror+file apt source found to rewrite"; exit 1
-          fi
-
-          for h in archive.ubuntu.com security.ubuntu.com; do
-            if ! resolves "$h"; then echo "::error::official host $h also unresolvable; apt cannot work on this runner (escalate to plan B)"; exit 1; fi
-          done
-          echo "::group::apt sources (after)"
-          grep -rn -E '^(URIs|Suites|deb )' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null || true
-          echo "::endgroup::"
-          sudo timeout 300 apt-get update
-
       - name: Install Chromium
         run: |
           set -euo pipefail
-          # 最多 3 次、間隔 30 秒；每次 10 分鐘上限。最終失敗 -> 步驟失敗（不吞錯、不 continue-on-error）。
-          for attempt in 1 2 3; do
-            echo "playwright install attempt $attempt/3"
-            if timeout --foreground 600 python -m playwright install --with-deps chromium; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then echo "attempt $attempt failed; retrying in 30s"; sleep 30; fi
-          done
-          echo "::error::playwright install --with-deps chromium failed after 3 attempts"
-          exit 1
+          # 容器已預裝 Chromium；此處僅驗證並在版本不符時下載瀏覽器本體（不使用 apt、不加 --with-deps）。
+          # 任何失敗 -> 步驟失敗（不吞錯、不 continue-on-error）。
+          python -m playwright --version
+          echo "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:?PLAYWRIGHT_BROWSERS_PATH 未設定}"
+          ls "$PLAYWRIGHT_BROWSERS_PATH"
+          python -m playwright install chromium
+          ls "$PLAYWRIGHT_BROWSERS_PATH"
 
       - name: Run New UI2 browser lane
         run: |
