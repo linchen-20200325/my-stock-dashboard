@@ -8275,12 +8275,12 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 
 - **客戶原文（2026-11-11 對話，正式裁示）**：「同意優先採 A，失敗再評估 B。授權專案 AI 獨立進行最小 CI workflow 安裝環境修復，另開 PR，保留全部 Browser required checks 與測試門檻，不碰 #1149 內容或業務程式。」
 - **授權範圍（僅此）**：`.github/workflows/pr-check.yml` 的 `ui2-browser` job「安裝環境」之最小修復（先 A、A 失敗再評估 B）；另開 PR；保留全部 Browser required checks 與測試門檻；不碰 #1149 內容、不碰業務程式。
-- **未授權（限制）**：降低或移除任何 Browser 守衛（`continue-on-error`、`|| true`、skip、降門檻、改 required 語意）；新增 Secret；修改 `tests/`、`src/`、`shared/`、資料或 `data_cache`；修改 #1149 的內容；任何 UI2 runtime 接線、coverage 門檻、授權／PIT 結論。**本裁示是 CI 環境修復授權，不是 `I1144-WIRING-GATE` 接線授權，也不關閉任何 Gate。**
+- **未授權（限制）**：降低或移除任何 Browser 守衛（針對 `ui2-browser` job：`continue-on-error`、`|| true`、skip、降門檻、改 required 語意）；新增 Secret；修改 `tests/`、`src/`、`shared/`、資料或 `data_cache`；修改 #1149 的內容；任何 UI2 runtime 接線、coverage 門檻、授權／PIT 結論。**本裁示是 CI 環境修復授權，不是 `I1144-WIRING-GATE` 接線授權，也不關閉任何 Gate。**
 
 #### 一、事實（FACT，皆有 GitHub 證據）
 
-- **故障**：#1149 attempt 1／2（run 43038462781）的 `ui2-browser`（streamlit 1.56.0／1.59.2）在「Install Chromium」步驟（`playwright install --with-deps chromium`）因 runner 的 apt 無法下載 9 個字型套件（DNS 解析失敗）而失敗，每次約 7～10 分鐘；無 `junit.xml` → `ui2-browser-gate` 失敗；Fast、Slow 皆 PASS。根因在 CI 安裝環境，不在 #1149 內容。
-- **方案 A 實證失效**：PR #1150 早期 commit 以「切換到 Ubuntu 官方來源＋有上限重試」修復；同 runner 上 `azure.archive.ubuntu.com`、`archive.ubuntu.com`、`security.ubuntu.com` 三個 host 皆 DNS 解析失敗（run 43045769006、job 130609352669），步驟快速失敗並提示升級 B。依客戶裁示「失敗再評估 B」，進入方案 B。
+- **故障**（依 job 日誌）：#1149 attempt 1／2（run 43038462781）的 `ui2-browser`（streamlit 1.56.0／1.59.2）在「Install Chromium」步驟（`playwright install --with-deps chromium`）因 runner 的 apt 無法下載 9 個字型套件（DNS 解析失敗）而失敗，每次約 7～10 分鐘；無 `junit.xml` → `ui2-browser-gate` 失敗；Fast、Slow 皆 PASS。根因在 CI 安裝環境，不在 #1149 內容。
+- **方案 A 實證失效**（依 job 日誌；run 層級 conclusion 為 cancelled〔被後續 push 取代〕，失敗證據在 job 130609352669）：PR #1150 早期 commit 以「切換到 Ubuntu 官方來源＋有上限重試」修復；同 runner 上 `azure.archive.ubuntu.com`、`archive.ubuntu.com`、`security.ubuntu.com` 三個 host 皆 DNS 解析失敗（run 43045769006、job 130609352669），步驟快速失敗並提示升級 B。依客戶裁示「失敗再評估 B」，進入方案 B。
 - **方案 B（PR #1150 最終內容，squash 合併為 main `96cb7614`）**：`ui2-browser` job 改在 `mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f` 內執行（tag＋digest 固定；Ubuntu 24.04；Chromium 與系統依賴預裝；與 `playwright==1.64.1` 一致），`options: --ipc=host`，`defaults.run.shell: bash`；移除 pip 快取（容器無 `lsb_release`）與 `~/.cache/ms-playwright` 快取步驟；「Install Chromium」改為無 apt 驗證（`playwright install chromium`，失敗即步驟失敗）。首次 B 實測（run 43046953627）因容器無 `lsb_release` 與預設 `sh` 失敗，已修正；修正後 head `0a30fd8b` 原生 CI 五項全綠（run 43047303965）。
 - **全部 Browser 守衛保留**：matrix 兩版本（1.56.0／1.59.2）、`UI2_BROWSER_LANE=required`、`pytest -m ui2_browser` 與兩個測試檔、junit 檢查（tests≥40、skipped=0）、evidence artifact、`ui2-browser-gate`；無 `continue-on-error`、無 `|| true`、無 skip、無降門檻、無新 Secret；未改 tests／production。獨立 QA（非作者）對 B diff PASS（映像 tag／digest 亦獨立向 mcr 驗證）。
 - **#1149 處置**：未改其內容；僅用 GitHub「Update branch」併入新 main 使其以修好的 workflow 重跑；新 head `a60fdd84` 原生 CI 五項全綠（run 43051230191）、0 unresolved threads，已 squash 合併為 main `d8d74ccd`。
@@ -8289,7 +8289,7 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 
 | 類別 | 內容 |
 |---|---|
-| **已授權且已完成** | CI 安裝環境最小修復（方案 A 嘗試→實證失效→方案 B）＝PR #1150（main `96cb7614`）；#1149 以修好的 workflow 重跑並合併（main `d8d74ccd`）。本 DEC 的 docs PR 號：待補 |
+| **已授權且已完成** | CI 安裝環境最小修復（方案 A 嘗試→實證失效→方案 B）＝PR #1150（main `96cb7614`）；#1149 以修好的 workflow 重跑並合併（main `d8d74ccd`）。本 DEC 的 docs PR 號：#1151 |
 | **未授權** | 降低／移除任何 Browser 守衛、新 Secret、改 tests／src／資料、UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller、coverage 門檻值、採用新母體 |
 | **仍 HOLD（本批未關閉任何 Gate）** | Coverage 母體新算法／最低 coverage 門檻（`DG-COV`，未裁示）、PIT 正式語意（`DG-PIT`）、資料再散布最終授權（`DG-LIC`）、UI2 `WIRING-GATE`（`I1144-WIRING-GATE`）、Digest A3／`market.health` 範圍／外資 L3（未授權）、G-F2～G-F6 |
 | **NOT VERIFIED** | 本修復只證明在**當日 runner** 上可執行；GitHub-hosted runner 的 Ubuntu 來源 DNS 故障根因（GitHub 或 Canonical 端）**未查明**；Streamlit Cloud、真機、Playwright 以外的真實環境未驗；`ui2-browser-gate` 是否已設為 GitHub Branch protection 的 required check 為設定面事項，本 AI 工作階段無權限讀寫（見 `pr-check.yml` 註解），未驗 |

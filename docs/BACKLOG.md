@@ -2379,4 +2379,4 @@
 - **#1149 狀態更正**：前段寫的「#1149 被 CI 環境阻塞」**已過期**——#1149 內容未改，以 Update branch 併入新 main 後原生 CI 五項全綠並合併（main `d8d74ccd`）。
 - **I1144-CI-ENV-MAINT**（新，低優先、非待辦動工項）：容器映像升級時 image tag、digest、`playwright==` pip pin 須一併更新；runner Ubuntu 來源 DNS 故障根因未查明（NOT VERIFIED）。無實際故障／升級需求不主動動工（CLAUDE.md §-1）。
 - **仍開放（均未因本批關閉）**：`DG-COV`（`I1140-COVERAGE-MIN`，母體新算法／最低門檻未裁示）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6。
-- **NOT VERIFIED**：修復僅證明於當日 runner 可執行；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否設為 branch protection required check 本工作階段無權限查證。本 docs PR 號：待補。
+- **NOT VERIFIED**：修復僅證明於當日 runner 可執行；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否設為 branch protection required check 本工作階段無權限查證。本 docs PR 號：#1151。

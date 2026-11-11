@@ -1586,7 +1586,7 @@ DEC-086 規則已於 main，本表已落地。
 **GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶就 DEC-169 所列 Gate 裁示；不自設門檻、不把網路可達或條款存在當授權；完整提示語見前段，不重貼。
 
 
-## 最新接手點（2026-11-11，Issue #1144 後續「CI 環境最小修復」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-170；本 docs PR 號：待補）
+## 最新接手點（2026-11-11，Issue #1144 後續「CI 環境最小修復」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-170；本 docs PR 號：#1151）
 
 > **更正前段**：前段（含 DEC-169 接手點與更早段落）若寫「#1149 被 CI 環境阻塞／`ui2-browser` 因 apt 無法安裝 Chromium 而紅」——**已過期**。客戶已裁示「同意優先採 A，失敗再評估 B」並授權獨立最小修復；方案 A 經 CI 實證失效，方案 B（Playwright 官方容器，tag＋digest 固定）已由 PR #1150 完成並合併（main `96cb7614`）；#1149 內容未改，Update branch 後原生 CI 五項全綠並合併（main `d8d74ccd`）。**新的 GPT／Claude Code 接手點以本段為準；前段完整提示語保留不改、仍可沿用。**
 

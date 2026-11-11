@@ -1249,4 +1249,4 @@
 - **維護**：升級 Playwright 時 image tag、digest、`playwright==` pin 一併更新；不得用 `latest`。
 - **仍未授權／HOLD**：UI2 runtime 接線（停在 WIRING-GATE）、Coverage 母體新算法與最低門檻、PIT 正式語意、資料再散布最終授權、Digest A3／`market.health`／外資 L3。CI 修復不構成上述任何核准。
 - **NOT VERIFIED**：僅證明當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 branch protection required check（設定面，本工作階段無權限）。
-- **出處**：DEC-170；BACKLOG『Issue #1144 後續｜CI 環境最小修復完成』。docs PR 號：待補。不一致時以出處為準。
+- **出處**：DEC-170；BACKLOG『Issue #1144 後續｜CI 環境最小修復完成』。docs PR 號：#1151。不一致時以出處為準。
