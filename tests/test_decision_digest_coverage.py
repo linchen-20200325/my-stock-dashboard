@@ -107,7 +107,9 @@ def test_omitted_nonzero_is_incomplete():
 
 
 @pytest.mark.parametrize("field", ["excluded_invalid_rows", "unkeyed_held_count", "station_rows_unmatched",
-                                   "holdings_without_station_row"])
+                                   "holdings_without_station_row", "station_non_mapping_rows",
+                                   "holdings_non_mapping_rows", "unrecognized_action_code_rows",
+                                   "duplicate_station_ticker_rows"])
 def test_nonzero_exclusion_or_unkeyed_is_incomplete(field):
     c = complete_cov(**{field: 1})
     assert validate_coverage(c) == () and c.is_complete is False
@@ -123,7 +125,9 @@ def test_any_unused_segment_is_incomplete(seg):
 
 @pytest.mark.parametrize("field", ["actions_total_eligible", "actions_omitted_count", "excluded_invalid_rows",
                                    "unkeyed_held_count", "station_rows_unmatched",
-                                   "holdings_without_station_row"])
+                                   "holdings_without_station_row", "station_non_mapping_rows",
+                                   "holdings_non_mapping_rows", "unrecognized_action_code_rows",
+                                   "duplicate_station_ticker_rows"])
 def test_unknown_count_is_none_not_zero_and_blocks_completeness(field):
     """未知計數用 None；None 與 0 不得混淆 → is_complete 為 False。"""
     over = {field: None}
@@ -161,7 +165,8 @@ def test_total_unknown_segments_used_is_rejected():
 
 
 _UNKNOWN_ALL = dict(actions_total_eligible=None, actions_omitted_count=None, excluded_invalid_rows=None,
-                    station_rows_unmatched=None, holdings_without_station_row=None)
+                    station_rows_unmatched=None, holdings_without_station_row=None, station_non_mapping_rows=None,
+                    unrecognized_action_code_rows=None, duplicate_station_ticker_rows=None)
 
 
 def test_actions_unused_with_known_counts_rejected():
@@ -176,9 +181,14 @@ def test_actions_unused_with_known_counts_rejected():
     assert validate_coverage(ok) == () and ok.is_complete is False
 
 
-@pytest.mark.parametrize("field", ["station_rows_unmatched", "holdings_without_station_row"])
+@pytest.mark.parametrize("field", ["station_rows_unmatched", "holdings_without_station_row", "station_non_mapping_rows",
+                                   "unrecognized_action_code_rows", "duplicate_station_ticker_rows"])
 def test_actions_used_with_unknown_new_counts_rejected(field):
     assert "actions_used_with_unknown_counts" in codes(complete_cov(**{field: None}))
+
+
+def test_holdings_used_with_unknown_holdings_non_mapping_rejected():
+    assert "holdings_used_with_unknown_unkeyed" in codes(complete_cov(holdings_non_mapping_rows=None))
 
 
 def test_holdings_used_with_unknown_unkeyed_rejected():
@@ -193,7 +203,9 @@ def test_holdings_used_with_unknown_unkeyed_rejected():
 @pytest.mark.parametrize("bad", [True, False, 2.0, 1.5, "2", float("nan"), -1])
 @pytest.mark.parametrize("field", ["actions_total_eligible", "actions_shown", "actions_omitted_count",
                                    "excluded_invalid_rows", "unkeyed_held_count", "station_rows_unmatched",
-                                   "holdings_without_station_row"])
+                                   "holdings_without_station_row", "station_non_mapping_rows",
+                                   "holdings_non_mapping_rows", "unrecognized_action_code_rows",
+                                   "duplicate_station_ticker_rows"])
 def test_counts_reject_bool_float_str_negative(field, bad):
     v = validate_coverage(complete_cov(**{field: bad}))
     assert any(x.startswith(f"{field}_") for x in v), (field, bad, v)
@@ -350,6 +362,8 @@ def test_to_dict_serializes_unknown_as_null_not_zero():
     segs = tuple(unused_seg(n, "not_loaded") for n in SEGMENTS)
     c = complete_cov(actions_total_eligible=None, actions_omitted_count=None, excluded_invalid_rows=None,
                      unkeyed_held_count=None, station_rows_unmatched=None, holdings_without_station_row=None,
+                     station_non_mapping_rows=None, holdings_non_mapping_rows=None,
+                     unrecognized_action_code_rows=None, duplicate_station_ticker_rows=None,
                      digest_holdings_available=False, digest_actions_available=False, actions_shown=0, segments=segs)
     d = c.to_dict()
     assert d["station_rows_unmatched"] is None and d["holdings_without_station_row"] is None
@@ -441,6 +455,10 @@ _COMPLETENESS_FACTORS = {
     "unkeyed": dict(unkeyed_held_count=1),
     "unmatched": dict(station_rows_unmatched=1),
     "holdings_without_station_row": dict(holdings_without_station_row=1),
+    "station_non_mapping_rows": dict(station_non_mapping_rows=1),
+    "holdings_non_mapping_rows": dict(holdings_non_mapping_rows=1),
+    "unrecognized_action_code_rows": dict(unrecognized_action_code_rows=1),
+    "duplicate_station_ticker_rows": dict(duplicate_station_ticker_rows=2),
     "digest_holdings_available": dict(digest_holdings_available=False),
     "digest_actions_available": dict(digest_actions_available=False),
 }

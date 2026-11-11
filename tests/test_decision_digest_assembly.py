@@ -620,36 +620,50 @@ def test_assemble_signature_accepts_no_ui_parameters():
 # ════════════════════════════════════════════════════════════════════════
 # builder 純加性修改的 parity（固定種子隨機輸入）
 # ════════════════════════════════════════════════════════════════════════
+_NON_MAPPING_JUNK = (None, "x", 5, [], (1, 2), 3.5)
+_CODE_POOL = list(ACTION_RULE_IDS) + ["premium", "cruise", "Add", "zzz", "", None, 5, "CUT", " cut"]
+
+
+def rng_variants(t):
+    return [t] * 12 + [t.lower(), t + " ", " " + t]
+
+
 def _random_case(rng):
-    pool = [f"T{i}" for i in range(12)]
-    tickers = rng.sample(pool, rng.randrange(0, 9))
-    codes = list(ACTION_RULE_IDS) + ["premium", "cruise", "zzz", None]
+    """刻意涵蓋：非 Mapping、未知／缺／None 碼、重複 ticker、大小寫／空白、held=False／缺、premium／cruise、
+    invalid 旗標、_detail.error、缺鍵、持股缺席／額外持股。held 只用 True／False／缺（壞型別另有專測）。"""
+    pool = [f"T{i}" for i in range(7)]
     rows = []
-    for t in tickers:
-        r = {"代號" if rng.random() < .7 else "ticker": t, "_action": rng.choice(codes),
-             "建議動作": "txt-" + t, "_detail": rng.choice([{}, {}, {"error": "x"}, None])}
+    for _ in range(rng.randrange(0, 11)):
+        if rng.random() < .08:
+            rows.append(rng.choice(_NON_MAPPING_JUNK))
+            continue
+        t = rng.choice(rng_variants(rng.choice(pool)))
+        r = {"代號" if rng.random() < .7 else "ticker": t, "建議動作": "txt-" + t}
+        code = rng.choice(_CODE_POOL + ["MISSING"] * 2)
+        if code != "MISSING":
+            r["_action"] = code
         h = rng.random()
-        if h < .85:
+        if h < .78:
             r["held"] = True
-        elif h < .95:
-            r["held"] = False
-        if rng.random() < .15:
-            r[KEY_INVALID_LIGHTS] = ["a"]
+        elif h < .9:
+            r["held"] = False                              # 其餘：缺 held（視為非持有）
         if rng.random() < .1:
+            r[KEY_INVALID_LIGHTS] = ["a"]
+        if rng.random() < .06:
             r[KEY_INVALID_INPUTS] = ["b"]
+        r["_detail"] = rng.choice([{}, {}, {}, {"error": "x"}, None])
         rows.append(r)
     hold = []
-    for t in tickers:                                 # 持有列：多數同 ticker；有些大小寫不符、有些缺席
-        x = rng.random()
-        if x < .70:
-            hold.append({"ticker": t, "held": rng.random() < .85})
-        elif x < .80:
-            hold.append({"ticker": t.lower(), "held": True})
-    for t in rng.sample(pool, rng.randrange(0, 3)):   # 站內沒有的額外持股
-        if t not in tickers:
-            hold.append({"ticker": t, "held": True})
-    rng.shuffle(hold)
-    keys = {h["ticker"]: HoldingKey("pf", h["ticker"]) for h in hold if rng.random() < .8}
+    for _ in range(rng.randrange(2, 10)):
+        if rng.random() < .07:
+            hold.append(rng.choice(_NON_MAPPING_JUNK))
+            continue
+        t = rng.choice(rng_variants(rng.choice(pool)))
+        hold.append({"ticker": t, "held": rng.random() < .85} if rng.random() < .9 else {"ticker": "  ", "held": True})
+    keys = {}
+    for h in hold:
+        if isinstance(h, dict) and h["ticker"].strip() == h["ticker"] and h["ticker"] and rng.random() < .8:
+            keys[h["ticker"]] = HoldingKey("pf", h["ticker"])
     return rows, hold, keys
 
 
@@ -660,72 +674,139 @@ def _tk(r):
     return t if type(t) is str and t.strip() else None
 
 
-def _brute_excluded(rows):
-    n = 0
-    for r in rows:
+def _oracle(rows, hold, keys):
+    """獨立 oracle：逐列貼標籤（與 builder 的實作方式不同：這裡先算出持股側集合，再對每列做單一 classify）。"""
+    held_h = [h for h in hold if isinstance(h, dict) and h.get("held") is True]
+    held_tickers = {_tk(h) for h in held_h if _tk(h) is not None}
+    keyed = {keys[_tk(h)] for h in held_h if _tk(h) in keys}
+
+    def classify(r):
+        if not isinstance(r, dict):
+            return "non_mapping"
         if r.get("held") is not True:
-            continue
+            return "not_held"
         d = r.get("_detail")
         if r.get(KEY_INVALID_LIGHTS) or r.get(KEY_INVALID_INPUTS) or (isinstance(d, dict) and d.get("error")):
-            n += 1
-    return n
-
-
-def _brute_unmatched(rows, hold, keys):
-    """獨立的 oracle：held、無異常、有行動碼，但 ticker 對不上（持有且有鍵的）持股。"""
-    keyed = {keys.get(_tk(h)) for h in hold if h.get("held") is True and keys.get(_tk(h)) is not None}
-    n = 0
-    for r in rows:
-        d = r.get("_detail")
-        if (r.get("held") is True and not r.get(KEY_INVALID_LIGHTS) and not r.get(KEY_INVALID_INPUTS)
-                and not (isinstance(d, dict) and d.get("error")) and r.get("_action") in ACTION_RULE_IDS):
+            return "invalid"
+        code = r.get("_action")
+        if isinstance(code, str) and code in ACTION_RULE_IDS:
             k = keys.get(_tk(r))
-            if k is None or k not in keyed:
-                n += 1
-    return n
+            return "candidate" if (k is not None and k in keyed) else "unmatched"
+        if isinstance(code, str) and code in ("premium", "cruise"):
+            return "non_action" if _tk(r) in held_tickers and _tk(r) is not None else "unmatched"
+        return "unrecognized"
+
+    labels = [classify(r) for r in rows]
+    from collections import Counter
+    counts = Counter(labels)
+    dup = Counter(_tk(r) for r in rows if isinstance(r, dict) and r.get("held") is True and _tk(r) is not None)
+    covered = {t for t in dup}
+    h_labels = Counter("non_mapping" if not isinstance(h, dict) else "not_held" if h.get("held") is not True
+                       else ("keyed" if keys.get(_tk(h)) is not None else "unkeyed") for h in hold)
+    return dict(
+        counts=counts, candidates=[r for r, l in zip(rows, labels) if l == "candidate"],
+        duplicate_rows=sum(n for n in dup.values() if n >= 2),
+        without_station=sum(1 for h in held_h if _tk(h) is None or _tk(h) not in covered), h_counts=h_labels)
 
 
-def _brute_without_station(rows, hold):
-    covered = {_tk(r) for r in rows if r.get("held") is True and _tk(r) is not None}
-    return sum(1 for h in hold if h.get("held") is True and (_tk(h) is None or _tk(h) not in covered))
-
-
-def _parity_run(seed, cases):
+def _property_check(seed, cases):
+    """分割恆等式＋獨立 oracle＋與 build_decision_digest 的 parity。回傳涵蓋統計。"""
     rng = random.Random(seed)
-    built = unmatched_seen = without_seen = 0
+    seen = dict.fromkeys(("non_mapping", "not_held", "invalid", "non_action", "unrecognized", "unmatched",
+                          "candidate", "dup", "built"), 0)
     for _ in range(cases):
         rows, hold, keys = _random_case(rng)
         plan = plan_action_selection(station_rows=rows, station_stamp=STATION_STAMP, holdings_rows=hold, holding_keys=keys)
-        assert plan.unmatched_station_rows == _brute_unmatched(rows, hold, keys)
-        assert plan.holdings_without_station_row == _brute_without_station(rows, hold)
-        assert plan.excluded_invalid_rows == _brute_excluded(rows)
-        unmatched_seen += plan.unmatched_station_rows > 0
-        without_seen += plan.holdings_without_station_row > 0
+        o = _oracle(rows, hold, keys)
+        c = o["counts"]
+        # ① 分割恆等式（用 plan 自己的欄位，不用 oracle）：不漏列、不重複計
+        assert plan.station_rows_total == len(rows)
+        assert (len(plan.ordered) + plan.station_non_action_rows + plan.station_not_held_rows
+                + plan.excluded_invalid_rows + plan.unrecognized_action_code_rows + plan.unmatched_station_rows
+                + plan.station_non_mapping_rows) == len(rows)
+        assert (plan.holdings_non_mapping_rows + plan.holdings_not_held_rows + plan.holdings_held_keyed_rows
+                + plan.unkeyed_held_count) == plan.holdings_rows_total == len(hold)
+        # ② 與獨立 oracle 逐項相同
+        assert len(plan.ordered) == c["candidate"]
+        assert plan.station_non_mapping_rows == c["non_mapping"] and plan.station_not_held_rows == c["not_held"]
+        assert plan.excluded_invalid_rows == c["invalid"] and plan.station_non_action_rows == c["non_action"]
+        assert plan.unrecognized_action_code_rows == c["unrecognized"] and plan.unmatched_station_rows == c["unmatched"]
+        assert plan.duplicate_station_ticker_rows == o["duplicate_rows"]
+        assert plan.holdings_without_station_row == o["without_station"]
+        assert plan.holdings_non_mapping_rows == o["h_counts"]["non_mapping"]
+        assert plan.holdings_not_held_rows == o["h_counts"]["not_held"]
+        assert plan.holdings_held_keyed_rows == o["h_counts"]["keyed"]
+        assert plan.unkeyed_held_count == o["h_counts"]["unkeyed"]
+        assert sorted(t for _, _, t in plan.ordered) == sorted(r["建議動作"] for r in o["candidates"])
+        for k in ("non_mapping", "not_held", "invalid", "non_action", "unrecognized", "unmatched", "candidate"):
+            seen[k] += c[k] > 0
+        seen["dup"] += o["duplicate_rows"] > 0
+        # ③ 與 build_decision_digest 的 parity（候選／選取／無鍵數）
         try:
             d = build_decision_digest(generated_at=NOW, station_rows=rows, station_stamp=STATION_STAMP,
                                       holdings_rows=hold, holding_keys=keys)
         except ValueError as e:
             assert str(e).startswith("Decision Digest 契約違規")             # 只有 Digest 契約違規可以讓兩者分歧
             continue
-        built += 1
-        # 舊路徑：候選（保持輸入順序）→ 穩定依 Q4 序排序 → 截斷到 MAX_ACTIONS
-        keyed = frozenset(keys[_tk(h)] for h in hold if h.get("held") is True and _tk(h) in keys)
+        seen["built"] += 1
+        keyed = frozenset(keys[_tk(h)] for h in hold if isinstance(h, dict) and h.get("held") is True
+                          and _tk(h) in keys)
         legacy = sorted(B._action_candidates(rows, STATION_STAMP, keyed, keys),
                         key=lambda c: ACTION_RULE_IDS.index(c[1]))
-        assert list(plan.ordered) == legacy
-        assert list(plan.chosen) == legacy[:MAX_ACTIONS]
-        carried = [(i.target, i.rule.rule_id, i.text) for i in d.actions.items]
-        assert carried == [(k, c, t) for k, c, t in plan.chosen]
-        assert plan.total_eligible - plan.omitted_count == len(d.actions.items)
+        assert list(plan.ordered) == legacy and list(plan.chosen) == legacy[:MAX_ACTIONS]
+        assert [(i.target, i.rule.rule_id, i.text) for i in d.actions.items] == [(k, c, t) for k, c, t in plan.chosen]
         assert plan.unkeyed_held_count == d.holdings.unkeyed_count
-    return built, unmatched_seen, without_seen
+    return seen
 
 
-@pytest.mark.parametrize("seed", [20261110, 7, 99991])
-def test_plan_parity_with_build_decision_digest_on_seeded_random_inputs(seed):
-    built, unmatched_seen, without_seen = _parity_run(seed, 500)
-    assert built > 100                                      # 夠多案例真的走到「建出 Digest」
-    assert unmatched_seen > 50 and without_seen > 50        # 隨機輸入確實涵蓋 unmatched／無站內列情形
+@pytest.mark.parametrize("seed", [101, 202, 303, 404, 505])
+def test_partition_identity_oracle_and_parity_on_seeded_random_inputs(seed):
+    """每個種子 500 組（共 2500 組）。輸入刻意含非 Mapping、未知碼、重複 ticker、大小寫／空白、held=False、
+    premium／cruise、invalid 旗標、_detail.error、缺鍵；各類別都必須真的被涵蓋到。"""
+    seen = _property_check(seed, 500)
+    assert all(v > 30 for v in seen.values()), seen
+
+
+_PARTITION_FIELDS = ("non_mapping", "not_held", "excluded_invalid", "non_action", "unrecognized", "unmatched")
+
+
+@pytest.mark.parametrize("field", _PARTITION_FIELDS)
+def test_teeth_deleting_any_classification_branch_breaks_the_partition(monkeypatch, field):
+    """突變：掃描迴圈漏記某一類（等同刪掉該分類分支）→ 恆等式／oracle 必紅。"""
+    _property_check(101, 150)                                           # 基準：未突變時綠
+    real = B._scan_action_rows
+    monkeypatch.setattr(B, "_scan_action_rows",
+                        lambda *a, **k: dataclasses.replace(real(*a, **k), **{field: 0}))
+    with pytest.raises(AssertionError):
+        _property_check(101, 150)
+
+
+def test_teeth_double_counting_breaks_the_partition(monkeypatch):
+    real = B._scan_action_rows
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: dataclasses.replace(
+        real(*a, **k), unrecognized=real(*a, **k).unrecognized + 1))
+    with pytest.raises(AssertionError):
+        _property_check(101, 150)
+
+
+def test_teeth_duplicate_overlay_removed_is_caught(monkeypatch):
+    real = B._scan_action_rows
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: dataclasses.replace(real(*a, **k), duplicate_rows=0))
+    with pytest.raises(AssertionError):
+        _property_check(101, 150)
+
+
+def test_non_action_codes_pinned_to_dividend_station_constants():
+    from src.compute.etf import dividend_station as ds
+    assert set(B._NON_ACTION_CODES) == {ds.ACTION_PREMIUM, ds.ACTION_CRUISE}
+    all_codes = {v for k, v in vars(ds).items() if k.startswith("ACTION_") and isinstance(v, str)}
+    assert all_codes == set(ACTION_RULE_IDS) | set(B._NON_ACTION_CODES)    # 站內列可能的碼 ＝ 行動碼 ∪ 非行動碼
+
+
+def test_bad_held_type_still_fails_loud_in_plan_like_builder():
+    with pytest.raises(TypeError):
+        plan_action_selection(station_rows=[row("A", held="yes")], station_stamp=STATION_STAMP,
+                              holdings_rows=holdings_for("A"), holding_keys=keys_for("A"))
 
 
 def test_plan_unknown_is_none_not_zero_and_validates_types():
@@ -895,7 +976,7 @@ def test_teeth_removing_omitted_calculation_turns_the_check_red(monkeypatch):
 def test_teeth_dropping_exclusion_count_turns_the_check_red(monkeypatch):
     assert _check_excluded_counts().coverage.excluded_invalid_rows == 4
     real = B._scan_action_rows
-    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: (real(*a, **k)[0], 0, real(*a, **k)[2]))      # 突變：排除數歸零
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: dataclasses.replace(real(*a, **k), excluded_invalid=0))      # 突變：排除數歸零
     assert _check_excluded_counts().coverage.excluded_invalid_rows != 4
 
 
@@ -950,7 +1031,7 @@ def test_unmatched_not_counted_for_nonheld_invalid_nonaction_or_error_rows():
             row("C", "cut", **{KEY_INVALID_LIGHTS: ["x"]}),               # 資料異常 → 屬於 excluded，不是 unmatched
             row("D", "premium"),                                          # 非行動碼
             row("E", "cut", _detail={"error": "boom"})]                   # 資料異常
-    a = _custom(rows, holdings_for("A"), keys_for("A"))
+    a = _custom(rows, holdings_for("A", "D"), keys_for("A", "D"))        # D 在持股內 → premium 是合法非行動列
     assert a.coverage.station_rows_unmatched == 0
     assert a.coverage.excluded_invalid_rows == 2
 
@@ -969,7 +1050,7 @@ def _check_unmatched_counted():
 def test_teeth_dropping_unmatched_count_turns_the_check_red(monkeypatch):
     _check_unmatched_counted()
     real = B._scan_action_rows
-    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: (*real(*a, **k)[:2], 0))
+    monkeypatch.setattr(B, "_scan_action_rows", lambda *a, **k: dataclasses.replace(real(*a, **k), unmatched=0))
     with pytest.raises(AssertionError):
         _check_unmatched_counted()
 
@@ -1095,7 +1176,8 @@ def test_envelope_rejects_actions_unused_but_digest_carries_actions():
     forged = _swap_seg(a.coverage, SEGMENT_ACTIONS, used=False, withheld_reason="stale")
     forged = dataclasses.replace(forged, actions_total_eligible=None, actions_omitted_count=None,
                                  excluded_invalid_rows=None, station_rows_unmatched=None,
-                                 holdings_without_station_row=None)            # coverage 本身合法
+                                 holdings_without_station_row=None, station_non_mapping_rows=None,
+                                 unrecognized_action_code_rows=None, duplicate_station_ticker_rows=None)  # coverage 本身合法
     assert validate_coverage(forged) == ()
     with pytest.raises(ValueError, match="actions 段 used=False 但 digest.actions 帶有行動"):
         AssembledDigest(digest=a.digest, coverage=forged)
@@ -1193,3 +1275,92 @@ def test_station_rows_row_level_type_error_is_not_loud_when_evidence_withheld_do
         assemble_digest(**full_kwargs(0, station_rows=bad_rows, holdings_rows=holdings_for("A"),
                                       holding_keys=keys_for("A")))
     assert "已知限制" in (A.__doc__ or "")
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Issue #1127 QA 第三輪：「每一列都必須被分類」— 四個反例＋正向對照（皆 is_complete=False 才算揭露）
+# ════════════════════════════════════════════════════════════════════════
+def _complete_base_rows():
+    return [row("A", "cut"), row("B", "add")], holdings_for("A", "B"), keys_for("A", "B")
+
+
+def _with_extra(extra_station=(), extra_holdings=(), keys_extra=()):
+    st, hd, ks = _complete_base_rows()
+    return assemble_digest(**full_kwargs(0, station_rows=st + list(extra_station),
+                                         holdings_rows=hd + list(extra_holdings),
+                                         holding_keys={**ks, **keys_for(*keys_extra)}))
+
+
+def test_positive_control_legit_nonaction_row_for_held_ticker_stays_complete():
+    a = _with_extra([row("C", "premium")], holdings_for("C"), ("C",))
+    c = a.coverage
+    assert (c.station_rows_unmatched, c.unrecognized_action_code_rows, c.station_non_mapping_rows,
+            c.holdings_non_mapping_rows, c.duplicate_station_ticker_rows) == (0, 0, 0, 0, 0)
+    assert c.is_complete is True
+
+
+@pytest.mark.parametrize("code", ["Add", "zzz", None, "", 5, "CUT"])
+def test_unrecognized_action_code_is_counted_and_blocks_completeness(code):
+    a = _with_extra([row("C", code)], holdings_for("C"), ("C",))
+    assert a.coverage.unrecognized_action_code_rows == 1 and a.coverage.is_complete is False
+
+
+def test_missing_action_key_is_unrecognized():
+    r = row("C"); del r["_action"]
+    a = _with_extra([r], holdings_for("C"), ("C",))
+    assert a.coverage.unrecognized_action_code_rows == 1 and a.coverage.is_complete is False
+
+
+@pytest.mark.parametrize("junk", [None, "x", 5, [], (1, 2)])
+def test_non_mapping_station_row_is_counted_and_blocks_completeness(junk):
+    a = _with_extra([junk])
+    assert a.coverage.station_non_mapping_rows == 1 and a.coverage.is_complete is False
+
+
+@pytest.mark.parametrize("junk", [None, "x", 5])
+def test_non_mapping_holdings_row_is_counted_and_blocks_completeness(junk):
+    a = _with_extra(extra_holdings=[junk])
+    assert a.coverage.holdings_non_mapping_rows == 1 and a.coverage.is_complete is False
+
+
+@pytest.mark.parametrize("second", ["cruise", "premium", "add", "cut"])
+@pytest.mark.parametrize("first_is_action", [True, False])
+def test_duplicate_station_ticker_conflict_is_counted_in_any_order(second, first_is_action):
+    pair = [row("C", "add"), row("C", second)] if first_is_action else [row("C", second), row("C", "add")]
+    if second in ("add", "cut"):          # 兩個行動列同 ticker：plan 層級只驗計數（digest 是否 fail loud 取決於是否都入選前 3）
+        p = plan_action_selection(station_rows=pair, station_stamp=STATION_STAMP, holdings_rows=holdings_for("C"),
+                                  holding_keys=keys_for("C"))
+        assert p.duplicate_station_ticker_rows == 2 and len(p.ordered) == 2
+        return
+    a = _with_extra(pair, holdings_for("C"), ("C",))
+    assert a.coverage.duplicate_station_ticker_rows == 2 and a.coverage.is_complete is False
+    assert [i.target.symbol for i in a.digest.actions.items].count("C") == 1     # builder 既有選取行為不變
+
+
+def test_nonaction_row_whose_ticker_is_not_in_holdings_is_unmatched():
+    for code in ("cruise", "premium"):
+        a = _with_extra([row("ZZ", code)])
+        assert a.coverage.station_rows_unmatched == 1 and a.coverage.is_complete is False
+
+
+def test_nonaction_row_for_nonheld_holding_is_unmatched():
+    a = _with_extra([row("C", "cruise")], holdings_for("C", held=False), ("C",))
+    assert a.coverage.station_rows_unmatched == 1 and a.coverage.is_complete is False
+
+
+def test_new_counts_none_when_not_evaluated_and_holdings_side_known_independently():
+    a = assemble_digest(**full_kwargs(2, station_evidence=EvidenceInput(STATION_STAMP, F.STALE)))
+    c = a.coverage
+    assert (c.station_non_mapping_rows, c.unrecognized_action_code_rows, c.duplicate_station_ticker_rows) == (None,) * 3
+    assert c.holdings_non_mapping_rows == 0                            # 持有側與證據無關 → 已知
+    b = assemble_digest(**full_kwargs(2, holdings_rows=None))
+    assert b.coverage.holdings_non_mapping_rows is None
+
+
+def test_risk_cap_very_old_snapshot_is_disclosed_via_as_of_but_not_judged():
+    """不改行為：snapshot 很舊仍可 complete，但 coverage 如實揭露 as_of（不被 fresh macro 戳洗新）。"""
+    ms = macro(risk_cap_disclosure=disclosure("2025-01-01 09:00:00"))
+    a = assemble_digest(**full_kwargs(2, macro_state=ms, allocation=alloc(ms)))
+    assert seg(a, SEGMENT_RISK_CAP).as_of == date(2025, 1, 1) and seg(a, SEGMENT_MARKET).as_of == D
+    assert a.coverage.is_complete is True
+    assert "不判斷新鮮度" in (A.__doc__ or "")
