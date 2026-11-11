@@ -2222,3 +2222,10 @@
   - **`tw_pmi` staleness 登記缺口**（INFERENCE）：`tw_pmi` 不在 `CACHE_DATASET_CADENCE`，故預設 stale；補登記屬正式碼，**需另授權**。
   - **`signals.parquet` 無禁讀測試**（INFERENCE；低優先建議）：目前僅靠無 caller 防止被當 live 判斷；無授權不動。
   - 仍待裁示：G-F2～G-F6。
+
+- **UI2 市場頁 Old-UI-First 三項資料（Issue #1134；DEC-162；僅追加；皆未授權、無裁示前不動工）**：
+  - **A2 下一批候選**：先做 docs-only 文字線框草稿 Gate（新 section 建議放日 K 與核心指標卡之後；或只進 `detail`，畫面 0 變更），再另行授權最小唯讀 L3 adapter＋UI2 純事實卡。詳見 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md` §3～§4。
+  - **待客戶裁示**：線框位置；inst 是否僅外資（parquet）；紅綠語意沿用或統一（本專案法人柱正綠負紅，與台股紅漲綠跌相反）；是否納入融資。
+  - **資料層缺口**：融資『資料疑義』旗標目前僅 UI 寫死文字，資料層無逐列旗標（v3 §02 強制標記未落實），建議由 sanity 失敗列產生，屬後續。
+  - **三類法人 headless 缺口**：`finmind_inst.parquet` 僅外資，投信／自營商只在 BFI82U 單日 session 路徑。
+  - **憲法對齊建議**：`fetch_margin_balance` 實際備援鏈（FinMind→MI_MARGN→HiStock→Goodinfo→Yahoo→鉅亨）與憲法 §2.1 寫的『TWSE→HiStock→Wearn』不一致，以碼為準，待憲法對齊。

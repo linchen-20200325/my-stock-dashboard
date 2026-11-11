@@ -8079,3 +8079,11 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **不授權**（照 Issue #1132）：不改位階算法／廣度 proxy 開關／風險曝險趨勢公式／D1–D5／PIT 例外；不新增 fetcher、API、source、pipeline、job、cron、Secret；不以 session 的 `macro_state.json` 或推播 SA 冒充 headless source；不實作 P-1、Digest v2、OneBrain、production caller、UI2 真資料接線；不動登入／OAuth／Sheet、Risk Cap、舊 UI、正式路由；不動資料 PR #1124–#1126、#1119 維持 HOLD。G-F2、G-F3／A2（現有 stale fail-closed 維持）、G-F4、G-F5／G-F6 仍待另行裁示。
 - **本批結論摘要（兩位獨立 agent 二次核對，仍屬 agent 產出、未經人工複驗）**：新增 `docs/vnext/STAGE_F_GF1_HEADLESS_MARKET_CONTRACT_2026-11-11.md`——(1) 唯一已具備 headless 唯讀路徑的是加權指數日 K（`get_twii_trend_view`，UI2 已接）；(2) inst／margin／sector_flow／m1m2／pmi 可讀 git 檔但 UI2 未接、五檔皆無 `release_date`；(3) 位階／light／health／曝險輸入只在 session，現行 production 為 `unknown`／⬜；(4) `signals.parquet` 不得充當 live 判斷；(5) 對 DEC-160 研究文件列出四點二次核對更正；(6) 下一階段三方案比較，AI 推薦（非客戶裁示）先方案 1 最小可推進項、並請客戶裁示方案 2 前置問題，不建議方案 3。**本批未改任何程式、schema、旗標，非施工授權。**
 - **與 DEC-160／DEC-159 的關係**：**不取代**。DEC-160 的 Gate G-F2～G-F6 與 DEC-159 的側車設計、P-4 fail-closed 維持有效；G-F2～G-F6 仍待裁示。
+
+### DEC-162｜Issue #1134 客戶裁示轉錄：市場頁 Old-UI-First 唯讀盤點與接線設計（2026-11-11；docs-only）
+
+- **決策者**：客戶。Issue #1134 轉錄，**非逐字、非 QA PASS**。
+- **範圍（照 Issue #1134）**：僅核准 UI2 市場頁「三大法人（inst）／融資（margin）／板塊資金（sector_flow）」的 Old-UI-First 唯讀盤點、Old → Legacy New → UI2 能力對照、`source → canonical L3 read-only service (proposed) → UI2 VM (proposed)` 接線設計，以及 A1／A2／A3 三方案比較。
+- **不授權（照 Issue #1134）**：不實作 UI2 接線或 adapter；不動任何 production 程式或測試；不切換 default；不改舊 UI；不碰登入／OAuth／Sheet、Actions／workflow、Secrets、Risk Cap、G-F2～G-F6、Digest v2、OneBrain、D1～D5、EPS、廣度開關、位階演算法、資料來源／API／cron；不授權新正式指標、法人強弱／融資趨勢／資金流信號、訊號分數、權重、排名。#1124～#1126 不得順手 merge／rebase／close／改寫（#1126 PIT NOT VERIFIED）；#1119 HOLD。
+- **本批結論摘要（四位 agent 唯讀盤點，agent 產出、未經人工複驗）**：新增 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md`——(1) 三項資料在 UI2（`shared/ui2_contract`、`src/ui2`、`src/services/ui2`）皆 0 命中，UI2 完全未呈現；(2) 舊 UI 三項皆耦合判讀語言（±100 億結論卡、3400／2500 融資燈、四象限白話），UI2 不應沿用；(3) `finmind_inst.parquet` 只有外資，三類法人只能來自 session 路徑；(4) 融資『資料疑義』目前只是 UI 寫死文字，資料層無逐列旗標；(5) 手機 390×844 `nav_margin_after_risk` 餘裕僅 8.8px，新 section 須先出文字線框草稿；(6) AI 推薦（非客戶裁示）A2 分兩步，不建議 A3。**本批未改任何程式、測試、schema、旗標，非施工授權。**
+- **與 DEC-157／DEC-161 的關係**：**不取代**。DEC-157 市場頁順序與 `MARKET_CARD_IDS` 固定 6 張維持有效；DEC-161 的 G-F1 契約與缺口維持有效，本批補能力對照與接線提案。
