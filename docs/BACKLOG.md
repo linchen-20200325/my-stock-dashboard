@@ -2200,3 +2200,6 @@
   - **未啟動**：P-1 其餘、P-2、P-3、OneBrain Stage G。
   - **維持 NOT VERIFIED**：P-4 完成 ≠ Stage F 完成 ≠ C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 的 PIT。#1119 維持 HOLD。
 - **TEST-DATE-DEP-1｜`tests/test_d3e_mrev_fail_cache.py` 日期相依測試缺陷**（2026-11-11 main 起失敗；根因＝`frozen_now` fixture 未釘 `shared.macro_compute.tw_now`，被測 `shortage_screener_service._as_of_today()` 讀 tw_now，fixture 月份寫死 2025-02~2026-08，2026-11-11 起月份契約判資料不足→修前模型④月營收=0，斷言前提不成立；已於 PR #1128 以測試端 6 行修〔僅測試，非正式邏輯〕）。全 repo 其他測試的同類日期相依**未掃**；低優先待辦，無客戶指派不動（§-1）。
+- 📌 **2026-11-11｜P-4 合併後更新（只追加；取代上方 P-4 指標「待合併，PR 號待補」之效力，舊句不改）**：#1128 已 squash 合併，main `720ccbed420da1e7c6066d81c20ce71698f4bf1d`（head `05d2733c`）；同 head 原生 CI 5 項全 success、第四輪獨立 QA PASS；最後一個日期相依測試修復 commit（`TEST-DATE-DEP-1`）僅作者端驗證，未另送獨立 QA（據實）。
+  - 仍 NOT VERIFIED：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR、資料 PR #1124～#1126（PIT）；P-4 完成 ≠ Stage F／C1～C7 通過，無 production caller。#1119 HOLD。
+  - 下一步：等客戶裁示（P-1 其餘、v2 嵌入式 coverage Gate、EPS Gate、D1 實作授權），無裁示不動工（§-1）。
