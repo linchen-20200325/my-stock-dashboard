@@ -565,6 +565,7 @@ import datetime as dt  # noqa: E402
 import itertools  # noqa: E402
 import os  # noqa: E402
 import pickle  # noqa: E402
+import time  # noqa: E402
 import re  # noqa: E402
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
@@ -1325,8 +1326,14 @@ class TestPcrSource:
         for mod in (LI, c1_pre_module(_LI)):
             d = tmp_path / f"m{next(_uid)}"
             d.mkdir()
-            with open(d / (_h.md5(f"lead_fast_7_{tok}".encode()).hexdigest() + ".pkl"), "wb") as f:
+            pkl = d / (_h.md5(f"lead_fast_7_{tok}".encode()).hexdigest() + ".pkl")
+            with open(pkl, "wb") as f:
                 pickle.dump(old_df, f)
+            # TEST-DATE-DEP-1：被測碼以 `time.time() - os.path.getmtime(pkl) < 30 分` 判「新鮮」。把 mtime 釘在『被測碼
+            # 實際讀的那個時鐘（time.time）』的當下，使年齡恆為 ≈0 —— 時鐘被偽裝／凍結時（檔案 mtime 仍是真實時間）
+            # 不會誤判成過期 pickle 而走 stale／重抓路徑。真實時鐘下行為與原本相同（pickle 仍須「新鮮且原樣返回」）。
+            _t = time.time()
+            os.utime(pkl, (_t, _t))
             _li_patch(mod, monkeypatch, d, taifex=False)
             outs.append(mod.build_leading_fast(days=7, token=tok))
         pd.testing.assert_frame_equal(outs[0], outs[1])
