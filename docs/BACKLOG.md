@@ -2356,3 +2356,10 @@
 - **仍開放（直接阻塞市場資金與籌碼區塊）**：`DG-COV`（`I1140-COVERAGE-MIN`，含母體口徑；不自設百分比）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）；接線前文案項 `I1140-MARGIN-SOURCE-TEXT`／`-ETF-FAMILY-ABSENT`／`-SECTOR-CRON-SCOPE`；成因查證 `I1140-SECTOR-UNOBS-LABELS`／`-DROPPED-PRICE`（範圍已釐清，成因仍 NOT VERIFIED）。
 - **歸類更正（INFERENCE）**：G-F2、G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH` 屬 Digest／持股／登入範圍，**不是**市場資金與籌碼區塊的前提；G-F3／G-F4／G-F5 為間接關係；仍待裁示。
 - **NOT VERIFIED**：TWSE／TPEX 授權、FinMind 官網條款、OGDL 原文、來源發布日／PIT、缺日是否休市、Cloud／真機／Playwright／390／1440。本批證據單組、未經第二組獨立複驗。
+
+
+### Issue #1144 後續｜B8 NAS 中繼站備援查證（2026-11-11；只追加；不改既有列；依據 DEC-168；非施工授權）
+
+- **I1144-B8-NAS-RELAY-PROBE**：已完成（docs-only）補充文件 §9；本 docs PR 號：待補。結果：Direct 失敗；既有 Proxy 與 NAS 中繼**本環境未配置、未測試**；官方 GitHub 成功（僅 FinMind README）。授權結論無變動，`DG-LIC` 維持 NOT VERIFIED。
+- **仍開放**：`DG-LIC`（客戶可選貼條款原文／放行網域／提供已配置 NAS 的執行環境並授權唯讀 GET）、`DG-COV`、`DG-PIT`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）。
+- **未授權**：網路架構、Secrets、NAS Server、新端點、放寬認證、新排程、第二套 Proxy。

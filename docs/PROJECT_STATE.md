@@ -1220,3 +1220,12 @@
 - **待裁示**：DG-COV、DG-PIT、DG-LIC、DG-SCOPE、WIRING-GATE。
 - **NOT VERIFIED**：TWSE／TPEX 授權（全部）、FinMind 官網條款、OGDL 原文、PIT 發布日、休市表、Cloud／真機／Playwright。
 - **出處**：DEC-167；BACKLOG『Issue #1144 後續』；補充文件。不一致時以出處為準。
+
+
+### 70.9 B8「NAS 中繼站備援」後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-168，非客戶逐字）
+
+- **FACT**：客戶新增 B8——官方網站直連不通時，參考舊 UI 的 NAS 中繼方式查證；不授權改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
+- **FACT（本批實測）**：Direct 失敗（沙箱 agent proxy 對官方網域 CONNECT 403）；本環境 NAS 連線資訊與 Squid 設定皆未配置，故 NAS 路徑未測試；官方 GitHub raw 成功（僅 FinMind README）。補充文件 §9 記錄契約與安全限制（`/proxy` 無主機白名單、僅 SSRF 私網封鎖、`X-API-Key` 認證、範例 scheme 為 HTTP）。
+- **授權結論無變動**：TWSE／TPEX／OGDL 原文與 FinMind 官網條款仍 NOT VERIFIED；DG-LIC 維持 NOT VERIFIED。NAS 可達≠已授權≠PIT 合格。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、網路架構變更、第二套 Proxy。
+- **出處**：DEC-168；補充文件 §9；BACKLOG『Issue #1144 後續｜B8』。PR 號：待補。不一致時以出處為準。

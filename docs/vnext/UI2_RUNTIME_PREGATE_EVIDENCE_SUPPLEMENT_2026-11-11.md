@@ -221,3 +221,90 @@
 | 7 | 前研究 §4.1「G-F2～G-F6 不阻塞本線」 | 維持 INFERENCE，並加列「若客戶另有語意須重列」 | 仍為推論 |
 | 8 | 授權：WebSearch OGDL 線索 | 維持 NOT VERIFIED（二手） | 非原文 |
 | 9 | 三份證據全文結論 | 維持「單組、未複驗」 | §-2 規則 6；本文抽查不等於獨立複驗 |
+
+
+---
+
+## 9. B8：NAS 中繼站備援查證（2026-11-11；只追加；不改 §1～§8 任何字）
+
+> **客戶新增指示 B8（2026-11-11 對話原文）**：「如果連不上線，記得要用 NAS 中繼站，可以參考舊 UI 的方式。」
+> **授權範圍（僅此）**：官方網站（TWSE／TPEX／FinMind）直連不通時，**唯讀**參考舊 UI 既有的 NAS 中繼做法，查證授權條款原文。
+> **不授權**：修改網路架構、新增服務、改 Secrets、繞過安全限制；自建第二套 Proxy；修改 NAS Server、新增端點、放寬認證、新增排程。**NAS 成功只代表網路可達，不代表再散布已授權，也不代表 PIT 合格。**
+> **複驗程度**：本節為單組（執行 AI）產出，未經第二組獨立複驗（§-2 規則 6）。符號引用＝檔案＋符號，不寫行號。**不輸出任何 Secret／金鑰／內網位址的值，只記「是否已設定」。**
+
+### 9.1 查證路徑與結果（2026-11-11，本沙箱）
+
+| # | 路徑 | 實測 | 結果 | 原因／備註 |
+|---|---|---|---|---|
+| 1 | **Direct（直連）** | 對 TWSE 使用條款頁、TPEX 版權頁、FinMind 官網與 `finmind.github.io/Disclaimer`、`data.gov.tw/license`、`openapi.twse.com.tw` 各 GET 一次（亦以既有 `fetch_url()` 對 TWSE 條款頁測一次） | **失敗** | 本沙箱唯一對外出口是 agent proxy（Claude 沙箱代理，**不是** repo 的 NAS Squid）；對上述官方網域回 `CONNECT tunnel failed, response 403`（政策拒絕）。與上輪（`ENOTFOUND`）一致，失敗型態不同但同為網域不在放行名單 |
+| 2 | **既有 Proxy（repo 的 NAS Squid，`get_proxy_config`）** | `get_proxy_config()` 回 `None` | **未測試** | `PROXY_URL`／`NAS_PROXY_URL`／`HTTP_PROXY` 皆未設定（見 §9.3）。**不得**把環境變數 `HTTPS_PROXY`（agent proxy）當作 NAS Squid 使用或冒充 |
+| 3 | **NAS 中繼站（`nas_relay_fetch`）** | `get_nas_relay()` 回 `None`；`nas_relay_fetch()` 回 `None`（未發出任何請求） | **未測試** | NAS 連線資訊（`NAS_BASE_URL`／`NAS_RELAY_URL`／`NAS_API_KEY`）在本環境**皆未設定**；依程式設計「未設定則自動跳過」。不自行填值、不自建替代中繼 |
+| 4 | **官方 GitHub（`raw.githubusercontent.com`）** | FinMind README GET | **成功（HTTP 200）** | 與上輪相同，僅得 README 三句（見 §1.4）；**不是**官網條款全文 |
+
+**結果**：官方條款頁**一頁都沒取得**。B8 指示的 NAS 備援路徑在本環境**不可執行（未配置）**，不是「執行後被拒」。維持 NOT VERIFIED，**不突破**。
+
+### 9.2 舊 UI NAS 中繼做法的實際契約與安全限制（FACT，唯讀讀檔）
+
+來源：`src/data/proxy/proxy_helper.py`（`fetch_url`、`get_nas_relay`、`nas_relay_fetch`、`get_proxy_config`）、`src/data/proxy/nas_server.py`（`/proxy` 端點、`_auth`、`_assert_public_url`）、`SPEC.md` §9.7。
+
+| 面向 | 契約 |
+|---|---|
+| 呼叫順序（`fetch_url`） | ① 若有 Squid 設定則先走 Squid（SSL `verify=False`）；② Squid 失敗（ProxyError／403）→ 降級直連；③ 最後手段 → NAS 中繼。**NAS 中繼是純失敗路徑增益**，未設定時行為與沒有它完全一致 |
+| 設定讀取順序（Squid） | `st.secrets` 的 `PROXY_URL` → `NAS_PROXY_URL` → `[proxy]` 區段；其次環境變數 `PROXY_URL` → `NAS_PROXY_URL` → `HTTP_PROXY` → `http_proxy`。⚠️ **風險（FACT）**：若環境剛好設了 `HTTP_PROXY`（例如某些沙箱），`get_proxy_config` 會把它當 Squid 用。本環境該變數**未設定**，故未觸發 |
+| 設定讀取順序（NAS 中繼） | 環境變數 `NAS_BASE_URL`／`NAS_RELAY_URL` ＋ `NAS_API_KEY`；缺 base 時再查 `st.secrets` 同名鍵；base 為空→回 `None`（跳過） |
+| 中繼端點 | `GET`／`POST {NAS_BASE_URL}/proxy?url=<目標>`；NAS 端 server-side 代抓並**原樣轉回** Status／Content-Type／Body |
+| 認證 | 請求標頭 `X-API-Key`（對應 NAS 端環境變數 `NAS_API_KEY`）。**NAS 端若未設 key，`/proxy` 無認證開放**（程式啟動時印警告；硬性拒絕啟動屬部署行為，由客戶決定）。⚠️ **本節不評估客戶實際 NAS 是否設了 key（NOT VERIFIED）** |
+| 目的主機限制 | **沒有「主機白名單」**：`_assert_public_url` 只擋 scheme 非 http／https、無 host、以及解析到私有／loopback／link-local／保留／多播／未指定位址（SSRF 防護，每一跳轉址都檢查，最多 6 跳）。**公開網址（含 TWSE／TPEX／FinMind／data.gov.tw）原則上放行**。已知限制：不防 DNS rebinding（程式註解自陳） |
+| 逾時 | client 端預設 `timeout=15`（`fetch_url` 轉呼叫時傳入自身 timeout）；NAS 端對目標 `timeout=20` |
+| 傳輸安全 | `SPEC.md` §9.7 與 `nas_server.py` 檔頭的設定範例為 `http://…:8765`（明文 HTTP，**範例而非實際值**）；client 端 `requests.get(..., verify=False)`。**INFERENCE**：若實際部署為 HTTP，API Key 與回傳內容在傳輸途中未加密；實際 scheme **NOT VERIFIED**（本環境無設定可查） |
+| 快取／退避 | `fetch_url` 有 300 秒 URL 快取（只快取 HTTP 200）；未見指數退避 |
+| 用途定位 | 為繞過**資料中心 IP 被官方來源 403**（NDC、CIER、Google News 等）而設；是**取數**管道，**不是授權／再散布機制** |
+| GitHub Actions | 多支 workflow 以 secrets 名稱 `PROXY_URL`／`NAS_BASE_URL`／`NAS_API_KEY` 注入（例：`probe_tw_sources.yml`、`update_sector_flow.yml`、`update_macro_history.yml`）。**是否已在 GitHub 端設定：NOT VERIFIED**（本沙箱無權限、亦不應嘗試讀取 secrets） |
+
+### 9.3 本環境 NAS 連線資訊是否已配置（僅 True／False，未列印任何值）
+
+| 變數名 | 已設定？ |
+|---|---|
+| `NAS_BASE_URL` | **False** |
+| `NAS_RELAY_URL` | **False** |
+| `NAS_API_KEY` | **False** |
+| `NAS_PROXY_URL` | **False** |
+| `PROXY_URL` | **False** |
+| `HTTP_PROXY`／`http_proxy` | **False**（`HTTPS_PROXY` 為 True，但屬 agent proxy，與 repo NAS 無關） |
+| `.streamlit/secrets.toml` | 不存在（僅有 `secrets.toml.example`） |
+
+**結論**：本環境**未合法配置**NAS 中繼；未自行補值、未用 agent proxy 冒充、未建第二套中繼，亦未修改任何 Secrets／設定。
+
+### 9.4 授權表更新
+
+**無變動。** 本次未取得任何新的官方條款原文：
+
+| 來源 | §3／§1.4 結論 | §9 後 |
+|---|---|---|
+| TWSE | NOT VERIFIED | **不變**（NOT VERIFIED） |
+| TPEX | NOT VERIFIED | **不變** |
+| data.gov.tw／OGDL-Taiwan-1.0 | NOT VERIFIED（僅二手線索） | **不變** |
+| FinMind | 僅 README 三句（範圍有限） | **不變**；官網 Disclaimer 未取得 |
+
+> **取代 §3 的哪一項**：**無**。§3 的 N-1～N-4 全部維持原狀。DG-LIC 維持 NOT VERIFIED。
+
+### 9.5 邊界聲明（避免誤讀）
+
+1. **網路可達 ≠ 已授權。** 即使日後 NAS 中繼讀到條款頁，也只證明「能讀到該頁」；再散布／公開展示／衍生聚合是否被允許，須逐字讀條款並標明**適用的資料集**。
+2. **網路可達 ≠ PIT 合格。** 能抓到資料不產生 `release_date`；`fetched_at`≠`release_date` 的原則不變。
+3. **官方頁面讀取 ≠ 資料取用同意。** 條款頁是公開 HTML；經 NAS 抓條款頁與經 NAS 抓行情資料是兩件事，後者不在 B8 範圍。
+4. **INFERENCE（AI 推論，須客戶／法律判斷）**：repo 現行 production 取數（cron／NAS 路徑）能運作，**不構成**授權證據；是否「非商業」、是否公開提供衍生檔，仍屬 §7 第 1 項待裁示。
+
+### 9.6 仍 NOT VERIFIED，與客戶可選的解封方式（皆為選項，非本批授權）
+
+| # | 仍 NOT VERIFIED | 可選解封方式（客戶決定） |
+|---|---|---|
+| 1 | TWSE 條款／openapi 授權／交易資訊轉載限制 | (a) 客戶貼上官方條款原文；(b) 客戶放行沙箱網域（`www.twse.com.tw`、`openapi.twse.com.tw`）；(c) 客戶提供**已合法配置 NAS 的執行環境**，並明確授權在該環境以既有 `nas_relay_fetch`／`fetch_url` 做唯讀 GET（仍不改任何程式、Secrets、排程） |
+| 2 | TPEX 版權頁／openapi／data.gov.tw | 同上（網域：`www.tpex.org.tw`、`openapi.tpex.org.tw`、`data.gov.tw`） |
+| 3 | FinMind 官網 Disclaimer／服務條款 | 同上（網域：`finmind.github.io`、`finmindtrade.com`） |
+| 4 | OGDL-Taiwan-1.0 原文 | 同上（`spdx.org` 或 data.gov.tw 授權頁） |
+| 5 | 實際 NAS 是否設 API Key、是否 HTTPS、GitHub secrets 是否已設 | 客戶自行確認（本沙箱無權限且不應讀取） |
+
+> 備註：repo 內既有 `probe_tw_sources.yml` 為手動探針，但其腳本不含條款頁網址（`grep` 條款／版權關鍵字 0 命中）；要用它抓條款頁需改腳本，**屬程式修改，本批未授權**，僅記錄不執行。
+
+**DG-LIC 維持 NOT VERIFIED；WIRING-GATE 仍未授權；B8 不改變任何 Gate。**

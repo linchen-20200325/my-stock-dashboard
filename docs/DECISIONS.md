@@ -8224,3 +8224,27 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 | **NOT VERIFIED** | TWSE／TPEX 授權全部；FinMind 官網條款全文；OGDL 原文（僅二手線索）；來源發布日／PIT／修訂；缺日是否休市；Cloud、iOS／Android 真機、Playwright／viewport（390／1440）；真實 macro_state 端到端 |
 
 - **有效讀法**：DEC-166 的「仍待客戶裁示」中，客戶已就方案選擇裁示「B」；其餘 Gate 不因此關閉。沉默不等於同意。
+
+
+### DEC-168｜Issue #1144 後續：客戶新增指示 B8——官方網站直連不通時，參考舊 UI 的 NAS 中繼站方式查證（2026-11-11；只追加；依客戶對話原文轉錄；明確**非**網路架構變更授權，非 QA PASS）
+
+- **客戶原文（2026-11-11 對話，B8）**：「如果連不上線，記得要用 NAS 中繼站，可以參考舊 UI 的方式。」
+- **授權範圍（僅此）**：承 DEC-167「同意 B」，在 TWSE／TPEX／FinMind 條款查證遇到直連不通時，**唯讀**檢視舊 UI 既有的 NAS 中繼做法（`proxy_helper.fetch_url`／`nas_relay_fetch`／`nas_server` 的 `/proxy`），並在**已合法配置**的前提下以既有函式做唯讀 GET 官方公開條款頁。
+- **未授權（限制）**：修改網路架構、新增服務、修改 Secrets、繞過安全限制；自建第二套 Proxy；修改 NAS Server、新增端點、放寬認證、新增排程；任何程式、投資規則、資料來源、UI runtime、Schema 修改。**本裁示不是 runtime 接線授權，`I1144-WIRING-GATE` 仍未授權。**
+- **結果（FACT，本批 docs-only，2026-11-11）**：
+  - Direct：**失敗**（沙箱出口 agent proxy 對官方網域回 CONNECT 403）。
+  - 既有 Proxy（repo NAS Squid）：**未測試**——`PROXY_URL`／`NAS_PROXY_URL`／`HTTP_PROXY` 皆未設定。
+  - NAS 中繼：**未測試**——`NAS_BASE_URL`／`NAS_RELAY_URL`／`NAS_API_KEY` 在本環境皆未設定（僅記 True／False，未列印任何值）。
+  - 官方 GitHub raw：**成功**，但僅 FinMind README 三句。
+  - 沙箱的 `HTTPS_PROXY` 是 agent proxy，**不是** NAS，未被拿來冒充。
+  - 契約與安全限制摘要（`/proxy` 無主機白名單、僅 SSRF 私網封鎖；認證為 `X-API-Key` 且 NAS 端未設 key 時無認證；範例 scheme 為 HTTP、client `verify=False`）見補充文件 §9.2。
+- **授權結論**：**無變動**。TWSE／TPEX／OGDL 原文仍 NOT VERIFIED，FinMind 仍僅 README 三句，DG-LIC 維持 NOT VERIFIED；補充文件 §9 未取代 §3 任何一項。
+- **仍待客戶裁示**：`DG-LIC`（可選：貼條款原文／放行沙箱網域／提供已配置 NAS 的執行環境並明確授權唯讀 GET）、`DG-COV`、`DG-PIT`、`DG-SCOPE`、`WIRING-GATE`。NAS 實際是否設 API Key、是否 HTTPS、GitHub secrets 是否已設，須客戶自行確認。
+- **有效讀法**：NAS 可達只代表網路可達，不代表再散布已授權，也不代表 PIT 合格；沉默不等於同意。
+
+| 類別 | 項目 |
+|---|---|
+| **已完成** | B8 唯讀查證與補充文件 §9（docs-only） |
+| **已授權** | 唯讀參考舊 UI NAS 中繼做法、在已配置前提下唯讀 GET 官方條款頁（本 DEC） |
+| **未授權** | 網路架構／Secrets／NAS Server／端點／認證／排程變更、第二套 Proxy、UI2 runtime 接線、coverage 門檻值 |
+| **NOT VERIFIED** | TWSE／TPEX 授權全部；FinMind 官網條款；OGDL 原文；NAS 實際部署設定；GitHub secrets 是否已設；PIT 發布日 |
