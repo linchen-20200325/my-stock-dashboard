@@ -22,7 +22,7 @@
 | 資料來源與更新 | 即時：`fetch_institutional`→TWSE BFI82U（NAS Squid proxy，`ttl=TTL_30MIN`，`_parse_bfi82u_rows`，回 `InstNetDict`〔`shared/inst_net.py`，含 `unobserved_net`〕）。口徑 `shared/inst_labels.py`：外資＝外資及陸資，**不含**外資自營商。git 追蹤檔 `data_cache/finmind_inst.parquet`：4939 列、2006-09-29～2026-11-09，欄位 `date`／`foreign_buy`(億元)／`source`／`fetched_at`，**只有外資，無投信、無自營商**。`source` 4920 列為 `…:Foreign`（舊口徑，2017-12-18 前含外資自營商）、19 列為 `…:Foreign_Investor`。更新：`update_macro_history.yml` cron `0 9 * * *`（UTC）→`publish_data_pr` 開 `auto/data-macro-history` PR | FACT |
 | canonical service | `macro_cache_reader`：`load_parquet_safe`、`read_cache_metadata`、`compute_cache_staleness('finmind_inst')`（登記 daily）；`load_extreme_risk_legs` 內 `_leg_series` 只輸出 `foreign_5d_yi`／`foreign_date`。**無『最新交易日外資億元＋as_of＋stale』專用函式**。三類（外資／投信／自營）只能來自 BFI82U 單日（`cl_data['inst']`，session 路徑，L1 取數），**不是 parquet** | FACT |
 | as_of／stale／missing | parquet 路徑：`compute_cache_staleness`，`STALE_DAYS_DAILY=7` 日曆天；`metadata.datasets.finmind_inst` 無 `fetch_outcome` 欄（失敗訊息落地處 NOT VERIFIED）。今日 11-11、最新列 11-09，屬 7 日內，**INFERENCE：非 stale**。單日路徑：`InstNetDict.unobserved_net` 區分未觀測與 0 | FACT／INFERENCE |
-| 公式與投資判讀耦合 | 同一資料餵 `foreign_net` 燈（`shared/lamp_direction_thresholds.py`）、總經紅綠燈、市場評估外資訊號；±100 億 inline literal；建議行動文字＝判讀語言。**本專案法人柱狀圖『正＝綠、負＝紅』，與台股紅漲綠跌相反** | FACT |
+| 公式與投資判讀耦合 | 同一資料餵 `foreign_net` 燈（`shared/lamp_direction_thresholds.py`）、總經紅綠燈、市場評估外資訊號；±100 億 inline literal；建議行動文字＝判讀語言。**現碼法人柱狀圖（`section_chips.py::_bc_spec`）：外資藍、投信綠、自營金，負值紅；正負值色彩語意是否沿用屬客戶裁示** | FACT |
 | 測試 | 檔名：`test_inst_sanity`、`test_inst_outlier_wiring_v19_135`、`test_batch_z33`(`_inst`)、`test_batch_z40`、`test_x2_dl_f1_s56_inst_missing_name`、`test_b2_consumer_consistency`、`test_macro_traffic_light_none_inst`、`test_lamp_foreign_net_wiring` | FACT（檔名）；內容未逐一讀、未執行＝NOT VERIFIED |
 | NOT VERIFIED | TWSE BFI82U／FinMind 授權與再散布條款；2017-12-18 前後口徑斷點是否在任何下游被處理；`fetch_outcome` 落地處 | NOT VERIFIED |
 
@@ -36,8 +36,8 @@
 | 資料來源與更新 | `data_cache/finmind_margin.parquet`：4939 列，欄位 `date`／`margin_balance`(int64，**元**)／`source`／`fetched_at`，2006-09-29～2026-11-09；最新 539,915,741,000 元＝**5,399 億**；全史 900.7～6,533 億。`source` 字串 `FinMind:TaiwanStockTotalMarginPurchaseShortSale:MarginPurchaseMoney:TodayBalance`。即時 `fetch_margin_balance` 備援鏈（以碼為準）：FinMind→MI_MARGN〔TWSE〕→HiStock→Goodinfo→Yahoo→鉅亨，`TTL_30MIN`，回純 float、**無 as_of**。更新同 1.1（macro-history cron） | FACT |
 | canonical service | **無融資專屬 L3 service**。圖用序列 `macro_cache_reader.load_v2_chart_series()`→`{'margin': Series(億)}`，其 `.attrs` 帶 `is_stale`／`stale_reason`／`as_of`／`age_days`／`upstream_error`。單值 `cl_data['margin']` 無 as_of | FACT |
 | as_of／stale／missing | 序列路徑具備（見上）；單值路徑沒有。相鄰日期最大間隔 13 天、多在 2 月（春節，**推測**） | FACT／NOT VERIFIED（春節成因） |
-| 單位混用與防線 | 成因（`shared/margin_schema.py` docstring）：舊 cron 取多 name 列（元／張／不明）去重，2006-07-17～2026-08-04 共 4929 列，約 40% 元、36% 張、25% 不明。已修在來源：`extract_margin_money_series` 只取 Money 列與當日餘額欄；`margin_money_to_yi` ÷1e8 並過 sanity [500, 10000] 億，不過回 None。現檔 0 列落 sanity 外。**8 月混用列是修掉或重建＝NOT VERIFIED** | FACT／NOT VERIFIED |
-| **資料疑義旗標缺口** | 『資料疑義』目前**只是 UI 寫死文字，資料層無逐列旗標**。v3 §02 要求的強制標記**未在資料層落實** | FACT |
+| 單位混用與防線 | 成因（`shared/margin_schema.py` docstring）：舊 cron 取多 name 列（元／張／不明）去重，2006-07-17～2026-08-04 共 4929 列，約 40% 元、36% 張、25% 不明。已修在來源：`extract_margin_money_series` 只取 Money 列與當日餘額欄；`margin_money_to_yi` ÷1e8 並過 sanity (500, 10000) 億（開區間，`margin_sanity_ok` 用 <），不過回 None。現檔 0 列落 sanity 外。**8 月混用列是修掉或重建＝NOT VERIFIED** | FACT／NOT VERIFIED |
+| **資料疑義旗標缺口** | 『資料疑義』目前**只是 UI 寫死文字，資料層無逐列旗標**（`tab_macro_v2` 另有 `hold_reason`／『⚠️ 圖表資料疑義』，屬卡片層，非逐列資料層旗標）。v3 §02 要求的強制標記**未在資料層落實** | FACT |
 | 公式與投資判讀耦合 | 門檻已失準：`shared/relative_thresholds.py` 寫明 5,148 億已超兩線、燈永遠紅；最新 5,399 億。另有 `margin_leverage_ratio`（融資／總市值）。`MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI=3400.0`、`MARGIN_BALANCE_WARN_THRESHOLD_YI=2500.0`（`shared/signal_thresholds.py`）。紅黃綠與建議行動文字＝判讀語言，**UI2 不應沿用** | FACT |
 | 測試 | 檔名：`tests/test_b3_margin_schema.py`、`test_h1_margin_label_and_registry.py`、`test_pr_n5_fetch_margin.py`（只讀名稱、未執行） | NOT VERIFIED（內容與結果） |
 | UI2 若呈現必須沿用 | 只取 Money 列、÷1e8、sanity 過濾、失敗回 None | FACT（既有防線） |
@@ -66,7 +66,7 @@
 - **sections**：`onebrain`(L1)／`why`(L2)／`detail`『指標明細（16 項）』(L3)／`raw`(L3)＋`kbar`。`views/_page.py::render_sections` 預設**不渲染** L2／L3，只有 `SHOWN_FOLDS` 三項（`target.conditions`、`me.digest`、`me.registry`）會收合顯示。
 - **現況**：三項資料在 `shared/ui2_contract`、`src/ui2`、`src/services/ui2`（含 `scenarios.py`）0 命中；FAKE 六場景無法人／融資／板塊假資料；Primary 空槽只在無 `kbar` 時出現，不適合承載。
 - **守衛**：G2／G2F（`real_feed` 精確名稱白名單 `G2F_IMPORT_ALLOWLIST`，目前僅 `get_twii_trend_view`、`get_macro_regime` 與 `real_canonical` 名稱）／G4／G9；`ui2-browser` lane（Streamlit 1.56／1.59.2）。
-- **手機餘裕**：390×844 `nav_margin_after_risk=168.8px`，門檻 160px，**餘裕僅 8.8px**（`viewport_measurements.json`）。插在風險與日 K 之間必破；放日 K 之後不影響此錨點，但仍須過 `content_not_covered_by_nav` 與 `market_stress_reachable`。
+- **手機導覽餘裕（據實）**：390×844 Real feed、p4_market 的 `nav_margin_after_risk=168.8px` 是 `docs/vnext/newui2_realfeed/viewport_measurements.json` 的量測值（FACT）。160px 門檻（`P2_NAV_MARGIN_MIN_PX`）依 `tests/ui2_viewport/measure_viewport.py` 僅套用於 `P2_NAV_MARGIN_SCENARIOS=("stale","unavailable")` 的手機場景，**不含 Real**；Real 場景的合格門檻以客戶線框與實測為準（NOT VERIFIED）。因此「8.8px 餘裕、放日 K 之前必破」**不是承重論據**，僅為 INFERENCE：在風險與日 K 之間插入新 section 會抬高其下內容、侵蝕任何手機餘裕。**AI 推薦（非客戶裁示）**：新 section 放日 K 之後，理由是不動既有首屏錨點、降低回歸風險；仍須過 `content_not_covered_by_nav` 與 `market_stress_reachable`。
 - **畫面結構門檻**：新增 section／卡片／欄位＝畫面結構改變，須先出**文字線框草稿**等客戶拍板（`CLAUDE.md` §-1.5 v3 §03-2①）。只放進 `detail`／`raw` 則畫面 0 變更。
 - **回滾**：預設 FAKE，Real 由 `ui2_feed` 切換，`app.py` production 不引用；還原白名單與 feed 即可。
 
@@ -98,17 +98,17 @@
 
 | 面向 | A1 僅文件映射＋誠實未提供 | A2 下一批另行授權：最小唯讀 L3 adapter＋UI2 純事實卡 | A3 擴大到法人／融資／產業趨勢訊號判讀與打分 |
 |---|---|---|---|
-| 正確性／風險 | 零 runtime 風險；無新可見值 | 低～中：單位（融資）、口徑（外資含／不含自營商）、stale 語意、手機 8.8px 餘裕 | 高：投資語意、PIT、資料授權；本批**不核准** |
+| 正確性／風險 | 零 runtime 風險；無新可見值 | 低～中：單位（融資）、口徑（外資含／不含自營商）、stale 語意、手機導覽餘裕（INFERENCE，見 §2） | 高：投資語意、PIT、資料授權；本批**不核准** |
 | 速度 | 最快（已完成於本文） | 中（INFERENCE：2 步，含客戶拍板線框） | 慢 |
 | Token／維護成本（INFERENCE） | 0 檔程式 | 估 5～8 個程式檔＋3～5 個測試檔、QA 2～3 輪 | 大量；含資料授權與 PIT 稽核 |
 | 對 UI2 切換幫助 | 無新值，市場頁仍缺三項 | 補齊 Old-UI-First 缺口中最基本的純事實 | 超出切換所需 |
 
 **AI 推薦（非客戶裁示）：A2，且分兩步。**
 
-1. **步驟 1＝docs-only 文字線框草稿**：新 section 位置建議放在**日 K 與核心指標卡之後**，避免侵蝕 8.8px 餘裕；需客戶拍板。或選擇只進 `detail` 區（畫面 0 變更）。
+1. **步驟 1＝docs-only 文字線框草稿**：新 section 位置 AI 推薦放在**日 K 與核心指標卡之後**（不動既有首屏錨點、降低回歸風險；非 8.8px 論據）；需客戶拍板。或選擇只進 `detail` 區（畫面 0 變更）。
 2. **步驟 2＝授權後最小實作**。初版範圍建議：margin（億＋as_of＋stale）、sector_flow 最新交易日淨額 Top／Bottom N、inst 僅外資（parquet）。三類法人與融資『資料疑義』資料層旗標列為後續 Gate。
 
-**A2 的前置**：客戶裁示（線框；是否納入 inst 僅外資；紅綠語意沿用或統一〔本專案法人柱正綠負紅，與台股紅漲綠跌相反〕；是否納融資）；各上游授權與再散布條款（NOT VERIFIED）。
+**A2 的前置**：客戶裁示（線框；是否納入 inst 僅外資；正負值色彩語意是否沿用〔現碼負值紅，外資藍／投信綠／自營金〕；是否納融資）；各上游授權與再散布條款（NOT VERIFIED）。
 
 ---
 
@@ -119,7 +119,7 @@
 3. 8 月融資混用列是修掉或重建；相鄰日期最大間隔 13 天（2 月）成因為推測。
 4. `metadata.datasets.finmind_inst` 無 `fetch_outcome`，失敗訊息落地處未知。
 5. 三類法人（外資／投信／自營）headless 缺口：parquet 僅外資。
-6. 融資『資料疑義』資料層逐列旗標缺（目前僅 UI 寫死文字）。
+6. 融資『資料疑義』資料層逐列旗標缺（目前僅 UI 寫死文字；tab_macro_v2 另有 `hold_reason`／『⚠️ 圖表資料疑義』機制，屬卡片層，不是逐列資料層旗標）。
 7. 融資備援鏈與憲法 §2.1 不一致（以碼為準）。
 8. `page_target`／`build_sector_flow_card` 與評分／行動『無耦合』未驗證；`n_dropped_missing_price=15761` 含義。
 9. Open PR #1124～#1126 PIT 未獨立判定（#1126 PIT NOT VERIFIED）；#1119 HOLD。

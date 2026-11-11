@@ -1452,4 +1452,4 @@ DEC-086 規則已於 main，本表已落地。
   - **基準**：main `a6155dde`；**本批 PR 號待補**。本批為 docs-only：新增 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md`（三大法人／融資／板塊資金的 Old → Legacy New → UI2 能力對照、接線提案、A1／A2／A3 比較）；DECISIONS 追加 DEC-162；BACKLOG 追加。未改任何程式或測試。
   - **更正（追加，舊段不改）**：上一段「Issue #1132」接手點寫「本批 PR 號待補」；實際 PR 為 **#1133**，已於 main `a6155dde` squash 合併（同 head `90c33509` 原生 CI 5 項 success；兩輪獨立 QA：第一輪 FAIL 已修，第二位複驗 PASS）。
   - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換。
-  - **下一個唯一安全工作**：等客戶裁示（線框位置、inst 僅外資、紅綠語意、是否納融資）；無裁示前不動工（`CLAUDE.md` §-1）。
+  - **下一個唯一安全工作**：等客戶裁示（線框位置、inst 僅外資、正負值色彩語意是否沿用（現碼負值紅）、是否納融資）；無裁示前不動工（`CLAUDE.md` §-1）。
