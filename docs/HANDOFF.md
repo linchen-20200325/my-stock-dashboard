@@ -1447,3 +1447,9 @@ DEC-086 規則已於 main，本表已落地。
   - **不可動項**：資料 PR #1124／#1125／#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標 `BREADTH_PROXY_SCORING_ENABLED`；runtime 接線；P-1／Digest v2／production caller。
   - **仍 NOT VERIFIED**：各上游授權／再散布、Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次排程。完成本批 ≠ Stage F ≠ C1～C7 通過。
   - **下一個唯一安全工作**：等客戶裁示（方案 2 前置問題、G-F2～G-F6）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1134；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-162 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `a6155dde`；**本批 PR 號待補**。本批為 docs-only：新增 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md`（三大法人／融資／板塊資金的 Old → Legacy New → UI2 能力對照、接線提案、A1／A2／A3 比較）；DECISIONS 追加 DEC-162；BACKLOG 追加。未改任何程式或測試。
+  - **更正（追加，舊段不改）**：上一段「Issue #1132」接手點寫「本批 PR 號待補」；實際 PR 為 **#1133**，已於 main `a6155dde` squash 合併（同 head `90c33509` 原生 CI 5 項 success；兩輪獨立 QA：第一輪 FAIL 已修，第二位複驗 PASS）。
+  - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換。
+  - **下一個唯一安全工作**：等客戶裁示（線框位置、inst 僅外資、正負值色彩語意是否沿用（現碼負值紅）、是否納融資）；無裁示前不動工（`CLAUDE.md` §-1）。
