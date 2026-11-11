@@ -1201,3 +1201,12 @@
 **限制與 NOT VERIFIED**：TWSE／TPEX／FinMind 再散布授權原文、parquet 缺 `release_date` 的 PIT、Streamlit Cloud、iOS／Android 真機、Playwright／viewport、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT 皆**未驗**。#1119 維持 HOLD；#1124～#1126 未處置。
 
 **出處**：`docs/DECISIONS.md` DEC-164、DEC-165；`docs/BACKLOG.md`『Issue #1140』『Issue #1144』；`docs/HANDOFF.md` Issue #1144 接手點。與出處不一致時**以出處為準**。
+
+
+### 70.7 A2 已上線後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-166，非客戶逐字）
+
+- **FACT**：Digest builder A2 已在 main（PR #1146，`d4f7b3f6a64d177b7ee0953dc22563adf59120e4`）：`_market_section` 對 `market.regime`／`market.light` 以由 `REGIME_LIGHT` 推導的白名單驗證，名單外非空值判 `INVALID`；凍結 Schema 未動。更正 §70.6 表中「A2 已授權、尚未實作」→ 已完成。
+- **FACT**：UI2 runtime 接線前置 Gate 研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`），內含 DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE；AI 推薦方案 B 為 RECOMMENDATION，非裁示。
+- **仍未授權**：UI2 runtime 接線、A3、`market.health` 範圍、外資 L3；最低 coverage 與 G-F2～G-F6 待客戶裁示。
+- **NOT VERIFIED**：上游授權、PIT `release_date`、Cloud、真機、Playwright、真實 macro_state。
+- **出處**：DEC-166；BACKLOG『Issue #1144 結果』；HANDOFF 最新接手點。不一致時以出處為準。

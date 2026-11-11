@@ -1534,3 +1534,18 @@ DEC-086 規則已於 main，本表已落地。
 5. 禁止：改 shared/decision_digest*.py 凍結檔、normalize_regime、get_macro_state、Risk Cap、公式/燈號/D1–D5/EPS/廣度；Digest v2、OneBrain runtime、production caller；接 UI／上線／外資 L3／新來源/API/排程；OAuth/Sheet/舊 UI；#1119/#1124～#1126。
 6. 流程：每線獨立 branch/PR；實作與驗收分離（非作者 QA）；同 head 原生 CI 全綠、mergeable clean、0 unresolved 才合併；合併後重查 main。context 不安全時依第 32 節先落盤再換對話。最終回報 ≤5 行；未驗證項明說。
 ```
+
+
+---
+
+## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：待補）
+
+> **更正**：前段『Issue #1144 接手點』所寫「A2／研究已授權、尚未施工」**已過期**——A2 已完成（PR #1146，main `d4f7b3f6a64d177b7ee0953dc22563adf59120e4`），B 線研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`，獨立 QA PASS）。前段其餘內容（含完整 GPT／Claude Code 提示語）保留不改。
+
+- **Current Task**：無。
+- **下一個唯一安全接手點**：等客戶就 DEC-166 所列 Gate（最低 coverage、G-F2～G-F6、`WIRING-GATE`、A3、health 範圍、外資 L3）裁示；**無裁示即停手**（CLAUDE.md §-1）。AI 推薦方案 B 僅 RECOMMENDATION。
+- **未授權**：UI2 runtime 接線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller；#1119 HOLD、#1124～#1126 不碰。
+- **NOT VERIFIED**：上游授權、PIT、Cloud、真機、Playwright、真實 macro_state。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-166／DEC-165 與本段；無客戶新裁示不動工；完整提示語見前段『Issue #1144 接手點』，不重貼。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶裁 DEC-166 Gate；完整提示語見前段，不重貼。

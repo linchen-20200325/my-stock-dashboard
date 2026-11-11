@@ -8180,3 +8180,29 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 | **NOT VERIFIED** | Streamlit Cloud UI2、iOS／Android 真機、Playwright／瀏覽器 viewport、TWSE／TPEX／FinMind 再散布授權、parquet `release_date`／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT |
 
 - **證據出處**：Issue #1144 本文（LIVE Gate 快照：#1141 head `4fefb9f0` CI 42993625770；#1142 head `7c7532ad` CI 43002344807；#1143 head `87e1170bf7c186adf2a47cb1d46c4b5f8cf691ad` CI 43005805156；Open PR 僅 #1124／#1125／#1126）。⚠️ 以上 head／CI 編號為 Issue 撰寫時快照轉錄，本撰寫組未於本回合另行查驗 PR 頁，**NOT VERIFIED by this docs author**；接手者須重查 LIVE GitHub。
+
+
+### DEC-166｜Issue #1144 執行結果：A2 已完成（PR #1146）；B 線前置 Gate 研究文件已產出；仍待客戶裁示事項（2026-11-11；只追加；AI 總管事實更新，非客戶裁示）
+
+- **來源／效力**：本條為 AI 總管對執行結果的事實記錄，**不是客戶新裁示**；其中「AI 推薦」屬 RECOMMENDATION。本 docs PR 號：待補。
+
+#### 一、已完成（FACT）
+
+- **A 線 Digest A2**：PR #1146 已 squash 合併，main `d4f7b3f6a64d177b7ee0953dc22563adf59120e4`；同 head `3c534de` 五項 CI success；獨立 QA PASS（diff 僅 2 檔；突變測試 30 項 failed 轉紅；邊界手測）。QA 觀察（非缺陷）：非 str 的非空值走既有路徑→MISSING；全形與 VS16 字元判 INVALID。範圍仍僅 `_market_section` 輸入邊界，未改凍結 Schema。
+- **B 線研究文件已產出**：`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`（唯讀、docs-only）。獨立 QA PASS，附三項小修已修（§1.1 標籤映射未查證補註、§3 授權敘述改為有界說法、§4.1 G-F5 引用改指 DEC-164 §四原文）。
+- 研究文件內含 Gate：`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`／`WIRING-GATE`。**RECOMMENDATION（非裁示）**：AI 推薦方案 B；是否採用待客戶裁示。
+
+#### 二、仍待客戶裁示（未裁示，不得視為已核准）
+
+最低 coverage 門檻；`G-F2～G-F6`；UI2 runtime 接線 Gate（`WIRING-GATE`）；Digest A3；`market.health` 0–100 範圍；外資 L3。
+
+#### 三、狀態分欄
+
+| 類別 | 內容 |
+|---|---|
+| **已完成** | A2（#1146）；B 線研究文件（待本 docs PR 合併入 main） |
+| **已授權、未施工** | 無（DEC-165 授權範圍已全數產出） |
+| **未授權** | UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller |
+| **NOT VERIFIED** | TWSE／TPEX／FinMind 再散布授權原文、parquet `release_date`／PIT、Streamlit Cloud、iOS／Android 真機、Playwright／viewport、真實 macro_state 端到端 |
+
+- **有效讀法**：DEC-165 三、四中「A2 已授權、尚未完成」自本條起讀作「A2 已完成（#1146）」；授權≠接線授權的限制不變。
