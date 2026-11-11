@@ -1565,13 +1565,13 @@ DEC-086 規則已於 main，本表已落地。
 ## 最新接手點（2026-11-11，Issue #1144 B8「NAS 中繼站備援」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-168）
 
 - **客戶指示 B8**：「如果連不上線，記得要用 NAS 中繼站，可以參考舊 UI 的方式。」僅授權唯讀查證，**不授權**改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
-- **已完成**：補充文件 §9（PR 號：待補）。本環境 NAS 連線資訊**全未設定**（NAS_BASE_URL／NAS_RELAY_URL／NAS_API_KEY／NAS_PROXY_URL／PROXY_URL＝False）；沙箱 `HTTPS_PROXY` 是 agent proxy，不是 NAS，勿冒充。Direct 失敗、NAS 未測試、官方 GitHub 成功（僅 FinMind README）。
+- **已完成**：補充文件 §9（PR 號：#1149）。本環境 NAS 連線資訊**全未設定**（NAS_BASE_URL／NAS_RELAY_URL／NAS_API_KEY／NAS_PROXY_URL／PROXY_URL＝False）；沙箱 `HTTPS_PROXY` 是 agent proxy，不是 NAS，勿冒充。Direct 失敗、NAS 未測試、官方 GitHub 成功（僅 FinMind README）。
 - **授權結論無變動**；`DG-LIC` 維持 NOT VERIFIED。**停點仍是 `WIRING-GATE`。**
 - **待客戶**：貼條款原文／放行沙箱網域／提供已配置 NAS 的環境並授權唯讀 GET，三擇一或另議；以及 DG-COV／DG-PIT／DG-SCOPE。
 - **一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-168／DEC-167 與補充文件 §9；無客戶新裁示不動工。
 
 
-## 最新接手點（2026-11-11，Issue #1144 後續「Coverage 母體收斂＋官方條款證據」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-169；本 docs PR 號：待補）
+## 最新接手點（2026-11-11，Issue #1144 後續「Coverage 母體收斂＋官方條款證據」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-169；本 docs PR 號：#1149）
 
 > **更正前段**：前段（DEC-166／167／168 接手點）寫「等客戶裁 Gate」仍有效；本段補述客戶已授權的**第二批 docs-only 查證**已完成，Gate 一個都沒有關閉。**新的 GPT／Claude Code 接手點以本段為準。**
 
