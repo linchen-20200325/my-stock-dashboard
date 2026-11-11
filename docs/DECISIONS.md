@@ -8161,7 +8161,7 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 #### 二、長期禁止清單（沿用並重申；與 DEC-160～164 疊加，不取代）
 
-Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／付費；production caller（**A2 僅 builder 為例外**）；UI2 runtime 接線／正式 UI 上線；公式／燈號／Risk Cap／D1–D5／EPS／廣度；OAuth／Sheet；舊 UI；正式路由；#1119 維持 HOLD；#1124～#1126 不碰（不得順手 merge／rebase／改寫／close；#1126 PIT 未驗）；L3（#1142 已合併、未接 UI）不重做；外資 L3 另案。
+Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／付費；production caller（**A2 僅 builder 為例外**）；UI2 runtime 接線／正式 UI 上線；公式／燈號／Risk Cap／D1–D5／EPS／廣度；OAuth／Sheet；舊 UI；正式路由；#1119 維持 HOLD；#1124～#1126 不碰（不得順手 merge／rebase／改寫；#1126 PIT 未驗）；L3（#1142 已合併、未接 UI）不重做；外資 L3 另案。
 
 #### 三、與既有 DEC／文件的有效讀法（只追加；舊文不改）
 
