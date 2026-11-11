@@ -8206,3 +8206,21 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 | **NOT VERIFIED** | TWSE／TPEX／FinMind 再散布授權原文、parquet `release_date`／PIT、Streamlit Cloud、iOS／Android 真機、Playwright／viewport、真實 macro_state 端到端 |
 
 - **有效讀法**：DEC-165 三、四中「A2 已授權、尚未完成」自本條起讀作「A2 已完成（#1146）」；授權≠接線授權的限制不變。
+
+
+### DEC-167｜Issue #1144 後續：客戶裁示「同意 B」——UI2「市場資金與籌碼」先完成唯讀證據補強、不進正式 runtime 接線（2026-11-11；只追加；依客戶對話原文轉錄，非 QA PASS）
+
+- **客戶原文（2026-11-11 對話）**：「同意 B」。方案 B＝UI2「市場資金與籌碼」先完成唯讀證據補強，不進行正式 UI runtime 接線。
+- **授權範圍（僅此）**：Coverage／板塊／ETF 家族、PIT、TWSE／TPEX／FinMind 授權、G-F2～G-F6 與接線 Gate 阻塞的**唯讀研究**；研究文件＋三方案比較＋SSOT 只追加。
+- **未授權（限制）**：任何程式、投資規則、資料來源、UI runtime、Schema 修改；不接線、不改 `G2F_IMPORT_ALLOWLIST`／real_feed／VM／views；不自設 coverage 百分比；A、C 方案僅未來候選，**不是施工授權**。**本裁示不是 runtime 接線授權，停在 `WIRING-GATE`（`I1144-WIRING-GATE` 仍未授權）。**
+- **已完成（FACT，本批 docs-only）**：補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md`（補強 `UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`，不取代）。要點：41 板塊＝窗口內標籤聯集、未觀測 3 者為單檔偶發標籤（INFERENCE：分類噪音）；15761 僅最近一次 cron 範圍；現有資料算不出個股覆蓋率；三資料集無 `release_date`；FinMind 僅 README 三句（範圍有限）。撰寫組對三份單組證據做了抽查並降級數項（見補充文件 §8）；**仍是單組，未經第二組獨立複驗**（§-2 規則 6）。
+- **仍待客戶裁示**：`DG-COV`（最低 coverage，含母體口徑）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`WIRING-GATE`。G-F2～G-F6 屬 Digest／headless 範圍，是否阻塞本區塊為 INFERENCE（不阻塞），仍待裁示。
+
+| 類別 | 項目 |
+|---|---|
+| **已完成** | 補充證據文件（docs-only）；A2（#1146）與前置研究文件（DEC-166）沿用 |
+| **已授權** | 唯讀證據補強與 SSOT 追加（本 DEC「同意 B」） |
+| **未授權** | UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller、方案 A／C 施工、任何 coverage 門檻值 |
+| **NOT VERIFIED** | TWSE／TPEX 授權全部；FinMind 官網條款全文；OGDL 原文（僅二手線索）；來源發布日／PIT／修訂；缺日是否休市；Cloud、iOS／Android 真機、Playwright／viewport（390／1440）；真實 macro_state 端到端 |
+
+- **有效讀法**：DEC-166 的「仍待客戶裁示」中，客戶已就方案選擇裁示「B」；其餘 Gate 不因此關閉。沉默不等於同意。

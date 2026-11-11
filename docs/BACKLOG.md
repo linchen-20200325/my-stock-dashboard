@@ -2348,3 +2348,11 @@
 
 **仍開放（保留，未改）**：`I1140-COVERAGE-MIN`（最低 coverage）、`G-F2～G-F6`、`I1144-WIRING-GATE`（接線，未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`I1144-BRANCH-CLEANUP`（僅候選，非刪除授權）、`I1140-*` 其餘各項。
 **NOT VERIFIED**：上游授權、PIT 發布日、Cloud／真機／Playwright、真實 macro_state。本 docs PR 號：待補。
+
+
+### Issue #1144 後續｜「同意 B」證據補強完成（2026-11-11；只追加；不改既有列；依據 DEC-167；以下皆非施工授權）
+
+- **I1144-UI2-PREGATE-SUPPLEMENT**：已完成（docs-only）`docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md`；PR 號：#1148。補強、不取代既有前置研究。
+- **仍開放（直接阻塞市場資金與籌碼區塊）**：`DG-COV`（`I1140-COVERAGE-MIN`，含母體口徑；不自設百分比）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）；接線前文案項 `I1140-MARGIN-SOURCE-TEXT`／`-ETF-FAMILY-ABSENT`／`-SECTOR-CRON-SCOPE`；成因查證 `I1140-SECTOR-UNOBS-LABELS`／`-DROPPED-PRICE`（範圍已釐清，成因仍 NOT VERIFIED）。
+- **歸類更正（INFERENCE）**：G-F2、G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH` 屬 Digest／持股／登入範圍，**不是**市場資金與籌碼區塊的前提；G-F3／G-F4／G-F5 為間接關係；仍待裁示。
+- **NOT VERIFIED**：TWSE／TPEX 授權、FinMind 官網條款、OGDL 原文、來源發布日／PIT、缺日是否休市、Cloud／真機／Playwright／390／1440。本批證據單組、未經第二組獨立複驗。
