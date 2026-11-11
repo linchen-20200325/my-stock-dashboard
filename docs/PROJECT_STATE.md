@@ -1240,3 +1240,13 @@
 - **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、新母體、門檻值、任何程式／資料／`data_cache` 變更、刪檔。
 - **NOT VERIFIED**：TWSE／TPEX 授權原文、PIT 發布日、3 偶發標籤個股成因、UI 來源標示是否顯示、Cloud／真機／Playwright；證據單組、未經第二組獨立複驗。
 - **出處**：DEC-169；補充文件 §10～§12；BACKLOG『Issue #1144 後續｜Coverage 母體收斂』。PR 號：#1149。不一致時以出處為準。
+
+
+### 70.11 CI 環境最小修復後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-170，非客戶逐字）
+
+- **FACT**：客戶裁示「同意優先採 A，失敗再評估 B」並授權獨立最小 CI workflow 安裝環境修復。#1149 的 `ui2-browser` 因 runner apt／DNS 無法裝 Chromium 依賴而失敗；方案 A 經 CI 實證失效（三個 Ubuntu 來源 host 皆 DNS 失敗）；方案 B＝`ui2-browser` job 改在固定 tag＋digest 的 `mcr.microsoft.com/playwright:v1.64.1-noble` 容器內執行，已由 PR #1150 合併（main `96cb7614`）。#1149 內容未改，Update branch 後原生 CI 五項全綠並合併（main `d8d74ccd`）。
+- **FACT（守衛未降）**：matrix 兩版本、`UI2_BROWSER_LANE=required`、junit tests≥40／skipped=0、evidence artifact、`ui2-browser-gate` 全保留；無 `continue-on-error`／`|| true`／skip／降門檻／新 Secret；未改 tests／production；獨立 QA PASS。
+- **維護**：升級 Playwright 時 image tag、digest、`playwright==` pin 一併更新；不得用 `latest`。
+- **仍未授權／HOLD**：UI2 runtime 接線（停在 WIRING-GATE）、Coverage 母體新算法與最低門檻、PIT 正式語意、資料再散布最終授權、Digest A3／`market.health`／外資 L3。CI 修復不構成上述任何核准。
+- **NOT VERIFIED**：僅證明當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 branch protection required check（設定面，本工作階段無權限）。
+- **出處**：DEC-170；BACKLOG『Issue #1144 後續｜CI 環境最小修復完成』。docs PR 號：待補。不一致時以出處為準。

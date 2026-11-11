@@ -2371,3 +2371,12 @@
 - **仍 HOLD**：`DG-COV`（含覆蓋口徑與偶發標籤處理）、`DG-PIT`、`DG-LIC`（含「是否商業／是否公開／公開 repo 保留個股級原始列」三問，待客戶／法律專業判斷）、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、G-F2～G-F6 及其餘 Gate。
 - **未授權**：採用新母體、coverage 門檻值、COV-A／B／C 施工、任何程式／資料／Actions／Secrets／`data_cache` 變更、刪檔、UI runtime 接線。
 - **NOT VERIFIED**：TWSE／TPEX／data.gov.tw 授權原文、OGDL 原頁、FinMind 方案等級與官網即時版本、3 偶發標籤個股成因、15761 組成、PIT 發布日、UI 來源標示是否顯示；證據單組、未經第二組獨立複驗。
+
+
+### Issue #1144 後續｜CI 環境最小修復完成（2026-11-11；只追加；不改既有列；依據 DEC-170；與 Gate 決策無關，非施工授權）
+
+- **I1144-CI-ENV-FIX**：**已完成**（PR #1150，main `96cb7614`）。客戶裁示「同意優先採 A，失敗再評估 B」；方案 A（改 Ubuntu 官方來源＋有上限重試）經 CI 實證失效（三個 host DNS 皆失敗），依裁示進入方案 B：`ui2-browser` job 改在 `mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a7...`（tag＋digest 固定）容器內執行。全部 Browser 守衛保留（matrix 兩版本、`UI2_BROWSER_LANE=required`、junit tests≥40／skipped=0、evidence artifact、`ui2-browser-gate`），無 `continue-on-error`／`|| true`／skip／降門檻／新 Secret，未改 tests／production。獨立 QA PASS。
+- **#1149 狀態更正**：前段寫的「#1149 被 CI 環境阻塞」**已過期**——#1149 內容未改，以 Update branch 併入新 main 後原生 CI 五項全綠並合併（main `d8d74ccd`）。
+- **I1144-CI-ENV-MAINT**（新，低優先、非待辦動工項）：容器映像升級時 image tag、digest、`playwright==` pip pin 須一併更新；runner Ubuntu 來源 DNS 故障根因未查明（NOT VERIFIED）。無實際故障／升級需求不主動動工（CLAUDE.md §-1）。
+- **仍開放（均未因本批關閉）**：`DG-COV`（`I1140-COVERAGE-MIN`，母體新算法／最低門檻未裁示）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6。
+- **NOT VERIFIED**：修復僅證明於當日 runner 可執行；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否設為 branch protection required check 本工作階段無權限查證。本 docs PR 號：待補。
