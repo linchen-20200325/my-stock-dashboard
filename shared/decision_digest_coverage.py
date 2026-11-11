@@ -13,8 +13,15 @@ Digest v1 凍結（`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` §5
 Digest 的版本**互相獨立**；Digest v2 日後若吸收這些欄位，側車可退役，而不影響 v1 消費者。
 
 ═══ 設計鐵則（寫死）══════════════════════════════════════════════════
-1. **`is_complete` 是「唯一」的完整性判定**：omitted==0 且 excluded==0 且 unkeyed==0 且 unmatched==0
-   且 holdings_without_station_row==0 且 `digest_holdings_available`／`digest_actions_available` 皆 True 且四段證據皆 used。
+1. **`is_complete` 是「唯一」的完整性判定**：下列「未能讀入」計數**全部**為 0 ——
+   omitted、excluded_invalid_rows、unkeyed_held_count、station_rows_unmatched、holdings_without_station_row、
+   station_non_mapping_rows、holdings_non_mapping_rows、unrecognized_action_code_rows、duplicate_station_ticker_rows
+   ——且 `digest_holdings_available`／`digest_actions_available` 皆 True 且四段證據皆 used。
+   原則（Issue #1127 QA 第三輪）：builder 掃描時**每一列**都歸入互斥窮盡的分類（候選／合法已知排除／未能讀入），
+   「未能讀入」的各細項各有一個計數；**不得**逐例補丁，任何新的靜默略過都應先被分類再被計數。
+   ⚠️ `is_complete` **不含新鮮度判斷**：它只回答「有沒有東西沒被讀進來」，不判斷「資料新不新」。例如 risk_cap 的
+   `snapshot_ts` 很舊（如 2025-01-01）時，只要沒有被拒用，該段仍 `used=True` 且 `is_complete` 可為 True；
+   coverage **如實揭露**該段 as_of（取該段 OK 事實最舊者），由讀者自行判讀，本物件不替讀者判舊。
    ⚠️ 最後兩個旗標是 **v1 限制**，不是「沒完成」：v1 builder 的 holdings／actions 段只有在「至少一項行動事實」時
    才 AVAILABLE，**無法區分「沒事做」與「判不出來」**。所以「零行動」一律 `is_complete=False`（保守 fail-closed）——
    它的意思是「v1 Digest 不能證明沒有遺漏」，**不是**「有東西漏了」。Digest v2 若能區分，這兩個旗標才可放寬。
@@ -89,8 +96,15 @@ class DigestCoverage:
     - `excluded_invalid_rows`：站內持有列因 `_invalid_lights`／`_invalid_inputs`／`_detail.error` 被排除的數；
       不能評估 → None。
     - `unkeyed_held_count`：持有但無 `HoldingKey` 的列數；`holdings_rows` 沒給 → None。
-    - `actions_unmatched_dropped`：站內 held、無異常旗標、有行動碼，卻因 ticker 對不上持股鍵（大小寫／空白不符、
-      不在 `holdings_rows`、沒有 `HoldingKey`）而被 builder 靜默丟棄的列數；不能評估 → None。
+    - `station_rows_unmatched`：站內 held、無異常旗標、碼合法（行動碼或 premium／cruise），卻因 ticker 對不上持股
+      （行動碼：對不上有鍵的 held 持股；非行動碼：ticker 不在 held 持股內；大小寫／空白不符、不在 `holdings_rows`、
+      沒有 `HoldingKey`）而被 builder 靜默丟棄的列數；不能評估 → None。
+    - `station_non_mapping_rows`／`holdings_non_mapping_rows`：站內列／持有列中非 Mapping 的項（原本被靜默略過）；
+      站內側不能評估 → None；持有側在 `holdings_rows` 沒給時 → None。
+    - `unrecognized_action_code_rows`：站內 held、無異常旗標，但 `_action` 缺／None／未知碼（如 'Add'、'zzz'）的列數；
+      不能評估 → None。
+    - `duplicate_station_ticker_rows`：同 ticker 出現在 ≥2 個 held 站內列者的所有列數（站內證據可能互相衝突，
+      builder 的既有選取行為不變，但任何一列都不得被默默選用）；不能評估 → None。
     - `holdings_without_station_row`：held 持股中，站內列沒有同 ticker held 列者（＝沒有任何站內證據）的數量；
       不能評估 → None。
     - `digest_holdings_available`／`digest_actions_available`：Digest 的 holdings／actions 段 availability 是否為
@@ -103,8 +117,12 @@ class DigestCoverage:
     actions_max: int
     excluded_invalid_rows: int | None
     unkeyed_held_count: int | None
-    actions_unmatched_dropped: int | None
+    station_rows_unmatched: int | None
     holdings_without_station_row: int | None
+    station_non_mapping_rows: int | None
+    holdings_non_mapping_rows: int | None
+    unrecognized_action_code_rows: int | None
+    duplicate_station_ticker_rows: int | None
     digest_holdings_available: bool
     digest_actions_available: bool
     segments: tuple
@@ -116,8 +134,10 @@ class DigestCoverage:
         if validate_coverage(self):
             return False
         return (self.actions_omitted_count == 0 and self.excluded_invalid_rows == 0
-                and self.unkeyed_held_count == 0 and self.actions_unmatched_dropped == 0
-                and self.holdings_without_station_row == 0
+                and self.unkeyed_held_count == 0 and self.station_rows_unmatched == 0
+                and self.holdings_without_station_row == 0 and self.station_non_mapping_rows == 0
+                and self.holdings_non_mapping_rows == 0 and self.unrecognized_action_code_rows == 0
+                and self.duplicate_station_ticker_rows == 0
                 and self.digest_holdings_available is True and self.digest_actions_available is True
                 and all(s.used is True for s in self.segments))
 
@@ -132,8 +152,12 @@ class DigestCoverage:
             "actions_max": self.actions_max,
             "excluded_invalid_rows": self.excluded_invalid_rows,
             "unkeyed_held_count": self.unkeyed_held_count,
-            "actions_unmatched_dropped": self.actions_unmatched_dropped,
+            "station_rows_unmatched": self.station_rows_unmatched,
             "holdings_without_station_row": self.holdings_without_station_row,
+            "station_non_mapping_rows": self.station_non_mapping_rows,
+            "holdings_non_mapping_rows": self.holdings_non_mapping_rows,
+            "unrecognized_action_code_rows": self.unrecognized_action_code_rows,
+            "duplicate_station_ticker_rows": self.duplicate_station_ticker_rows,
             "digest_holdings_available": self.digest_holdings_available,
             "digest_actions_available": self.digest_actions_available,
             "segments": [
@@ -216,8 +240,12 @@ def _validate(c: Any) -> list:
     omitted_ok = _opt_count("actions_omitted_count", c.actions_omitted_count, out)
     _opt_count("excluded_invalid_rows", c.excluded_invalid_rows, out)
     _opt_count("unkeyed_held_count", c.unkeyed_held_count, out)
-    _opt_count("actions_unmatched_dropped", c.actions_unmatched_dropped, out)
+    _opt_count("station_rows_unmatched", c.station_rows_unmatched, out)
     _opt_count("holdings_without_station_row", c.holdings_without_station_row, out)
+    _opt_count("station_non_mapping_rows", c.station_non_mapping_rows, out)
+    _opt_count("holdings_non_mapping_rows", c.holdings_non_mapping_rows, out)
+    _opt_count("unrecognized_action_code_rows", c.unrecognized_action_code_rows, out)
+    _opt_count("duplicate_station_ticker_rows", c.duplicate_station_ticker_rows, out)
     for _flag in ("digest_holdings_available", "digest_actions_available"):
         if type(getattr(c, _flag)) is not bool:
             out.append(f"{_flag}_type: 必須是 bool：{type(getattr(c, _flag)).__name__} {getattr(c, _flag)!r}")
@@ -266,19 +294,24 @@ def _validate(c: Any) -> list:
     # 跨欄位：actions 段完整採用 ⇒ 計數已評估；holdings 段完整採用 ⇒ unkeyed 已知
     act = seg_by_name.get(SEGMENT_ACTIONS)
     _eval_counts = (c.actions_total_eligible, c.actions_omitted_count, c.excluded_invalid_rows,
-                    c.actions_unmatched_dropped, c.holdings_without_station_row)
+                    c.station_rows_unmatched, c.holdings_without_station_row, c.station_non_mapping_rows,
+                    c.unrecognized_action_code_rows, c.duplicate_station_ticker_rows)
     if act is not None and act.used is True:
         if any(v is None for v in _eval_counts):
-            out.append("actions_used_with_unknown_counts: actions 段 used=True 時 total／omitted／excluded／"
-                       "unmatched／holdings_without_station_row 必須已評估（不得為 None）")
+            out.append("actions_used_with_unknown_counts: actions 段 used=True 時站內側所有計數（total／omitted／"
+                       "excluded／unmatched／holdings_without_station_row／non_mapping／unrecognized／duplicate）"
+                       "必須已評估（不得為 None）")
     elif act is not None and act.used is False:
         if any(v is not None for v in _eval_counts):
-            out.append("actions_unused_with_known_counts: actions 段 used=False（證據未採用）時 total／omitted／"
-                       "excluded／unmatched／holdings_without_station_row 必須全部是 None"
+            out.append("actions_unused_with_known_counts: actions 段 used=False（證據未採用）時站內側所有計數"
+                       "（total／omitted／excluded／unmatched／holdings_without_station_row／non_mapping／"
+                       "unrecognized／duplicate）必須全部是 None"
                        "（未採用的證據之上的計數不可信；未知不是 0）")
     hold = seg_by_name.get(SEGMENT_HOLDINGS)
-    if hold is not None and hold.used is True and c.unkeyed_held_count is None:
-        out.append("holdings_used_with_unknown_unkeyed: holdings 段 used=True 時 unkeyed_held_count 必須已知（不得為 None）")
+    if hold is not None and hold.used is True and (c.unkeyed_held_count is None
+                                                   or c.holdings_non_mapping_rows is None):
+        out.append("holdings_used_with_unknown_unkeyed: holdings 段 used=True 時 unkeyed_held_count／"
+                   "holdings_non_mapping_rows 必須已知（不得為 None）")
     return out
 
 

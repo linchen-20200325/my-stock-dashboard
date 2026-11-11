@@ -696,10 +696,10 @@ def _parity_run(seed, cases):
     for _ in range(cases):
         rows, hold, keys = _random_case(rng)
         plan = plan_action_selection(station_rows=rows, station_stamp=STATION_STAMP, holdings_rows=hold, holding_keys=keys)
-        assert plan.unmatched_action_rows == _brute_unmatched(rows, hold, keys)
+        assert plan.unmatched_station_rows == _brute_unmatched(rows, hold, keys)
         assert plan.holdings_without_station_row == _brute_without_station(rows, hold)
         assert plan.excluded_invalid_rows == _brute_excluded(rows)
-        unmatched_seen += plan.unmatched_action_rows > 0
+        unmatched_seen += plan.unmatched_station_rows > 0
         without_seen += plan.holdings_without_station_row > 0
         try:
             d = build_decision_digest(generated_at=NOW, station_rows=rows, station_stamp=STATION_STAMP,
@@ -903,7 +903,7 @@ def test_teeth_unknown_counts_collapsing_to_zero_is_caught(monkeypatch):
     """突變：把『未知』偽裝成 0 → 側車 validator 必須擋下（actions 段未採用卻宣稱計數已知）或 is_complete 不得為 True。"""
     base = assemble_digest(generated_at=NOW)
     faked = dataclasses.replace(base.coverage, actions_total_eligible=0, actions_omitted_count=0,
-                                excluded_invalid_rows=0, unkeyed_held_count=0, actions_unmatched_dropped=0,
+                                excluded_invalid_rows=0, unkeyed_held_count=0, station_rows_unmatched=0,
                                 holdings_without_station_row=0)
     with pytest.raises(ValueError):                                         # 與 digest 的未知狀態不一致 → 拒收
         AssembledDigest(digest=base.digest, coverage=faked)
@@ -927,20 +927,20 @@ def _custom(station, holdings, keys, **over):
 def test_unmatched_ticker_case_mismatch_is_counted_and_blocks_completeness():
     a = _custom([row("t0", "cut")], holdings_for("T0"), keys_for("T0"))
     c = a.coverage
-    assert c.actions_unmatched_dropped == 1 and a.digest.actions.items == ()
+    assert c.station_rows_unmatched == 1 and a.digest.actions.items == ()
     assert c.actions_total_eligible == 0 and c.is_complete is False
 
 
 def test_unmatched_ticker_not_in_holdings_rows():
     a = _custom([row("T0", "cut"), row("ZZ", "add")], holdings_for("T0"), keys_for("T0", "ZZ"))
-    assert a.coverage.actions_unmatched_dropped == 1               # ZZ 有行動碼但不是持股
+    assert a.coverage.station_rows_unmatched == 1               # ZZ 有行動碼但不是持股
     assert [i.target.symbol for i in a.digest.actions.items] == ["T0"]
     assert a.coverage.is_complete is False
 
 
 def test_unmatched_held_holding_without_holding_key():
     a = _custom([row("T0", "cut"), row("T1", "add")], holdings_for("T0", "T1"), keys_for("T0"))
-    assert a.coverage.actions_unmatched_dropped == 1 and a.coverage.unkeyed_held_count == 1
+    assert a.coverage.station_rows_unmatched == 1 and a.coverage.unkeyed_held_count == 1
     assert a.coverage.is_complete is False
 
 
@@ -951,18 +951,18 @@ def test_unmatched_not_counted_for_nonheld_invalid_nonaction_or_error_rows():
             row("D", "premium"),                                          # 非行動碼
             row("E", "cut", _detail={"error": "boom"})]                   # 資料異常
     a = _custom(rows, holdings_for("A"), keys_for("A"))
-    assert a.coverage.actions_unmatched_dropped == 0
+    assert a.coverage.station_rows_unmatched == 0
     assert a.coverage.excluded_invalid_rows == 2
 
 
 def test_unmatched_is_none_when_not_evaluated_not_zero():
     for kw in (dict(station_evidence=None), dict(station_rows=None), dict(holdings_rows=None)):
-        assert assemble_digest(**full_kwargs(2, **kw)).coverage.actions_unmatched_dropped is None
+        assert assemble_digest(**full_kwargs(2, **kw)).coverage.station_rows_unmatched is None
 
 
 def _check_unmatched_counted():
     a = _custom([row("t0", "cut")], holdings_for("T0"), keys_for("T0"))
-    assert a.coverage.actions_unmatched_dropped == 1
+    assert a.coverage.station_rows_unmatched == 1
     assert a.coverage.is_complete is False
 
 
@@ -1094,7 +1094,7 @@ def test_envelope_rejects_actions_unused_but_digest_carries_actions():
     a = _good_complete()
     forged = _swap_seg(a.coverage, SEGMENT_ACTIONS, used=False, withheld_reason="stale")
     forged = dataclasses.replace(forged, actions_total_eligible=None, actions_omitted_count=None,
-                                 excluded_invalid_rows=None, actions_unmatched_dropped=None,
+                                 excluded_invalid_rows=None, station_rows_unmatched=None,
                                  holdings_without_station_row=None)            # coverage 本身合法
     assert validate_coverage(forged) == ()
     with pytest.raises(ValueError, match="actions 段 used=False 但 digest.actions 帶有行動"):
@@ -1144,7 +1144,7 @@ def test_envelope_unverifiable_counts_are_a_documented_limitation_not_a_guard():
     """據實：total／excluded／unmatched／holdings_without_station_row 在 digest 內看不到 → envelope 無法驗證。
     本測試把這個限制釘住（自洽的偽造值會通過；它們只靠 builder parity 與測試保證）。見模組 docstring「已知限制」。"""
     a = _good_complete()
-    forged = dataclasses.replace(a.coverage, excluded_invalid_rows=0, actions_unmatched_dropped=0,
+    forged = dataclasses.replace(a.coverage, excluded_invalid_rows=0, station_rows_unmatched=0,
                                  holdings_without_station_row=0)           # 與真值相同，僅示範：這些欄位不被 digest 驗證
     assert AssembledDigest(digest=a.digest, coverage=forged).coverage == a.coverage
     assert "不防惡意偽造" in (A.AssembledDigest.__doc__ or "")

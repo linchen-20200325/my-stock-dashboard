@@ -45,8 +45,9 @@ def unused_seg(name, reason="stale", source=None, as_of=None):
 
 def complete_cov(**over):
     base = dict(actions_total_eligible=2, actions_shown=2, actions_omitted_count=0, actions_max=MAX_ACTIONS,
-                excluded_invalid_rows=0, unkeyed_held_count=0, actions_unmatched_dropped=0,
-                holdings_without_station_row=0, digest_holdings_available=True, digest_actions_available=True,
+                excluded_invalid_rows=0, unkeyed_held_count=0, station_rows_unmatched=0,
+                holdings_without_station_row=0, station_non_mapping_rows=0, holdings_non_mapping_rows=0,
+                unrecognized_action_code_rows=0, duplicate_station_ticker_rows=0, digest_holdings_available=True, digest_actions_available=True,
                 segments=tuple(used_seg(n) for n in SEGMENTS))
     base.update(over)
     return DigestCoverage(**base)
@@ -105,7 +106,7 @@ def test_omitted_nonzero_is_incomplete():
     assert validate_coverage(c) == () and c.is_complete is False
 
 
-@pytest.mark.parametrize("field", ["excluded_invalid_rows", "unkeyed_held_count", "actions_unmatched_dropped",
+@pytest.mark.parametrize("field", ["excluded_invalid_rows", "unkeyed_held_count", "station_rows_unmatched",
                                    "holdings_without_station_row"])
 def test_nonzero_exclusion_or_unkeyed_is_incomplete(field):
     c = complete_cov(**{field: 1})
@@ -121,7 +122,7 @@ def test_any_unused_segment_is_incomplete(seg):
 
 
 @pytest.mark.parametrize("field", ["actions_total_eligible", "actions_omitted_count", "excluded_invalid_rows",
-                                   "unkeyed_held_count", "actions_unmatched_dropped",
+                                   "unkeyed_held_count", "station_rows_unmatched",
                                    "holdings_without_station_row"])
 def test_unknown_count_is_none_not_zero_and_blocks_completeness(field):
     """未知計數用 None；None 與 0 不得混淆 → is_complete 為 False。"""
@@ -160,7 +161,7 @@ def test_total_unknown_segments_used_is_rejected():
 
 
 _UNKNOWN_ALL = dict(actions_total_eligible=None, actions_omitted_count=None, excluded_invalid_rows=None,
-                    actions_unmatched_dropped=None, holdings_without_station_row=None)
+                    station_rows_unmatched=None, holdings_without_station_row=None)
 
 
 def test_actions_unused_with_known_counts_rejected():
@@ -175,7 +176,7 @@ def test_actions_unused_with_known_counts_rejected():
     assert validate_coverage(ok) == () and ok.is_complete is False
 
 
-@pytest.mark.parametrize("field", ["actions_unmatched_dropped", "holdings_without_station_row"])
+@pytest.mark.parametrize("field", ["station_rows_unmatched", "holdings_without_station_row"])
 def test_actions_used_with_unknown_new_counts_rejected(field):
     assert "actions_used_with_unknown_counts" in codes(complete_cov(**{field: None}))
 
@@ -191,7 +192,7 @@ def test_holdings_used_with_unknown_unkeyed_rejected():
 # ════════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("bad", [True, False, 2.0, 1.5, "2", float("nan"), -1])
 @pytest.mark.parametrize("field", ["actions_total_eligible", "actions_shown", "actions_omitted_count",
-                                   "excluded_invalid_rows", "unkeyed_held_count", "actions_unmatched_dropped",
+                                   "excluded_invalid_rows", "unkeyed_held_count", "station_rows_unmatched",
                                    "holdings_without_station_row"])
 def test_counts_reject_bool_float_str_negative(field, bad):
     v = validate_coverage(complete_cov(**{field: bad}))
@@ -348,10 +349,10 @@ def test_to_dict_is_deterministic_json_serializable_and_has_is_complete():
 def test_to_dict_serializes_unknown_as_null_not_zero():
     segs = tuple(unused_seg(n, "not_loaded") for n in SEGMENTS)
     c = complete_cov(actions_total_eligible=None, actions_omitted_count=None, excluded_invalid_rows=None,
-                     unkeyed_held_count=None, actions_unmatched_dropped=None, holdings_without_station_row=None,
+                     unkeyed_held_count=None, station_rows_unmatched=None, holdings_without_station_row=None,
                      digest_holdings_available=False, digest_actions_available=False, actions_shown=0, segments=segs)
     d = c.to_dict()
-    assert d["actions_unmatched_dropped"] is None and d["holdings_without_station_row"] is None
+    assert d["station_rows_unmatched"] is None and d["holdings_without_station_row"] is None
     assert d["actions_total_eligible"] is None and d["actions_omitted_count"] is None
     assert d["excluded_invalid_rows"] is None and d["unkeyed_held_count"] is None
     assert d["is_complete"] is False
@@ -430,7 +431,7 @@ def test_digest_availability_false_blocks_completeness_with_explicit_v1_reason(f
 
 def test_unmatched_and_without_station_row_accept_known_zero_and_positive():
     for n in (0, 1, 5):
-        c = complete_cov(actions_unmatched_dropped=n, holdings_without_station_row=n)
+        c = complete_cov(station_rows_unmatched=n, holdings_without_station_row=n)
         assert validate_coverage(c) == () and c.is_complete is (n == 0)
 
 
@@ -438,7 +439,7 @@ _COMPLETENESS_FACTORS = {
     "omitted": dict(actions_total_eligible=3, actions_omitted_count=1),                 # shown=2 → 3−2=1
     "excluded": dict(excluded_invalid_rows=1),
     "unkeyed": dict(unkeyed_held_count=1),
-    "unmatched": dict(actions_unmatched_dropped=1),
+    "unmatched": dict(station_rows_unmatched=1),
     "holdings_without_station_row": dict(holdings_without_station_row=1),
     "digest_holdings_available": dict(digest_holdings_available=False),
     "digest_actions_available": dict(digest_actions_available=False),

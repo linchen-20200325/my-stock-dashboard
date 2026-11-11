@@ -35,21 +35,27 @@
   fresh 的 macro 戳不得讓 coverage 看起來比 `cap_pct` 的快照日期（`snapshot_ts`）更新。
 - holdings／actions：v1 的 holdings entry 只有行動事實，兩段都由「站內證據＋`holdings_rows`＋`station_rows`」
   決定；全部就緒才 `used=True`。
-- 「沒被讀進來」的計數（不能評估 → None，**不是 0**）：被 `MAX_ACTIONS` 截掉的候選（omitted）、資料異常被排除的列
-  （excluded）、無鍵持股（unkeyed）、行動列對不上持股鍵而被丟棄（unmatched；ticker 大小寫／空白不符、不在
-  `holdings_rows`）、持股沒有任何站內列（holdings_without_station_row）。任何一項非 0 → `is_complete=False`。
+- 「沒被讀進來」的計數（不能評估 → None，**不是 0**）。原則：builder 掃描時**每一列**都歸入互斥窮盡的分類
+  （候選／合法已知排除／未能讀入；見 `decision_digest_builder._ScanResult`），不得有任何一列被靜默略過：
+  被 `MAX_ACTIONS` 截掉的候選（omitted）、資料異常被排除的列（excluded）、無鍵持股（unkeyed）、站內 held 列對不上
+  持股／鍵（station_rows_unmatched；含大小寫／空白不符、不在 `holdings_rows`、非行動碼的 ticker 不在持股）、
+  `_action` 缺／None／未知碼（unrecognized_action_code_rows）、非 Mapping 項（station／holdings 各一個計數）、
+  同 ticker 多個 held 站內列（duplicate_station_ticker_rows；正交疊加，builder 選取行為不變）、
+  持股沒有任何站內列（holdings_without_station_row）。任何一項非 0 → `is_complete=False`。
+- ⚠️ `is_complete` **不判斷新鮮度**：risk_cap 的 `snapshot_ts` 即使很舊（如 2025-01-01），只要證據沒被拒用，
+  該段仍可 `used=True`；coverage 只**如實揭露**該段 as_of（該段 OK 事實最舊者），不替讀者判舊、不改行為。
 - ⚠️ **v1 限制（不是「沒完成」）**：v1 builder 對「沒有任何行動」讓 holdings／actions 段為 UNAVAILABLE，
   **無法區分「沒事做」與「判不出來」**。coverage 以 `digest_holdings_available`／`digest_actions_available`
   （由 digest 推得）把這點納入 `is_complete`：零行動 ⇒ `is_complete=False`。`station_rows=[]`（fresh 證據、
   持有列也是空）亦同。這是保守 fail-closed，意思是「v1 Digest 不能證明沒有遺漏」。
 
 ═══ 已知限制（誠實揭露；不是被修掉的項目）═══════════════════════════════
-1. `AssembledDigest` **不防惡意偽造**：coverage 中的 total／excluded／unmatched／holdings_without_station_row
-   在 digest 內**看不到**，只能靠 `plan_action_selection` 與 builder 共用同一個掃描迴圈（parity 測試以固定種子隨機輸入
+1. `AssembledDigest` **不防惡意偽造**：coverage 中的 total／excluded／unmatched／unrecognized／non_mapping／
+   duplicate／holdings_without_station_row 在 digest 內**看不到**，只能靠 `plan_action_selection` 與 builder 共用同一個掃描迴圈（parity 測試以固定種子隨機輸入
    守住）與測試保證；envelope 只交叉驗證 digest 內可見者（shown、unkeyed、段落 used、source／as_of、availability 旗標）。
 2. 證據被拒用時，該段上游輸出不交給 builder，因此 `station_rows` **列層級**的型別錯誤（例如某列 `held` 不是 bool）
    在該情形下不會 fail loud（只在證據可用時才會被 builder 掃到）。頂層型別（Mapping／list／tuple）仍會被檢查。
-3. 「站內列與持股用 ticker 精確字串比對」：大小寫／空白不同的 ticker 會被計入 unmatched 與 holdings_without_station_row
+3. 「站內列與持股用 ticker 精確字串比對」：大小寫／空白不同的 ticker 會被計入 station_rows_unmatched 與 holdings_without_station_row
    （這是揭露，不是修正；builder 的比對行為不變）。
 
 分層（CLAUDE.md §8.2）：L3 —— 只 import 標準函式庫、L0（`shared.*`）與同層
@@ -184,7 +190,7 @@ class AssembledDigest:
     `assemble_digest` 是**唯一**由證據推導 coverage 的入口；直接建構也會被同一套一致性檢查擋下。
     ⚠️ **據實限制**：一致性檢查只能驗證 coverage 中「digest 內看得到」的部分（shown、unkeyed、段落 used、
     used 段的 source／as_of、holdings／actions availability 旗標）。total／omitted／excluded／unmatched／
-    holdings_without_station_row 在 digest 內看不到，只能靠 builder parity 與測試保證——
+    holdings_without_station_row 等其餘計數在 digest 內看不到，只能靠 builder parity 與測試保證——
     **本類別不防惡意偽造**（見模組 docstring「已知限制」）。
     """
     digest: DecisionDigest
@@ -349,8 +355,12 @@ def assemble_digest(*, generated_at: datetime,
         actions_max=MAX_ACTIONS,
         excluded_invalid_rows=plan.excluded_invalid_rows,
         unkeyed_held_count=plan.unkeyed_held_count,
-        actions_unmatched_dropped=plan.unmatched_action_rows,
+        station_rows_unmatched=plan.unmatched_station_rows,
         holdings_without_station_row=plan.holdings_without_station_row,
+        station_non_mapping_rows=plan.station_non_mapping_rows,
+        holdings_non_mapping_rows=plan.holdings_non_mapping_rows,
+        unrecognized_action_code_rows=plan.unrecognized_action_code_rows,
+        duplicate_station_ticker_rows=plan.duplicate_station_ticker_rows,
         digest_holdings_available=digest.holdings.availability is Availability.AVAILABLE,
         digest_actions_available=digest.actions.availability is Availability.AVAILABLE,
         segments=segments,

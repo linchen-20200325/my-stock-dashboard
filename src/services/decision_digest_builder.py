@@ -291,55 +291,105 @@ def _key_for(ticker: str | None, holding_keys: Mapping | None) -> HoldingKey | N
     return k
 
 
+#: 站內列「合法且已知」的**非行動**碼（`dividend_station.ACTION_PREMIUM`／`ACTION_CRUISE` 的複本；L3 不得 import
+#: `src.compute`，故以字串複本登記，由測試 pin 住與 `dividend_station.ACTION_*` 的一致）。用 tuple 而非 frozenset：
+#: 站內列的 `_action` 可能是任何東西（含不可 hash 者），`in tuple` 只用 `==`，不會 raise。
+_NON_ACTION_CODES: tuple = ("premium", "cruise")
+
+
+@dataclass(frozen=True)
+class _ScanResult:
+    """站內列掃描結果：**每一列**恰好歸入下列互斥且窮盡的分類之一（分割恆等式，由測試守住）：
+
+        rows_total == len(candidates) + non_action + not_held + excluded_invalid
+                      + unrecognized + unmatched + non_mapping
+
+    (a) `candidates`：成為行動候選。
+    (b) 合法且已知的排除：`not_held`（held 缺／False）、`non_action`（合法非行動碼 premium／cruise，且 ticker
+        對得上 held 持股）、`excluded_invalid`（held 且帶 `_invalid_lights`／`_invalid_inputs`／`_detail.error`）。
+    (c) 「未能讀入」：`non_mapping`（非 Mapping 的項）、`unrecognized`（held、無異常，但 `_action` 缺／None／未知碼，
+        例如 'Add'、'zzz'）、`unmatched`（held、無異常、碼合法，但 ticker 對不上持股：行動碼要求對得上有鍵的 held
+        持股，非行動碼要求 ticker 在 held 持股內）。
+    另有一個**正交的疊加計數** `duplicate_rows`（不屬於分割）：held 的站內列中，ticker（非空）出現在 ≥2 個 held 列的
+    **所有**列數。同 ticker 多列代表站內證據彼此可能衝突；builder 既有選取行為不變，但任何一列都不得被默默選用而
+    不揭露。
+    """
+    candidates: list
+    rows_total: int = 0
+    non_mapping: int = 0
+    not_held: int = 0
+    excluded_invalid: int = 0
+    non_action: int = 0
+    unrecognized: int = 0
+    unmatched: int = 0
+    duplicate_rows: int = 0
+
+
 def _scan_action_rows(station_rows: Sequence[Mapping] | None, station_stamp: SourceStamp | None,
-                      keyed: frozenset, holding_keys: Mapping | None) -> tuple:
-    """單一掃描迴圈：回 (合格行動候選 list, 因資料異常被排除的持有列數, 無法對上持股鍵而被丟棄的行動列數)。
+                      keyed: frozenset, holding_keys: Mapping | None,
+                      held_tickers: frozenset = frozenset()) -> _ScanResult:
+    """單一掃描迴圈：把**每一列**歸入 `_ScanResult` 的互斥窮盡分類（見該類 docstring）。
 
     ⚠️ 這是 `_action_candidates`（`build_decision_digest` 的路徑）與 `plan_action_selection`
     （Issue #1127 S8 的省略揭露）**共用的唯一判定**——兩者不得各自重寫一份（會漂移）。
-    排除計數只數「held 且帶 `_invalid_lights`／`_invalid_inputs`（非空）或 `_detail.error`」的列
-    （不論其 `_action` 是什麼：資料異常的持有列即使本來不是行動，也屬於「有一列沒被讀」）。
-    第三個計數 `unmatched`：held、**無**資料異常標記、`_action` ∈ `ACTION_RULE_IDS`，但 ticker 對不上持股鍵
-    （`_key_for` 回 None：ticker 缺／不在 `holding_keys`／大小寫或空白不符）或鍵不在 `keyed` 內而被**靜默丟棄**的列數
-    （Issue #1127 QA M1：這些列原本不在任何計數內）。
-    `station_rows`／`station_stamp` 為 None 時不掃描 → ([], 0, 0)。
+    分支順序與 builder 原本逐一相同（非 Mapping → held → 異常旗標 → `_detail.error` → 行動碼 → 鍵 → 文字），
+    只是在原本 `continue` 的地方多記一筆分類計數；候選與例外行為不變。
+    `held_tickers`：held 持股的 ticker 集合，只用來判定「非行動碼的列 ticker 是否對得上持股」（不影響候選）。
+    `station_rows`／`station_stamp` 為 None 時不掃描 → 全 0（呼叫端以 `evaluated` 區分「未知」與「0」）。
     """
     if station_rows is None or station_stamp is None:
-        return [], 0, 0
+        return _ScanResult(candidates=[])
     out: list = []
-    excluded = 0
-    unmatched = 0
+    n_total = n_nonmap = n_nothel = n_invalid = n_nonact = n_unrec = n_unm = 0
+    ticker_count: dict = {}
     for row in station_rows:
-        if not isinstance(row, Mapping) or not _is_held(row):
+        n_total += 1
+        if not isinstance(row, Mapping):
+            n_nonmap += 1
             continue
-        # 帶資料異常標記（非空）的列整列不搬：不用壞資料給建議（fail-safe）。契約沒有「列被排除」的欄位可揭露，
-        # 故不揭露；空 list／空 dict 視為無異常。（排除數由 `plan_action_selection` 以側車 coverage 揭露。）
+        if not _is_held(row):
+            n_nothel += 1
+            continue
+        tk = _ticker_of(row)
+        if tk is not None:
+            ticker_count[tk] = ticker_count.get(tk, 0) + 1
+        # 帶資料異常標記（非空）的列整列不搬：不用壞資料給建議（fail-safe）。Digest 內沒有「列被排除」的欄位可揭露，
+        # 排除數由 `plan_action_selection` 以側車 coverage 揭露；空 list／空 dict 視為無異常。
         if row.get(KEY_INVALID_LIGHTS) or row.get(KEY_INVALID_INPUTS):
-            excluded += 1
+            n_invalid += 1
             continue
         detail = row.get("_detail")
         if isinstance(detail, Mapping) and detail.get("error"):
-            excluded += 1
+            n_invalid += 1
             continue
         code = row.get("_action")
         if code not in ACTION_RULE_IDS:
+            if code in _NON_ACTION_CODES:
+                if tk is not None and tk in held_tickers:
+                    n_nonact += 1
+                else:
+                    n_unm += 1
+            else:
+                n_unrec += 1
             continue
-        key = _key_for(_ticker_of(row), holding_keys)
+        key = _key_for(tk, holding_keys)
         if key is None or key not in keyed:
-            unmatched += 1
+            n_unm += 1
             continue
         text = row.get("建議動作")
         if type(text) is not str or not text.strip():
             raise ValueError(f"站內列 {key.symbol!r} 的 _action={code!r} 但 建議動作 不是非空 str：{text!r}"
                              "（規則層契約漂移；不得默默丟掉行動）")
         out.append((key, code, text))
-    return out, excluded, unmatched
+    return _ScanResult(candidates=out, rows_total=n_total, non_mapping=n_nonmap, not_held=n_nothel,
+                       excluded_invalid=n_invalid, non_action=n_nonact, unrecognized=n_unrec, unmatched=n_unm,
+                       duplicate_rows=sum(n for n in ticker_count.values() if n >= 2))
 
 
 def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: SourceStamp | None,
                        keyed: frozenset, holding_keys: Mapping | None) -> list:
     """合格行動候選：(HoldingKey, branch_code, 原樣文字)，保持輸入順序。"""
-    return _scan_action_rows(station_rows, station_stamp, keyed, holding_keys)[0]
+    return _scan_action_rows(station_rows, station_stamp, keyed, holding_keys).candidates
 
 
 def _order_candidates(cands: list) -> list:
@@ -438,30 +488,52 @@ def _validate_inputs(macro_state: Any, macro_stamp: Any, allocation: Any, statio
 # ── 行動選取計畫（Issue #1127 S8：省略揭露的資料來源；純加性，不改 build_decision_digest 輸出）──────────
 @dataclass(frozen=True)
 class ActionSelectionPlan:
-    """`build_decision_digest` 在行動段做的選取，攤開來看（不改任何輸出，只讓「被省略多少」可被數出來）。
+    """`build_decision_digest` 在行動段做的選取，攤開來看（不改任何輸出，只讓「被省略／沒被讀進來」可被數出來）。
 
-    - `evaluated`：能否評估。`holdings_rows`／`station_rows`／`station_stamp` 任一為 None → False
-      （builder 此時行動段 UNAVAILABLE；**未知不是零**）。
+    **原則**：掃描時每一列都必須被歸入互斥且窮盡的分類之一（見 `_ScanResult`），不得有任何一列被靜默略過。
+    不能評估的欄位一律 None（**未知不是 0**）。
+
+    ── 能否評估與行動選取 ──
+    - `evaluated`：`holdings_rows`／`station_rows`／`station_stamp` 任一為 None → False（builder 此時行動段 UNAVAILABLE）。
     - `ordered`：**全部**合格候選 (HoldingKey, branch_code, 原樣文字)，Q4 序（stable）；未評估 → ()。
-    - `chosen`：`ordered[:MAX_ACTIONS]`，與 `build_decision_digest` 實際搬進 Digest 的行動逐一相同
-      （parity 由測試以固定種子隨機輸入守住）。
-    - `excluded_invalid_rows`：held 且因 `_invalid_lights`／`_invalid_inputs`／`_detail.error` 整列被排除的列數；
-      未評估 → None（不是 0）。
-    - `unmatched_action_rows`：held、無異常旗標、`_action` ∈ 行動碼，但對不上持股鍵而被 builder 靜默丟棄的列數
-      （例：ticker 大小寫不符、ticker 不在 `holdings_rows`、沒有 `HoldingKey`）；未評估 → None。
-    - `holdings_without_station_row`：`holdings_rows` 中 held 的列，在站內列裡**沒有**同 ticker 的 held 列
-      （＝這檔持股沒有任何站內證據；ticker 缺／空白者也計入，因為無從比對）；未評估 → None。
+    - `chosen`：`ordered[:MAX_ACTIONS]`，與 `build_decision_digest` 實際搬進 Digest 的行動逐一相同（parity 由測試守住）。
+
+    ── 站內列分割（未評估 → 全 None）：rows_total == len(ordered) + station_non_action_rows + station_not_held_rows
+         + excluded_invalid_rows + unrecognized_action_code_rows + unmatched_station_rows + station_non_mapping_rows ──
+    - `station_rows_total`：掃描到的站內列總數。
+    - 合法且已知的排除（不算遺漏）：`station_not_held_rows`、`station_non_action_rows`（premium／cruise 且 ticker 對得上
+      held 持股）、`excluded_invalid_rows`（資料異常：`_invalid_lights`／`_invalid_inputs`／`_detail.error`；
+      這個**算**未讀入，coverage 仍要求其為 0）。
+    - 未能讀入：`station_non_mapping_rows`、`unrecognized_action_code_rows`（`_action` 缺／None／未知碼，含 'Add'、'zzz'）、
+      `unmatched_station_rows`（held、無異常、碼合法，但 ticker 對不上持股／鍵；大小寫或空白不符、不在 `holdings_rows`、
+      沒有 `HoldingKey`、非行動碼的 ticker 不在 held 持股）。
+    - `duplicate_station_ticker_rows`：**正交疊加**（不在分割內）：同 ticker 出現在 ≥2 個 held 站內列者的所有列數。
+    - `holdings_without_station_row`：held 持股中，站內列沒有同 ticker held 列者（＝沒有任何站內證據）的數量。
       比對一律精確字串（與鍵查找相同，不做大小寫或空白正規化）。
-    - `unkeyed_held_count`：held 但無鍵的持有列數（與 `HoldingsSection.unkeyed_count` 同判定）；
-      `holdings_rows is None` → None（builder 對此情形的 `unkeyed_count=0` 是「未知」，不是零）。
+
+    ── 持有列分割（`holdings_rows` 為 None → 全 None）：holdings_rows_total == holdings_non_mapping_rows
+         + holdings_not_held_rows + holdings_held_keyed_rows + unkeyed_held_count ──
+    - `holdings_non_mapping_rows`：非 Mapping 的持有項（原本被靜默略過）。
+    - `unkeyed_held_count`：held 但無鍵的持有列數（與 `HoldingsSection.unkeyed_count` 同判定；`holdings_rows is None` → None，
+      builder 對此情形的 `unkeyed_count=0` 是「未知」，不是零）。
     """
     evaluated: bool
     ordered: tuple
     chosen: tuple
     excluded_invalid_rows: int | None
     unkeyed_held_count: int | None
-    unmatched_action_rows: int | None = None
+    unmatched_station_rows: int | None = None
     holdings_without_station_row: int | None = None
+    station_rows_total: int | None = None
+    station_non_mapping_rows: int | None = None
+    station_not_held_rows: int | None = None
+    station_non_action_rows: int | None = None
+    unrecognized_action_code_rows: int | None = None
+    duplicate_station_ticker_rows: int | None = None
+    holdings_rows_total: int | None = None
+    holdings_non_mapping_rows: int | None = None
+    holdings_not_held_rows: int | None = None
+    holdings_held_keyed_rows: int | None = None
 
     @property
     def total_eligible(self) -> int | None:
@@ -491,17 +563,25 @@ def plan_action_selection(*, station_rows: Sequence[Mapping] | None = None,
         return ActionSelectionPlan(evaluated=False, ordered=(), chosen=(), excluded_invalid_rows=None,
                                    unkeyed_held_count=None)
     keys_in_order, unkeyed = _keyed_holdings(holdings_rows, holding_keys)
+    h_total = len(holdings_rows)
+    h_nonmap = sum(1 for r in holdings_rows if not isinstance(r, Mapping))
+    h_nothel = sum(1 for r in holdings_rows if isinstance(r, Mapping) and not _is_held(r))
+    holdings_side = dict(unkeyed_held_count=unkeyed, holdings_rows_total=h_total, holdings_non_mapping_rows=h_nonmap,
+                         holdings_not_held_rows=h_nothel, holdings_held_keyed_rows=len(keys_in_order))
     if station_rows is None or station_stamp is None:
         return ActionSelectionPlan(evaluated=False, ordered=(), chosen=(), excluded_invalid_rows=None,
-                                   unkeyed_held_count=unkeyed)
-    cands, excluded, unmatched = _scan_action_rows(station_rows, station_stamp, frozenset(keys_in_order),
-                                                   holding_keys)
-    ordered = tuple(_order_candidates(cands))
-    return ActionSelectionPlan(evaluated=True, ordered=ordered, chosen=ordered[:MAX_ACTIONS],
-                               excluded_invalid_rows=excluded, unkeyed_held_count=unkeyed,
-                               unmatched_action_rows=unmatched,
-                               holdings_without_station_row=_count_holdings_without_station_row(
-                                   holdings_rows, station_rows))
+                                   **holdings_side)
+    held_tickers = frozenset(t for t in (_ticker_of(r) for r in holdings_rows
+                                         if isinstance(r, Mapping) and _is_held(r)) if t is not None)
+    sc = _scan_action_rows(station_rows, station_stamp, frozenset(keys_in_order), holding_keys, held_tickers)
+    ordered = tuple(_order_candidates(sc.candidates))
+    return ActionSelectionPlan(
+        evaluated=True, ordered=ordered, chosen=ordered[:MAX_ACTIONS], excluded_invalid_rows=sc.excluded_invalid,
+        unmatched_station_rows=sc.unmatched,
+        holdings_without_station_row=_count_holdings_without_station_row(holdings_rows, station_rows),
+        station_rows_total=sc.rows_total, station_non_mapping_rows=sc.non_mapping, station_not_held_rows=sc.not_held,
+        station_non_action_rows=sc.non_action, unrecognized_action_code_rows=sc.unrecognized,
+        duplicate_station_ticker_rows=sc.duplicate_rows, **holdings_side)
 
 
 def _count_holdings_without_station_row(holdings_rows: Sequence[Mapping], station_rows: Sequence[Mapping]) -> int:
