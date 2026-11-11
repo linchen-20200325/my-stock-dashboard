@@ -8303,3 +8303,27 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 
 - **有效讀法**：DEC-169 之後、#1149 被 CI 環境阻塞的描述（含 HANDOFF 前段「PR 待 CI／被環境阻塞」類字樣）自本條起**已過期**——CI 環境已修復（#1150）、#1149 已合併（`d8d74ccd`）。CI 環境修復**已授權且已完成**，與 Gate 決策是兩件事：它不構成任何資料授權、PIT、coverage 或接線的核准；沉默不等於同意。
 - **下一步**：**等客戶就 Coverage 門檻／母體口徑（`DG-COV`）與資料授權風險（`DG-LIC`，含 `DG-PIT`、`DG-SCOPE`）裁示**；無裁示即停手（CLAUDE.md §-1）。
+
+
+### DEC-171｜Issue #1144 後續：客戶裁示「同意方案 B」——先執行公開 Repository 的資料曝露、來源授權與儲存架構唯讀稽核，再決定是否修改資料保存方式（2026-11-11；只追加；依客戶對話原文轉錄；僅 docs-only 唯讀稽核；非 QA PASS）
+
+- **客戶原文（2026-11-11 對話）**：「客戶已同意方案 B：先執行公開 Repository 的資料曝露、來源授權與儲存架構唯讀稽核，再決定是否修改資料保存方式。」
+- **授權範圍（僅此）**：(1) `data_cache/` 追蹤檔資料曝露盤點；(2) 來源授權（TWSE／TPEX／FinMind／MOPS／data.gov.tw／CBC／Yahoo）證據矩陣；(3) Git 歷史曝露與資料發布／讀取架構唯讀分析；(4) 三方案比較與分階段遷移**候選**；(5) docs-only 更新 GitHub SSOT（只追加）。
+- **未授權（限制；明確不是下列任何一項的授權）**：資料遷移、刪除任何檔（含 `industry_raw.json`）、改寫 Git 歷史、改 repo 可見性（公開／私人）、修改 workflow／Actions／Secrets／網路架構、新增儲存或認證、任何程式／投資規則／資料來源／UI runtime／Schema 修改、採用新 Coverage 母體或任何門檻值。**「再決定是否修改資料保存方式」是客戶之後的另一個裁示，本 DEC 不含。本裁示不是 runtime 接線授權，`I1144-WIRING-GATE` 仍未授權。**
+- **成果摘要（FACT／抽查；詳見 `docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`）**：
+  - **曝露**：repo 公開；`data_cache` 追蹤 29 檔、約 2.30 MB，**個股級 15 檔**；無 Secret、個人持股（regex 範圍內，非專業掃描器；PR-only 物件未掃），安全事件候選：無可確認事件（僅低度本機路徑觀察）。
+  - **更正先前說法**：`industry_raw.json` 內 FinMind 列只保留 `date`／`industry_category`／`type` 三欄（官方列只 `code`／`endpoint`／`market`／`name` 四欄），**不是**「全部原始列」；是否仍屬條款所稱原始資料＝客戶／法律判斷。補充文件 §11 原文不改，自本條起讀作更正後意義。
+  - **授權**：條款原文僅 FinMind 取得（官方 GitHub Pages，2026-10-31 版）＝PARTIALLY VERIFIED；TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo 零頁原文＝NOT VERIFIED；repo 內無授權證據；A（原文）／B（適用）／C（已取得授權）三層分開，**未下任何法律定論**。
+  - **Git 歷史**：`data_cache` 歷史 1,036 個相異 blob、約 80.0 MB；存在於各分支與 1,133 個 PR head；停止追蹤不減歷史。
+  - **架構**：Streamlit Cloud 讀 repo checkout 內 `data_cache`；若離開公開 repo，至少 8 個 L1／L3 讀取模組與約 61 個測試檔受影響；Google Sheets／NAS／`data` 分支／Artifact 皆非現成可替換的非公開資料倉。
+  - **RECOMMENDATION（非裁示）**：先取得授權書面答案再決定；高優先級項目為 `industry_raw.json` 與 FinMind 市場級序列；若須降低曝露面，優先考慮可逆的方案 C 第一階段（H1 來源列不再寫入公開 repo），不動歷史；**以上僅候選，非施工授權**。
+  - **抽查與降級**：撰寫組自行實跑抽查並降級數項（歷史 blob 大小口徑、僅 PR blob 數、main commit 數、路徑觀察計數等，見研究文件 §8）；**證據仍為單組，未經第二組獨立複驗**（§-2 規則 6）。
+- **仍 HOLD**：`DG-COV`（Coverage 母體變更、最低 coverage）、`DG-PIT`、`DG-LIC`（最終判斷）、`DG-SCOPE`、`I1144-WIRING-GATE`、Digest A3、`market.health` 範圍、外資 L3、OneBrain runtime、UI2 接線、G-F2～G-F6；本批**未關閉任何 Gate**。
+- **有效讀法**：公開≠違法；API 可取得≠可再散布；條款存在≠適用於該資料集≠本專案已取得授權；網路可達（DEC-168）≠授權；沉默不等於同意。
+
+| 類別 | 項目 |
+|---|---|
+| **已完成** | 公開資料曝露、來源授權與儲存架構唯讀稽核（研究文件，docs-only）；本 docs PR 號：待補 |
+| **已授權** | 唯讀稽核與 GitHub SSOT 只追加更新（本 DEC 客戶原文） |
+| **未授權** | 資料遷移、刪檔、改歷史、改 repo 可見性、改 workflow／Secrets／儲存／網路、任何程式／資料／`data_cache` 變更、採用新母體或門檻、UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller |
+| **NOT VERIFIED** | TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo 條款原文與適用性；FinMind 官網即時版本、方案等級、是否商業、與來源機關契約；Streamlit Cloud 部署設定；UI 來源標示是否顯示；raw URL 等實際可取得性；歷史 Secret 掃描窮盡性；裸 push 是否被 branch protection 擋下；本批結論的第二組獨立複驗 |

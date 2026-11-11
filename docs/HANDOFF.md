@@ -1599,3 +1599,17 @@ DEC-086 規則已於 main，本表已落地。
 
 **Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-170／169／168 與本段；CI 已修復、#1149 已合併，勿重做；無客戶新裁示不動工；完整提示語見前段『Issue #1144 接手點』，不重貼。
 **GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成（CI 環境修復 #1150）／已授權／未授權／NOT VERIFIED，等客戶就 `DG-COV`／`DG-LIC` 裁示；不自設門檻、不把 CI 綠燈或網路可達當授權；完整提示語見前段，不重貼。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「公開 Repository 資料曝露／來源授權／儲存架構唯讀稽核」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-171；本 docs PR 號：待補）
+
+> **更正前段**：前段（DEC-169／170 接手點）寫「等客戶就 Coverage／授權風險裁示」仍有效；本段補述：客戶已裁示「同意方案 B」（先唯讀稽核，再決定是否修改資料保存方式），**授權風險審計已完成**，現在**等客戶裁示儲存方案**。**新的 GPT／Claude Code 接手點以本段為準。**
+
+- **客戶原文**：「客戶已同意方案 B：先執行公開 Repository 的資料曝露、來源授權與儲存架構唯讀稽核，再決定是否修改資料保存方式。」
+- **已完成**：研究文件 `docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`（docs-only）。要點：`data_cache` 29 檔／個股級 15 檔；僅 FinMind 條款原文 PARTIALLY VERIFIED，其餘來源 NOT VERIFIED，repo 內無授權證據；Git 歷史 1,036 blob／約 80 MB、停止追蹤不減歷史；`industry_raw.json` FinMind 列僅 3 欄（更正「全部原始列」）；無可確認的 Secret／個資事件；三方案比較與分階段候選（標明不可逆階段）。
+- **停點**：`WIRING-GATE`。**不得**遷移、刪檔（含 `industry_raw.json`）、改寫歷史、改 repo 可見性、改 workflow／Secrets／儲存／網路；**不得**據此宣稱已授權或已違規；不自設門檻。
+- **待客戶**：研究文件 §7（商業？公開？是否可保留個股級來源列？是否授權另案提出階段 1 最小方案？如何取得條款原文？）；其餘 `DG-COV`／`DG-PIT`／`DG-SCOPE`／接線授權仍 HOLD。
+- **NOT VERIFIED**：TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo 條款、FinMind 方案等級與是否商業、Streamlit Cloud 設定、UI 來源標示、歷史 Secret 掃描窮盡性；證據單組、未經第二組獨立複驗。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-171／170 與研究文件 §0、§5、§7；稽核已完成，勿重做；無客戶新裁示不動工、不遷移任何資料。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成（唯讀稽核）／已授權／未授權（遷移、刪檔、改歷史、改可見性）／NOT VERIFIED，等客戶裁示儲存方案與授權三問；不自設門檻、不把公開或可取得當授權；完整提示語見前段，不重貼。

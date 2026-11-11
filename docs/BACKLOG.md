@@ -2380,3 +2380,13 @@
 - **I1144-CI-ENV-MAINT**（新，低優先、非待辦動工項）：容器映像升級時 image tag、digest、`playwright==` pip pin 須一併更新；runner Ubuntu 來源 DNS 故障根因未查明（NOT VERIFIED）。無實際故障／升級需求不主動動工（CLAUDE.md §-1）。
 - **仍開放（均未因本批關閉）**：`DG-COV`（`I1140-COVERAGE-MIN`，母體新算法／最低門檻未裁示）、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6。
 - **NOT VERIFIED**：修復僅證明於當日 runner 可執行；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否設為 branch protection required check 本工作階段無權限查證。本 docs PR 號：#1151。
+
+
+### Issue #1144 後續｜公開 Repository 資料曝露、來源授權與儲存架構唯讀稽核完成（2026-11-11；只追加；不改既有列；依據 DEC-171；以下皆非施工授權）
+
+- **I1144-PUBLIC-DATA-AUDIT**：已完成（docs-only）`docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`；PR 號：待補。結果：`data_cache` 29 檔、個股級 15 檔；授權僅 FinMind PARTIALLY VERIFIED、其餘 NOT VERIFIED、repo 內無授權證據；Git 歷史停止追蹤不減曝露；三方案 A／B／C 比較完成；**未下法律定論、未動任何檔**。
+- **I1144-DATA-STORAGE-DECISION**（新；**待客戶裁示，非動工項**）：是否修改資料保存方式。RECOMMENDATION（非裁示）：先取授權書面答案；若要降低曝露面，優先評估可逆的方案 C 第一階段（`industry_raw.json` 來源列不再寫入公開 repo）。分階段候選見研究文件 §5.1（歷史改寫、改 repo 可見性為不可逆／最高等級，須客戶拍板）。
+- **I1144-LIC-THREE-QUESTIONS**（新；屬 `DG-LIC`）：本專案是否商業？是否公開對外？公開 repo 保留個股級來源列是否可接受？待客戶／法務。
+- **更正（INFERENCE→FACT）**：`industry_raw.json` 的 FinMind 列僅 3 欄、官方列僅 4 欄（非「全部原始列」）；補充文件 §11 原文保留。
+- **仍開放（均未因本批關閉）**：`DG-COV`、`DG-PIT`、`DG-LIC`（最終判斷）、`DG-SCOPE`、`I1144-WIRING-GATE`（未授權）、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6。
+- **NOT VERIFIED**：TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo 條款原文、FinMind 方案等級與是否商業、Streamlit Cloud 設定、UI 來源標示、歷史 Secret 掃描窮盡性；證據單組、未經第二組獨立複驗。
