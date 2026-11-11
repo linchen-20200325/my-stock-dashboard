@@ -79,6 +79,13 @@ class TwiiTrendView:
     n_ohlc: int = 0
 
     def __post_init__(self) -> None:
+        # Issue #1140 C2：負的 age_days ＝ 資料日晚於基準日（未來日；L1 `compute_cache_staleness` D2 照實保留負值供診斷）。
+        # 這種資料**無法判定新鮮度**：⛔ 不顯示「過期 -N 天」、⛔ 不截成 0 天、⛔ 不當 fresh／未判定的 OK。
+        # 此處是三條消費路徑（收盤卡／日 K／圖 A）共用的唯一出口：天數改 None（"天數未知"）、is_stale 強制 True
+        # （與 L1 D2「視為過期」同向）；原因說明 `stale_reason` 原樣保留（來源可追溯）。
+        if self.age_days is not None and self.age_days < 0:
+            object.__setattr__(self, "age_days", None)
+            object.__setattr__(self, "is_stale", True)
         # B2(DEC-148):有 upstream_error 但沒帶 upstream_state(舊讀取路徑／直接建構)→ 由 last_error 單獨判定
         # (純空抓取標記 → UNDETERMINED,不預設成功;其他錯誤字串 → FETCH_FAILED)。判定規則只在 L0 一處。
         if not self.upstream_state and self.upstream_error:
@@ -116,11 +123,38 @@ def get_twii_trend_view(n_trading_days: int, *, with_ohlc: bool = False, today=N
         return TwiiTrendView(ok=False, failed=True, error=f"{type(_e).__name__}: {_e}")
     if _s is None or len(_s) == 0:
         return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT)
-    return TwiiTrendView(**_close_view_kwargs(_s, getattr(_s, "attrs", {}) or {}, n_trading_days))
+    _attrs = getattr(_s, "attrs", {}) or {}
+    _bad = _card_price_problem(_s, _attrs, n_trading_days)
+    if _bad:
+        # Issue #1140 C1：收盤價必須是有限正值（與日 K 契約 `price_problem` 同一規則）；⛔ 不補 0／不剔除壞值後照畫。
+        # 畫面沿用既有「讀不到」灰態字樣（不新增使用者可見文案）；具體原因只進 log。
+        print(f"[market_twii_view_service] 收盤價未通過價格有效性檢查，整段不用：{_bad}")
+        return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT)
+    return TwiiTrendView(**_close_view_kwargs(_s, _attrs, n_trading_days))
 
 
 #: 讀不到（檔不存在／壞檔／缺欄／空）時的說明（灰，非例外）。
 _UNREADABLE_TEXT: str = "加權指數歷史快取讀不到（檔案不存在、壞檔、缺欄或內容為空）"
+
+
+def _card_price_problem(_s, _attrs: dict, n_trading_days: int) -> str:
+    """收盤卡／圖 A 的價格有效性（first violation wins；合格 → `""`）。只驗**價格欄**，規則＝L0 `price_problem`。
+
+    - 視窗內任何一筆收盤不是有限正值（≤ 0、±inf、非數值）→ 整段不合格（同日 K ⛔ 剔除壞棒後照畫）。
+    - L1 `load_twii_close` 對 NaN 只 dropna（有 log）：若**最新一列**的 close 是 NaN，被剔除後尾端會是前一天的值，
+      但 `attrs["as_of"]`（來自原始檔最大日期）仍是最新日 ⇒ 卡片會把舊收盤標成新資料日。兩者對不上 → 不合格。
+    """
+    from shared.twii_ohlc_contract import price_problem
+
+    _tail = _s.tail(n_trading_days)
+    for _idx, _v in zip(_tail.index, _tail.values):
+        _code = price_problem(_v)
+        if _code:
+            return f"{_code} {_iso(_idx)} close={_v!r}"
+    _as_of = _iso(_attrs.get("as_of"))
+    if _as_of is not None and _tail.shape[0] and _as_of != _iso(_tail.index[-1]):
+        return f"NOT_FINITE 最新資料日 {_as_of} 的收盤為空值（最後一筆有效收盤是 {_iso(_tail.index[-1])}）"
+    return ""
 
 
 def _close_view_kwargs(_s, _attrs: dict, n_trading_days: int) -> dict:
