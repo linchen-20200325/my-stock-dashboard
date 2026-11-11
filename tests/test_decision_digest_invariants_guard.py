@@ -17,6 +17,13 @@ C2  repo 全域「0 production caller」守衛：AST 掃描 repo 內所有 .py�
     （取 `HoldingKey`／`StrategyType` 兩個純型別），不在上述 8 個目標內，亦不碰任何側車／規則模組；
     本檔另有測試鎖死「它對 digest 家族只 import 那一個模組」。
 
+已知限制（minor，有意識不修；若要補強須另案）：
+  - C1 的 os.environ 陷阱只攔「寫入」，不攔讀取（digest 路徑讀 env 目前不受檢）；
+  - C3 只量 shared 的 digest 家族＋L0 依賴的閉包，不含 `src.services.decision_digest_*` 三個模組的閉包
+    （那三個的 import 白名單由 tests/test_decision_digest_assembly.py／builder／summary 各自的 AST 檔守住）；
+  - C2 動態 import 偵測以「字串片段含 `decision_digest`」為準，刻意把子字串拆開
+    （如 `"decision" + "_digest"`）可繞過 —— 這類惡意規避不在守衛範圍。
+
 C3  L0 動態 import 閉包：以 `python -I` 子行程匯入 shared 的 digest 家族與其 L0 依賴，
     用**匯入前後 sys.modules 差集**斷言新增模組不含 streamlit／requests／pandas／numpy／src／app 等。
     （`google` 在直譯器啟動時即被預載，故一律用差集而非絕對檢查。）
@@ -280,19 +287,39 @@ ALLOWED_CALLERS: frozenset = frozenset()
 # 僅 import L0 根契約 shared.decision_digest 的既有檔（不在 TARGET_MODULES 內，另由專屬測試鎖死）。
 L0_ROOT_IMPORTERS = frozenset({"shared/strategy_class_schema.py"})
 
-_SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", "env", ".tox", ".mypy_cache",
-              ".pytest_cache", "site-packages", "scratchpad", "docs", "tests"}
+# digest 家族檔：**明確檔名白名單**（Gate 變更才改）。其餘任何 decision_digest* 檔（含未來新增、如
+# src/services/decision_digest_caller.py）一律視為「非家族檔」而被掃描。
+FAMILY_FILES = frozenset({
+    "shared/decision_digest.py", "shared/decision_digest_rules.py", "shared/decision_digest_terms.py",
+    "shared/decision_digest_grounding.py", "shared/decision_digest_validator.py",
+    "shared/decision_digest_coverage.py",
+    "src/services/decision_digest_builder.py", "src/services/decision_digest_assembly.py",
+    "src/services/decision_digest_summary.py",
+})
+# 只排除「頂層」這些目錄；更深層的同名目錄（如 src/ui/tests/、pkg/env/、src/docs/）一律掃。
+_SKIP_TOP_DIRS = frozenset({"tests", "docs", "venv"})
+_SKIP_ANYWHERE = frozenset({"__pycache__", "node_modules"})     # 以及任何以 "." 開頭的目錄
+_SKIP_TOP_PATHS = (("scripts", "_out"),)
 
 
 def _is_family_file(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return ((rel.startswith("shared/") and rel.count("/") == 1 and name.startswith("decision_digest"))
-            or (rel.startswith("src/services/") and rel.count("/") == 2 and name.startswith("decision_digest_")))
+    return rel in FAMILY_FILES
+
+
+def _skip_dir(rel_parts: tuple) -> bool:
+    name = rel_parts[-1]
+    if name.startswith(".") or name in _SKIP_ANYWHERE:
+        return True
+    if len(rel_parts) == 1 and name in _SKIP_TOP_DIRS:
+        return True
+    return rel_parts in _SKIP_TOP_PATHS
 
 
 def _iter_py(root: Path):
+    root = Path(root)
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        base = Path(dirpath).relative_to(root).parts
+        dirnames[:] = [d for d in dirnames if not _skip_dir(base + (d,))]
         for fn in filenames:
             if fn.endswith(".py"):
                 yield Path(dirpath) / fn
@@ -300,14 +327,27 @@ def _iter_py(root: Path):
 
 def _package_of(rel: str) -> list:
     parts = rel[:-3].split("/")
-    return parts[:-1] if parts[-1] != "__init__" else parts[:-1]
+    return parts[:-1]
+
+
+DYNAMIC_MARKER = "DYNAMIC_DIGEST_IMPORT"
 
 
 def _imported_modules(tree: ast.AST, rel: str) -> set:
-    """回傳此檔以任何形式觸及的『絕對模組名』集合（含 from-import 的 module.name 組合與 importlib 字串形式）。"""
+    """回傳此檔以任何形式觸及的『絕對模組名』集合（含 from-import 的 module.name 組合與 importlib 字串形式）。
+
+    動態 import（`import_module`／`__import__`）：引數為純字串常數 → 直接收；引數非常數（BinOp／JoinedStr／
+    Call／Name…）→ 只要該呼叫的運算式 unparse 後、或**同檔任何字串常數**含 `decision_digest`，就加入 DYNAMIC_MARKER
+    （涵蓋 `"src.services." + "decision_digest_builder"`、f-string、先指派變數再 import）。
+    repo 既有合法動態 import（如 `import_module(f".{_name}")`）檔內無該子字串，不會誤報。
+    """
     found: set = set()
     pkg = _package_of(rel)
+    dynamic_nonconst = False
+    file_has_digest_str = False
     for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "decision_digest" in n.value:
+            file_has_digest_str = True
         if isinstance(n, ast.Import):
             found |= {a.name for a in n.names}
         elif isinstance(n, ast.ImportFrom):
@@ -322,15 +362,23 @@ def _imported_modules(tree: ast.AST, rel: str) -> set:
         elif isinstance(n, ast.Call):
             f = n.func
             name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
-            if name in ("import_module", "__import__") and n.args:
-                a0 = n.args[0]
-                if isinstance(a0, ast.Constant) and isinstance(a0.value, str):
-                    found.add(a0.value)
+            if name in ("import_module", "__import__"):
+                arg = n.args[0] if n.args else next((k.value for k in n.keywords if k.arg == "name"), None)
+                if arg is None:
+                    continue
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    found.add(arg.value)
+                else:
+                    dynamic_nonconst = True
+                    if "decision_digest" in ast.unparse(arg):
+                        found.add(DYNAMIC_MARKER)
+    if dynamic_nonconst and file_has_digest_str:
+        found.add(DYNAMIC_MARKER)
     return found
 
 
 def scan_digest_callers(root: Path, *, allowed: frozenset = frozenset()) -> list:
-    """掃 root 下所有 .py（排除 tests/docs/digest 家族檔自身），回傳 [(相對路徑, 命中的模組)]。"""
+    """掃 root 下所有 .py（排除頂層 tests/docs、家族白名單檔），回傳 [(相對路徑, 命中的模組)]。"""
     hits = []
     for path in _iter_py(root):
         rel = path.relative_to(root).as_posix()
@@ -341,9 +389,22 @@ def scan_digest_callers(root: Path, *, allowed: frozenset = frozenset()) -> list
         except (SyntaxError, UnicodeDecodeError) as exc:                  # 掃不動 ＝ 不能宣稱沒 caller → fail loud
             hits.append((rel, f"UNPARSEABLE:{type(exc).__name__}"))
             continue
-        for m in sorted(_imported_modules(tree, rel) & TARGET_MODULES):
+        found = _imported_modules(tree, rel)
+        for m in sorted(found & TARGET_MODULES):
             hits.append((rel, m))
+        if DYNAMIC_MARKER in found:
+            hits.append((rel, DYNAMIC_MARKER))
     return hits
+
+
+def test_c2_family_whitelist_files_exist_and_cover_all_current_digest_files():
+    for rel in FAMILY_FILES:
+        assert (REPO / rel).is_file(), rel
+    on_disk = {p.relative_to(REPO).as_posix() for p in _iter_py(REPO)
+               if "decision_digest" in p.name and p.parent.relative_to(REPO).as_posix() in ("shared", "src/services")}
+    assert on_disk == set(FAMILY_FILES), (
+        "shared/ 或 src/services/ 出現白名單外的 decision_digest* 檔：新家族檔須明示加入 FAMILY_FILES"
+        "（有意識的 Gate 變更），否則它會被當成 caller 掃描。差集：" + repr(on_disk ^ set(FAMILY_FILES)))
 
 
 def test_c2_repo_has_zero_production_callers_of_digest_family():
@@ -370,6 +431,53 @@ def test_c2_scanner_has_teeth_on_fake_callers(tmp_path):
         p.write_text(src, encoding="utf-8")
     hits = scan_digest_callers(tmp_path)
     assert {r for r, _ in hits} == set(cases)                       # 每種 import 形式都被抓到
+
+
+def test_c2_teeth_m08_dynamic_import_with_string_concat_and_fstring_and_variable(tmp_path):
+    cases = {
+        "m_concat.py": "import importlib\nimportlib.import_module('src.services.' + 'decision_digest_builder')\n",
+        "m_fstr.py": "import importlib\nn='builder'\nimportlib.import_module(f'src.services.decision_digest_{n}')\n",
+        "m_var.py": "import importlib\nm = 'shared.' + 'decision_digest_rules'\nimportlib.import_module(m)\n",
+        "m_dunder.py": "__import__('shared.' + 'decision_digest_terms')\n",
+        "m_join.py": "import importlib\nimportlib.import_module('.'.join(['src','services','decision_digest_summary']))\n",
+    }
+    for rel, src in cases.items():
+        (tmp_path / rel).write_text(src, encoding="utf-8")
+    hits = scan_digest_callers(tmp_path)
+    for rel in cases:
+        assert any(r == rel for r, _ in hits), rel
+    # 無關的合法動態 import 不誤報
+    (tmp_path / "ok.py").write_text("import importlib\nimportlib.import_module(f'.{x}', __name__)\n"
+                                    "__import__('sys').stderr\n", encoding="utf-8")
+    assert not any(r == "ok.py" for r, _ in scan_digest_callers(tmp_path))
+
+
+def test_c2_teeth_m10_m11_same_named_dirs_at_depth_are_scanned_but_top_level_tests_docs_are_not(tmp_path):
+    fake = "from src.services.decision_digest_builder import build_decision_digest\n"
+    for d in ("env", "src/ui/tests", "src/docs", "pkg/venv", "pkg/tests/deep"):
+        (tmp_path / d).mkdir(parents=True)
+        (tmp_path / d / "fake_caller.py").write_text(fake, encoding="utf-8")
+    hit_files = {r for r, _ in scan_digest_callers(tmp_path)}
+    assert hit_files == {"env/fake_caller.py", "src/ui/tests/fake_caller.py", "src/docs/fake_caller.py",
+                         "pkg/venv/fake_caller.py", "pkg/tests/deep/fake_caller.py"}
+    # 頂層 tests/、docs/、.隱藏目錄、__pycache__ 仍排除
+    for d in ("tests", "docs", ".hidden", "pkg/__pycache__"):
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+        (tmp_path / d / "ignored.py").write_text(fake, encoding="utf-8")
+    assert {r for r, _ in scan_digest_callers(tmp_path)} == hit_files
+
+
+def test_c2_teeth_m12_new_decision_digest_named_files_are_not_exempt(tmp_path):
+    fake = "from src.services.decision_digest_builder import build_decision_digest\n"
+    (tmp_path / "src" / "services").mkdir(parents=True)
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "src" / "services" / "decision_digest_caller.py").write_text(fake, encoding="utf-8")
+    (tmp_path / "shared" / "decision_digest_new.py").write_text("import shared.decision_digest_rules\n",
+                                                                encoding="utf-8")
+    # 白名單內的家族檔名（內容同樣 import 另一家族模組）仍被豁免
+    (tmp_path / "src" / "services" / "decision_digest_summary.py").write_text(fake, encoding="utf-8")
+    assert {r for r, _ in scan_digest_callers(tmp_path)} == {"src/services/decision_digest_caller.py",
+                                                            "shared/decision_digest_new.py"}
 
 
 def test_c2_scanner_catches_relative_import_and_respects_exclusions(tmp_path):
