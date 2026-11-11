@@ -2288,6 +2288,8 @@
 | **I1140-DIGEST-HEALTH-RANGE** | Digest `market.health` 僅檢查有限數，無 0..100 範圍檢查（FACT：`150`、`-5` 仍 OK） | 併 A2 裁示 |
 | **I1140-MACRO-STATE-NONCANON** | `get_macro_state` 對非 canonical `effective_regime` 洗成 `neutral` 且 `is_loaded=True`；`light` 直通 `warroom['light']` 不驗（FACT）。不建議動 `normalize_regime`（被測試釘住、舊 UI 大量使用） | 有實際錯誤／客戶裁示 |
 | **I1140-REGIME-SET-EQ** | 四份 regime 集合（`REGIME_LIGHT`、`REGIME_LABEL`、`STATE_WORDS_LATIN`、`_REGIME_EN`）無等式守衛（FACT） | 併 A2 測試規格 #8 |
+| **I1140-NAN-MID-WINDOW** | #1141 限制：窗口中段 NaN 仍被 L1 `dropna` 剔除（DEC-077 既有；FACT，未改） | 客戶要求或實際錯誤 |
+| **I1140-C12-PATH-NOT-EXHAUSTIVE** | #1141 影響路徑為實作者＋QA 兩組 grep，**未窮舉舊 UI 顯示點**（NOT VERIFIED） | 有任務動到舊 UI 顯示點時重查 |
 | **I1140-MACRO-BARREL-ST** | macro barrel eager 載入 streamlit（既有性質；FACT） | 有 headless 需求時評估 lazy（NV） |
 
 #### 3. 仍阻塞／NOT VERIFIED

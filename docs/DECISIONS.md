@@ -8098,8 +8098,8 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 ### DEC-164｜Issue #1140 客戶裁示轉錄：G-1～G-10 正式裁示、融資＋板塊唯讀 L3 與兩項獨立安全修復授權、Digest regime/light 相容性 Gate（2026-11-11）
 
-- **來源／效力（據實，不誇大）**：決策者＝客戶；來源＝GitHub Issue #1140（客戶裁示轉錄）。本條再依該 Issue 轉錄，**非逐字展開、非 QA PASS**；僅下列「客戶原文」引號內為 Issue 所載客戶語句，其餘為依 Issue 整理（原始逐字對話不在 repo，NOT VERIFIED by repo）。基準 main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`（#1141 合併後）。
-- **客戶原文（Issue #1140 所載）**：「同意你的六項 G 表建議，G-4、G-6～G-8 沿用既有方向。授權融資＋板塊唯讀 L3 service 和單元測試（不接 UI、不啟用新來源），以及價格≤0、未來 as_of 的獨立安全修復；Digest regime/light 先做相容性 Gate，不改凍結 Schema。」
+- **來源／效力（據實，不誇大）**：決策者＝客戶；來源＝GitHub Issue #1140（客戶裁示轉錄）。本條再依該 Issue 轉錄，**非逐字展開、非 QA PASS**；僅下列「客戶原文」引號內為 Issue 所載客戶語句，其餘為依 Issue 整理（原始逐字對話不在 repo，NOT VERIFIED by repo）。基準 main `1e5542a8`（#1142 合併後；#1141 為 `907322aa`）。
+- **客戶原文（Issue #1140 所載）**：「同意你的六項 G 表建議，G-4、G-6～G-8 沿用既有方向。授權融資＋板塊唯讀 L3 service 和單元測試（不接 UI、不啟用新來源），以及價格≤0、未來 as_of 的獨立安全修復；Digest regime/light 先做相容性 Gate，不改凍結 Schema。」（引文略去 Issue 後半『請正式寫入 GitHub，給 Claude Code 完整提示語，維持靜默自主巡航。』）
 
 #### 一、G-1～G-10 正式裁示表（依 Issue #1140 轉錄；題號沿用 `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`／DEC-163）
 
@@ -8121,8 +8121,10 @@ Model：Claude Sonnet 5.5  Effort：Medium
 #### 二、授權範圍與 Digest 相容性 Gate
 
 - **授權施工（僅此）**：(1) 融資唯讀 L3 service＋單元測試；(2) 板塊資金唯讀 L3 service＋單元測試（皆**不接 UI、不啟用新來源**）；(3) 獨立安全修復：價格≤0 一致拒用、未來 `as_of` 不再顯示負過期天數。
-- **Digest regime/light：先做相容性 Gate（僅研究）**，**不改凍結 Schema**：不改 v1 schema／validator／action semantics、不升 v2、不建 production caller、不建 OneBrain runtime。
-- **永久禁止清單（Issue #1140 轉錄；本條記錄並沿用，與 DEC-160／DEC-163 不授權事項疊加，不取代）**：不改位階／燈號／公式／權重／PIT；不新增 fetcher、API、source、pipeline、job、cron、Secret；不動登入／OAuth／Sheet、Risk Cap、D1–D5、EPS、舊 UI、正式路由；不實作 P-1、Digest v2、OneBrain、production caller、UI2 切換；不產生買賣建議、法人強弱／融資趨勢／資金流信號、訊號分數、排名；#1119 維持 HOLD；#1124～#1126 不得順手合併／改寫／rebase（#1126 PIT NOT VERIFIED）。
+- **Digest regime/light：先做相容性 Gate（研究；Issue 另允許新增獨立反例測試，本批未新增）**，**不改凍結 Schema**：不改 v1 schema／validator／action semantics、不升 v2、不建 production caller、不建 OneBrain runtime。
+- **永久禁止清單（分兩組；本條記錄並沿用，與 DEC-160／DEC-163 不授權事項疊加，不取代）**：
+  - **(甲) Issue #1140 原清單逐項（轉錄，非逐字）**：不修改舊 UI；不切換正式 app；不動 Risk Cap；不動 D1–D5；不動 EPS／廣度／公式；不新增 API／MCP／source／fetcher／cron／Secrets；不動 OAuth／Sheet；不做外資 L3；不接 UI2 real_feed／section runtime；不實作 Digest v2；不建 OneBrain AI Provider／成本機制；不做 #1119 Actions 精簡（#1119 維持 HOLD）；不處置 #1124～#1126（#1126 PIT 未驗，不得順手合併／改寫／rebase）；上游 TWSE／TPEX／FinMind 再散布權利、Streamlit Cloud、真機、Playwright 皆 **NOT VERIFIED**。
+  - **(乙) 沿用 DEC-160／162／163，Issue #1140 未重述**（為避免遺失而一併列出，**不是**本 Issue 新增的客戶語句）：不改位階／燈號／權重／PIT；不實作 P-1；不產生買賣建議、法人強弱、融資趨勢、訊號分數、排名；不建 production caller。
 
 #### 三、本批 AI 總管內部拍板（**技術實作細節，內部自決，依 v3 §03-1；非客戶裁示**）
 

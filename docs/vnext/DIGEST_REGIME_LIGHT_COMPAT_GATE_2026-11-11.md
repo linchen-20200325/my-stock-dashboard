@@ -1,9 +1,9 @@
 # Digest `market.regime`／`market.light` 詞彙相容性 Gate（唯讀研究）
 
-> **基準**：main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`　**量測日**：2026-11-11
+> **基準**：main `1e5542a8`（#1142 合併後；#1141 為 `907322aa`）　**量測日**：2026-11-11
 > **授權來源**：GitHub Issue #1140 §D（客戶裁示轉錄；見 `docs/DECISIONS.md` DEC-164）。「Digest regime/light 先做相容性 Gate，不改凍結 Schema。」
 > **本檔性質**：docs-only 研究。**不是施工授權**；不改 `src/services/decision_digest_builder.py`、`shared/decision_digest*.py`、`macro_state_locker.py`、任何測試。不升 Digest v2、不建 production caller、不建 OneBrain runtime。
-> **查證方式（據實）**：兩組獨立研究＋一組獨立複驗；本檔所列 FACT 為已複驗事實。未跑全 repo 測試；環境 Python 3.13（非 CI 3.11）。
+> **查證方式（據實）**：多組獨立研究與複驗（過程見 session，非 repo 證據）；§2–§5 為已複驗 FACT；§6 的測試轉紅數為作者端原型實測（未複驗，INFERENCE）。未跑全 repo 測試；環境 Python 3.13（非 CI 3.11）。
 
 ## 0. 結論先行
 
@@ -37,7 +37,7 @@
 
 | 位置 | 行為 |
 |---|---|
-| `src/services/macro_state_locker.py::get_macro_state` 快路徑 | 對非 canonical `effective_regime` 經 `normalize_regime` 洗成 `'neutral'`（`is_loaded=True`）；`light` 直通 `warroom['light']`、不驗，可與 regime 矛盾 |
+| `src/services/macro_state_locker.py::get_macro_state` 快路徑 | 對非 canonical `effective_regime` 經 `normalize_regime` 洗成 `'neutral'`（`is_loaded=True`）；`light` 直通 `warroom['light']`、不驗，可與 regime 矛盾。**`get_macro_state` 快路徑須 warroom 帶 `health_score` 鍵；缺此鍵會落入 unknown／is_loaded=False** |
 | `macro_state_locker._REGIME_EN` | `("bull","neutral","caution","bear")` 共 4 個＝`REGIME_LIGHT` 去掉 `unknown`（設計如此） |
 
 ## 4. 曝險與 SSOT
@@ -70,13 +70,21 @@
 | G5 | `get_macro_state` 非 canonical 輸入測試 | **無** |
 | G6 | 四份 regime 集合等式守衛 | **無** |
 
+**Issue #1140 §D 要求的三項對照（皆已在本檔其他節，此處僅索引）**
+
+| 要求 | 所在 |
+|---|---|
+| 既有拒用位置 | §2（`_text_or_none`／`_UNEVALUATED_*`／AB-0 `PLACEHOLDER_TEXTS`；其餘層皆不檢查值） |
+| 輸入來源 | §3（`get_macro_state` 快路徑、`warroom['light']`、`_REGIME_EN`） |
+| 受影響 caller | §4（production 0 caller，C2 守衛釘住；風險為日後新增 caller） |
+
 ## 6. 三方案比較
 
 | 面向 | **A 上游輸入邊界驗證（builder 白名單）** | **B 強化 validator（`_own_checks`）** | **B' 放 `validate_strict`** | **C 等 Digest v2 正式驗證（Stage F G-F4）** |
 |---|---|---|---|---|
 | 作法 | `decision_digest_builder.py::_market_section` 內 `text_fact` 新增 `_VALID_REGIMES`／`_VALID_LIGHTS`（由 `REGIME_LIGHT` 推導）；名單外→`INVALID`；既有佔位字仍→`MISSING` | 在 `shared/decision_digest_validator.py::_own_checks` 檢查值 | 在 `validate_strict` 檢查 | 待 v2 schema／compat／PIT Gate |
 | 正確性／安全 | 源頭攔截，壞值不進 Digest | **事後**攔截：builder 仍產出 OK Fact；`assemble_digest` 不呼叫 validator，coverage 仍 `used=True` | builder 對垃圾改 raise；`assess_digest` 路徑無保護 | 缺口持續到 v2 |
-| 向後相容 | **嚴格相等版**：1 條既有測試轉紅（`Bull` 逐字斷言）；**A2（`strip().lower()` 比對、text 仍逐字保留）：0 條轉紅**（原型實測，約 1641 條相關測試） | 原型實測 **16～17 條**既有測試轉紅；且一個壞字串會讓整份 Digest 輸出 **0 段** | 同上類風險，且與 builder「降級不崩潰」衝突 | 不適用 |
+| 向後相容 | **嚴格相等版**：1 條既有測試轉紅（`Bull` 逐字斷言）；**A2（`strip().lower()` 比對、text 仍逐字保留）：0 條轉紅**（**INFERENCE／作者端原型實測，未複驗**；約 1641 條相關測試） | **INFERENCE／作者端原型實測，未複驗**：**16～17 條**既有測試轉紅；且一個壞字串會讓整份 Digest 輸出 **0 段** | 同上類風險，且與 builder「降級不崩潰」衝突 | 不適用 |
 | 改動範圍／凍結契約 | 單檔（builder）；**不碰 `shared/decision_digest*.py`** | 碰凍結 validator 家族 | 碰凍結 validator 家族 | 需 v2 Gate（本批不授權） |
 | 速度／Token／維護 | O(1) 集合比對；白名單由 `REGIME_LIGHT` 推導，**不新增第六份真相源** | 規則散在 validator | 同左 | — |
 | 風險 | 低；INVALID 語意與既有先例一致（`market.health` 非有限、`risk_cap.*_pct` 越界 → `_invalid`） | 中高：大範圍測試轉紅、整份 Digest 歸零 | 中高 | 缺口持續（目前無 caller，風險可控） |
@@ -87,7 +95,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 理由 | (1) 唯一不碰凍結檔；(2) 與 builder「降級不崩潰」一致；(3) 與 UI2 `validate_regime_fact` 白名單前例同向；(4) 白名單由 `REGIME_LIGHT` 推導，不新增真相源；(5) INVALID 語意與既有先例一致，MISSING 保留給既有佔位字 |
+| 理由 | (1) 唯一不碰凍結檔；(2) 與 builder「降級不崩潰」一致；(3) 與 UI2 `validate_regime_fact` 白名單前例概念同向（`validate_regime_fact` 為違反即 raise `RealFeedContractError`，A2 為降級成 INVALID，語意不同，僅概念同向）；(4) 白名單由 `REGIME_LIGHT` 推導，不新增真相源；(5) INVALID 語意與既有先例一致，MISSING 保留給既有佔位字 |
 | 落點 | `decision_digest_builder.py::_market_section` 內 `text_fact`；新增 `_VALID_REGIMES`／`_VALID_LIGHTS` |
 | 可選 A3 | 配對一致性（`light == REGIME_LIGHT[regime]`）；**未原型** |
 | 狀態 | **本批不實作，等客戶裁示** |
@@ -119,8 +127,8 @@
 
 | 項目 | 狀態 |
 |---|---|
-| 成因、上游、SSOT、覆蓋表 | 兩組獨立研究＋一組獨立複驗（FACT） |
-| 方案 A／A2／B 原型測試轉紅數 | 作者端原型實測（約 1641 條相關測試；**未跑全 repo 測試**） |
+| 成因、上游、SSOT、覆蓋表（§2–§5） | 多組獨立研究與複驗（過程見 session，非 repo 證據）（FACT） |
+| 方案 A／A2／B 原型測試轉紅數（§6） | INFERENCE：作者端原型實測，未複驗（約 1641 條相關測試；**未跑全 repo 測試**） |
 | 執行環境 | Python 3.13，**非 CI 3.11** |
 | 「0 caller」範圍 | 僅 `.py`／`.yml`／`.json`／`.toml` 與 importlib |
 | 全形字元／VS16 emoji 變體 | **NOT VERIFIED**（行為未驗） |
