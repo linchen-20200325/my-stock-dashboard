@@ -1,25 +1,25 @@
 {
-  "updated_at": "2026-11-10T17:13:06.328568+00:00",
-  "last_updated": "2026-11-10",
-  "row_count": 1762,
-  "n_days": 38,
+  "updated_at": "2026-11-11T17:21:38.092394+00:00",
+  "last_updated": "2026-11-11",
+  "row_count": 1807,
+  "n_days": 39,
   "fetch_diag": {
-    "days_fetched": 1,
+    "days_fetched": 2,
     "days_holiday_or_empty": 0,
     "days_missing_price": 0,
     "unresolved_retried": [],
     "unresolved_expired": []
   },
   "coverage": {
-    "n_stock_days_with_net": 19654,
-    "n_dropped_missing_price": 17413,
+    "n_stock_days_with_net": 39500,
+    "n_dropped_missing_price": 35020,
     "n_unclassified_stock_days": 0,
     "n_sectors": 46,
-    "n_days": 1,
+    "n_days": 2,
     "n_missing_foreign_stock_days": 0,
     "n_missing_trust_stock_days": 0,
     "n_missing_dealer_stock_days": 0,
-    "n_excluded_foreign_ccy_stock_days": 5
+    "n_excluded_foreign_ccy_stock_days": 9
   },
   "last_error": null,
   "warnings": [],
@@ -35,23 +35,37 @@
       "tpex_ok": true,
       "holiday": false,
       "written": true
+    },
+    "20261111": {
+      "twse_inst": 18945,
+      "twse_close": 1376,
+      "tpex_inst": 905,
+      "tpex_close": 993,
+      "tpex_inst_status": "ok",
+      "tpex_close_status": "ok",
+      "twse_ok": true,
+      "tpex_ok": true,
+      "holiday": false,
+      "written": true
     }
   },
   "markets_summary": {
     "TWSE": {
-      "ok_days": 1,
+      "ok_days": 2,
       "fail_days": 0,
       "ok_dates": [
-        "20261110"
+        "20261110",
+        "20261111"
       ],
       "fail_dates": [],
       "not_written_dates": []
     },
     "TPEx": {
-      "ok_days": 1,
+      "ok_days": 2,
       "fail_days": 0,
       "ok_dates": [
-        "20261110"
+        "20261110",
+        "20261111"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -72,19 +86,19 @@
     "n_trading_days_used": 20,
     "n_days_tpex_ok": 20,
     "tpex_complete": true,
-    "n_absent_cells": 54,
+    "n_absent_cells": 55,
     "n_missing_value_cells": 0,
     "raw_axis": {
       "n_sectors": 49,
       "n_trading_days_used": 20,
-      "n_absent_cells": 54,
+      "n_absent_cells": 55,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
     "canonical_axis": {
       "n_sectors": 41,
       "n_trading_days_used": 20,
-      "n_absent_cells": 54,
+      "n_absent_cells": 55,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
@@ -94,9 +108,9 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-11-10T17:13:00.914620+00:00",
+    "fetched_at": "2026-11-11T17:21:29.281578+00:00",
     "rules": {
-      "finmind_no_official": 1190,
+      "finmind_no_official": 1192,
       "official_match_finmind": 1977,
       "official_name": 9
     },
@@ -117,7 +131,7 @@
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4383
+      "n_rows": 4385
     },
     "unavailable_markets": [],
     "alias_consistency": {
