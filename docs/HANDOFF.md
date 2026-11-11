@@ -1440,3 +1440,10 @@ DEC-086 規則已於 main，本表已落地。
   - **仍 NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。P-4 完成 ≠ Stage F ≠ C1～C7 通過。
   - **`TEST-DATE-DEP-1` 結果（作者端驗證，獨立 QA 待補；細節見 `docs/DECISIONS.md` DEC-160「裁示 4 執行結果補記」）**：測試端 +8／-1 於 `tests/test_c1_observability.py`（`os.utime` 對齊 pickle mtime）＋新增 `tests/test_date_dep_boundaries.py`（51 測試：公告延遲＝次月 11 日、當日／前一日、跨月含 2028-02-29、跨年；`no_real_clock` 證明只用注入 `as_of`；窄範圍時鐘模擬 2026-12-15／2027-01-15 皆綠）；未改正式程式。⚠️ **更正**：先前（Issue #1127 研究留言、先前 QA）稱 `TestPcrSource::test_old_pickle_returned_as_is` 於 2026-12-01 起轉紅——複查在真實時鐘與多種偽裝至 2026-11-11～2027-01-15 皆通過，**無真實日期相依**；紅燈最可能來自只偽裝 `time.time`、檔案 mtime 仍為真實時間的不一致偽裝（推測，未核對當時偽裝）；`os.utime` 僅為防禦性加固。已確認的日期相依測試只有 `test_d3e_mrev_fail_cache`（#1128 已補釘；`frozen_now` 只釘 `as_of`＝2026-09-28，延遲常數突變 0／9／11／12 使邊界測試紅 26／19／20／20 項、契約 grace 0→7 紅 7 項）。**NOT VERIFIED**：真正 libfaketime／freezegun（環境無）、未掃全 repo、其他測試檔日期相依未掃、單組驗證。
   - **下一個唯一安全工作**：等客戶裁示 G-F1～G-F6；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1132；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-161 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `3cf13a02`；**本批 PR 號待補**。本批為 docs-only：新增 `docs/vnext/STAGE_F_GF1_HEADLESS_MARKET_CONTRACT_2026-11-11.md`（G-F1 方案 A：契約矩陣、缺口、對前份研究的二次核對更正、下一階段三方案）；兩位獨立 agent 二次核對，仍屬 agent 產出、未經人工複驗。
+  - **更正（追加，舊段不改）**：上一段「Issue #1130」接手點寫「本批 PR 號待補」；實際 PR 為 **#1131**，已於 main `3cf13a02` squash 合併（同 head `07ad5909` 原生 CI 5 項 success，兩位獨立 QA PASS）。
+  - **不可動項**：資料 PR #1124／#1125／#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標 `BREADTH_PROXY_SCORING_ENABLED`；runtime 接線；P-1／Digest v2／production caller。
+  - **仍 NOT VERIFIED**：各上游授權／再散布、Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次排程。完成本批 ≠ Stage F ≠ C1～C7 通過。
+  - **下一個唯一安全工作**：等客戶裁示（方案 2 前置問題、G-F2～G-F6）；無裁示前不動工（`CLAUDE.md` §-1）。
