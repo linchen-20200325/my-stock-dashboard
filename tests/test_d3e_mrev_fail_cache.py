@@ -340,6 +340,12 @@ def frozen_now(monkeypatch):
     """`fetched_at` 取 `pd.Timestamp.now("UTC")` —— 凍結後才能與修前模型逐字比。"""
     fixed = pd.Timestamp("2026-09-28T01:02:03.456789", tz="UTC")
     monkeypatch.setattr(pd.Timestamp, "now", classmethod(lambda cls, tz=None: fixed))
+    # 月份契約的回溯基準日走 shared.macro_compute.tw_now（L3 `_as_of_today`）；不釘住則 fixture 的 11508 會隨真實日期落出
+    # 『最近 3 個已達公告時點的月』窗口（2026-11-11 起），修前模型的 C4 也變資料不足 → 與修前比對的前提失效。
+    import datetime as _dtm
+    import shared.macro_compute as _mc
+    _asof_now = _dtm.datetime(2026, 9, 28, 9, 2, 3, tzinfo=_mc.tw_now().tzinfo)
+    monkeypatch.setattr(_mc, "tw_now", lambda: _asof_now)
     return fixed
 
 

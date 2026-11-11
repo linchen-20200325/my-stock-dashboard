@@ -115,7 +115,8 @@ def is_known_l0_explain(text: str | None) -> bool:
 
 def stale_text(days: int | None) -> str:
     """Stale 字樣；天數未知 → `⚠ 可能已過期`（⛔ 不補推估天數）。"""
-    if days is None:
+    if days is None or days < 0:
+        # Issue #1140 C2：負天數＝資料日晚於基準日（未來日）；⛔ 印「過期 -N 天」、⛔ 截成 0 天 → 一律「天數未知」。
         return TEXT_STALE_UNKNOWN
     return TEXT_STALE_DAYS_FMT.format(n=int(days))
 

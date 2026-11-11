@@ -84,6 +84,24 @@ jobs:
   ui2-browser:
     name: "ui2-browser (streamlit ${{ matrix.streamlit }})"
     runs-on: ubuntu-latest
+    # DEC-170（客戶授權之 CI 環境最小修復，方案 B；方案 A 已由 CI 實證失效：該 runner 的
+    # azure/archive/security.ubuntu.com 三個 host 皆 DNS 解析失敗）：本 job 改在固定「版本＋digest」的
+    # Playwright 官方容器內執行，系統相依套件與 Chromium 已預裝，runner 完全不需要 apt。
+    # 容器相容性說明：
+    #  - 映像為 Ubuntu 24.04(noble)/linux-amd64、預設 root、ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright；
+    #    內建 Node（GitHub 亦會掛載 runner 自帶 node 供 JS actions 使用）。
+    #  - tests 以 `p.chromium.launch()` 預設參數啟動（無自訂 args）；root 下 Playwright 預設
+    #    chromiumSandbox=false 會自動加 --no-sandbox，容器內可正常啟動，無須改測試。
+    #  - Playwright 官方文件建議 Docker 執行 Chromium 加 --ipc=host（避免共享記憶體不足導致崩潰），故設 options。
+    #  - actions/setup-python 於容器 job 可用（Ubuntu 基底，工具快取目錄由 runner 掛入）。
+    #  - 不使用 latest；tag 保留供閱讀，digest 為不可變的實際依據（升 Playwright 時 tag、digest、pip pin 一併更新）。
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --ipc=host
+    # 容器 job 的 run 預設 shell 為 `sh -e`（dash，不支援 pipefail）；統一用映像內的 bash，行為與原 runner 一致。
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -97,12 +115,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 容器 job 不啟用 `cache: pip`：setup-python 的 pip 快取需呼叫 lsb_release 算快取鍵，
+      # 而 Playwright 映像沒有 lsb_release 且無法 apt 安裝；此僅為效能快取，不影響測試語意。
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
@@ -110,14 +128,16 @@ jobs:
           pip install -r requirements.txt
           pip install "streamlit==${{ matrix.streamlit }}" pytest "playwright==1.64.1"
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-1.64.1-chromium
-
       - name: Install Chromium
-        run: python -m playwright install --with-deps chromium
+        run: |
+          set -euo pipefail
+          # 容器已預裝 Chromium；此處僅驗證並在版本不符時下載瀏覽器本體（不使用 apt、不加 --with-deps）。
+          # 任何失敗 -> 步驟失敗（不吞錯、不 continue-on-error）。
+          python -m playwright --version
+          echo "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:?PLAYWRIGHT_BROWSERS_PATH 未設定}"
+          ls "$PLAYWRIGHT_BROWSERS_PATH"
+          python -m playwright install chromium
+          ls "$PLAYWRIGHT_BROWSERS_PATH"
 
       - name: Run New UI2 browser lane
         run: |

@@ -1411,3 +1411,191 @@ DEC-086 規則已於 main，本表已落地。
 - PR #1122 已 squash 合併，main `e43482188145b9dc4d75786dd32c151013f41a09`；取代前一段「PR #1122 Draft」措辭。同 head `4945c9d1` 原生 CI 5 項全 success（pytest fast、AppTest slow、ui2-browser 1.56.0／1.59.2、gate）；非作者獨立 QA PASS（14 項抽查，3 項 minor 措辭已修於 `4945c9d1`）；mergeable clean、0 未解決討論串。
 - 仍 **NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 真實 Actions PR。
 - **下一個唯一安全工作**：等客戶裁示（EPS Gate E-0~E-6、Digest F／G 方案 P-1~P-4、D1 實作授權）；#1119 HOLD。
+
+
+## 最新接手點（2026-11-11，Issue #1127 P-4；只追加）
+
+- **基準**：main `5f98154c`（`5f98154c5bf4c4df3279855298e7778427420403`，Issue #1127 授權時的 main）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：P-4 S7/S8 程式＋文件同步的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`；原版 `7cfeb31d`，獨立 QA 共三輪皆發現問題並回修：第一、二輪 `571302e1`／`95bcf809`，第三輪 `50da5574`／`8dc1ddf0`）。授權範圍轉錄自 Issue #1127（非逐字）；設計決定見 `docs/DECISIONS.md` DEC-159（採側車、不升 Digest v2；設計決定為 AI 總管內部技術決策，非客戶裁示）。
+- **第三輪重點（DEC-159 第 3、4 點）**：builder 每個站內掃描列必歸入互斥窮盡分類（分割恆等式 `rows_total == 候選 + non_action + not_held + excluded_invalid + unrecognized + unmatched + non_mapping`；`duplicate_rows` 為疊加計數）。`DigestCoverage` 欄位：`station_rows_unmatched`（由 `actions_unmatched_dropped` 更名，未發布）、`station_non_mapping_rows`、`holdings_non_mapping_rows`、`unrecognized_action_code_rows`、`duplicate_station_ticker_rows`、`holdings_without_station_row`、`digest_holdings_available`／`digest_actions_available`。`is_complete` 要求九個計數全 0＋兩旗標 True＋四段 used，**不判斷新鮮度**。
+- **新檔／改動清單**：
+  - 新增 `shared/decision_digest_coverage.py`（L0；`DigestCoverage`，`digest_coverage.v1`，尚未發布、三輪回修皆無升版）
+  - 新增 `src/services/decision_digest_assembly.py`（L3；`assemble_digest`、`AssembledDigest`，建構時交叉驗證 coverage 與 digest）
+  - 修改 `src/services/decision_digest_builder.py`（純加性：`plan_action_selection`、`ActionSelectionPlan`、共用掃描 `_scan_action_rows`／`_ScanResult`；24000 組隨機輸入與舊版逐位元相同）
+  - 新增 `tests/test_decision_digest_coverage.py`、`tests/test_decision_digest_assembly.py`（合計 364 條）
+  - 文件純追加：`docs/DECISIONS.md`（DEC-159）、`docs/BACKLOG.md`、本檔
+- **測試狀態（據實）**：作者自跑 1361 passed（digest 相關＋c3 分層）。**獨立 QA 第四輪與原生 CI 結果待補**；三輪 QA 皆為發現問題非 PASS；尚未合併，不得寫成已通過。
+- **不可動項**：Open 資料 PR **#1124（macro-history）、#1125（sector-flow）、#1126（macro-forward-test）禁止順手合併／改寫／rebase**（#1126 歷史曾有 PIT 失敗契約，須獨立驗證）；**#1119 維持 HOLD**；Digest v1 凍結契約（`SCHEMA_VERSION`／`MAX_ACTIONS`／列舉／既有 `shared/decision_digest*.py`）不得動；不建 production caller；不碰舊 UI、正式路由、Actions、Secrets、Risk Cap、D1～D5、EPS、OneBrain。
+- **已知限制**：裸 `DecisionDigest` v1 仍無 omitted 欄位，完整性只在 coverage 側車；嵌入 Digest 屬未來 v2 Decision Gate。`AssembledDigest` 不防惡意偽造（total／omitted／excluded／unmatched 等在 digest 看不到）；零行動／`station_rows=[]` 一律 `is_complete=False`（v1 無法區分「沒事做」與「判不出來」，需 Digest v2）；證據被拒用時 `station_rows` 列層級型別錯誤不 fail loud；ticker 精確字串比對；`held` 缺失視為 not_held（與 builder 既有行為相同）；premium／cruise 在 builder 內為字串複本（有一致性測試）；risk_cap 舊快照仍 complete、`as_of` 如實揭露（`is_complete` 不判斷新鮮度）；無 production caller。側車的 `excluded_invalid_rows` 與契約 §6 A7、`segments` 與 A6／A1 語意部分重疊，A6／A7 仍未完成，不得形成第二個 SSOT。P-4 完成 ≠ Stage F／C1～C7 通過；Cloud UI2、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126 PIT 皆 **NOT VERIFIED**。
+- **下一個唯一安全工作**：等客戶裁示（P-1 其餘、v2 嵌入式 coverage 的 Decision Gate）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **2026-11-11｜P-4 合併後更新（只追加；以本段取代上一批「PR 號待補／獨立 QA 第四輪與原生 CI 待補／尚未合併」舊句之效力——有意識的更新，舊句保留不改）**：PR **#1128 已 squash 合併**，main `720ccbed420da1e7c6066d81c20ce71698f4bf1d`（head `05d2733c`）；同 head 原生 CI 5 項全 success（Fast pytest、AppTest slow、ui2-browser 1.56.0／1.59.2、gate），mergeability clean、0 未解決討論串。獨立非作者 QA 共四輪（前三輪發現問題並回修；第四輪 PASS：約 7 萬組 oracle、3 萬組新舊 builder 逐位元比對、25 突變 0 存活，無 blocker／major）。
+- **據實揭露**：最後一個 commit（`tests/test_d3e_mrev_fail_cache.py` 的 `frozen_now` 補釘 `tw_now`，6 行，日期相依測試缺陷，2026-11-11 起 main 紅燈；`TEST-DATE-DEP-1` 已登記）僅由作者端驗證＋突變，**未另送獨立 QA**。
+- **仍 NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。P-4 完成 ≠ Stage F ≠ C1～C7 通過；`assemble_digest` 無 production caller。#1119 維持 HOLD。
+- **下一個唯一安全工作**：等客戶裁示（P-1 其餘、v2 嵌入式 coverage Decision Gate、EPS Gate、D1 實作授權）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1130；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-160 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `8df4797d898f7002ff6c55a3fa6c3b2371a93720`；**本批 PR 號待補**。本批為 docs-only 研究：新增 `docs/vnext/STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md`（headless 輸入／授權矩陣、A2 stale 語意、Digest v2 B＋M1 方向、Gate G-F1～G-F6）；單組撰寫，未經第二組複驗。
+  - **不可動項**：Open 資料 PR **#1124／#1125／#1126** 禁止順手合併／改寫／rebase；**#1119 維持 HOLD**；OneBrain、EPS、D1～D5、UI2 切換、舊 UI 刪除一律未授權；Digest v1 凍結契約未動、無 production caller。
+  - **仍 NOT VERIFIED**：Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次真實 Actions PR、資料 PR #1124～#1126（PIT）。P-4 完成 ≠ Stage F ≠ C1～C7 通過。
+  - **`TEST-DATE-DEP-1` 結果（作者端驗證，獨立 QA 待補；細節見 `docs/DECISIONS.md` DEC-160「裁示 4 執行結果補記」）**：測試端 +8／-1 於 `tests/test_c1_observability.py`（`os.utime` 對齊 pickle mtime）＋新增 `tests/test_date_dep_boundaries.py`（51 測試：公告延遲＝次月 11 日、當日／前一日、跨月含 2028-02-29、跨年；`no_real_clock` 證明只用注入 `as_of`；窄範圍時鐘模擬 2026-12-15／2027-01-15 皆綠）；未改正式程式。⚠️ **更正**：先前（Issue #1127 研究留言、先前 QA）稱 `TestPcrSource::test_old_pickle_returned_as_is` 於 2026-12-01 起轉紅——複查在真實時鐘與多種偽裝至 2026-11-11～2027-01-15 皆通過，**無真實日期相依**；紅燈最可能來自只偽裝 `time.time`、檔案 mtime 仍為真實時間的不一致偽裝（推測，未核對當時偽裝）；`os.utime` 僅為防禦性加固。已確認的日期相依測試只有 `test_d3e_mrev_fail_cache`（#1128 已補釘；`frozen_now` 只釘 `as_of`＝2026-09-28，延遲常數突變 0／9／11／12 使邊界測試紅 26／19／20／20 項、契約 grace 0→7 紅 7 項）。**NOT VERIFIED**：真正 libfaketime／freezegun（環境無）、未掃全 repo、其他測試檔日期相依未掃、單組驗證。
+  - **下一個唯一安全工作**：等客戶裁示 G-F1～G-F6；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1132；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-161 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `3cf13a02`；**本批 PR 號待補**。本批為 docs-only：新增 `docs/vnext/STAGE_F_GF1_HEADLESS_MARKET_CONTRACT_2026-11-11.md`（G-F1 方案 A：契約矩陣、缺口、對前份研究的二次核對更正、下一階段三方案）；兩位獨立 agent 二次核對，仍屬 agent 產出、未經人工複驗。
+  - **更正（追加，舊段不改）**：上一段「Issue #1130」接手點寫「本批 PR 號待補」；實際 PR 為 **#1131**，已於 main `3cf13a02` squash 合併（同 head `07ad5909` 原生 CI 5 項 success，兩位獨立 QA PASS）。
+  - **不可動項**：資料 PR #1124／#1125／#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標 `BREADTH_PROXY_SCORING_ENABLED`；runtime 接線；P-1／Digest v2／production caller。
+  - **仍 NOT VERIFIED**：各上游授權／再散布、Cloud UI2、真機、ETF Managers 2026-11-16 20:00 UTC 首次排程。完成本批 ≠ Stage F ≠ C1～C7 通過。
+  - **下一個唯一安全工作**：等客戶裁示（方案 2 前置問題、G-F2～G-F6）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+- **最新接手點（2026-11-11，Issue #1134；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-162 轉錄，非客戶逐字、非 QA PASS）**：
+  - **基準**：main `a6155dde`；**本批 PR 號待補**。本批為 docs-only：新增 `docs/vnext/NEWUI2_MARKET_CHIPS_OLD_UI_FIRST_MAPPING_2026-11-11.md`（三大法人／融資／板塊資金的 Old → Legacy New → UI2 能力對照、接線提案、A1／A2／A3 比較）；DECISIONS 追加 DEC-162；BACKLOG 追加。未改任何程式或測試。
+  - **更正（追加，舊段不改）**：上一段「Issue #1132」接手點寫「本批 PR 號待補」；實際 PR 為 **#1133**，已於 main `a6155dde` squash 合併（同 head `90c33509` 原生 CI 5 項 success；兩輪獨立 QA：第一輪 FAIL 已修，第二位複驗 PASS）。
+  - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換。
+  - **下一個唯一安全工作**：等客戶裁示（線框位置、inst 僅外資、正負值色彩語意是否沿用（現碼負值紅）、是否納融資）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+## 最新接手點（2026-11-11，Issue #1136；只追加）
+
+- **基準**：main `5eef8863`。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：docs-only 文字線框草案 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`）。授權範圍轉錄自 Issue #1136（非逐字）；見 `docs/DECISIONS.md` DEC-163、`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；**不是經驗證畫面，真機／Cloud 未驗**）。
+- **更正（追加，舊段不改）**：上一段「Issue #1134」接手點寫「本批 PR 號待補」；實際 PR 為 **#1135**，已於 main `5eef8863` squash 合併（同 head `ba99bca5` 原生 CI 5 項 success、獨立 QA PASS）。
+- **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換；A2 步驟 2 程式施工。
+- **下一個唯一安全工作**：等客戶對線框正式拍板（G-1～G-10）；無裁示前不動工（`CLAUDE.md` §-1）。
+
+## 最新接手點（2026-11-11，Issue #1138；只追加；不改既有段落；依據 Issue #1138 轉錄，非客戶逐字、非 QA PASS）
+
+- **基準**：main `838f667a`（#1137 squash 合併後）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **本批**：Issue #1138 雙線 tests-only／docs 追加的 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`）。獨立 QA 與原生 CI：**待補**（NOT VERIFIED，不得寫成已通過）。
+- **兩條線各自的 tests-only 檔（FACT，收集數已實測；production 0 改動）**：
+  - Digest 不變性線：`tests/test_decision_digest_invariants_guard.py`（31 測試；C1 UI 狀態不變性、C2 全域 0 production caller〔Gate 開啟時須同步更新〕、C3 L0 動態 import 閉包）。
+  - UI2 市場頁渲染線：`tests/test_ui2_market_render_guards_extra.py`（27 測試；無值卡片 blank＋『—』、真 0 vs missing、核心卡 id 多／少／顛倒／重複、kbar 狀態禁詞）。
+- **production 發現**：審計發現的設計限制／疑似缺陷（a～i）已登記 `docs/BACKLOG.md`『Issue #1138 雙線結果』，**均未修、均待 Gate**，不屬 tests-only。審計為單組，未經第二組驗證。
+- **#1137 已合併事實（FACT）**：squash 於 main `838f667a`；同 head `277292ea` 原生 CI 5 項 success。
+- **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；Digest v2／Stage G；舊 UI。
+- **NOT VERIFIED**：瀏覽器／viewport 測試（沙箱無 Playwright）；`DataStatus` 六態與 schema candidate 五態措辭不一致未裁決。
+- **下一個唯一安全工作**：等客戶對 G 表（見 Issue #1138 留言）裁示；無裁示前不動工（`CLAUDE.md` §-1）。
+
+## 最新接手點（2026-11-11，Issue #1140；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-164 轉錄，非客戶逐字、非 QA PASS）
+
+- **現在做到哪**：Issue #1140 三批完成——批 1 #1141（C1 價格≤0 一致拒用、C2 未來 `as_of` 不顯示負天數；main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`）；批 2 #1142（融資＋板塊唯讀 L3 service，不接 UI；`1e5542a8`）；批 3 本 docs PR（Digest regime/light 相容性 Gate 研究＋DEC-164＋BACKLOG＋本段）。
+- **main SHA**：#1141 合併為 `907322aa`、#1142 合併為 `1e5542a8`；本 docs PR 合併後的 SHA 以 GitHub main 為準。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **Current Task**：無進行中施工。G-1～G-10 已裁（DEC-164）；兩個 L3 已有但**未接任何 UI**。
+- **下一個唯一安全接手點**：**等待客戶裁示，無裁示則停手**（`CLAUDE.md` §-1）。需裁示項：
+  1. **Digest A2 實作與否**（`DG-DIGEST-A2`）：見 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §9；AI 推薦 A2（**非客戶裁示**）。
+  2. **UI2 市場頁「市場資金與籌碼」runtime 接線 Gate**（需新 Gate，含 G-F2～G-F6；**外資 L3 另案**；最低覆蓋率門檻 `I1140-COVERAGE-MIN` 待裁示）。
+- **禁止事項**：不接 UI2 feed／section runtime、不上線、不做外資 L3、不改資料來源；不改 Digest v1 凍結檔、不升 v2、不建 production caller／OneBrain；不改位階／燈號／公式／PIT、Risk Cap、D1–D5、EPS、登入／OAuth／Sheet、舊 UI；不動 Actions／cron／Secrets；#1119 HOLD；#1124～#1126 禁止順手合併／改寫／rebase（#1126 PIT 未驗）；不得把 AI 推薦寫成客戶裁示。
+- **先讀哪些 SSOT**：`CLAUDE.md`（§-2、§-1.5、§-1、§1）→ `PROCESS.md` → `docs/DECISIONS.md` DEC-164（並回看 DEC-157／DEC-160～163）→ `docs/BACKLOG.md`『Issue #1140』段（`I1140-*` 缺口）→ `docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（G 表原題）→ `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`。
+- **仍 NOT VERIFIED**：Cloud UI2、真機、Playwright／瀏覽器、資料來源授權／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程。
+
+## 最新接手點（2026-11-11，Issue #1144 舊對話收尾；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-165 轉錄，非客戶逐字、非 QA PASS）
+
+> **更正過期狀態**：上方「最新接手點（2026-11-11，Issue #1140）」第 1 項「Digest A2 實作與否（`DG-DIGEST-A2`）等待客戶裁示」**已過期**——客戶已於 Issue #1144 裁示**同意方案 A（A2）**，見 DEC-165。該段原文保留不改（歷史）。UI2「市場資金與籌碼」runtime 接線**仍未授權**。
+
+- **現在做到哪（FACT，GitHub main）**：PR #1141（`907322aa0af9570fdcca9a496ffdc83e275bfdd3`）、#1142（`1e5542a87cdc0006a6535b34457f8b59a85f6baa`）、#1143（`7060cafe618ab93b0afd3d871397aec2071b2034`）均已合併。本交接 docs PR 合併後的 SHA **以 GitHub main 為準**，接手時 LIVE 重查，不得把本文任何 SHA 當最新。
+- **Current Task**：**無進行中施工。**A2 builder 與 UI2 前置 Gate 研究皆為「已授權、尚未施工」。
+- **下一個唯一安全接手點**：依 Issue #1144，先做 LIVE GitHub Verification Gate，再 ① **A 線**：Digest builder A2（`I1144-A2-IMPL`；Sonnet 5.5、Effort High、靜默巡航）；② **B 線**：UI2 runtime 前置 Gate 研究（`I1144-UI2-PREGATE`；docs-only）。兩線各自獨立 PR。
+- **仍需客戶裁示（AI 不得代決）**：最低 coverage 門檻（`I1140-COVERAGE-MIN`）；`G-F2～G-F6`；UI2 runtime 接線 Gate；A3 配對一致性（`I1144-DG-A3`）；`market.health` 0–100 範圍（`I1144-DG-HEALTH`）；外資 L3。
+- **不得自行做**：A3、health 範圍、改 `shared/decision_digest*.py` 凍結檔／`normalize_regime`／`get_macro_state`／Risk Cap；改 `real_feed.py`／VM／views／allowlist；接 UI／上線；外資 L3；新來源／API／排程；Digest v2、OneBrain runtime／provider、production caller；公式／燈號／D1–D5／EPS／廣度；OAuth／Sheet／舊 UI／正式路由；碰 #1119（HOLD）或 #1124～#1126；把 AI 推薦或授權寫成「已完成」。
+- **先讀 SSOT 順序**：`CLAUDE.md`（§-2、§-1.5、§-1、§1）→ `PROCESS.md` → `PROJECT_RULES.md`（第 32 節）→ `docs/DECISIONS.md` DEC-165、DEC-164（回看 DEC-157／160～163）→ `docs/BACKLOG.md`『Issue #1144』『Issue #1140』→ `docs/HANDOFF.md` 本段 → `docs/PROJECT_STATE.md` §70.6 → GitHub Issue #1144 → `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` → UI2／OneBrain 契約（`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md`、`docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`、`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`）。
+- **研究文件有效讀法**：`docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §7.1／§9 的「等客戶裁示／本批不實作」已被 DEC-165 取代（客戶同意方案 A；A3 與 `market.health` 範圍除外）；研究文原文不改。
+- **仍 NOT VERIFIED**：Streamlit Cloud UI2、iOS／Android 真機、Playwright／瀏覽器 viewport、TWSE／TPEX／FinMind 再散布授權、parquet `release_date`／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT。
+
+### 舊對話已保存／未保存清單（本段撰寫時；FACT 除另標）
+
+| 類別 | 內容 |
+|---|---|
+| **已保存（GitHub）** | main 上 #1141／#1142／#1143；Issue #1144（客戶裁示永久紀錄）；本 PR（DEC-165＋BACKLOG＋HANDOFF＋PROJECT_STATE；合併前仍只在 PR head） |
+| **本地未推 commit** | 無；本交接 PR head 已 push（接手時以 GitHub 實況為準） |
+| **未保存／未做** | A2 builder 實作、UI2 前置 Gate 研究文件（皆已授權、未施工） |
+| **遠端 branches（全部保留，不刪）** | `auto/data-macro-forward-test`、`auto/data-macro-history`、`auto/data-sector-flow`（對應 open PR #1126／#1124／#1125）、`ccr-ed362375-uplnw7`、`claude/stock-dashboard-handoff-g9dtm0`、`data`、`docs/newui2-data-page-trend-onebrain-pdf-20261106`、`docs/newui2-hold-w11-draft-20261105`、`docs/newui2-top-five-nav-wireframe-gate-20261107`、`docs/stock-github-memory-governance-sync-20261106`、`v2` |
+| **另有本 PR head** | `ccr-588f897e-7wzywe`（本交接 PR 的 head branch）；合併後由總管另判，**不在 cleanup 候選內** |
+| **cleanup 候選** | 以上除 `main`／`data`／`v2`／`auto/data-*` 外的 handoff／docs branch 為**候選**；**皆未經核查是否可清理，僅列候選，待客戶授權；不是刪除授權**（`PROJECT_RULES.md` 分支清理規則：branch 清單屬狀態） |
+
+### GPT 新對話接手提示語（可直接貼用）
+
+```
+你是 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）的治理／驗收端（GPT）。你沒有舊聊天記憶，不得依賴 ChatGPT Memory。
+1. 先重新做 GitHub Verification Gate：main 最新 SHA、Open/Draft PR（head、diff）、CI/QA 狀態、branches。GitHub 實況 > HANDOFF > PROJECT_STATE > 記憶；不得把任何文件內的 SHA 當成最新。若 main 尚無 DEC-165，改讀 Issue #1144 本文與 open docs PR（#1145）head 上的 DECISIONS／HANDOFF，並以 Issue 為準。
+2. 再讀：CLAUDE.md、PROCESS.md、PROJECT_RULES.md（含第 32 節）、docs/DECISIONS.md（DEC-164、DEC-165）、docs/BACKLOG.md（Issue #1144／#1140 段）、docs/HANDOFF.md（Issue #1144 段）、docs/PROJECT_STATE.md（§70.6）、Issue #1144、docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md、以及相關 Active UI2／OneBrain 契約。
+3. 分工：你負責治理、需求釐清、驗收與文件審查；Claude Code 負責實作與測試。嚴格分工，不自己動手寫 production code。
+4. 已授權（尚未完成）：Digest builder A2（僅 decision_digest_builder.py::_market_section 白名單驗證＋反例測試）；UI2 runtime 接線「前置 Gate」唯讀研究。未授權：A3、market.health 範圍、UI2 接線／上線、外資 L3、Digest v2、OneBrain runtime/provider、production caller、公式/燈號/Risk Cap/D1–D5/EPS/廣度、OAuth/Sheet、舊 UI、#1119（HOLD）、#1124～#1126。最低 coverage 門檻與 G-F2～G-F6 仍待客戶裁示，不得代決。
+5. 驗收時區分 FACT／INFERENCE／RECOMMENDATION，區分「已授權／已完成／NOT VERIFIED」；Cloud、真機、Playwright 未測一律 NOT VERIFIED。不把授權寫成完成。
+6. 最終回報 ≤5 行（需客戶裁示時可超過，但只保留裁示所需資訊）。
+```
+
+### Claude Code 新對話接手提示語（可直接貼用）
+
+```
+你是 my-stock-dashboard 的 Claude Code 實作端（建議 Claude Sonnet 5.5；Digest 語意／跨域稽核 Effort High，純文件 Medium；靜默自主巡航）。無舊 session 記憶。
+1. 動工前先 LIVE GitHub Verification Gate：git fetch；確認 main SHA、Open/Draft PR（#1124/#1125/#1126 不得碰）、branches、CI。GitHub 實況優先，不把文件內 SHA 當最新。若 main 尚無 DEC-165，改讀 Issue #1144 本文與 open docs PR（#1145）head 上的 DECISIONS／HANDOFF，並以 Issue 為準。
+2. 讀：CLAUDE.md（§-2 派工與獨立複驗、§-1.5、§-1、§1）、PROCESS.md、PROJECT_RULES.md（第 9.0 Model/Effort Gate、第 32 節）、docs/DECISIONS.md（DEC-164/165）、docs/BACKLOG.md（Issue #1144/#1140）、docs/HANDOFF.md（Issue #1144 段）、docs/PROJECT_STATE.md（§70.6）、Issue #1144、docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md §7.1/§7.2、Decision Digest 與 OneBrain 契約。
+3. 任務 A（Digest A2，已授權）：僅改 src/services/decision_digest_builder.py::_market_section；白名單由 shared/regime_arbiter.py::REGIME_LIGHT 推導 _VALID_REGIMES/_VALID_LIGHTS；strip().lower() 比對、合法 Fact.text 逐字保留；名單外非空值→INVALID；placeholder／is_loaded=False／無 stamp 維持 MISSING；加反例/正例/大小寫空白/fail-closed/等式 SSOT/mutation 測試。不做 A3、不夾帶 market.health 範圍。若會破壞合法值契約或原型 0 測試轉紅不成立→先停止並上報。
+4. 任務 B（UI2 前置 Gate，已授權、docs-only）：唯讀查核 coverage／PIT／資料授權／缺口／G-F2～G-F6／I1140-* 阻塞等，產出研究文件與 3 方案比較；不改 real_feed.py／VM／views／allowlist／程式／測試；最低 coverage 門檻不得自設；缺 release_date 或找不到官方授權原文→NOT VERIFIED。
+5. 禁止：改 shared/decision_digest*.py 凍結檔、normalize_regime、get_macro_state、Risk Cap、公式/燈號/D1–D5/EPS/廣度；Digest v2、OneBrain runtime、production caller；接 UI／上線／外資 L3／新來源/API/排程；OAuth/Sheet/舊 UI；#1119/#1124～#1126。
+6. 流程：每線獨立 branch/PR；實作與驗收分離（非作者 QA）；同 head 原生 CI 全綠、mergeable clean、0 unresolved 才合併；合併後重查 main。context 不安全時依第 32 節先落盤再換對話。最終回報 ≤5 行；未驗證項明說。
+```
+
+
+---
+
+## 最新接手點｜Issue #1144 執行完畢後（2026-11-11；只追加；依據 DEC-166；本 docs PR 號：#1147）
+
+> **更正**：前段『Issue #1144 接手點』所寫「A2／研究已授權、尚未施工」**已過期**——A2 已完成（PR #1146，main `d4f7b3f6a64d177b7ee0953dc22563adf59120e4`），B 線研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`，獨立 QA PASS）。前段其餘內容（含完整 GPT／Claude Code 提示語）保留不改。
+
+- **Current Task**：無。
+- **下一個唯一安全接手點**：等客戶就 DEC-166 所列 Gate（最低 coverage、G-F2～G-F6、`WIRING-GATE`、A3、health 範圍、外資 L3）裁示；**無裁示即停手**（CLAUDE.md §-1）。AI 推薦方案 B 僅 RECOMMENDATION。
+- **未授權**：UI2 runtime 接線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller；#1119 HOLD、#1124～#1126 不碰。
+- **NOT VERIFIED**：上游授權、PIT、Cloud、真機、Playwright、真實 macro_state。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-166／DEC-165 與本段；無客戶新裁示不動工；完整提示語見前段『Issue #1144 接手點』，不重貼。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶裁 DEC-166 Gate；完整提示語見前段，不重貼。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「同意 B」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-167）
+
+- **更正前段**：前段『Issue #1144 接手點』與 DEC-166 結尾「等客戶裁 DEC-166 Gate」中的方案選擇，**客戶已裁示「同意 B」**（唯讀證據補強、不接線）；其餘 Gate 仍未裁。
+- **已完成**：補充證據文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md`（docs-only；PR #1148）。
+- **停點**：`WIRING-GATE`。**不得**改程式／allowlist／real_feed／VM／views；**不得**自設 coverage 百分比；方案 A／C 僅未來候選，非施工授權。
+- **待客戶**：`DG-COV`、`DG-PIT`、`DG-LIC`、`DG-SCOPE`、接線授權。**不要把 Digest／OneBrain 的 Gate（G-F2、G-F6、A3、health）當成市場頁前提。**
+- **NOT VERIFIED**：上游授權（TWSE／TPEX 全部；FinMind 僅 README 三句）、PIT 發布日、休市表、Cloud、真機、Playwright。證據單組、未經獨立複驗。
+
+**一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-167／DEC-166 與補充文件；無客戶新裁示不動工。
+
+
+## 最新接手點（2026-11-11，Issue #1144 B8「NAS 中繼站備援」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-168）
+
+- **客戶指示 B8**：「如果連不上線，記得要用 NAS 中繼站，可以參考舊 UI 的方式。」僅授權唯讀查證，**不授權**改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
+- **已完成**：補充文件 §9（PR 號：#1149）。本環境 NAS 連線資訊**全未設定**（NAS_BASE_URL／NAS_RELAY_URL／NAS_API_KEY／NAS_PROXY_URL／PROXY_URL＝False）；沙箱 `HTTPS_PROXY` 是 agent proxy，不是 NAS，勿冒充。Direct 失敗、NAS 未測試、官方 GitHub 成功（僅 FinMind README）。
+- **授權結論無變動**；`DG-LIC` 維持 NOT VERIFIED。**停點仍是 `WIRING-GATE`。**
+- **待客戶**：貼條款原文／放行沙箱網域／提供已配置 NAS 的環境並授權唯讀 GET，三擇一或另議；以及 DG-COV／DG-PIT／DG-SCOPE。
+- **一行式接手**：先 LIVE GitHub Verification Gate，讀 DEC-168／DEC-167 與補充文件 §9；無客戶新裁示不動工。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「Coverage 母體收斂＋官方條款證據」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-169；本 docs PR 號：#1149）
+
+> **更正前段**：前段（DEC-166／167／168 接手點）寫「等客戶裁 Gate」仍有效；本段補述客戶已授權的**第二批 docs-only 查證**已完成，Gate 一個都沒有關閉。**新的 GPT／Claude Code 接手點以本段為準。**
+
+- **客戶原文**：「同意先收斂 Coverage 母體並補上 TWSE、TPEX、FinMind 官方條款證據。僅授權 docs-only 查證與 GitHub SSOT 更新；其餘 Gate 保持 HOLD。」
+- **已完成**：補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md` §10（母體收斂）、§11（授權矩陣）、§12（抽查降級＋殘餘阻塞＋下一步）。只追加，§1～§9 未動。
+- **要點**：41 板塊＝窗口標籤聯集；3 偶發標籤窗口內僅 7 股日；個股／金額／市值覆蓋皆算不出（`net_amt_yi` 是法人淨買賣超，非成交金額）；RECOMMENDATION 暫不改母體、日後至少 COV-A 強制揭露、候選 COV-C、不選 COV-B。FinMind PARTIALLY VERIFIED（官方 GitHub Pages 原文，**≠TWSE／TPEX 條款**，其稱對外再散布須自行取得原資料機關授權）；TWSE／TPEX／data.gov.tw 官方站沙箱不可連，**維持 NOT VERIFIED**。
+- **停點**：`WIRING-GATE`。**不得**改程式／資料／Actions／Secrets／`data_cache`／allowlist／real_feed／VM／views；**不得**自設 coverage 百分比或採用新母體；**不得**據此宣稱已取得再散布授權、已驗證 PIT、已同意接線。repo 公開與 `data_cache` 落地面（含 `industry_raw.json`）只陳述事實，**不做法律結論**，待客戶／法律專業判斷。
+- **待客戶**：覆蓋口徑與偶發標籤處理（DG-COV）、是否商業／是否公開／原始列落地（DG-LIC）、時間語意（DG-PIT）、範圍（DG-SCOPE）、接線授權；解封條款查證的方式見補充文件 §12.4（貼條款原文／放行網域／提供已配置 NAS 環境並授權唯讀 GET／法務判斷）。
+- **NOT VERIFIED**：TWSE／TPEX／data.gov.tw 授權、OGDL 原頁、FinMind 方案等級與官網即時版本、PIT 發布日、3 偶發標籤個股成因、Cloud／真機／Playwright。證據單組、未經第二組獨立複驗。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-169／168／167 與補充文件 §10～§12；無客戶新裁示不動工。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成／已授權／未授權／NOT VERIFIED，等客戶就 DEC-169 所列 Gate 裁示；不自設門檻、不把網路可達或條款存在當授權；完整提示語見前段，不重貼。
+
+
+## 最新接手點（2026-11-11，Issue #1144 後續「CI 環境最小修復」；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-170；本 docs PR 號：#1151）
+
+> **更正前段**：前段（含 DEC-169 接手點與更早段落）若寫「#1149 被 CI 環境阻塞／`ui2-browser` 因 apt 無法安裝 Chromium 而紅」——**已過期**。客戶已裁示「同意優先採 A，失敗再評估 B」並授權獨立最小修復；方案 A 經 CI 實證失效，方案 B（Playwright 官方容器，tag＋digest 固定）已由 PR #1150 完成並合併（main `96cb7614`）；#1149 內容未改，Update branch 後原生 CI 五項全綠並合併（main `d8d74ccd`）。**新的 GPT／Claude Code 接手點以本段為準；前段完整提示語保留不改、仍可沿用。**
+
+- **客戶原文**：「同意優先採 A，失敗再評估 B。授權專案 AI 獨立進行最小 CI workflow 安裝環境修復，另開 PR，保留全部 Browser required checks 與測試門檻，不碰 #1149 內容或業務程式。」
+- **已完成（CI 環境修復，已授權且已完成）**：`pr-check.yml` 的 `ui2-browser` 改在固定 digest 的 Playwright 容器內執行；全部 Browser 守衛保留；無 `continue-on-error`／`|| true`／skip／降門檻／新 Secret；未改 tests／production；獨立 QA PASS。
+- **維護注意**：容器映像升級時 image tag、digest、`playwright==` pip pin 須一併更新；不得改用 `latest`；不得降低 Browser 守衛。
+- **停點不變**：`WIRING-GATE`。Coverage 母體新算法／最低門檻（`DG-COV`）、PIT 正式語意（`DG-PIT`）、資料再散布最終授權（`DG-LIC`）、`DG-SCOPE`、UI2 接線、Digest A3／`market.health`／外資 L3 **全部仍 HOLD／未授權**；CI 修復**不構成**其中任何一項的核准。
+- **待客戶**：就 Coverage 門檻／母體口徑與資料授權風險裁示；無裁示即停手。
+- **NOT VERIFIED**：修復只證明在當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因（GitHub 或 Canonical 端）未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 required check（設定面）本工作階段無權限查證。
+
+**Claude Code 一行式接手**：先 LIVE GitHub Verification Gate（git fetch；確認 main、Open PR、CI；#1119／#1124～#1126 不碰），讀 DEC-170／169／168 與本段；CI 已修復、#1149 已合併，勿重做；無客戶新裁示不動工；完整提示語見前段『Issue #1144 接手點』，不重貼。
+**GPT 一行式接手**：先 LIVE GitHub 驗證，區分已完成（CI 環境修復 #1150）／已授權／未授權／NOT VERIFIED，等客戶就 `DG-COV`／`DG-LIC` 裁示；不自設門檻、不把 CI 綠燈或網路可達當授權；完整提示語見前段，不重貼。

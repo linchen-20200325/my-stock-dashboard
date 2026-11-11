@@ -208,6 +208,8 @@ def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
         raise RealFeedContractError("台股日 K：ok=True 與 failed=True 矛盾")
     if k.upstream_state not in _UPSTREAM_STATES:
         raise RealFeedContractError(f"台股日 K：upstream_state 不是三態之一：{k.upstream_state!r}")
+    if k.age_days is not None and k.age_days < 0:      # Issue #1140 C2：同 validate_twii_fact
+        raise RealFeedContractError(f"台股日 K：age_days 為負（資料日在未來）{k.age_days!r}")
     if k.ohlc_ok is False:
         if k.ohlc_reason not in OC.OHLC_REASON_CODES:
             raise RealFeedContractError(f"台股日 K：不合格但原因碼未知：{k.ohlc_reason!r}")
@@ -344,6 +346,14 @@ def validate_twii_fact(t: TwiiFact) -> None:
         last = t.close[-1]
         if not isinstance(last, (int, float)) or isinstance(last, bool) or not math.isfinite(last):
             raise RealFeedContractError(f"台股：收盤值不是有限數 {last!r}")
+        # Issue #1140 C1：價格類欄位 ≤ 0 不是合法觀測（與日 K 的 `_finite_positive`／L0 `price_problem` 同一規則）。
+        # 只驗收盤價；其他指標的合法 0（淨買超 0、持平）不經過本函式。
+        for c in t.close:
+            if not isinstance(c, (int, float)) or isinstance(c, bool) or OC.price_problem(c) is not None:
+                raise RealFeedContractError(f"台股：收盤值不是有限正值 {c!r}")
+    # Issue #1140 C2：age_days 為負＝資料日在未來；L3 已改 None，這裡 fail loud 擋「過期 -N 天」再度流入。
+    if t.age_days is not None and t.age_days < 0:
+        raise RealFeedContractError(f"台股：age_days 為負（資料日在未來）{t.age_days!r}")
 
 
 def regime_spec(snap: RealFeedSnapshot, key: str, label: str, *, brief: bool = True,

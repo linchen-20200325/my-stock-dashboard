@@ -1175,3 +1175,78 @@
 - **2026-11-08 補（DEC-153 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 ~~main `35c08d2`，#1075～#1078 已 merge，~~ ~~現行 main `b01db69`，#1075～#1079 已 merge，~~（已更新：main `476529d`，#1075～#1084 部分已合併，見本檔下一則；有意識的更新，不是漏刪）#1038 Draft NO MERGE，#1034 Draft 待核銷。**Batch A**：FinMind 真實取樣 **BLOCKED**（無 token、無真實／錄製樣本；欄位語意 NOT VERIFIED；全市場 STRONG 仍恆 0，不得宣稱恢復）。**Batch B**：C4 未驗證月份鍵上限~~實作完成＋非作者 QA 通過（commit `93904d0`＋`964f717`），**待 PR／CI／merge，尚未合併**~~（2026-11-08 已更新：Batch B（C4-E）已由 #1079 squash 合併，main `b01db69`，head `d02811d` 最新 head 原生 CI 全綠、非作者 QA 通過；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；#1079）**已合併 #1079**；~~待客戶確認詮釋點（5 分 vs 0 分）。~~（2026-11-08 已更新：已由 DEC-154 裁示（C4 保留 5 分，含全高值，missing 不保底）；有意識的更新，不是漏刪；決策者 AI 總管（事實更新）；DEC-154）**Batch C**：缺貨缺值唯讀研究（單組、合成資料），推薦 A 先行、資格規則進 Decision Gate、不建議數值門檻。詳見 BACKLOG `NUI2-DEC153`、HANDOFF 最新接手點、DECISIONS DEC-153 ③。
 
 - **2026-11-08 補（DEC-154 執行結果；AI 總管事實更新，非客戶裁示）**：GitHub 為準 main `476529d`；#1082（`412d15b`）、#1083（G1，`b6a20b6`）、#1084（FinMind 唯讀探針，`476529d`）已合併，皆原生 CI 全綠、有非作者 QA；#1038 NO MERGE、#1034 待核銷。**G1**：缺貨 n_ok＜4 不再寫確定「缺貨弱」而顯示「部分證據 n/4」，排名／百分位／composite／權重逐位元不變。**探針合併≠執行，尚未執行**（`run_workflow` 403），FinMind 欄位語意與方案可取性仍 NOT VERIFIED，不得翻 `BATCH_SOURCE_MONTH_KEY_VERIFIED`，全市場 STRONG 仍恆 0、不得宣稱恢復。候選視窗研究與 `SHORTAGE_VERSION` 設計（皆未施工）見 DECISIONS DEC-154 ③。
+
+
+### 70.6 Issue #1140／#1144 後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-164／DEC-165 轉錄，非客戶逐字、非 QA PASS）
+
+> 依 `PROJECT_RULES.md` §0.3／§15／§32：只收「目前仍有效且會影響下一個 AI 判斷」的知識；待辦在 BACKLOG、current／next safe point 在 HANDOFF、正式裁示在 DECISIONS。本檔檔首「量測」行屬 2026-10-29 歷史值（cron 會推進 main）；本節以 GitHub 實況為準，**不在此寫最新 main SHA**。
+
+**FACT（main，各 PR 已合併）**
+
+- 新增兩支**唯讀 L3** service：`src/services/margin_fact_service.py`（融資）、`src/services/sector_flow_fact_service.py`（板塊資金；#1142，`1e5542a87cdc0006a6535b34457f8b59a85f6baa`）。實查：**目前除自身與測試外無 production caller、未接任何 UI**（本節撰寫時以 grep `margin_fact_service|sector_flow_fact_service` 對 `*.py` 檢視；窮舉性單組，NOT VERIFIED 第二組）。外資 L3 **不存在**（另案）。
+- 新增 L1 純讀函式 `src/data/sector_flow/reader.py::read_sector_daily_net_latest`（讀 `daily_net.parquet`）與 `read_sector_flow_cron_coverage`；新常數檔 `shared/sector_flow_fact_thresholds.py`（舊常數檔被 `test_batch_z42` sha256 釘住，故另立新檔）。
+- 安全修復（#1141，`907322aa0af9570fdcca9a496ffdc83e275bfdd3`）：價格≤0 於卡片與日 K 一致拒用；未來 `as_of` 不再顯示負過期天數（卡片層與日 K 處理**不對稱**，已登記 `I1140-FUTURE-ASOF-ASYM`）。
+- 板塊口徑（G-10，DEC-164）：「三大法人合計（外資＋投信＋自營商），依個股張數×收盤價彙總至板塊」，**與「大盤外資淨買賣超（僅外資）」不同、不可直接比較**。#1142 實測 coverage：板塊 41、觀測 38、未觀測 3（**非全市場完整覆蓋**；最低 coverage 門檻**未裁示**）。
+- Digest regime／light 缺口（研究文件 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`）：`decision_digest_builder.py::_market_section` 對 `market.regime`／`market.light` 無白名單，非空垃圾值可被當合法 `Fact`；`get_macro_state` 會把非 canonical regime 洗成 `neutral` 且 `is_loaded=True`；`market.health` 僅檢查有限數、無 0–100 範圍。
+
+**授權狀態（Approved ≠ 已完成）**
+
+| 項目 | 狀態 | 出處 |
+|---|---|---|
+| Digest builder A2（白名單驗證＋反例測試，不改凍結 Schema） | **已授權（客戶同意方案 A）、尚未實作** | DEC-165；Issue #1144 |
+| UI2 runtime 接線**前置 Gate**（唯讀研究：coverage／PIT／授權／缺口） | **已授權、尚未施工**（docs-only） | DEC-165 |
+| Digest A3 配對一致性、`market.health` 範圍驗證 | **未授權，獨立 Gate** | DEC-165 三 |
+| UI2 市場頁「市場資金與籌碼」runtime 接線／上線 | **仍未授權**，需新 Gate（含 G-F2～G-F6、coverage 門檻） | DEC-164 G-9；DEC-165 |
+
+**限制與 NOT VERIFIED**：TWSE／TPEX／FinMind 再散布授權原文、parquet 缺 `release_date` 的 PIT、Streamlit Cloud、iOS／Android 真機、Playwright／viewport、ETF Managers 2026-11-16 20:00 UTC 首次排程、#1126 PIT 皆**未驗**。#1119 維持 HOLD；#1124～#1126 未處置。
+
+**出處**：`docs/DECISIONS.md` DEC-164、DEC-165；`docs/BACKLOG.md`『Issue #1140』『Issue #1144』；`docs/HANDOFF.md` Issue #1144 接手點。與出處不一致時**以出處為準**。
+
+
+### 70.7 A2 已上線後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-166，非客戶逐字）
+
+- **FACT**：Digest builder A2 已在 main（PR #1146，`d4f7b3f6a64d177b7ee0953dc22563adf59120e4`）：`_market_section` 對 `market.regime`／`market.light` 以由 `REGIME_LIGHT` 推導的白名單驗證，名單外非空值判 `INVALID`；凍結 Schema 未動。更正 §70.6 表中「A2 已授權、尚未實作」→ 已完成。
+- **FACT**：UI2 runtime 接線前置 Gate 研究文件已產出（`docs/vnext/UI2_RUNTIME_PREGATE_RESEARCH_2026-11-11.md`），內含 DG-COV／DG-PIT／DG-LIC／DG-SCOPE／WIRING-GATE；AI 推薦方案 B 為 RECOMMENDATION，非裁示。
+- **仍未授權**：UI2 runtime 接線、A3、`market.health` 範圍、外資 L3；最低 coverage 與 G-F2～G-F6 待客戶裁示。
+- **NOT VERIFIED**：上游授權、PIT `release_date`、Cloud、真機、Playwright、真實 macro_state。
+- **出處**：DEC-166；BACKLOG『Issue #1144 結果』；HANDOFF 最新接手點。不一致時以出處為準。
+
+
+### 70.8 「同意 B」後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-167，非客戶逐字）
+
+- **FACT**：客戶裁示「同意 B」＝UI2「市場資金與籌碼」先做唯讀證據補強、不進正式 runtime 接線；補充文件 `docs/vnext/UI2_RUNTIME_PREGATE_EVIDENCE_SUPPLEMENT_2026-11-11.md` 已產出（PR 號：#1148）。
+- **FACT（抽查實跑）**：板塊 41／38／3 為窗口標籤聯集，未觀測 3 者為單檔偶發標籤；現有資料算不出個股覆蓋率；`n_dropped_missing_price` 僅最近一次 cron；三資料集無 `release_date`；融資 `fetched_at` 99.5% 為 bootstrap 批值。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、A3、health 範圍、外資 L3、方案 A／C 施工、任何 coverage 門檻值。
+- **待裁示**：DG-COV、DG-PIT、DG-LIC、DG-SCOPE、WIRING-GATE。
+- **NOT VERIFIED**：TWSE／TPEX 授權（全部）、FinMind 官網條款、OGDL 原文、PIT 發布日、休市表、Cloud／真機／Playwright。
+- **出處**：DEC-167；BACKLOG『Issue #1144 後續』；補充文件。不一致時以出處為準。
+
+
+### 70.9 B8「NAS 中繼站備援」後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-168，非客戶逐字）
+
+- **FACT**：客戶新增 B8——官方網站直連不通時，參考舊 UI 的 NAS 中繼方式查證；不授權改網路架構／Secrets／NAS Server／端點／認證／排程，不得自建第二套 Proxy。
+- **FACT（本批實測）**：Direct 失敗（沙箱 agent proxy 對官方網域 CONNECT 403）；本環境 NAS 連線資訊與 Squid 設定皆未配置，故 NAS 路徑未測試；官方 GitHub raw 成功（僅 FinMind README）。補充文件 §9 記錄契約與安全限制（`/proxy` 無主機白名單、僅 SSRF 私網封鎖、`X-API-Key` 認證、範例 scheme 為 HTTP）。
+- **授權結論無變動**：TWSE／TPEX／OGDL 原文與 FinMind 官網條款仍 NOT VERIFIED；DG-LIC 維持 NOT VERIFIED。NAS 可達≠已授權≠PIT 合格。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、網路架構變更、第二套 Proxy。
+- **出處**：DEC-168；補充文件 §9；BACKLOG『Issue #1144 後續｜B8』。PR 號：#1149。不一致時以出處為準。
+
+
+### 70.10 Coverage 母體收斂與官方條款證據後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-169，非客戶逐字）
+
+- **FACT**：客戶授權 docs-only 的 Coverage 母體收斂與 TWSE／TPEX／FinMind 官方條款證據補查；補充文件新增 §10～§12（PR 號：#1149）。其餘 Gate 保持 HOLD，**未關閉任何 Gate**。
+- **FACT（抽查實跑）**：現行母體＝窗口標籤聯集 41；3 偶發標籤窗口內 7 股日（全 37 日 15 股日）；僅板塊標籤覆蓋可算，個股／金額／市值覆蓋 NOT VERIFIED；歷史列用回補當下的產業對映（非各日 PIT）。
+- **RECOMMENDATION（非裁示）**：暫不改母體；日後揭露至少 COV-A 強制揭露；候選 COV-C「標註不剔除」；不選 COV-B。**未設任何 coverage 百分比。**
+- **授權證據**：FinMind PARTIALLY VERIFIED（官方 GitHub Pages 原文，版本日期 2026-10-31；≠TWSE／TPEX 條款；Apache-2.0 只管 SDK）；TWSE／TPEX／data.gov.tw NOT VERIFIED；OGDL 僅 SPDX 轉錄本。repo 公開、`data_cache` 追蹤 29 檔（含 `industry_raw.json`）僅陳述事實，須客戶／法律專業判斷。
+- **仍未授權**：UI2 runtime 接線（停在 WIRING-GATE）、新母體、門檻值、任何程式／資料／`data_cache` 變更、刪檔。
+- **NOT VERIFIED**：TWSE／TPEX 授權原文、PIT 發布日、3 偶發標籤個股成因、UI 來源標示是否顯示、Cloud／真機／Playwright；證據單組、未經第二組獨立複驗。
+- **出處**：DEC-169；補充文件 §10～§12；BACKLOG『Issue #1144 後續｜Coverage 母體收斂』。PR 號：#1149。不一致時以出處為準。
+
+
+### 70.11 CI 環境最小修復後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-170，非客戶逐字）
+
+- **FACT**：客戶裁示「同意優先採 A，失敗再評估 B」並授權獨立最小 CI workflow 安裝環境修復。#1149 的 `ui2-browser` 因 runner apt／DNS 無法裝 Chromium 依賴而失敗；方案 A 經 CI 實證失效（三個 Ubuntu 來源 host 皆 DNS 失敗）；方案 B＝`ui2-browser` job 改在固定 tag＋digest 的 `mcr.microsoft.com/playwright:v1.64.1-noble` 容器內執行，已由 PR #1150 合併（main `96cb7614`）。#1149 內容未改，Update branch 後原生 CI 五項全綠並合併（main `d8d74ccd`）。
+- **FACT（守衛未降）**：matrix 兩版本、`UI2_BROWSER_LANE=required`、junit tests≥40／skipped=0、evidence artifact、`ui2-browser-gate` 全保留；無 `continue-on-error`／`|| true`／skip／降門檻／新 Secret；未改 tests／production；獨立 QA PASS。
+- **維護**：升級 Playwright 時 image tag、digest、`playwright==` pin 一併更新；不得用 `latest`。
+- **仍未授權／HOLD**：UI2 runtime 接線（停在 WIRING-GATE）、Coverage 母體新算法與最低門檻、PIT 正式語意、資料再散布最終授權、Digest A3／`market.health`／外資 L3。CI 修復不構成上述任何核准。
+- **NOT VERIFIED**：僅證明當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 branch protection required check（設定面，本工作階段無權限）。
+- **出處**：DEC-170；BACKLOG『Issue #1144 後續｜CI 環境最小修復完成』。docs PR 號：#1151。不一致時以出處為準。
