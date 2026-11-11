@@ -8092,6 +8092,6 @@ Model：Claude Sonnet 5.5  Effort：Medium
 
 - **決策者**：客戶。Issue #1136 轉錄，**非逐字、非 QA PASS**（客戶在對話回覆「同意」四項建議，不是逐字展開說明）。
 - **四項同意要點（照 Issue #1136）**：(1) A2 **步驟 1 僅 docs-only 文字線框**，草稿完成後回客戶正式拍板，不得擅自進入步驟 2 程式接線；(2) 新 section 置於 **OneBrain 下方**，不插入六張核心卡、不改 OneBrain 或首屏錨點，390／1440 首屏可達性與導覽不遮擋須驗證（真機／Cloud 未做標 NOT VERIFIED）；(3) 初版三項：外資淨買賣超（僅外資，不稱三大法人）、融資餘額（億元，不沿用 3400／2500）、板塊資金流最新交易日淨額（不含四象限、動能、Top-N 推薦排序）；(4) 配色中性色＋明確正負號＋文字標籤，不沿用舊 UI 負值紅與外資藍／投信綠／自營金作投資訊號，Dark-only 不變。
-- **本批產物**：`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；上報點與待確認項 G-1～G-9 見該文）。**線框不是經驗證畫面，未做真機／Cloud／瀏覽器驗收（NOT VERIFIED）。**
+- **本批產物**：`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；上報點與待確認項 G-1～G-10 見該文）。**線框不是經驗證畫面，未做真機／Cloud／瀏覽器驗收（NOT VERIFIED）。**
 - **與 DEC-157／DEC-162 的關係**：**不取代**。DEC-157 市場頁順序與 `MARKET_CARD_IDS` 固定 6 張維持有效；DEC-162 Mapping 文件 §4 AI 推薦新 section 放日 K 之後，**客戶 Issue #1136 指定改為 OneBrain 下方，以客戶指定為準**（AI 推薦非客戶裁示，兩者不衝突於客戶原文）。
 - **不授權**：A2 步驟 2 程式施工；不改 production code／tests／UI2 VM／feed／section、資料讀寫、fetcher、source／API、PIT／公式／權重／燈號、Risk Cap、D1–D5、EPS、OAuth／Sheet、Digest v2、P-1、OneBrain、Actions、cron／Secrets；#1119 HOLD；#1124～#1126 不處置。

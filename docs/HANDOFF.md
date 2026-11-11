@@ -1460,4 +1460,4 @@ DEC-086 規則已於 main，本表已落地。
 - **本批**：docs-only 文字線框草案 PR（**PR 號待補**；分支 `ccr-588f897e-7wzywe`）。授權範圍轉錄自 Issue #1136（非逐字）；見 `docs/DECISIONS.md` DEC-163、`docs/vnext/NEWUI2_MARKET_CAPITAL_FLOW_TEXT_WIREFRAME_2026-11-11.md`（草案，待客戶正式拍板；**不是經驗證畫面，真機／Cloud 未驗**）。
 - **更正（追加，舊段不改）**：上一段「Issue #1134」接手點寫「本批 PR 號待補」；實際 PR 為 **#1135**，已於 main `5eef8863` squash 合併（同 head `ba99bca5` 原生 CI 5 項 success、獨立 QA PASS）。
 - **不可動項**：資料 PR #1124～#1126（PIT）；#1119 HOLD；D1～D5；OneBrain；Risk Cap；廣度旗標；runtime 接線；P-1／v2／caller；UI2 切換；A2 步驟 2 程式施工。
-- **下一個唯一安全工作**：等客戶對線框正式拍板（G-1～G-9）；無裁示前不動工（`CLAUDE.md` §-1）。
+- **下一個唯一安全工作**：等客戶對線框正式拍板（G-1～G-10）；無裁示前不動工（`CLAUDE.md` §-1）。
