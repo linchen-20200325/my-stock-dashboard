@@ -8140,6 +8140,6 @@ Model：Claude Sonnet 5.5  Effort：Medium
 - **DEC-163「待確認 G-1～G-10」**：本條為其**正式裁示**；DEC-163 文中「初版三項含外資淨買賣超」的**初版範圍**，有效讀法為：**本批只授權融資＋板塊兩個 L3，外資 L3 另案**（G-9）。DEC-163 BACKLOG 上報點 (b)「板塊 Top／Bottom N 屬新排名語意，需另 Gate」維持有效，G-3 已明確**不做**排名。
 - **DEC-162 §4「新 section 放日 K 之後」**：維持被 DEC-163 以客戶指定「OneBrain 下方」取代；本條 G-1 再確認。
 - **DEC-157／DEC-161／DEC-160**：不取代；Gate G-F2～G-F6、方案 2 前置問題**仍待裁示**；市場頁 `MARKET_CARD_IDS` 固定 6 張維持。
-- **本批施工與研究產物（據實，詳見 BACKLOG／HANDOFF）**：批 1＝#1141（main `907322aa`）C1／C2 安全修復；批 2＝#1142（`<MERGE_SHA_1142>`）融資／板塊唯讀 L3；批 3＝`docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，**不實作**）。
+- **本批施工與研究產物（據實，詳見 BACKLOG／HANDOFF）**：批 1＝#1141（main `907322aa`）C1／C2 安全修復；批 2＝#1142（`1e5542a8`）融資／板塊唯讀 L3；批 3＝`docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，**不實作**）。
 - **Digest A2 實作與否＝待客戶裁示**：研究文件的 AI 推薦（方案 A2）**不是客戶裁示**；未獲裁示前不動 `decision_digest_builder.py`。
 - **仍 NOT VERIFIED**：Cloud UI2、真機、Playwright／瀏覽器 viewport、資料來源授權／PIT、ETF Managers 2026-11-16 20:00 UTC 首次排程、資料 PR #1124～#1126（PIT）。

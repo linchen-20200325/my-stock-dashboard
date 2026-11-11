@@ -1477,8 +1477,8 @@ DEC-086 規則已於 main，本表已落地。
 
 ## 最新接手點（2026-11-11，Issue #1140；只追加；不改既有段落；依據 `docs/DECISIONS.md` DEC-164 轉錄，非客戶逐字、非 QA PASS）
 
-- **現在做到哪**：Issue #1140 三批完成——批 1 #1141（C1 價格≤0 一致拒用、C2 未來 `as_of` 不顯示負天數；main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`）；批 2 #1142（融資＋板塊唯讀 L3 service，不接 UI；`<MERGE_SHA_1142>`）；批 3 本 docs PR（Digest regime/light 相容性 Gate 研究＋DEC-164＋BACKLOG＋本段）。
-- **main SHA**：`907322aa`（#1141）之後以 `<MERGE_SHA_1142>` 與本 docs PR 合併 SHA 為準（占位，由總管事後取代）。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
+- **現在做到哪**：Issue #1140 三批完成——批 1 #1141（C1 價格≤0 一致拒用、C2 未來 `as_of` 不顯示負天數；main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`）；批 2 #1142（融資＋板塊唯讀 L3 service，不接 UI；`1e5542a8`）；批 3 本 docs PR（Digest regime/light 相容性 Gate 研究＋DEC-164＋BACKLOG＋本段）。
+- **main SHA**：#1141 合併為 `907322aa`、#1142 合併為 `1e5542a8`；本 docs PR 合併後的 SHA 以 GitHub main 為準。cron 會推進 main，接手前先做 LIVE GitHub Verification Gate。
 - **Current Task**：無進行中施工。G-1～G-10 已裁（DEC-164）；兩個 L3 已有但**未接任何 UI**。
 - **下一個唯一安全接手點**：**等待客戶裁示，無裁示則停手**（`CLAUDE.md` §-1）。需裁示項：
   1. **Digest A2 實作與否**（`DG-DIGEST-A2`）：見 `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md` §9；AI 推薦 A2（**非客戶裁示**）。

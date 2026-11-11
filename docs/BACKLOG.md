@@ -2262,8 +2262,8 @@
 | 批 | PR／SHA | 內容 | 測試證據 |
 |---|---|---|---|
 | 批 1 | #1141（main `907322aa0af9570fdcca9a496ffdc83e275bfdd3`） | **C1** 價格≤0 一致拒用（卡片與日 K 一致）；**C2** 未來 `as_of` 不再顯示負過期天數 | 新增 85 項測試；QA 20 個突變全殺；廣範圍 5438 passed |
-| 批 2 | #1142（`<MERGE_SHA_1142>`） | 融資唯讀 L3 service、板塊資金唯讀 L3 service（含既有 `reader.py` 新增純讀 `daily_net.parquet` 的 L1 函式）、新常數檔 `shared/sector_flow_fact_thresholds.py`；**不接 UI、不啟用新來源** | 融資 97／板塊 149／reader 11；QA 三輪；廣範圍 5781 passed |
-| 批 3 | 本 docs PR（SHA 待補） | `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，不實作）；DEC-164；本登記；HANDOFF | docs-only |
+| 批 2 | #1142（`1e5542a8`） | 融資唯讀 L3 service、板塊資金唯讀 L3 service（含既有 `reader.py` 新增純讀 `daily_net.parquet` 的 L1 函式）、新常數檔 `shared/sector_flow_fact_thresholds.py`；**不接 UI、不啟用新來源** | 融資 97／板塊 149／reader 11；QA 三輪；廣範圍 5781 passed |
+| 批 3 | 本 docs PR（合併 SHA 以 GitHub main 為準） | `docs/vnext/DIGEST_REGIME_LIGHT_COMPAT_GATE_2026-11-11.md`（研究，不實作）；DEC-164；本登記；HANDOFF | docs-only |
 
 **真實 `data_cache` 交叉比對（批 2，FACT：作者端實測，單組）**：融資 **5399.15741 億 @ 2026-11-09**；板塊 N=41、觀測 38、未觀測 3、合計 **−920.248**、正 11／負 27／持平 0、標準化軸。
 
