@@ -1130,3 +1130,12 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 6. **主動提供『可直接複製的新對話提示語』**：完成可恢復的遠端保存後，由 AI 主動告知「🟡 建議換新對話」／適當的狀態燈，附一份完整提示語，至少寫 repo、GitHub Verification Gate、必讀治理文件、未合併 PR head、正式 vs 候選需求、禁止事項、下一個唯一安全動作、Model／Mode／Minimum Sufficient Effort。**不能只給短摘要、不能只說『看上一個對話』**。若保存失敗則先說明阻塞，提供尚可驗證的手動救援提示語，不宣稱安全落盤。
 7. **與靜默巡航併用**：這是「對話不安全／需要安全交接」的明確狀態報告，而非逐 commit／CI 等待的進度碎訊；安全時保持靜默，只有真正接近無法可靠續聊或客戶要求時才提醒一次，避免重複打擾。
 8. **驗收／定義完成**：新對話只靠最新 GitHub main＋必要 Open／Draft PR head＋既有治理檔案即可正確恢復已核准內容、候選方向、阻塞和 next safe action；若恢復不全，交接尚未完成，不能把聊天中的記憶當補洞來源。此項屬文件／流程治理，不授權實作新功能或更動正式投資公式。
+
+
+
+## 2026-11-12｜工作優先序與 GitHub 跨對話續接索引（DEC-175；本節只索引，不授權）
+- **現行優先事項**：延續 DEC-174 的 **New UI2 五頁＋既有資料層／資料契約雙軌**；資料層是整理／驗證已存在的資料架構（source→cache→L3→canonical／VM→UI2），不是重建資料庫或繞過資料 Gate。每批最多三項。
+- **延後事項**：Actions Run／Artifact 紀錄清理與 Old UI／死碼清理，放在新 UI 接線、測試、正式 cutover／rollback Gate 完成後的收尾；不因有 CSV 候選便取得刪除權限。
+- **跨對話保存**：每批結束前依本檔 §0.3 五檔分工同步正式 Decision、BACKLOG、PROJECT_STATE、HANDOFF；本檔只作導航索引。新 Agent 先獨立驗證 GitHub main、Open／Draft PR、CI、review、branch、最新 DEC 與 STOP Gates，再讀 HANDOFF；不可讓聊天摘要推翻 GitHub。
+- **不變之禁止**：#1124～#1126 資料 PR HOLD，PIT／cron 先唯讀核查；#1164 與其餘 open PR 不順手處置；I1144-WIRING-GATE、DG-COV／DG-PIT／DG-LIC／DG-SCOPE、資料授權、儲存架構及正式 UI 切換均未因 DEC-175 解除。舊 UI First、線框先行、資料狀態、安全測試與獨立 QA 規則照舊。
+- 詳細可追溯客戶裁示見 `docs/DECISIONS.md` DEC-175；現行任務列見 `docs/BACKLOG.md`，最新安全接手點見 `docs/HANDOFF.md`。本節不得作為獨立施工授權。
