@@ -122,11 +122,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      # 一律用 `python -m pip`，不用 bare `pip`：工具快取（/opt/hostedtoolcache）在容器內被掛到 /__t，
+      # 而映像預建的 bin/pip 腳本 shebang 指向主機路徑 /opt/hostedtoolcache/...，容器內不存在。
+      # 若預建 pip 已是最新版，`--upgrade pip` 不會重寫該腳本，bare `pip` 就會 exit 127
+      # （cannot execute: required file not found）；`python -m pip` 不經 shebang，與 pip 版本無關。
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install "streamlit==${{ matrix.streamlit }}" pytest "playwright==1.64.1"
+          python -m pip install -r requirements.txt
+          python -m pip install "streamlit==${{ matrix.streamlit }}" pytest "playwright==1.64.1"
 
       - name: Install Chromium
         run: |
