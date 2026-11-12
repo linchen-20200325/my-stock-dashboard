@@ -2352,3 +2352,13 @@
 | **DEC174-CI-UI2BROWSER-EXIT127** | `ui2-browser (1.59.2)` 偶發 `pip: cannot execute: required file not found`（exit 127；容器內 pip 無法執行，測試未開始）。一次性觀察：#1165 期間發生，新 commit 後同 job 重跑通過；與已登記的 `I1144-CI-ENV-MAINT` 同屬 CI 環境類。**僅登記為觀察項，不開修復** | P2 | open | DEC-174；#1165 PR 描述「驗證」段（本組僅轉述，未查 CI log，NOT VERIFIED） | 再次出現（非一次性）才評估；屆時併入 `I1144-CI-ENV-MAINT`。無實際故障不動（§-1） |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3 仍 HOLD。
+
+
+
+## 2026-11-12｜DEC-175 工作優先序與續接（新裁示的待辦索引；登記不等於施工授權）
+| ID | 說明 | Priority | Status | 來源 | Next safe action |
+|---|---|---|---|---|---|
+| DEC175-UI2-DATA-DUAL | UI2 五頁 × 現有資料層／契約雙軌：對齊來源、as_of、PIT、coverage、stale、五態、L3、UI2 consumer 與測試，避免另建資料庫 | P0 | open | DEC-175；DEC-174；#1165 稽核兩檔 | 先非作者複核稽核事實，再按核准契約整理最小安全工作；新 UI 設計須先文字線框 |
+| DEC175-DATA-PR-PIT-READONLY | #1124～#1126 是否處置的前置資料：PIT、資料發布時間、cron 成功率與比較結果 | P1 | blocked-on-customer（處置仍 HOLD） | DEC-174；DEC-175；DEC174-DATA-PR-1124-1126-DISPOSITION | 允許另行指派唯讀查證與決策單；不合併／關閉／rebase |
+| DEC175-CLEANUP-DEFER | Actions Run／Artifact 清理與舊 UI／死碼清理延後，CSV／工具僅為歷史盤點，不作刪除授權 | P3 | deferred | DEC-175 | 新 UI 與資料 Gate、cutover／rollback 驗收後再評估；此時不執行 |
+| DEC175-CROSSCHAT-CHECKPOINT | 每批狀態落入既有五份治理／知識文件，跨對話先 GitHub-first 重核 | P0 | open (recurring governance) | DEC-175；PROJECT_RULES §0.3 | 每批依正式規則更新 DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF；不新增第二套記憶 |
