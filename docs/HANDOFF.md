@@ -524,7 +524,7 @@
 |---|---|
 | latest verified main SHA | `76ed4b7bb486f1fd3db51c0df09d09f15a93f797`（#1173 合併點；2026-11-12 `git fetch origin main` 與 GitHub MCP 取回 main 提交紀錄，FACT；cron 與其他 PR 會推進 main，一律重查） |
 | current working branch | `docs/ssot-sync-batch3-20261112`（本同步 docs PR 的 head；合併後可為任何新分支） |
-| current PR | 本同步 docs PR **__PRNUM__**（Draft；以 GitHub 上 head＝上列分支者為準）。其餘 Open PR：#1164（REORG3C 歸檔，Draft）、資料 PR #1124／#1125／#1126（HOLD；head `fc447def`／`1efb178a`／`428258b3`；check runs 0、pr-check 為 `action_required`）——皆不碰。#1119 不在 Open PR 清單，僅為 HOLD 項目名稱 |
+| current PR | 本同步 docs PR **#1174**〔PR 號補記：有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕〕（Draft；以 GitHub 上 head＝上列分支者為準）。其餘 Open PR：#1164（REORG3C 歸檔，Draft）、資料 PR #1124／#1125／#1126（HOLD；head `fc447def`／`1efb178a`／`428258b3`；check runs 0、pr-check 為 `action_required`）——皆不碰。#1119 不在 Open PR 清單，僅為 HOLD 項目名稱 |
 | current task / batch | **無進行中的客戶批次**；僅有本同步 PR＝客戶 2026-11-12 派工三項安全工作之 ① GitHub SSOT 結果同步（②＝#1173、③＝#1172 已合併；見 DEC-176(c)）。本批做完即停止擴張並回報 |
 | completed in this batch | 見下方「已完成」表（#1165～#1173 全已合併）；本同步 PR 本身尚未合併 |
 | exact current stopping point | 本同步 PR 已推送、Draft；待非作者獨立 QA 與同 head 原生 CI。**未做**：任何 UI／資料／workflow 變更 |
