@@ -2408,3 +2408,28 @@
 
 - **仍 HOLD（本批無一解除）**：`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-WIRING-GATE`、G-F2～G-F6、Digest A3（`I1144-DG-A3`）、`market.health`（`I1144-DG-HEALTH`）、外資 L3、#1124～#1126、#1164、#1119、Old UI／預設 UI 切換（Old UI Removal Gate，`UIM-REMOVAL-GATE`／`NUI2-CUTOVER`）、`REORG3C-Q5-GATE`（Q5）。
 - **NOT VERIFIED**：台股缺 11-11 的原因（#1124 分支外資／融資有 11-11、台股沒有；來源 `DAILY_DATA_PR_PIT_CRON_INVESTIGATION_2026-11-12.md` §1、§2.1）；Streamlit Cloud 追蹤分支（即 `DPE-6` 所缺的設定頁證據）；DEC-175／DEC-176 fence 與客戶原訊息的逐字一致性；「V1 CSV」來源（repo 內無出處，見 HANDOFF 前段）；「#1171 修正有效」；各 PR 的非作者 QA／CI 數字（轉述）。
+
+
+## 2026-11-12｜#1169 獨立複驗結論的勘誤指標（只追加；不改既有列；依據 `docs/DECISIONS.md`「DEC-174／DEC-176 後續註記：#1169 獨立複驗結論的有效讀法」；登記不等於施工授權）
+
+> 背景：#1169（`aa98de4c`）的複驗文件 `docs/vnext/NEWUI2_INDEPENDENT_REVERIFICATION_2026-11-12.md`（單組產出）對 #1165 兩份文件提出 E-1～E-13 勘誤並修正 B1 結論措辭。下方「Batch 1 收尾」段（撰寫時 main `85c65dfc` 的 BACKLOG 約 2330～2355 行，僅供定位）與「DEC-176 結果同步」段的數列敘述因此過期或過強；**依只追加慣例，原列不改字**，以下表「有效讀法」為準。完整對照見 DECISIONS 同名小節。**所有 HOLD／Gate 未動**；本段單組撰寫，未經非作者獨立 QA（`CLAUDE.md` §-2 規則 6）。ID 前綴 `DEC176-`（落盤前 `git grep -c "DEC176-REVERIFY" docs/BACKLOG.md` ＝ 0，無重複）。
+
+### A. 勘誤指標（逐列：原列 → 有效讀法；不改原列）
+
+| 原列 ID（撰寫時 BACKLOG 行號，僅供定位） | 原列說法（摘要） | 有效讀法 | 複驗文件出處 |
+|---|---|---|---|
+| 「Batch 1 收尾」背景段（約 2332 行） | 「B1 結論＝未發現契約內可重現缺陷，故未開 UI 修復 PR」 | **未證明違反已核准契約，但不能說「無」；R1～R5 為候選**（只分類，不修）。「未開 UI 修復 PR」這個動作本身仍屬實，且仍不授權開 | §5 |
+| `DEC174-N1-STALE-THRESHOLD`（約 2338 行；P1 open） | 「板塊 4 日 vs 融資／外資 7 日；皆不看交易日曆」 | **(1)** 外資現行 consumer 走 **10 日曆日**（`load_extreme_risk_legs`／`EXTREME_STALE_MAX_CALENDAR_DAYS`），過期門檻實為**三種**（4／7／10）；**(2)**「皆不看交易日曆」過度絕對：repo 有交易日曆服務與以交易日計的 `shared/freshness_policy.py`（客戶 2026-10-14 核准 SSOT；`DAILY_MAX_LAG_TRADING_DAYS`＝3），**這幾條 UI2 stale 判定未接**到它們；**(3)** 原列漏引 `shared/freshness_policy.py`（N-1 部分推翻，E-7）。列仍 open，是否統一仍待客戶 | §4 E-1、E-2、E-7 |
+| `DEC174-COPY-DRIFT-2ITEMS`（約 2342 行；P2 open） | 開發面文案「只接 2 項真資料」漂移；`REAL_PREVIEW_BANNER_NOTE`「僅台股與市場位階為真資料」口徑與位階一致 | 補（紅隊 R2，自報重現）：該橫幅**宣稱位階為真資料，但位階在 UI2 恆未載入**，且同句沒提日 K——「與位階口徑一致」不代表與畫面事實一致。仍只登記、先確認類別（開發面或產品畫面），不改字 | §5.1 R2 |
+| `DEC174-CAPMAP-DRIFT`（約 2347 行；P2 open） | CAPMAP 將 MK-02／TG-30「真資料」標「是」，實況為已接線但恆未載入 | 補：CAPMAP「真資料＝是」實為 **5 列**（MK-02、MK-03、MK-04、TG-30、SY-03），原列漏 SY-03；**SY-03 備註「位階有真 as_of／source」與程式不符**（位階畫面明寫「市場位階未提供資料日」，`source` 為規則分支識別）。五頁稽核 §3.3 結論句「UI2 有真值的只有 MK-03、MK-04」同樣過窄。CAPMAP 檔更正與否仍由總管決定 | §4 E-5；§3 V-5、V-6 |
+| `DEC174-B1-INDEP-QA`（約 2351 行；status open） | 「派第二組重做關鍵 FACT 與覆核 N-1～N-4」 | #1169 已產出一份**單組**複驗文件（內含逐項事實組、紅隊組、文件組三位各自單組），**不等於本項結案**：是否視為「非作者獨立 QA」由總管裁定，複驗文件自己亦不宣稱（檔頭第 7 行）。本列維持 open（待判定）。與 `DEC176-INDEP-REVERIFY-DONE`、`DEC176-REVERIFY-R1R5-CANDIDATES` 互引 | 檔頭；§9 |
+| `DEC174-VG1-FAKE-REAL-LOOK`（約 2343 行；P2 blocked-on-customer） | FAKE 與 Real 標示第一列樣式相同 | 補：複驗 R4（示意軸「已載入」場景的「市場目前狀態 震盪」等缺行內示意標記）**併入本列處理**，不另立工作 | §5.1 R4 |
+| `DEC176-INDEP-REVERIFY-DONE`（約 2381 行；open 待判定） | 「#1169 複驗文件已產出，是否結案由總管／客戶判定」 | 補其**修正內容**：核心事實獲獨立重現、**0 個被整體推翻**；13 條措辭／查法勘誤（E-1～E-13，見 DECISIONS 同名小節）、B1 修正、R1～R5 候選。仍未結案；與 `DEC174-B1-INDEP-QA`、`DEC176-REVERIFY-R1R5-CANDIDATES` 互引 | §0、§2.2、§4、§5 |
+
+### B. 新增列
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC176-REVERIFY-R1R5-CANDIDATES** | #1169 複驗 B1 紅隊找到的 R1～R5 **候選**：R1 🎯 閒置時「查詢摘要」重複兩次（畫面結構取捨）；R2 真資料軸橫幅宣稱位階為真資料（文案與事實矛盾）；R3 🗂 資料頁原因句沿用 🎯 頁文案；R4 示意軸缺行內示意標記（併入 `DEC174-VG1-FAKE-REAL-LOOK`）；R5 相對路徑 `Path("data_cache")`（**環境依賴，不是缺陷**，只需在「沙箱實測」註明「從專案根啟動」）。紅隊以渲染輸出重現，**FACT 來自紅隊自報，文件組未重做渲染** | P2 | open（候選；只分類） | `NEWUI2_INDEPENDENT_REVERIFICATION_2026-11-12.md` §5.1；DEC-174；`DEC174-B1-INDEP-QA`；`DEC176-INDEP-REVERIFY-DONE` | **任何 UI 動作須先文字線框＋客戶拍板**（`CLAUDE.md` §-1.5.D §03-2 ①）；R2／R3 的類別（開發面文案或產品畫面）由總管先判定；R4 走 VG1；R5 不開工。**非授權**，無客戶指派不動工（§-1）。本列單組撰寫，R1～R5 未被再次重驗 |
+
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3 仍 HOLD。
