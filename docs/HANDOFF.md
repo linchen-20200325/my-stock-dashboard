@@ -463,15 +463,16 @@
 | relevant evidence location | `docs/vnext/NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md`（§0、§7、§11）、`docs/vnext/NEWUI2_MARKET_DATA_CONTRACT_VALIDATION_2026-11-12.md`（§0、§7、§10）；`docs/DECISIONS.md` DEC-174 結果指標；BACKLOG 檔尾「方案 B Batch 1 收尾」段（`DEC174-*`） |
 | recommended Model | Claude Sonnet 5.5（純文件；AI 總管建議，非客戶裁示） |
 | recommended Effort | Medium（純文件；獨立複驗或涉規範位階判斷時升 High） |
-| last checkpoint timestamp | 2026-11-12 11:27 UTC |
+| last checkpoint timestamp | 2026-11-12 11:42 UTC（`date -u` 實查，為 QA 修正 commit 前最後查核時間；不早於 PR 推送時間） |
 
 - **完成項（指標；merge SHA 取自 `git log origin/main`，CI／QA 見各 PR 頁，本組未逐項重查）**：#1153～#1159（3C Q1～Q4、DEC-172／173 登錄；見上一段）；#1160 `ced0232b`（3C 收尾）；#1161～#1163（REF-SYNC 與 BACKLOG 表頭，`755aee87`／`f57e7c77`／`7eb48d6c`）；#1166 `dae78eea`（DEC-174 登錄）；#1165 `68e56ff0`（Batch 1 兩份稽核文件）。
 - **Batch 1 結論**：(1) 預設路徑只到 FAKE，REAL 軸帶真值僅台股卡與日 K，位階已接線但 UI2 獨立 session 目前恆未載入；(2) 「市場資金與籌碼」不在 UI2 VM，融資／板塊 L3 引用數為 0，外資無 L3；(3) 口徑問題：`finmind_inst` 同欄兩種 `source` 標籤、板塊外資分項與 FinMind 外資同日不等、stale 4 日 vs 7 日；(4) 台股卡資料日停在 2026-11-09，疑與資料 PR #1124～#1126 未合併有關（INFERENCE）；(5) B1：未發現契約內可重現缺陷，其餘為 Visual Gate 候選／文案漂移／守衛缺口，皆已登記 BACKLOG `DEC174-*`，皆非授權。
 - **仍 HOLD／NOT VERIFIED**：上表 Stop Gates 全部；兩份文件的第二組複驗、PIT、授權原文、cron 成功率、Cloud UI2、真機、Real 軸瀏覽器量測、ETF Managers 2026-11-16 20:00 UTC 首次排程。
-- **需客戶裁示**：(1) 是否處置資料 PR #1124～#1126（BACKLOG `DEC174-DATA-PR-1124-1126-DISPOSITION`；AI 推薦：本批與下一批皆不處置，先做唯讀 PIT 與 cron 成功率檢查）；(2) 開發面文案漂移與 VG1／VG2 的**文字線框**（Visual Gate，草稿先行，客戶拍板前不寫 UI code）；(3) Q5 沿用 DEC-173：暫不執行，是否及何時重議；(4) 既有 `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`。
+- **需客戶裁示**：(1) 是否處置資料 PR #1124～#1126（BACKLOG `DEC174-DATA-PR-1124-1126-DISPOSITION`；AI 推薦：本批與下一批皆不處置，先做唯讀 PIT 與 cron 成功率檢查）；(2) VG1／VG2 的**文字線框**（Visual Gate 候選，草稿先行，客戶拍板前不寫 UI code）；「只接 2 項真資料」文案漂移（`DEC174-COPY-DRIFT-2ITEMS`）**先確認類別**——開發面文案屬內部自決，產品畫面才需文字線框，不預設請客戶為它出線框；(3) Q5 沿用 DEC-173：暫不執行，是否及何時重議；(4) 既有 `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`。
 - **下一批施工候選（最多 3 項；照五頁稽核 §11 原文，皆為 RECOMMENDATION，非授權，不得自動跨越 Decision Gate）**：
-  1. 獨立複驗兩份文件（派第二組非作者重做關鍵 FACT 與 CAPMAP 對帳，含部署端位階實況）——否需客戶裁示；稽核推薦先做。
+  1. 獨立複驗兩份文件（派第二組非作者重做關鍵 FACT 與 CAPMAP 對帳，含部署端位階實況）——不需客戶裁示（仍須客戶指派）；稽核推薦先做。
   2. 把「接線前須客戶裁示」整理成商業語言的一頁決策單（DG-SCOPE／DG-COV／DG-PIT／DG-LIC 四問＋AI 推薦）——需客戶看；不解除 `I1144-WIRING-GATE`。
   3. （需客戶先裁示，未裁示則不計入該批）🗂 資料頁新鮮度總覽的文字線框草稿——稽核暫不推薦自動啟動。
-- **禁止**：無客戶指派不動工；不碰、不合併、不改寫、不 rebase #1119、#1124～#1126、#1164；不把 AI 推薦寫成客戶裁示；不把稽核分類（READY／BLOCKED）讀成 Gate 解除或資料可用；不把歸檔讀成刪除授權（DEC-173 Q6）。
-- **先讀 SSOT**：`CLAUDE.md` → `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§23）→ `docs/DECISIONS.md` DEC-174（含結果指標）／DEC-173 → `docs/BACKLOG.md` 檔尾「方案 B Batch 1 收尾」段 → 兩份稽核文件 → 本段。本段單組撰寫，未經第二組驗證。
+- **禁止**：無客戶指派不動工；不碰、不合併、不改寫、不 rebase #1124～#1126、#1164；#1119 維持 HOLD；完整 HOLD 清單見 `docs/DECISIONS.md` DEC-174；不把 AI 推薦寫成客戶裁示；不把稽核分類（READY／BLOCKED）讀成 Gate 解除或資料可用；不把歸檔讀成刪除授權（DEC-173 Q6）。
+- **先讀 SSOT**：`CLAUDE.md` → `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§23）→ `docs/DECISIONS.md` DEC-174（含結果指標）／DEC-173 → `docs/BACKLOG.md` 檔尾「方案 B Batch 1 收尾」段 → 兩份稽核文件 → 本段。
+- **其餘 open 的 `REORG3C-*`**：見 BACKLOG 檔尾 3C 收尾段——`REORG3C-REF-SYNC`（P1）、`REORG3C-DLF1S8-ROW`、`REORG3C-SEC3-HEADER`（BACKLOG 該段列為 open）；#1164（Draft）＝`REORG3C-DEC092-L309-MOVE` 的搬移實作；`REORG3C-Q5-GATE` 待客戶。Q5 相關 Token 量測為單次樣本，不得當統計結論。本段單組撰寫，未經第二組驗證。
