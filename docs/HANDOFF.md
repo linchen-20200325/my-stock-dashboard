@@ -500,7 +500,7 @@
 | 是否存在 uncommitted / unpushed work | 否（推送後；以 `git status`／GitHub 實查為準） |
 | relevant evidence location | `docs/DECISIONS.md` DEC-175（含 fence＋sha256、AI 整理分節、QA 軌跡）；`docs/BACKLOG.md` 檔尾「DEC-175」段（`DEC175-*`）；`PROJECT_RULES.md` 檔尾 DEC-175 索引；單組 QA 報告僅存於上一輪派工輸出，repo 內無，8 項已逐項記於 PR 描述；#1169 新增三份 `docs/vnext/` 文件（見下） |
 | recommended Model | ~~Claude Sonnet 5.5（純文件；AI 總管建議，非客戶裁示）~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
-| recommended Effort | ~~High（涉規範位階與 Gate 文字判斷；AI 總管建議，非客戶裁示；**現行值只維護於此處**）~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
+| recommended Effort | ~~High（涉規範位階與 Gate 文字判斷；AI 總管建議，非客戶裁示；**現行值只維護於此處**）~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 〔📌 更正（有意識的更正，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）：此處劃線只表示「現行值改維護於檔尾新段」，**不是**被 Medium 取代；該 High 與客戶最新派工訊息（Effort：High）一致，檔尾新段現行值亦為 High。〕 |
 | last checkpoint timestamp | ~~2026-11-12 14:17 UTC（`date -u` 實查；追加修正 commit 前；前一版 13:50 UTC）~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 
 - **PROJECT_STATE 未更新**：本批只新增優先序／續接索引，無新增有效架構知識，故未動 `docs/PROJECT_STATE.md`（`PROJECT_RULES.md` §0.3 五檔分工的有意識省略，非遺漏）。
@@ -534,8 +534,8 @@
 | unresolved true Stop Gates | #1119 HOLD；#1124～#1126 HOLD（客戶 DEC-176(a) 方案 A；非合併授權）；#1164 HOLD；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6、`REORG3C-Q5-GATE`、Old UI Removal Gate、預設 UI 切換（全部未動；DEC-175／DEC-176 未解除任何一項） |
 | 是否存在 uncommitted / unpushed work | 否（本 PR 推送後；以 `git status`／GitHub 實查為準） |
 | relevant evidence location | `docs/DECISIONS.md` DEC-176（含兩個 fence＋sha256）／DEC-175；`docs/BACKLOG.md` 檔尾「DEC-176 結果同步」（`DEC176-*`）；`docs/PROJECT_STATE.md` §70.13；`docs/vnext/` 的 #1169（三份）、#1172、#1173、#1170 文件；`PROJECT_RULES.md` 檔尾 DEC-175 索引後的 DEC-176(c) 釐清 |
-| recommended Model | Claude Sonnet 5.5（純文件；AI 總管建議，非客戶裁示；**現行值只維護於此處**） |
-| recommended Effort | Medium（純文件；涉規範位階或 Gate 文字判斷時升 High；AI 總管建議，非客戶裁示；**現行值只維護於此處**） |
+| recommended Model | Claude Sonnet 5.5（客戶最新派工訊息指定；經派工訊息轉錄，逐字 NOT VERIFIED；**現行值只維護於此處**） |
+| recommended Effort | High（客戶最新派工訊息指定〔「CI 修復＋#1168／#1170…續工」與「DEC-175 權限釐清與下一批」兩則皆寫 Effort：High〕；經派工訊息轉錄，逐字 NOT VERIFIED）；Mode：靜默自主巡航（客戶派工訊息指定；轉錄，NOT VERIFIED）。**現行值只維護於此處**。〔更正（有意識的更正，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）：本欄初稿曾寫「Medium」，與客戶派工訊息相反，已改；初稿原字未保留於本欄，更正紀錄在此。〕 |
 | last checkpoint timestamp | 2026-11-12T16:07:07Z（`date -u` 實查；PR 推送前最後查核） |
 
 ### 已完成（FACT：merge SHA 取自 2026-11-12 main 提交紀錄；QA／CI 為合併提交訊息與派工訊息自述，**本組未逐 PR 重讀 review／check runs**）
@@ -599,7 +599,7 @@ HOLD／禁止（全部未解除）：#1124～#1126 資料 PR（不合併／關�
 新 UI layout／欄位／文案先出文字線框等客戶拍板；每批最多三項；作者不自行合併，須非作者獨立 QA＋同 head 五項原生 CI。
 AI 推薦（如「推薦 A」）不是客戶裁示；FACT／INFERENCE／NOT VERIFIED 要分開寫；CI 綠不等於 Cloud／資料來源已驗證。
 未合併 PR（以最新 GitHub 為準，head 會變）：#1164 `6fddc582`（Draft）、#1124 `fc447def`、#1125 `1efb178a`、#1126 `428258b3`——全部不碰。
-建議 Model／Mode／Effort（AI 建議，非客戶裁示；PROJECT_RULES 第 9 節〔Model／Mode／Effort〕）：Claude Sonnet 5.5／Mode 不另設（第 9 節標題含 Mode，但本組未找到獨立 Mode 定義，NOT VERIFIED；沿用既有 Gate）／Medium（涉規範位階或 Gate 文字判斷升 High）；現行值只以 HANDOFF 最新 Resume Checkpoint 為準。
+Model／Mode／Effort（客戶最新派工訊息指定，經轉錄、逐字 NOT VERIFIED；PROJECT_RULES 第 9 節）：Claude Sonnet 5.5／Mode：靜默自主巡航／Effort：High；現行值只以 HANDOFF 最新 Resume Checkpoint 為準。
 沒有客戶新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
 ```
 
