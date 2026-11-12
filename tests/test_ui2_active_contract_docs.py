@@ -31,6 +31,19 @@ def _read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
 
+#: DEC-173 Q1（2026-11-12）：`docs/HANDOFF.md` 歷史段逐字搬入此分冊；Safe Handoff 錨點段在分冊內。
+HANDOFF_HISTORY_REL = "docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md"
+
+
+def _handoff_chain() -> str:
+    """HANDOFF 交接鏈＝歷史分冊（較早）＋主檔（現行，含檔尾最新接手段），依時序串接。
+
+    DEC-173 Q1 前讀的是主檔單檔；搬移後錨點在分冊，故改讀串接鏈——「錨點段起至鏈尾」的斷言語意由
+    「主檔最末」變為「歷史鏈中、且其後內容（含主檔現行段）」。
+    """
+    return _read(HANDOFF_HISTORY_REL) + _read("docs/HANDOFF.md")
+
+
 def _dec128() -> str:
     t = _read("docs/DECISIONS.md")
     i = t.index("### DEC-128｜")
@@ -745,7 +758,7 @@ def test_p2_text_wireframe_exists_declares_pending_acceptance_and_has_sections_a
 def test_dec132_is_wired_into_backlog_state_handoff_and_checklist():
     assert "DEC-132 落盤與 P2" in _read("docs/BACKLOG.md")
     assert "## 63. DEC-132" in _read("docs/PROJECT_STATE.md")
-    h = _read("docs/HANDOFF.md")
+    h = _handoff_chain()   # DEC-173 Q1：原 _read("docs/HANDOFF.md")；錨點已搬入歷史分冊
     tail = h[h.rindex("Safe Handoff（2026-11-04 DEC-132"):]
     assert "客戶驗收 P2 文字線框" in tail and "驗收通過前不得實作" in tail and "設計候選" in tail
     assert "## §24 DEC-132" in _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
@@ -804,10 +817,10 @@ def test_dec133_is_wired_into_backlog_state_handoff_checklist_and_contract():
     row = next(l for l in b.splitlines() if l.startswith("| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER**"))
     assert "客戶已確認（DEC-133" in row and "~~open~~" in row                      # 原刪除線保留、新增客戶確認
     assert "## 64. New UI2 UI Correction P2" in _read("docs/PROJECT_STATE.md")
-    h = _read("docs/HANDOFF.md")
+    h = _handoff_chain()   # DEC-173 Q1：原 _read("docs/HANDOFF.md")；錨點已搬入歷史分冊
     tail = h[h.rindex("Safe Handoff（2026-11-04 DEC-133"):]
     assert "待客戶從 P6" in tail and "P7" in tail and "客戶未選定不動工" in tail and "設計候選" in tail
-    assert h.rindex("Safe Handoff（2026-11-04 DEC-133") > h.rindex("Safe Handoff（2026-11-04 DEC-132")   # 最末
+    assert h.rindex("Safe Handoff（2026-11-04 DEC-133") > h.rindex("Safe Handoff（2026-11-04 DEC-132")   # 最末（DEC-173 Q1 後＝串接鏈中的時序先後）
     c = _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
     sec = c[c.index("## §25 UI Correction P2"):]
     assert "[ ]" in sec and not re.search(r"\[[xX]\]", sec), "§25 不得自勾"

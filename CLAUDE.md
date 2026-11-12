@@ -1071,47 +1071,14 @@ dummy 資料 / `except: pass` / 自己估一個合理值）**一項未減**。
 
 ## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）
 
-> Bootstrap 流程全 4 步完成,§0 已從「BOOTSTRAP 紀錄」改名為「填寫紀錄」。
-> 完整收尾證據按時序記錄如下。
-
-**步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
-- meta-docs（README/STATE/ARCHITECTURE/SPEC/DATASTATION/STRATEGY_MANUAL/MACRO_CALIBRATION）
-- 27 個外部資料來源 endpoint + 單位 + 發布延遲 + 修正風險
-- 14 類門檻常數 + 10 大單位陷阱 + TTL 對照表 + 時區/日曆使用
-
-**步驟 2｜填寫待填欄位** — 已完成,以下節次依現有 code 證據填妥（每條附 `file:line`）：
-- §2.1 SSOT 5-Tier 27 來源權威分級
-- §2.3 Point-in-Time 各源發布延遲 + 修正風險表
-- §2.4 Freshness max_age 對照（依 `shared/ttls.py` + macro_core 常數）
-- §3.1 Schema 主要 DataFrame 表（待議：是否導入 pandera）
-- §3.2 範圍 / 合理性檢查（依 `MACRO_THRESHOLDS` + 領域知識）
-- §3.3 反捏造 — 14 類 magic number 盤點（含 SSOT vs inline 標記）
-- §3.4 Benford 適用性判斷
-- §4.1 8 大單位陷阱
-- §4.2 不變量斷言
-- §4.4 Welford 適用性判斷
-- §4.5 時序對齊（**無**第三方 trading calendar lib）
-- §4.6 領域邊界（9 種 TW 股市特有狀態）
-- §8 架構先行 — 7 層分層 + 5 條硬規則 + 3 處灰色地帶（v3 增補,evidence: ARCHITECTURE.md §1-§7 + SPEC.md §5）
-
-**步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
-- W1（v18.241 群 A/B/C）：14 處 SSOT 抽出 + EX-CACHE-1/EX-L0-1/EX-AI-1 例外登記（EX-AI-1 v18.399 已退役）
-- W3a/W3b（#253）：4 處 inline magic SSOT 抽出 + 收斂 §3.3 表
-- W4（#252）：刪死碼 get_nas_proxy 群
-- W5-1（#254）：data_loader 5 處 except:pass 收窄 + log
-- W5-2（#255）：9 處 except/empty 補 log + 註解
-- W5-3（#256）：tw_stock_data_fetcher 加註 §8.2.A EX-CACHE-1+EX-L0-1 例外
-- S-H1/H3/H4/H5/H6（#257）：Stock §8.2 5 項違憲全結案
-  - S-H4：merrill_clock fetch_pmi_history 下沉 tw_macro（L2→L1 重構）
-  - S-H1：data_loader 死碼 safe_fetch_strict 刪除
-  - S-H3：etf_fetch 4 處 st.error/warning/session_state → print + module-level dict + accessor
-  - S-H5/H6：app.py + etf_dashboard 直呼 L1 → EX-PASSTHRU-1 例外登記（類比 Fund F-H6）
-
-**步驟 4｜收尾** — 已完成。
-- §3.3 反捏造 ❌ 0 項（原 14 類 magic number 全 SSOT 化）
-- §8.2 高項違憲 0 項（S-H1/H3/H4 真重構；S-H5/H6 EX-PASSTHRU-1 例外登記）
-- §8.2.A 例外清單：EX-L0-1 / EX-CACHE-1 / EX-PASSTHRU-1 / EX-OAUTH-1(v18.431 補登)(EX-AI-1 + EX-RENDER-1 已退役)
-- 證據：全部 commit history + PR description 保留於 origin/main。
+<!-- CLAUDE_HISTORY_INDEX:BEGIN lines=1074-1114 archive=docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md -->
+- 📦 **路徑索引（2026-11-12，DEC-173 Q4；只搬不改）**：原 L1074–L1114（屬 `## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）`）已逐字搬至 `docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md`（分冊 L10–L50）；純歷史紀錄，非現行規則。本處原為下列引言與 4 個步驟（引言首行與步驟小標題逐字；他處引用「§0 步驟 1」「§0 步驟 4」即指此）：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：> Bootstrap 流程全 4 步完成,§0 已從「BOOTSTRAP 紀錄」改名為「填寫紀錄」。
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 2｜填寫待填欄位** — 已完成,以下節次依現有 code 證據填妥（每條附 `file:line`）：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 4｜收尾** — 已完成。
+<!-- CLAUDE_HISTORY_INDEX:END -->
 
 ---
 

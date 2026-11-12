@@ -564,6 +564,8 @@ Risk Cap **怎麼獨立顯示**（數字、7 天沿用、必要／選配清單�
 | B14 | 舊 UI 雷達標籤「10 燈」與實際 9 項不符（舊 UI 凍結，不改） | `src/ui/tabs/macro/helpers.py:195` | 只記錄 |
 | B15 | Risk Cap 數值現行出現在兩處：卡①「硬否決天花板」列（條件成立時）與更新報告步驟說明（每次更新）；沒有自己的卡 | `page_today.py:2054-2066`；`macro_refresh_service.py:1065-1072` | `RC-VISIBILITY`（本批照舊並揭露） |
 
+> 📌 **2026-11-12 REF-SYNC（原 B10 證據列保留，僅更新引用位置）**：B10 原 `docs/HANDOFF.md:178-194` 是 2026-10-30 時點的歷史引用，已由 #1156 逐字歸檔到 [`HANDOFF_HISTORY_2026-11-12.md` 原 L178–194／分冊 L124–140](../archive/historical/HANDOFF_HISTORY_2026-11-12.md)。此引用只證明當時的歷史快照，不代表 #920 今日 PR 狀態；今日狀態請查 live GitHub。依 DEC-173 Q1／Q6 與客戶 `REORG3C-REF-SYNC` 授權，不更改 B10 原判定。
+
 ## 附錄 C｜獨立複驗結果
 
 **第一輪複驗（2026-10-24，獨立唯讀稽核組；未參與撰寫）**
