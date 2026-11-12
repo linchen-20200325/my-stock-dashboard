@@ -476,3 +476,16 @@
 - **禁止**：無客戶指派不動工；不碰、不合併、不改寫、不 rebase #1124～#1126、#1164；#1119 維持 HOLD；完整 HOLD 清單見 `docs/DECISIONS.md` DEC-174；不把 AI 推薦寫成客戶裁示；不把稽核分類（READY／BLOCKED）讀成 Gate 解除或資料可用；不把歸檔讀成刪除授權（DEC-173 Q6）。
 - **先讀 SSOT**：`CLAUDE.md` → `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§23）→ `docs/DECISIONS.md` DEC-174（含結果指標）／DEC-173 → `docs/BACKLOG.md` 檔尾「方案 B Batch 1 收尾」段 → 兩份稽核文件 → 本段。
 - **其餘 open 的 `REORG3C-*`**：見 BACKLOG 檔尾 3C 收尾段——`REORG3C-REF-SYNC`（P1）、`REORG3C-DLF1S8-ROW`、`REORG3C-SEC3-HEADER`（BACKLOG 該段列為 open）；#1164（Draft）＝`REORG3C-DEC092-L309-MOVE` 的搬移實作；`REORG3C-Q5-GATE` 待客戶。Q5 相關 Token 量測為單次樣本，不得當統計結論。本段單組撰寫，未經第二組驗證。
+
+
+
+## 2026-11-12｜DEC-175 最新安全接手點（新增優先序；舊段保留為歷史）
+> 客戶最新裁示：先處理股票 **UI2＋現有資料層／資料契約**，Actions 清理延後到最後 Old UI／死碼清理階段。正式裁示在 `docs/DECISIONS.md` DEC-175；本段是快照而非 GitHub SSOT。開始前必做 Live GitHub Verification Gate。
+- **查詢時 main**：`6241ad3b6c64ca7f64140cd111a9038dd8c1dea5`（#1167 合併）；請重查 live main。**當時 Open PR**：#1164（獨立 Draft）、#1124～#1126（資料 HOLD），均不得順手處置。
+- **已完成**：DEC-174 Batch 1，#1165 五頁稽核與市場資料契約、#1166 DEC-174、#1167 結果／BACKLOG／HANDOFF 收尾。尚缺外部／第二組獨立事實複驗，不可把 PR QA 等同於所有外部實測。
+- **當前主線**：沿用 DEC-174「UI＋資料契約雙軌」，每批最多三項；先核查資料來源→快取→L3→Canonical→UI2 的既有讀取路徑、PIT／新鮮度／coverage／資料狀態，再做已核准範圍內 UI 安全改善。新 layout／文案／欄位／動線變更仍須文字線框及裁示。
+- **資料 PR 處置**：#1124～#1126 保持 HOLD；唯讀 PIT／cron 先查證，AI 推薦暫不處置不是客戶的新決策。資料來源授權與 WIRING Gate、資料儲存架構及 #1119 等原 HOLD 均不變。
+- **仍 NOT VERIFIED**：PIT、cron 成功率、11/10 與 11/11 市場交易日核查、來源授權原文、Cloud／真機／Real 軸量測及資料能否供正式決策。
+- **暫緩**：GitHub Actions Runs／Artifacts 清理（V1 CSV 只盤點，不刪）與舊 UI／死碼清理，放到安全 cutover／rollback 驗收後。
+- **下一安全動作**：依委派治理先做非作者獨立 QA 與來源契約決策材料，不在 HOLD 未解除時接線；每批同步既有 DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF，避免跨對話失憶。
+- **建議 Agent**：Claude Sonnet 5.5／靜默自主巡航／High；正式指派與 QA 按本 repo 規則。此段不是獨立施工授權。
