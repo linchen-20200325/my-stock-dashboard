@@ -687,7 +687,7 @@ Model／Mode／Effort（客戶最新派工訊息指定，經轉錄、逐字 NOT 
 
 ### 風險
 
-(1) 本 PR 單組作者撰寫，未經非作者獨立 QA；(2) #1169 複驗內事實（含紅隊渲染重現）未被再次重驗，且 #1165 兩份文件仍含被修正措辭（本批不改）；(3) D6 紅燈機制為兩組調查一致的推論，**CI 當次實例未直接驗證**，且「其他測試是否有同類缺陷」未掃——每個跑到該測試檔的 pytest 行程（PR CI、slow lane 也適用，不只 main push）約有 0.54～0.63% 機率再出紅燈（機率為調查組估算，兩組自算一致，本組未重算），rerun 通過不等於已修；(4) concurrency `cancel-in-progress: true` 使連續 push 的前一個 push run 可能被取消，push CI 不一定完整；(5) #1171 修正有效性仍 NOT VERIFIED；(6) 資料 PR 長期不處理：台股卡持續落後；11-21 `update_fundamentals` 直推 main 預期被保護擋下（INFERENCE）；(7) 資料 PR head 為各 PR 最後更新／fetched_at 約 17:29–17:45Z 的時點快照（讀取時間以本段 checkpoint 為準），cron 會推進，一律重查；(8) DEC-176 fence 與客戶原訊息逐字一致性 NOT VERIFIED。
+(1) 本 PR 單組作者撰寫，未經非作者獨立 QA；(2) #1169 複驗內事實（含紅隊渲染重現）未被再次重驗，且 #1165 兩份文件仍含被修正措辭（本批不改）；(3) D6 紅燈機制為兩組調查一致的推論，**CI 當次實例未直接驗證**，且「其他測試是否有同類缺陷」未掃——每個跑到該測試檔的 pytest 行程（PR CI 與 main push 的 fast lane 都會跑到該檔）約有 0.54～0.63% 機率再出紅燈（機率為調查組估算，兩組自算一致，本組未重算），rerun 通過不等於已修；(4) concurrency `cancel-in-progress: true` 使連續 push 的前一個 push run 可能被取消，push CI 不一定完整；(5) #1171 修正有效性仍 NOT VERIFIED；(6) 資料 PR 長期不處理：台股卡持續落後；11-21 `update_fundamentals` 直推 main 預期被保護擋下（INFERENCE）；(7) 資料 PR head 為各 PR 最後更新／fetched_at 約 17:29–17:45Z 的時點快照（讀取時間以本段 checkpoint 為準），cron 會推進，一律重查；(8) DEC-176 fence 與客戶原訊息逐字一致性 NOT VERIFIED。
 
 ### 下一批候選（最多 3 項；僅候選，**需客戶指派，非授權**；啟動仍須客戶指派，`CLAUDE.md` §-1）
 
