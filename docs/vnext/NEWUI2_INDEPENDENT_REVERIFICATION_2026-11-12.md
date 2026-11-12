@@ -74,10 +74,10 @@
 
 | # | 原料宣稱 | 方法 | 結果 |
 |---|---|---|---|
-| V-1 | 外資還有第三種過期門檻 10 日 | 讀 `src/data/macro/macro_cache_reader.py::load_extreme_risk_legs`（`_leg_series` 帶 `EXTREME_STALE_MAX_CALENDAR_DAYS`）與 `shared/signal_thresholds.py` | **屬實（FACT）**：常數值 10；`finmind_inst` 的現行 consumer 走此門檻（`compute_cache_staleness` 在 src 內只被 `_attach_staleness` 呼叫，其餘呼叫者是校準腳本；`finmind_inst` 在 src 內只出現在 `CACHE_DATASET_CADENCE` 登記與 `load_extreme_risk_legs`）；`shared/freshness_policy.py` 的檔頭表格也把它登記為「極端風險兩腿」的日曆日上限 |
+| V-1 | 外資還有第三種過期門檻 10 日 | 讀 `src/data/macro/macro_cache_reader.py::load_extreme_risk_legs`（`finmind_inst` 字串在 `data_loader.py`、`finmind_client.py` 也出現，那是個股法人抓取，與 parquet 無關）（`_leg_series` 帶 `EXTREME_STALE_MAX_CALENDAR_DAYS`）與 `shared/signal_thresholds.py` | **屬實（FACT）**：常數值 10；`finmind_inst` 的現行 consumer 走此門檻（`compute_cache_staleness` 在 src 內只被 `_attach_staleness` 呼叫，其餘呼叫者是校準腳本；`finmind_inst` 在 src 內只出現在 `CACHE_DATASET_CADENCE` 登記與 `load_extreme_risk_legs`）；`shared/freshness_policy.py` 的檔頭表格也把它登記為「極端風險兩腿」的日曆日上限 |
 | V-2 | 「無交易日曆」過度絕對 | 確認三個檔案存在，並搜尋引用處 | **屬實（FACT）**：`src/services/trading_calendar_service.py`、`src/data/stock/twse_holiday_fetcher.py`、`src/compute/trading_calendar.py` 存在；`trading_calendar_service` 出現在 `src/ui/views/page_today.py`、`src/services/macro_engine_inputs.py`、`src/services/dividend_station_service.py`、`src/services/risk_cap_history_service.py`、`shared/freshness_policy.py`（比原料多列後三者；是否皆為真 import 未逐一核）。`compute_cache_staleness` 本身不用交易日曆（FACT，讀碼） |
 | V-3 | 15761 在 `coverage.n_dropped_missing_price`，不在 `per_day` | 讀 main 上 `data_cache/sector_flow/metadata.json` | **屬實（FACT）**：遞迴搜尋值 15761 只出現在 `coverage.n_dropped_missing_price`；`per_day` 的 2026-11-09 項只有 `twse_inst`、`twse_close`、`tpex_inst`、`tpex_close` 及狀態旗標 |
-| V-4 | 示意字串漏列「無異常（FAKE）」 | 搜尋 `src/services/ui2/scenarios.py` | **屬實（FACT）**：`conn_issue` 的值是「無異常（FAKE）」，`next` 的值是「無需處理（FAKE）」，兩者都帶 FAKE 標示 |
+| V-4 | 五頁稽核 §8 Q5 的 FAKE 字串清單未含「無異常（FAKE）」 | 搜尋 `src/services/ui2/scenarios.py` | **屬實（FACT）**：`conn_issue` 的值是「無異常（FAKE）」，`next` 的值是「無需處理（FAKE）」，兩者都帶 FAKE 標示 |
 | V-5 | CAPMAP「真資料＝是」其實有 5 列（MK-02、MK-03、MK-04、TG-30、SY-03） | 解析 `NEWUI2_CAPMAP_3COL_2026-11-10.md` 的 100 列，取「是｜是｜否」三欄樣式的列 | **屬實（FACT，以此樣式為代理）**：恰 5 列；本表共 100 列 |
 | V-6 | SY-03 備註「位階有真 as_of／source」與程式不符 | 讀 `src/services/ui2/real_canonical.py` 的 `REGIME_ASOF_NOTE` | **屬實（FACT）**：位階的資料日在畫面上明寫「市場位階未提供資料日」；`source` 是規則分支識別，被明示「非資料來源」 |
 | V-7 | M-10 測試欄 `::test_twii_*` 實際在 `tests/test_ui2_real_feed.py` | 搜尋 `def test_twii_` | **屬實（FACT）**：`test_ui2_real_feed.py` 有 `test_twii_parquet_is_the_real_local_cache_…` 等八個以上 `test_twii_*`；與同表 M-09 的 `tests/test_ui2_twii_kbar.py` 不同檔 |
@@ -85,14 +85,14 @@
 | V-9 | （紅隊）`assess_daily(11-09, today=11-12, calendar=None)` 會是 UNDETERMINED | 唯讀執行 | **不成立（FACT，反向勘誤）**：實測回傳 `FRESH`、落後 3 個交易日（不給行事曆時以上界判定）。該函式只在「上界超過上限、下界未超過」時才回 UNDETERMINED。其餘紅隊對 N-1 的論點（兩份文件漏引 SSOT）不受影響 |
 | V-10 | 「所有 Gate 維持 HOLD」與 §6.2 矛盾；G-F1 已裁示方案 A、融資／板塊 L3 與 A2 已授權完成 | 讀 `docs/DECISIONS.md` 的 DEC-161／164／165 標題與內文；搜尋五頁稽核 §0-9 | **屬實（FACT）**：DEC-161 標題即「G-F1 方案 A」；DEC-164 授權融資＋板塊唯讀 L3；DEC-165 授權 A2。五頁稽核 §0-9 確有「所有 Gate 維持 HOLD／未授權」字樣；市場文件 §0-7 寫「所有接線相關 Gate」，範圍較窄 |
 | V-11 | 分支對 main 的既有列修訂＝0 格 | 5 個資料檔（twii、inst、margin、sector 日淨額、forward-test 信號）分支比對 | **屬實（FACT）**：共同列 4913／4939／4939／1716／47，**被刪列 0、被改格 0**，欄位清單與順序不變；新增列 1／2／2／91／2 |
-| V-12 | 新增列抓取時間約在資料日翌日凌晨（約 25 小時後） | 讀新增列的抓取時間欄（台北時間換算） | **屬實（FACT）**：twii 11-10 為 11-11 00:55（24.9 小時）；inst／margin 11-10 為 11-11 00:55、11-11 為 11-12 00:59（25.0 小時）；sector 11-10 為 11-11 01:13（25.2）、11-11 為 11-12 01:21（25.4）。forward-test 的 `captured_at` 為資料日＋2 日（11-09 列 → 11-11 01:17；11-10 列 → 11-12 01:27） |
+| V-12 | 新增列抓取時間約在資料日翌日凌晨（約 25 小時後；此為自資料日 00:00 台北起算） | 讀新增列的抓取時間欄（台北時間換算） | **屬實（FACT）**：以下小時數皆自資料日 00:00（台北）起算，**自 13:30 收盤起算約 11.4～11.9 小時**。twii 11-10 為 11-11 00:55（24.9 小時）；inst／margin 11-10 為 11-11 00:55、11-11 為 11-12 00:59（25.0 小時）；sector 11-10 為 11-11 01:13（25.2）、11-11 為 11-12 01:21（25.4）。forward-test 的 `captured_at` 為資料日＋2 日（11-09 列 → 11-11 01:17；11-10 列 → 11-12 01:27） |
 | V-13 | 分支末日：twii 到 11-10；inst、margin 到 11-11 | 同上＋讀分支 `metadata.json` | **屬實（FACT）**：分支 metadata 的 `last_updated` 為 11-10／11-11／11-11，`last_error` 皆為空 |
 | V-14 | 各 cron 近 30 次成功率 | GitHub 唯讀 API 列出 workflow 執行紀錄 | **屬實（FACT）**：總經歷史 30 次中 29 成功、1 失敗（11-05）；板塊 30 次中 29／1（11-05）；forward-test 30 次中 28 成功、1 失敗（11-05）、1 筆長期排隊中（10-07）；ETF 經理人最近 10 次中 9／1（11-10）；匯出資料庫 30 次全成功 |
 | V-15 | （紅隊）main 上 `twii_ohlcv.parquet` 歷史只有 3 個提交，名為「每日增量」的只有一次 | `git log` 該檔；`git rev-parse --is-shallow-repository` | **該句不成立（FACT，反向勘誤）**：本機是淺層複製（71 個提交、最早 2026-11-08），3 個提交只是淺層窗口的產物。但紅隊的另一半論點——「每日資料自 11-06 起改為資料分支＋PR」——**有獨立證據**：見 V-16、V-17 |
 | V-16 | GH006 是被擋的原因（證據 run 日誌） | 讀 4 個失敗 run 的日誌 | **屬實（FACT）**：總經歷史（11-05）、板塊（11-05）、forward-test（11-05）、ETF 經理人（11-10）四次失敗日誌皆有 `GH006: Protected branch update failed … Required status check "ui2-browser-gate" is expected`。**其中板塊與 forward-test 兩次，原料只標「推定」，本回合已讀到日誌，升為 FACT** |
 | V-17 | 日常資料自 11-06 起改為資料 PR | 讀 workflow 執行紀錄的 `head_commit` | **屬實（FACT）**：11-04 以前的執行，head 是機器人直推 main 的提交（訊息形如「每日總經歷史增量」）；11-06 的執行，head 是合併 #1035「改走資料分支＋PR」的提交；之後 head 不再出現機器人直推 |
 | V-18 | （紅隊）排程時間與實際提交時間落差 | 讀 workflow 檔的 cron 與執行紀錄的建立時間 | **屬實（FACT）**：總經歷史 cron 為 09:00（UTC），實際建立時間為 11-09 19:39、11-10 16:54、11-11 16:59（UTC）；板塊 cron 09:30，實際 11-10 17:12、11-11 17:20；forward-test cron 09:40（週一至五），實際 11-10 17:16、11-11 17:26。**落差約 7～11 小時**；原因 NOT VERIFIED（GitHub 排程延遲為常見成因，INFERENCE） |
-| V-19 | 三個資料 PR 現況 | GitHub 唯讀讀 #1124／#1125／#1126 | **屬實（FACT）**：皆 open、非 draft、未合併、與 main 的關係「落後」；head 分別 `fc447def`／`1efb178a`／`428258b3`（與開工時相同）；#1124 的 check runs ＝ 0。#1125、#1126 的 check runs 本回合未讀 |
+| V-19 | 三個資料 PR 現況 | GitHub 唯讀讀 #1124／#1125／#1126 | **屬實（FACT）**：皆 open、非 draft、未合併、與 main 的關係「落後」；head 分別 `fc447def`／`1efb178a`／`428258b3`（與開工時相同）；三者的 check runs 皆為 0（2026-11-12 讀取） |
 | V-20 | 紅隊 R5：真資料軸讀 `Path("data_cache")` 相對路徑 | 讀 `macro_cache_reader.py` | **屬實（FACT，讀碼）**：`DEFAULT_PARQUET_CACHE_DIR = Path("data_cache")`。非專案根目錄啟動時會讀不到的行為，文件組**未重現**（紅隊自報重現） |
 | V-21 | Digest 查法偏窄（「只被自家三檔提到」） | 搜尋非測試 `.py` | **屬實（FACT）**：提到 `decision_digest` 的非測試 `.py` 有 **10** 個，其中 `shared/strategy_class_schema.py` 會 import `shared.decision_digest` 的兩個型別。「Digest builder 沒有 production caller」是否仍成立，文件組**未重驗**（紅隊自報成立） |
 | V-22 | DEC-174 結果指標引 PR 描述稱「兩組非作者 QA PASS」，但兩份文件自述「非作者獨立 QA 待做」 | 讀 `docs/DECISIONS.md` 的 DEC-174 結果指標與兩份文件檔頭 | **屬實（FACT）**：結果指標明寫該 CI／QA 數字「僅轉述 PR 描述，未重查」；兩文件檔頭自述 QA 待做。兩者各自誠實，但並列時易被擷取成「已 QA PASS」 |
@@ -110,10 +110,10 @@
 | **E-1** | 五頁稽核 X-08、§0-5／§6.1；市場文件 §4 表「外資」列 | 外資 `finmind_inst` 過期門檻 7 日、基準主機日 | 現行唯一讀 `finmind_inst` 的 consumer 走 **10 日曆日**門檻（過舊直接回空值），不經 7 日規則；7 日對 `finmind_inst` 只被校準腳本使用。因此兩文件「4 vs 7」的論述漏了第三種門檻（FACT）。「若日後接 L3，外資會落在 7 日」屬假想 | V-1 | 表中外資列改為「現行 consumer 10 日（極端風險兩腿）；7 日僅校準腳本使用；若接 L3 的門檻另行決定」，並把「兩種門檻」改「三種」 |
 | **E-2** | 五頁稽核 §0-7、X-08、X-09、§9；市場文件 §4 | 「無交易日曆／無行事曆」 | 說得過度絕對。repo 有交易日曆服務與休市表抓取，也有以交易日計的新鮮度 SSOT；**但它們沒有接到 UI2 這幾條 stale 判定**，且需要網路（FACT）。「這幾條 stale 判定不看交易日曆」屬實；「11-10／11-11 是否為交易日仍無法離線驗證」屬實 | V-2、V-8 | 改寫為「這些 stale 判定以日曆天計、未接交易日曆；repo 另有交易日曆服務與以交易日計的新鮮度規則（`shared/freshness_policy.py`），尚未接入」 |
 | **E-3** | 五頁稽核 X-03；§10 尾段 | 「`metadata.json` per_day 15761」 | 位置不準：15761 在 `coverage.n_dropped_missing_price`。算術（18026 − 15761 ＝ 2265）正確；市場文件 §2 的位置正確 | V-3 | 改為「`metadata.json` 的 `coverage.n_dropped_missing_price`」 |
-| **E-4** | 五頁稽核 §8 Q5 | 「示意字串只命中『無需處理（FAKE）』」 | 漏列「無異常（FAKE）」（同樣帶 FAKE 標示，無實質危害） | V-4 | 補列 |
+| **E-4** | 五頁稽核 §8 Q5 | 「人類可見字串……真正的字串值只命中 `scenarios.py` 的 FAKE 值『無需處理（FAKE）』」 | 不是命中漏列：該句所依的 grep 關鍵字清單（安全／正常／中性／無風險／無需／續抱／沒有持股／0 檔／今日無）本就**不含**「無異常」，屬**關鍵字覆蓋不足**。事實不變：`scenarios.py` 的 `conn_issue` 值是「無異常（FAKE）」（同樣帶 FAKE 標示，無實質危害） | V-4 | 在 Q5 補註「關鍵字清單未含『無異常』；另有 FAKE 值『無異常（FAKE）』」 |
 | **E-5** | 五頁稽核 §3.3 結論；CAPMAP 的 SY-03 備註 | 「UI2 有真值的只有 MK-03、MK-04」；SY-03 備註「TWII 與位階有真 as_of／source」 | CAPMAP「真資料＝是」其實 5 列（MK-02、MK-03、MK-04、TG-30、SY-03）；文件已另述 MK-02、TG-30，漏 SY-03。**SY-03 的備註與程式不符**：位階沒有資料日，`source` 是規則分支識別而非資料來源 | V-5、V-6 | 結論句改「真值只有台股卡與日 K；位階接線成立但目前恆未載入」；SY-03 備註更正（該備註在 CAPMAP 檔，不在 #1165 兩份文件） |
 | **E-6** | 五頁稽核 M-10 測試欄 | `::test_twii_*`（無檔名） | 緊接 M-09 的 `tests/test_ui2_twii_kbar.py`，易誤讀；實際在 `tests/test_ui2_real_feed.py` | V-7 | 補檔名 |
-| **E-7** | 市場文件 §5 N-1；五頁稽核 X-08 的候選項 N-1 | 新鮮度門檻不一致「未登記於任何處」 | 不實：`shared/freshness_policy.py`（客戶 2026-10-14 核准的新鮮度 SSOT，日頻以交易日計、上限 3）已逐條登記 `STALE_DAYS_DAILY`＝7、板塊 4、極端風險 10、領先報價 5 為「顯示用日曆日規則，只登記不改」。兩份文件對該檔引用數為 0 | V-8、V-9 | N-1 改寫為「顯示用日曆日門檻已登記於 `shared/freshness_policy.py`，但與其交易日 SSOT 並存、與 UI2 並列時是否統一，待客戶裁示」 |
+| **E-7** | 市場文件 §5 N-1；五頁稽核 X-08 的候選項 N-1 | 市場文件 N-1 原文：「閾值語意未登記於 BACKLOG（grep `SECTOR_FLOW_STALE_MAX` 僅命中歷史列，調查者查）」 | 「未登記於 BACKLOG」本身可成立（以調查者 grep 為準）；但兩份文件都沒有提到：`shared/freshness_policy.py`（客戶 2026-10-14 核准的新鮮度 SSOT，日頻以交易日計、上限 3）已逐條登記 `STALE_DAYS_DAILY`＝7、板塊 4、極端風險 10、領先報價 5 為「顯示用日曆日規則，只登記不改」。兩份文件對該檔引用數為 0 | V-8、V-9 | N-1 補註：「顯示用日曆日門檻已登記於 `shared/freshness_policy.py`，但與其交易日 SSOT 並存、與 UI2 並列時是否統一，待客戶裁示」 |
 | **E-8** | 五頁稽核 §0-9；市場文件 §0-7 | 「所有 Gate 維持 HOLD／未授權」 | 與文件自己的 §6.2 矛盾：G-F1 已裁示方案 A（DEC-161）、融資／板塊 L3 與 A2 已授權並完成（DEC-164、DEC-165）。正確說法是「**沒有任何 Gate 被解除**」。BACKLOG 的 `I1144-UI2-PREGATE` 舊新兩列並存（舊列「已授權、尚未施工」，新列「研究文件已產出」）也只被點名一對 | V-10 | 「所有 Gate 維持 HOLD」改「未解除任何 Gate；已裁示／已授權項目見 §6.2」 |
 | **E-9** | 五頁稽核 §0-7、X-09；市場文件 §0 對應句 | 「停更原因（推論）：每日資料 PR 未合併」 | 推論方向成立，但**論證力度過強**：(a) 每日資料自 11-06 起改為「資料分支＋人工合併」，**不合併就不前進是設計狀態**，不是故障事件（V-17）；(b) 同一次 11-11 執行，分支上 inst／margin 有 11-11 列、**TWII 沒有**，表示 TWII 還有第二個未解原因，「非 cron 失敗」不能說死（原因 NOT VERIFIED）；(c) cron 排程與實際提交時間差約 7～11 小時（V-18），文件只寫「成功率 NOT VERIFIED」；(d) **新發現**：分支上台股 11-10 那一列，第一次寫入時成交量是空值，隔日才補上（§6）；(e) 文件已寫「即使合併也只到 11-10」，屬實 | V-12、V-13、V-14、V-17、V-18 | 把因果分三層寫：FACT（資料日對照、PR 未合併）、INFERENCE（停更主因）、NOT VERIFIED（TWII 缺 11-11、排程落差、部署端追蹤哪個分支） |
 | **E-10** | 五頁稽核欄位表（M-02、M-22、T-01 等） | 版面／字樣列標 `READY` | `READY` 只指接線＋契約，且文件已加警語；但用在版面或字樣列上，易被數成「4 個 READY」並被誤讀為資料可用 | 紅隊自報 | 版面／字樣列改標「版面完成」或獨立欄；`READY` 只留給有真值來源的欄位 |
@@ -179,9 +179,12 @@
 
 ### 6.2 新發現：台股 11-10 那列「先空、後補」（FACT，文件組發現）
 
-- 分支 `auto/data-macro-history` 的第一個提交（11-10 16:55 UTC）寫入台股 11-10 列時，**成交量為空值**；11-11 16:59 UTC 的執行把它補成 4,766,000，同一執行日誌印出「舊空值→新有值，採新值 1 格」。其餘欄位（開高低收）兩次相同。
+- 分支 `auto/data-macro-history` 的第一個提交（11-10 16:55 UTC）寫入台股 11-10 列時，**成交量為空值**；11-11 16:59 UTC 的執行把它補成 4,766,000，同一執行日誌印出「舊 null→新有值，採新值 1 格」。其餘欄位（開高低收）兩次相同。
 - 意義：**這是一個「同一列在隔天被改了 1 格」的實例**。§3 V-11 的「既有列修訂＝0 格」是以 **main 為基準**比對的結果（main 當時還沒有 11-10 列），**看不到分支內部這 1 格**。兩個說法不矛盾，但「0 格」不能被讀成「來源從不補寫」。
 - 與 Yahoo 在台北凌晨 04:00 以前是否仍會微調（`CLAUDE.md` §2.3 的 EOD 時點）有關：此例中補的是成交量而非價格；**價格是否也可能被補寫，樣本只有 1 例，NOT VERIFIED**。
+- **台股成交量欄平常就大量缺值（脈絡，FACT，量測日 2026-11-12、main `6241ad3b`）**：main 上台股最近 30 列中有 27 列成交量為空；2026-10-29～11-09 之間只有 11-05 那列有量，而那一列是 11-06 14:09 UTC 才抓入的。
+- **該格的真實補入時間不是列上寫的時間（FACT）**：補值後，該列的 `fetched_at` 仍停在 11-10T16:55:08（UTC）；實際補入約在 11-11 16:59 UTC，距資料日 00:00（台北）約 49 小時。所以前述「24.9 小時」不能代表成交量這一格。
+- **成因有兩種解釋，目前無法區分（INFERENCE／NOT VERIFIED）**：(1) 凌晨 00:55 抓得太早，成交量還沒齊，隔天補齊；(2) Yahoo 的 `^TWII` 成交量欄本來就間歇性空缺，這一次剛好隔天又有值。
 - 詳見同批 `DAILY_DATA_PR_PIT_CRON_INVESTIGATION_2026-11-12.md`。
 
 ---
@@ -206,7 +209,7 @@
 7. cron 排程延遲 7～11 小時的原因。
 8. 兩份文件所引「1705／41」那組全量測試結果：本批沒有重跑。
 9. 紅隊的「壞 JSON 的 `macro_state.json` 會讓位階變紅」旁路：文件組未重現。
-10. #1125、#1126 的 check runs（文件組只讀了 #1124 的）。
+10. 三個資料 PR 的 check runs：#1124、#1125、#1126 皆為 0（2026-11-12 文件組讀取）。**這只是「沒有檢查結果」**；`ui2-browser-gate` 能否在 Close→Reopen 後通過，仍未驗證。
 
 ## 9. 單組聲明與限制
 
