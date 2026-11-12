@@ -493,7 +493,7 @@
 | current task / batch | ~~DEC-175 續接規範登錄（DECISIONS／PROJECT_RULES／BACKLOG／HANDOFF 四檔）＋依獨立 QA 的 8 項文字修正（客戶「方案 A」授權（來源：經派工訊息轉錄；repo 與 PR 留言內無原文；與 PR #1168 留言 6824799769 的「方案 A」〔CI 最小環境修復〕是**兩件不同的授權**，不得混讀））＋Delta QA 後 N1～N6 追加修正~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 | completed in this batch | ~~DEC-175 四檔追加（原 head `4c1a7354`）；QA 8 項文字修正已套用；merge main 進分支~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 | exact current stopping point | ~~Delta QA（單組，轉述自派工訊息）判定 8 項大致落實、PASS with fixes；N1～N6 追加修正 commit 已推送；待再次 Delta QA 與同 head 原生 CI；維持 Draft，未合併、未轉 ready~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
-| next single action | ~~非作者 Delta QA 核對 8 項修正 → 同 head 五項原生 CI 全綠＋review threads＝0＋mergeable clean → 依現行 Auto-Ship Gate 判斷。CI 紅燈屬環境類（見下）者，修復走獨立 PR（#1171，已合併為 `2a1623e8`；有效性 NOT VERIFIED），不在本 PR。~~**DEC-175 是否構成開工指派待客戶確認；確認前維持 `CLAUDE.md` §-1 與無客戶指派不動工**~~ 【已由 DEC-176(c) 回答（客戶 2026-11-12，經派工訊息轉錄）：DEC-175 不是無條件施工授權、不解除 `CLAUDE.md` §-1 等既有 Gate；既有明確核准的工作不必重新請示；2026-11-12，有意識的更新，不是漏刪；決策者 客戶〔DEC-176(c)〕＋AI 總管〔事實更新〕】~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
+| next single action | ~~非作者 Delta QA 核對 8 項修正 → 同 head 五項原生 CI 全綠＋review threads＝0＋mergeable clean → 依現行 Auto-Ship Gate 判斷。CI 紅燈屬環境類（見下）者，修復走獨立 PR（#1171，已合併為 `2a1623e8`；有效性 NOT VERIFIED），不在本 PR。**DEC-175 是否構成開工指派待客戶確認；確認前維持 `CLAUDE.md` §-1 與無客戶指派不動工**~~ 【已由 DEC-176(c) 回答（客戶 2026-11-12，經派工訊息轉錄）：DEC-175 不是無條件施工授權、不解除 `CLAUDE.md` §-1 等既有 Gate；既有明確核准的工作不必重新請示；2026-11-12，有意識的更新，不是漏刪；決策者 客戶〔DEC-176(c)〕＋AI 總管〔事實更新〕】 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 | tests / CI 已完成 | ~~作者端本機：`tests/test_sec_s3_batch_s3.py`、`tests/test_sec_s4_batch_s4.py`、`tests/test_ui2_active_contract_docs.py` 及讀這四檔的其餘測試（結果見 PR 描述）；`scrub_secrets`／`scrub_prose_secrets` 對四檔零改寫；DEC-175 fence sha256 重算相符。單組非作者 QA（舊 head `4c1a7354`）已完成，判定 PASS with fixes（內容層）~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 | tests / CI 尚未完成 | ~~修正後的 Delta QA；**修正後新 head** 的原生 CI 五項（舊 head `4c1a7354` run 43216473677：`ui2-browser` 1.56.0／1.59.2 與 gate 為 exit 127 環境類失敗，轉述自 PR 留言、本組未重查 job log）；fence 與客戶原訊息的逐字一致性~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】 |
 | unresolved true Stop Gates | #1119 HOLD；#1124～#1126 HOLD（PIT／cron 先唯讀）；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6、`REORG3C-Q5-GATE`、Old UI Removal Gate（全部未動；DEC-175 未解除任何一項） |
@@ -507,9 +507,9 @@
 - **FACT（main 現況，僅陳述存在，非授權）**：#1169（`aa98de4c`）於 `docs/vnext/` 新增三份文件——`NEWUI2_INDEPENDENT_REVERIFICATION_2026-11-12.md`、`DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md`、`DAILY_DATA_PR_PIT_CRON_INVESTIGATION_2026-11-12.md`。本 PR **未複核其內容**；它們不解除任何 Gate、不構成接線／資料 PR 處置授權；是否取代前段「下一批施工候選 1／2」**NOT VERIFIED**，由客戶／下一批 QA 判定。
 - **已完成（前序）**：DEC-174 Batch 1，#1165 五頁稽核與市場資料契約、#1166 DEC-174、#1167 結果／BACKLOG／HANDOFF 收尾。尚缺外部／第二組獨立事實複驗，不可把 PR QA 等同於所有外部實測。
 - **當前主線**：沿用 DEC-174「UI＋資料契約雙軌」，每批最多三項；先核查資料來源→快取→L3→Canonical→UI2 的既有讀取路徑、PIT／新鮮度／coverage／資料狀態，再做已核准範圍內 UI 安全改善。新 layout／文案／欄位／動線變更仍須文字線框及裁示。
-- **資料 PR 處置**：#1124～#1126 保持 HOLD；唯讀 PIT／cron 先查證，AI 推薦暫不處置不是客戶的新決策。資料來源授權與 WIRING Gate、資料儲存架構及 #1119 等原 HOLD 均不變。
-- **CI（環境類，登記於 BACKLOG `DEC175-CI-UI2BROWSER-EXIT127-RECUR`）**：客戶 2026-11-12 以「方案 A」（PR #1168 留言 6824799769，CI 最小環境修復；**與上述 8 項文字修正的授權是不同的兩件事**）授權在獨立分支／獨立 PR 做最小 CI 環境修復；獨立 PR #1171（2026-11-12T13:48:24Z 建立）已於 2026-11-12T14:16:09Z 合併為 `2a1623e8`（GitHub REST 實查，FACT）；該 PR 描述稱失敗為 runner image 分流（預建 pip 26.3 失敗／26.2.2 成功，轉述自 #1171 描述，本組未重查日誌）〔📌 2026-11-12 更正（有意識的更正，不是漏刪；決策者 AI 總管〔事實更新〕）：「image 分流」推測**不成立**——失敗 job 131230664848 的 image 是 `20261111.127.1`，非 370.1；目前僅知預建 pip 26.3 與失敗共變（INFERENCE）；詳見 DEC-176(b)〕；**#1171 的修正是否有效 NOT VERIFIED**（#1171 描述自陳：其 CI 綠不構成驗證，須至少一個 cell 落在預建 pip 26.3 並成功）〔📌 2026-11-12 後續（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）：合併後已有至少 2 個預建 pip 26.3 的 1.59.2 cell 成功（run 43232020099 job 131229652524；run 43235464794 job 131241682819），但樣本少、非證明，**有效性仍 NOT VERIFIED**；現況見檔尾「Batch 3 同步後最新接手點」〕。不得降低 matrix／gate／測試數量／no-skip。本 PR 不含 workflow 變更。
-- **仍 NOT VERIFIED**：PIT、cron 成功率、來源授權原文、Cloud／真機／Real 軸量測及資料能否供正式決策；下列兩項**來源僅在客戶／派工對話，repo 內無出處**（本組 2026-11-12 `git grep` docs／PROJECT_RULES.md 0 命中），不得當 repo 內可追溯事實：「V1 CSV 只盤點，不刪」（Actions Runs／Artifacts 盤點）、「11/10 與 11/11 市場交易日核查」。
+- **資料 PR 處置**：#1124～#1126 保持 HOLD；唯讀 PIT／cron 先查證，AI 推薦暫不處置不是客戶的新決策。資料來源授權與 WIRING Gate、資料儲存架構及 #1119 等原 HOLD 均不變。〔📌 已被超前（有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）：唯讀 PIT／cron 查證已由 #1169（`aa98de4c`）與 #1172（`57885e6e`）完成；外部對帳／處置仍待客戶裁示，#1124～#1126 維持 HOLD（DEC-176(a)）。〕
+- **CI（環境類，登記於 BACKLOG `DEC175-CI-UI2BROWSER-EXIT127-RECUR`）**：客戶 2026-11-12 以「方案 A」（PR #1168 留言 6824799769，CI 最小環境修復；**與上述 8 項文字修正的授權是不同的兩件事**）授權在獨立分支／獨立 PR 做最小 CI 環境修復；獨立 PR #1171（2026-11-12T13:48:24Z 建立）已於 2026-11-12T14:16:09Z 合併為 `2a1623e8`（GitHub REST 實查，FACT）；該 PR 描述稱失敗為 runner image 分流（預建 pip 26.3 失敗／26.2.2 成功，轉述自 #1171 描述，本組未重查日誌）〔📌 2026-11-12 更正（有意識的更正，不是漏刪；決策者 AI 總管〔事實更新〕）：「image 分流」推測**不成立**——失敗 job 131230664848 的 image 是 `20261111.127.1`，非 370.1；目前僅知預建 pip 26.3 與失敗共變（INFERENCE）；詳見 DEC-176(b)〕；**#1171 的修正是否有效 NOT VERIFIED**（#1171 描述自陳：其 CI 綠不構成驗證，須至少一個 cell 落在預建 pip 26.3 並成功）〔📌 2026-11-12 後續（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）：#1171 修正生效後已有至少 2 個預建 pip 26.3 的 1.59.2 cell 成功（其一 run 43232020099 job 131229652524 為 #1171 PR 自身 CI〔合併前〕，其一 run 43235464794 job 131241682819 為合併後；兩 job 的預建 pip 版本本組未逐一讀到，NOT VERIFIED），但樣本少、非證明，**有效性仍 NOT VERIFIED**；現況見檔尾「Batch 3 同步後最新接手點」〕。不得降低 matrix／gate／測試數量／no-skip。本 PR 不含 workflow 變更。
+- **仍 NOT VERIFIED**：PIT、cron 成功率〔📌 已被 #1169／#1172 超前（有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）：唯讀查證已完成，但 PIT 仍未驗、外部對帳／處置仍待客戶〕、來源授權原文、Cloud／真機／Real 軸量測及資料能否供正式決策；下列兩項**來源僅在客戶／派工對話，repo 內無出處**（本組 2026-11-12 `git grep` docs／PROJECT_RULES.md 0 命中），不得當 repo 內可追溯事實：「V1 CSV 只盤點，不刪」（Actions Runs／Artifacts 盤點）、「11/10 與 11/11 市場交易日核查」。
 - **暫緩**：GitHub Actions Runs／Artifacts 清理與舊 UI／死碼清理（DEC-175「這」＝Actions 清理，與「CSV 候選」皆為 **INFERENCE、來源僅派工對話**，可參 Issue #1119 留言 6768487486／6822675191 作脈絡，**未證實等同**），放到安全 cutover／rollback 驗收後；Runs／Artifacts 刪除屆時仍須客戶逐批明示授權（不可逆，`CLAUDE.md` §-1.5.D §03-2 ②），Old UI／死碼受 Old UI Removal Gate 與 DEC-173 Q6 拘束。
 - ~~**下一安全動作**：依委派治理先做非作者獨立 QA 與來源契約決策材料，不在 HOLD 未解除時接線；每批同步既有 DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF，避免跨對話失憶。此段不是獨立施工授權。~~ 【已被檔尾「2026-11-12｜Batch 3 同步後最新接手點」取代；2026-11-12，有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕】（該段所列「來源契約決策材料」已由 #1169／#1172／#1173 產出）
 
@@ -552,7 +552,7 @@
 | #1172 | 資料 PR 證據缺口 G-01～G-17／決策順序 DPE-1～DPE-7 | `57885e6e` | 獨立 QA ＋Delta PASS | 同 head `35bfc002` 五項全綠 |
 | #1173 | 🗂 資料新鮮度總覽三方案文字線框 A／B／C（AI 推薦 A，展開層沿用 B；候選 C-1～C-17） | `76ed4b7b` | 獨立 QA ＋Delta PASS with fixes（小缺已記 BACKLOG） | 同 head `8140a952` 五項全綠 |
 
-**CI 證據更正（#1171）**：FACT——失敗 6/6 為預建 pip 26.3 後 bare `pip` exit 127，成功 26/26 為預建 26.2.2；#1171 合併後至少 2 個預建 pip 26.3 的 1.59.2 cell 成功（run 43232020099 job 131229652524；run 43235464794 job 131241682819）；其後 #1172／#1173 head CI 全綠但**未逐 cell 讀 pip 版本，不得宣稱走過失敗路徑**。~~先前「runner image 分流」推測~~ 已被反證（失敗 job 131230664848 的 image 是 `20261111.127.1`，非 370.1；有意識的更正，不是漏刪）。**NOT VERIFIED**：偶發故障是否完全消失，需後續樣本。**取代**上段過期的 `pip exit 127`「待修／有效性」敘述。
+**CI 證據更正（#1171）**：FACT——#1171 描述所列 6 個失敗 run 為預建 pip 26.3 後 bare `pip` exit 127、成功 26/26 為預建 26.2.2（#1171 描述自述，本組未全驗）；本組另重讀失敗 job 131230664848（run 43232345078，不在該 6 個 run 內＝第 7 個失敗樣本，即 ≥7）；#1171 修正生效後至少 2 個預建 pip 26.3 的 1.59.2 cell 成功：run 43232020099（job 131229652524，head `abc0ec38`）是 **#1171 PR 自身**的 CI（合併前）、run 43235464794（job 131241682819，#1170 分支，14:16Z 之後）才是**合併後**；兩 job 的預建 pip 版本，#1170 對帳底稿記為 26.3（轉述），本組因日誌代理限制未逐一讀到（**NOT VERIFIED**）；其後 #1172／#1173 head CI 全綠但**未逐 cell 讀 pip 版本，不得宣稱走過失敗路徑**。~~先前「runner image 分流」推測~~ 已被反證（失敗 job 131230664848 的 image 是 `20261111.127.1`，非 370.1；有意識的更正，不是漏刪）。**NOT VERIFIED**：偶發故障是否完全消失，需後續樣本。**取代**上段過期的 `pip exit 127`「待修／有效性」敘述。
 
 ### blocking issues
 
@@ -565,7 +565,7 @@
 ### 待客戶裁示清單（最少題數；附推薦者為 AI 推薦＝RECOMMENDATION，非客戶裁示；沒答的項目視為維持 HOLD）
 
 1. **資料 PR #1124～#1126**（`DEC176-DATA-PR-EVIDENCE-DECISIONS`）：若考慮日後放行，**最少答 2 題＝DPE-3**（外部對帳是否牽涉資料來源使用條款；答「先確認條款」即算答）、**DPE-6**（貼 Streamlit Cloud 設定頁的 Repository／Branch／Main file，不貼 secrets）；本輪完全不考慮放行則可都不答。處置（合併／關閉）本身仍須客戶另行裁示——DEC-176(a) 只定「維持 HOLD」。
-2. **🗂 資料新鮮度總覽文字線框**（`DEC176-FRESHNESS-WIREFRAME-PICK`）：選 A／B／C（AI 推薦 A）；並裁示 **C-16**、**C-17**、文件 §10 的 **①⑥⑦**。一鍵回覆格式見 `NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md` §7.2。
+2. **🗂 資料新鮮度總覽文字線框**（白話：選 A／B／C 這類**版面方案**，不是資料裁示；`DEC176-FRESHNESS-WIREFRAME-PICK`）：選 A／B／C（AI 推薦 A）；並裁示 **C-16**、**C-17**、文件 §10 的 **①⑥⑦**。一鍵回覆格式見 `NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md` §7.2。
 3. **「完整資料健康度改派 🗂」上報點**（`DEC176-HEALTH-ESCALATION-1`，即上項 §10 ①）：撰寫組未找到明確改派裁示，不自行折衷。
 4. **接線前決策單**（`DEC176-GATE-SHEET-CUSTOMER`）：`DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 的 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`／`I1144-WIRING-GATE`；不答＝維持 HOLD。
 5. 既有：`I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`（DEC-171）；Q5（DEC-173：是否及何時重議）。
@@ -584,7 +584,7 @@
 
 ### 下一批候選（最多 3 項；僅候選，非授權；啟動仍須客戶指派，`CLAUDE.md` §-1）
 
-1. **docs 微批**：處理 BACKLOG `DEC176-GAP-*` 八項小缺口——**不需客戶裁示**，但屬補丁，無指派不動。
+1. **docs 微批**：處理 BACKLOG `DEC176-GAP-*` 八項小缺口——**不需客戶裁示**，但**仍需客戶下達指派**（DEC-176(c)：既有明確核准的工作不必重新請示，新工作仍需指派）；屬補丁，無指派不動。
 2. **等待客戶對 wireframe／DG／DPE 的回覆**——**需客戶裁示**；回覆前不施工。
 3. **CI 偶發被動觀察**（`DEC176-CI-1171-VALIDITY`）——**不需客戶裁示**；再出現 exit 127 才評估。
 
@@ -598,6 +598,8 @@ HOLD／禁止（全部未解除）：#1124～#1126 資料 PR（不合併／關�
 權限邊界：DEC-175 與 DEC-176 都不是無條件 UI／資料施工授權，不解除 CLAUDE.md §-1、文字線框 Gate、資料接線 Gate、獨立 QA、CI；既有明確核准的工作可依已批准範圍繼續，不必重新請示。
 新 UI layout／欄位／文案先出文字線框等客戶拍板；每批最多三項；作者不自行合併，須非作者獨立 QA＋同 head 五項原生 CI。
 AI 推薦（如「推薦 A」）不是客戶裁示；FACT／INFERENCE／NOT VERIFIED 要分開寫；CI 綠不等於 Cloud／資料來源已驗證。
+未合併 PR（以最新 GitHub 為準，head 會變）：#1164 `6fddc582`（Draft）、#1124 `fc447def`、#1125 `1efb178a`、#1126 `428258b3`——全部不碰。
+建議 Model／Mode／Effort（AI 建議，非客戶裁示；PROJECT_RULES 第 9 節〔Model／Mode／Effort〕）：Claude Sonnet 5.5／Mode 不另設（第 9 節標題含 Mode，但本組未找到獨立 Mode 定義，NOT VERIFIED；沿用既有 Gate）／Medium（涉規範位階或 Gate 文字判斷升 High）；現行值只以 HANDOFF 最新 Resume Checkpoint 為準。
 沒有客戶新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
 ```
 
