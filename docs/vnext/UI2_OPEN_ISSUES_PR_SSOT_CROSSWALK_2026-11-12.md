@@ -54,3 +54,22 @@
 - 非作者獨立 QA 至少重核：5 Issues 原文／留言、6 PR 最新 head/base/status、DEC-164 對 G 表的後續裁示、DEC-175 是否真正 merge、#1110 API Matrix／#1107 Cloud Gate、#1138 相關實作與 tests-only 是否仍成立。
 - 最新 head 的原生 CI 依正式 required checks 規則核實；任何不足保持 Draft。不自我宣稱 QA PASS，不 Auto-merge。
 - 若逐項核對證實上述對帳已足夠且零新差異，**不應為湊 PR 另改其他正式文件**。若發現新客戶裁示確實漏登，單獨依來源進行最小追加與第二組 QA。
+
+## 6. Issue 留言補充核對（2026-11-12；增量證據，仍非第二組 QA）
+
+> 本節是原撰寫者**追加**讀取目前五個 Open Issue 的留言，不等同非作者 QA。優先採較晚的客戶決策與正式 Gate，Issue 中較早的執行快照不能推翻最新實況。
+
+| Issue | 留言中已找到的關鍵補證 | 對 UI／資料施工的有效讀法 |
+|---|---|---|
+| [#1138 工作優先序留言](https://github.com/linchen-20200325/my-stock-dashboard/issues/1138#issuecomment-6818780219) | 2026-11-12 客戶轉錄「好 我希望把這些項目完成後，再來繼續優化UI」；列第一階段既有工程／文件／驗收收尾、第二階段 UI2 進一步優化；保留受外部條件阻塞者 HOLD。早一則 [G 表留言](https://github.com/linchen-20200325/my-stock-dashboard/issues/1138#issuecomment-6790811255) 仍是當時研究及方案推薦。 | **新發現：優先序需與 DEC-174／#1168 DEC-175 對帳**。可並行的是已批准的安全 UI／資料層調查與合規修復，不可因雙軌推進便略過既有驗收，亦不可用早期「G 表待裁」覆蓋 DEC-164 後續裁示。是否確有矛盾需獨立檢查時間與來源，未經此步不得宣稱「已完全一致」。 |
+| [#1107 用戶截圖部分驗收](https://github.com/linchen-20200325/my-stock-dashboard/issues/1107#issuecomment-6758541700) | 已有用戶手機 Real-data Preview 截圖，看到 K 棒、Yahoo 來源、2026-11-09 資料日、圖例與誠實資料狀態；[先前留言](https://github.com/linchen-20200325/my-stock-dashboard/issues/1107#issuecomment-6758485565) 記用戶確認 Preview 部署入口 `app_ui2.py`（用戶聲明、非 Cloud 設定 API 複核）。 | **修正單讀 Issue 主文的「Cloud 全部 NOT VERIFIED」印象**：手機渲染**部分 PASS（使用者截圖）**；部署 commit SHA、20 根／220px 精測、390／1440、stale/error、官方第二來源仍 NOT VERIFIED。不得關閉 Issue 或切換 production。 |
+| [#1110 D6 已完成](https://github.com/linchen-20200325/my-stock-dashboard/issues/1110#issuecomment-6764132467) | D6 舊 UI 憑證敏感顯示修補已經 #1114 合併、#1115 文件同步；D1～D5 仍待裁。另一 [研究留言](https://github.com/linchen-20200325/my-stock-dashboard/issues/1110#issuecomment-6765231976) 記載「已於 GitHub Actions 落地的資料優先，不重複 Cloud 連外抓同一份」方向，但**沒有授權**新資料／新 cron。 | 不要重做 D6；Cloud Secrets live 認證及資料資格仍 NOT VERIFIED。資料層整理要先確認現成 GitHub cache／既有 provider，不為 UI 方便重抓同份資料。 |
+| [#1116 修復及設定更正](https://github.com/linchen-20200325/my-stock-dashboard/issues/1116#issuecomment-6767801471) | #1117 代替直接推 main 的修復與 #1118 文件同步已合併；Repo 可開 PR 的 Actions 設定為**擁有者回報已啟用**，不是 GitHub/CI 獨立驗證。 | ETF Managers 首次真實排程發布仍待 2026-11-16 20:00 UTC 後的證據；不要把設定回報當端到端 PASS。 |
+| [#1119 Actions 延後](https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6768487486)；[Run 保留方案](https://github.com/linchen-20200325/my-stock-dashboard/issues/1119#issuecomment-6822675191) | 19 個 Workflow YAML 精簡明確延後至新 UI 完成／死碼 Removal Gate；另有 30 天 Run 保留的**唯讀清單、特殊證據保護與刪除另行確認**要求。 | workflow YAML 清理 ≠ workflow run 歷史清理；兩項均**沒有現階段刪除授權**。不能把 30 天外紀錄或候選名單判定可直接刪。 |
+
+### 需非作者 QA 查核的跨來源差異（只登記，不替客戶裁示）
+
+1. **先收尾既有工作 vs UI＋資料雙軌**：#1138 2026-11-12 優先序留言、DEC-174、#1168 DEC-175 的先後、具體批次限制與仍未結案驗收，需給出可追溯「兼容／相衝／未決」結論。實務上不因上面任一方向解除 Visual／Data Wiring Gate。
+2. **Cloud 驗收證據狀態**：#1107 主文歷史 NOT VERIFIED 與後續截圖 PARTIAL 必須依項目分別紀錄；不得概括成全部沒驗或全部已驗。
+3. **既有授權去重**：#1110 D6 和 #1116 ETF Managers 已實作的部分只核對完成證據，不重開施工；新的真實 API／cron／PIT 工作只可在核准範圍研究。
+4. **PR 動態性**：觀測到 #1168／#1169／#1170 均 Draft；新留言或 CI、QA、main 推進後重查，不把本節固定數字當即時現況。
