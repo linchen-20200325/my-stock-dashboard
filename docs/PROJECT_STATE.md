@@ -1250,3 +1250,15 @@
 - **仍未授權／HOLD**：UI2 runtime 接線（停在 WIRING-GATE）、Coverage 母體新算法與最低門檻、PIT 正式語意、資料再散布最終授權、Digest A3／`market.health`／外資 L3。CI 修復不構成上述任何核准。
 - **NOT VERIFIED**：僅證明當日 runner 可執行；runner Ubuntu 來源 DNS 故障根因未查明；Streamlit Cloud／真機未驗；`ui2-browser-gate` 是否為 branch protection required check（設定面，本工作階段無權限）。
 - **出處**：DEC-170；BACKLOG『Issue #1144 後續｜CI 環境最小修復完成』。docs PR 號：#1151。不一致時以出處為準。
+
+
+### 70.12 公開 Repository 資料曝露、來源授權與儲存架構唯讀稽核後的有效專案知識（2026-11-11；只追加；不改既有節；依據 DEC-171，非客戶逐字）
+
+- **FACT**：客戶裁示「同意方案 B」並授權 docs-only 唯讀稽核（本 docs PR 號：#1152）。repo 公開；`data_cache` 追蹤 29 檔（約 2.30 MB），個股級 15 檔；Git 歷史 `data_cache` 1,036 個相異 blob（約 80.0 MB）散在各分支與 1,133 個 PR head，停止追蹤不減歷史；網站讀 repo checkout 內 `data_cache`。
+- **授權證據**：條款原文僅 FinMind（官方 GitHub Pages，2026-10-31 版）PARTIALLY VERIFIED，其餘來源 NOT VERIFIED，repo 內無授權證據；A（原文）／B（適用）／C（已取得授權）分開；**未下法律定論**。
+- **更正**：`industry_raw.json` 的 FinMind 列僅 `date`／`industry_category`／`type` 三欄、官方列僅四欄，非「全部原始列」。
+- **安全**：無可確認 Secret／個人資料事件（regex 範圍；非專業掃描器；PR-only 物件未掃）。
+- **RECOMMENDATION（非裁示）**：先取得授權書面答案；若降低曝露面，優先評估可逆的方案 C 第一階段；歷史改寫與改 repo 可見性不可逆，須客戶拍板。
+- **仍未授權／HOLD**：遷移、刪檔、改歷史、改可見性、改 workflow／Secrets／儲存、UI2 runtime 接線（停在 WIRING-GATE）、Coverage 母體變更與門檻、PIT、`DG-LIC` 最終判斷、Digest A3／`market.health`／外資 L3／OneBrain runtime。
+- **NOT VERIFIED**：其餘來源條款、FinMind 方案等級與是否商業、Streamlit Cloud 設定、UI 來源標示、歷史 Secret 掃描窮盡性、第二組獨立複驗。
+- **出處**：DEC-171；研究文件 `docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md`；BACKLOG『Issue #1144 後續｜公開 Repository 資料曝露…』。PR 號：#1152。不一致時以出處為準。
