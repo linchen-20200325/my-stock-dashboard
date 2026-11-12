@@ -2,7 +2,7 @@
 
 > **性質**：稽核證據。**不是 SSOT、不是授權**。未修改任何 src／tests／workflow／資料；不接線、不解除任何 Gate、不把研究候選當成核准。與同批 `NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md`（下稱「五頁稽核」）互補：五頁稽核看五頁全貌，本文專看**市場頁與「市場資金與籌碼」**的欄位契約與距接線的 Gate 缺口。
 > **基準**：**程式／資料事實基準 main `7eb48d6c`**（#1161～#1163 已含在其歷史內）；其後 main 的變動僅為 docs（#1166，main `dae78eea`；`git diff --stat 7eb48d6c origin/main` 核實只有 `docs/DECISIONS.md` +25 行，無 src／tests／資料／workflow 變動，故本文程式與資料斷言不受影響）；資料量測日 2026-11-12（本機 `data_cache` 最新資料日 2026-11-09）。引用一律「檔:符號」（`CLAUDE.md` §8.2.A.0 規則 1），**本文不引用行號**。**證據來源**：整理市場契約單組調查報告並加上本文自行重核（§9）；**調查報告為 session 暫存、未入 repo**，故不以其章節編號為引用，僅出自調查報告而本 PR 未重核者標「調查者 FACT／本 PR 未重核」。
-> **授權來源**：**已登錄於 main：DEC-174（PR #1166，main `dae78eea`）**＝客戶 2026-11-12 對 Batch 1 的「方案 B」裁示（原句見 DEC-174，本文不轉錄；本文作者未逐字讀其內文，已登錄；獨立 QA 對 #1166 head `07da10c6` 複驗一致；本文仍不引申其授權範圍）。**消歧**：此「方案 B」是 Batch 1 的選項，與 DEC-165／166／167／170／171 在 Issue #1144 脈絡內各自出現的「方案 A／B」（Digest A2、B 線 Gate 研究、CI 修復 fallback、公開 repo 資料曝露稽核）**不同義**，不得互相引用授權範圍。
+> **授權來源**：**已登錄於 main：DEC-174（PR #1166，main `dae78eea`）**＝客戶 2026-11-12 對 Batch 1 的「方案 B」裁示（原句見 DEC-174，本文不轉錄；本文不引申其授權範圍）。**消歧**：此「方案 B」是 Batch 1 的選項，與 DEC-165／166／167／170／171 在 Issue #1144 脈絡內各自出現的「方案 A／B」（Digest A2、B 線 Gate 研究、CI 修復 fallback、公開 repo 資料曝露稽核）**不同義**，不得互相引用授權範圍。
 > **圖例**：**FACT**＝本回合讀碼／讀檔／執行直接確認；**APPROVED（轉錄）**＝文件記載客戶已裁示，**非本文確認**；來源類別不一：DEC-155 為 ChatGPT 獨立裁示（非客戶逐字）、DEC-158 自陳「非客戶逐字原文」、DEC-158～171 多為 Issue 轉錄或 AI 摘要，依 DEC-172 D3 須逐項核查來源，**本文未逐項核查，不得據此擴權**；**RECOMMENDATION**＝AI 推薦，非裁示；**HOLD**＝客戶裁示維持未授權；**INFERENCE**＝由 FACT 推得、未實測；**NOT VERIFIED**＝未驗，不得當前提。
 > **稽核分類**：READY／BLOCKED／NOT VERIFIED **僅為本文的稽核分類，不是正式 Data State enum**（正式只有 `shared/ui2_contract/models.py::FieldState` 五態，DEC-124）。READY＝該性質成立且有守衛（**不含**授權條款與接線授權；**不等於資料新鮮、不等於可對外呈現**）。
 > **原則：畫面完成或測試綠燈 ≠ 資料可用。** 本文引用的測試名僅證明「有守衛」，不證明目前綠燈，更不證明 Real 欄位有資料、新鮮或可對外呈現。
@@ -22,7 +22,7 @@
 | 6 | 融資 L3 使用者可見常數 `MARGIN_SOURCE_TEXT` 含「全市場融資金額」；板塊側有「不稱全市場」守衛，**融資側沒有**；FinMind 該 dataset 是否含上櫃 NOT VERIFIED | FACT（字面與守衛範圍）（§6.2 GG-1） |
 | 7 | **所有接線相關 Gate 維持 HOLD／未授權**（§5）。本文未暗示任何 Gate 已解除 | FACT |
 | 8 | UI2、Digest、OneBrain **沒有任何「資金與籌碼」欄位的共同核准基礎**：Digest 市場段只有 regime／light／health，OneBrain 無 producer；Digest `DataStatus` 與 UI2 `FieldState` 無核准對映（見五頁稽核 §4.2） | FACT（§8） |
-| 9 | **台股資料實況**：`twii_ohlcv.parquet` 最後一筆資料提交為 `4432d5a7`（2026-11-10 08:46 +0800，資料日 2026-11-09），此後 main 無新資料提交；固定來源字樣仍寫「每日更新」。A1／A2 的 READY 只指接線＋契約，**不代表資料新鮮**。**每日資料 PR 證據（本回合重驗，FACT）**：`origin/auto/data-macro-history` 最新提交 `fc447def`（2026-11-11 16:59:56 +0000），相對 main 差 5 檔（含 `twii_ohlcv.parquet`、`finmind_inst.parquet`、`finmind_margin.parquet`、`macro_last_good/tw_pmi.json`、`metadata.json`）；該分支 `twii_ohlcv.parquet` 末日 2026-11-10（4914 列），main 為 2026-11-09（4913 列）。對應 PR **#1124／#1125／#1126 皆 open、未合併**（GitHub 讀取 `merged=false`、`mergeable_state=behind`；#1124 head 即 `fc447def`），屬既有 HOLD（BACKLOG「#1124～#1126 未處置（#1126 PIT 未驗）」；DEC-159 記其 PIT NOT VERIFIED；客戶指示不處置）。 **推論（INFERENCE）**：main 上 TWII 資料日停在 2026-11-09，疑為每日資料 PR 未合併，**非 cron 失敗**（自動分支 11-11 仍有增量）；**cron 成功率 NOT VERIFIED**（三條自動分支最新提交均為 2026-11-11 UTC，11-12 當日有無增量本回合讀不到）。即使 #1124 合併，TWII 卡也只到 2026-11-10。 | FACT（§9 V10、V15）；原因 INFERENCE |
+| 9 | **台股資料實況**：`twii_ohlcv.parquet` 最後一筆資料提交為 `4432d5a7`（2026-11-10 08:46 +0800，資料日 2026-11-09），此後 main 無新資料提交；固定來源字樣仍寫「每日更新」。A1／A2 的 READY 只指接線＋契約，**不代表資料新鮮**。**每日資料 PR 證據（本回合重驗，FACT）**：`origin/auto/data-macro-history` 最新提交 `fc447def`（2026-11-11 16:59:56 +0000），相對 main 差 5 檔（含 `twii_ohlcv.parquet`、`finmind_inst.parquet`、`finmind_margin.parquet`、`macro_last_good/tw_pmi.json`、`metadata.json`）；該分支 `twii_ohlcv.parquet` 末日 2026-11-10（4914 列），main 為 2026-11-09（4913 列）。對應 PR **#1124／#1125／#1126 皆 open、未合併**（GitHub 讀取 `merged=false`；`mergeable_state`：讀取當時為 `behind`（另有審查讀到 `unknown`）；三 PR 的 base 仍是舊的 `043a4d21`；該欄位由 GitHub 惰性計算、隨時會變，不作為判斷依據；#1124 head 即 `fc447def`；#1124 內文「資料狀態」段（本回合重讀）顯示：分支上 `finmind_inst`／`finmind_margin` 資料日到 2026-11-11、`twii_ohlcv` 到 2026-11-10），屬既有 HOLD（BACKLOG「#1124～#1126 未處置（#1126 PIT 未驗）」；DEC-159 記其 PIT NOT VERIFIED；DEC-174 的 HOLD 清單與 BACKLOG 記為維持未處置，禁止順手合併／改寫／rebase）。 **推論（INFERENCE）**：main 上 TWII 資料日停在 2026-11-09，疑為每日資料 PR 未合併，**非 cron 失敗**（自動分支 11-11 仍有增量）；**cron 成功率 NOT VERIFIED**（三條自動分支最新提交均為 2026-11-11 UTC，11-12 當日有無增量本回合讀不到）。即使 #1124 合併，TWII 卡也只到 2026-11-10。 | FACT（§9 V10、V15）；原因 INFERENCE |
 | 10 | **不可直接採信的欄位**（外資 source 斷點、板塊外資分項、TWII 資料日與固定字樣、融資來源字樣、PMI proxy、位階未載入、FAKE 值）彙整見五頁稽核 §0.1 | FACT／INFERENCE（逐項標籤見該節） |
 
 ---
@@ -269,8 +269,8 @@
 | V7 | 卡片新鮮度 | 讀 `compute_cache_staleness`／`STALE_DAYS_DAILY=7`；沙箱 today 2026-11-12 | 一致（age_days=3、is_stale=False） |
 | V8 | 成交量猜單位（推論） | 讀 `leading_indicators.twse_volume` 備援迴圈；parquet 最近非 NaN volume＝4,239,400 | 迴圈為 FACT；偏差為 INFERENCE（詳五頁稽核 X-10） |
 | V9 | 本文特有的補充重核 | 讀 L3：融資 5399.15741 億@2026-11-09；板塊 41／38／3、−920.24812237、`complete`；`metadata.json` per_day 算術 18026−15761＝2265；`reader._compute_staleness` 用 `tw_now().date()`；`margin_fact_service._taipei_today`；`compute_cache_staleness` 預設 `date.today()` | 與市場契約調查者一致；**基準日不一致調查者未明言**（本回合補充；已併入既有 `I1140-TODAY-TZ`） |
-| V10 | 台股資料實況（第二版新增） | `git log -- data_cache/twii_ohlcv.parquet`：最後一筆 `4432d5a7`「每日總經歷史增量：2026-11-09 (#1103)」2026-11-10 08:46:18 +0800；再 fetch 後 main 仍為 `7eb48d6c`，此路徑之後無新提交；`metadata.json` `twii_ohlcv.last_updated=2026-11-09` | 一致（與獨立 QA 所述同）；11-10／11-11 是否交易日 NOT VERIFIED |
-| V15 | 每日資料 PR 狀態（第三版新增） | 查三條自動分支最新提交：`fc447def`（2026-11-11 16:59:56 +0000）、`1efb178a`（17:21:40）、`428258b3`（17:28:10）；比較 `origin/main...origin/auto/data-macro-history` 的差異檔含 `twii_ohlcv.parquet`；取分支 parquet 讀末日＝2026-11-10（4914 列）；GitHub MCP 讀 PR #1124／#1125／#1126：皆 `open`、`merged=false`、`mergeable_state=behind` | 與獨立 QA 自驗一致 |
+| V10 | 台股資料實況（第二版新增） | `git log -- data_cache/twii_ohlcv.parquet`：最後一筆 `4432d5a7`「每日總經歷史增量：2026-11-09 (#1103)」2026-11-10 08:46:18 +0800；再 fetch 後 main 仍為 `7eb48d6c`，此路徑之後無新提交；`metadata.json` `twii_ohlcv.last_updated=2026-11-09` | 一致（本回合自行重驗）；11-10／11-11 是否交易日 NOT VERIFIED |
+| V15 | 每日資料 PR 狀態（第三版新增） | 查三條自動分支最新提交：`fc447def`（2026-11-11 16:59:56 +0000）、`1efb178a`（17:21:40）、`428258b3`（17:28:10）；比較 `origin/main...origin/auto/data-macro-history` 的差異檔含 `twii_ohlcv.parquet`；取分支 parquet 讀末日＝2026-11-10（4914 列）；GitHub MCP 讀 PR #1124／#1125／#1126：皆 `open`、`merged=false`；`mergeable_state`：讀取當時為 `behind`（另有審查讀到 `unknown`）；三 PR 的 base 仍是舊的 `043a4d21`；該欄位由 GitHub 惰性計算、隨時會變，不作為判斷依據；#1124 內文資料狀態段：`finmind_inst`／`finmind_margin` 資料日 2026-11-11、`twii_ohlcv` 2026-11-10 | 本回合自行重驗 |
 | V11 | 外資差距拆分（第二版新增） | 同 V5，另以 `source` 後綴標記每日標籤：舊 18 日中位 60.18／最大 239.57／同號 18；新 19 日中位 49.19／最大 140.28／同號 18 | 與 QA 數字一致 |
 | V12 | `finmind_inst` 讀取者（第二版新增） | `grep -rn finmind_inst --include=*.py`（排除 `tests/`、`.claude/`） | `src` 內 1 個、`scripts/` 4 個（§3.1）；僅靜態 grep |
 
@@ -280,7 +280,7 @@
 2. **absent 計數**：`n_member_absent_cells=0`（ETF 家族成員）與 `n_absent_cells=53`（板塊×日空格）是不同的量（§2 末）。
 3. **`:Foreign` 成分**：調查者敘述「依 docstring 至少 2017-12-18 起含外資自營商」，並已自標「未重抓驗證」；本文維持 NOT VERIFIED，未升級為 FACT。
 4. **行號**：調查者引用的行號（如 `real_canonical.py` 第 324–331 行、`BACKLOG` 第 2203 行）在 3C 重整與後續變動後不可信，本文改用符號／ID。
-5. **第二版（回應獨立 QA）新增更正**：(a) A3 位階由 READY 改為 NOT VERIFIED（接線成立、目前恆未載入）；(b)「真實且有使用資格＝3」改為「REAL 帶真值 2 欄＋位階已接線但恆未載入」；(c) §0-2／§1-B 標題：DEC-164 G-9 授權並已完成融資＋板塊唯讀 L3（#1142），獲核准的「方向」是文字線框，接線與外資 L3 未授權，外資 B1 不再置於「已核准方向」之下；(d) 37 日外資窗拆分斷點前後；(e) `is_proxy` 位於 `data_cache/macro_last_good/tw_pmi.json`，不在 `tw_pmi.parquet`；(f)「L1 僅 `load_extreme_risk_legs`」只在 `src/` 成立，`scripts/` 另有 4 個讀取者；(g) `CACHE_DATASET_CADENCE` 出處為 `macro_cache_reader`；(h) 欄名「來源已核准？」改「已有客戶裁示？」；(i) §6.2 的 T-n 改 GG-n（避免與其他文件的 T-xx 混淆）。
+5. **第二版（回應審查回饋）新增更正**：(a) A3 位階由 READY 改為 NOT VERIFIED（接線成立、目前恆未載入）；(b)「真實且有使用資格＝3」改為「REAL 帶真值 2 欄＋位階已接線但恆未載入」；(c) §0-2／§1-B 標題：DEC-164 G-9 授權並已完成融資＋板塊唯讀 L3（#1142），獲核准的「方向」是文字線框，接線與外資 L3 未授權，外資 B1 不再置於「已核准方向」之下；(d) 37 日外資窗拆分斷點前後；(e) `is_proxy` 位於 `data_cache/macro_last_good/tw_pmi.json`，不在 `tw_pmi.parquet`；(f)「L1 僅 `load_extreme_risk_legs`」只在 `src/` 成立，`scripts/` 另有 4 個讀取者；(g) `CACHE_DATASET_CADENCE` 出處為 `macro_cache_reader`；(h) 欄名「來源已核准？」改「已有客戶裁示？」；(i) §6.2 的 T-n 改 GG-n（避免與其他文件的 T-xx 混淆）。
 
 ### 9.3 限制（如實）
 
@@ -294,13 +294,20 @@
 
 ---
 
-## 10. 建議下一批（3 項＋依獨立 QA 增列第 4 項；**皆為 RECOMMENDATION，非授權；不得自動跨越 Decision Gate**）
+## 10. 下一批施工候選（最多 3 項；**皆為 RECOMMENDATION，非授權；不得自動跨越 Decision Gate**）
+
+> DEC-174 規定每批最多三項；以下只放 3 項。條件式者註明「需客戶先裁示，未裁示則不計入該批」。
 
 | # | 項目 | 需客戶裁示？ | 前置 Gate | 風險 | AI 總管推薦 |
 |---|---|---|---|---|---|
-| 1 | **非作者獨立 QA 本文與五頁稽核**：第二組重核 §9.1 的 V3／V4／V5／V10／V11 與 §3.3、§4（基準日差異屬既有 `I1140-TODAY-TZ`），並覆核 N-1～N-4 是否成立 | 否（內部 QA；§-2 規則 4） | 無 | 低；docs-only。不做的風險＝全稱句長期停在單組待驗 | **推薦先做** |
-| 2 | **整理 DG-SCOPE／DG-COV／DG-PIT／DG-LIC 的商業語言決策單**（附 AI 推薦；PREGATE 研究的推薦為「先關 Gate、不動程式」，必要時最小面積只接融資一項），並以治理 PR 登記 N-1～N-4 | 是（決策單給客戶；登記由總管另案） | `I1144-WIRING-GATE` 不在此批解除，僅整理決策材料 | 低；不動 runtime。風險＝被讀成授權（本文各表已標 HOLD） | 推薦；在 #1 之後 |
-| 3 | **（僅客戶先裁示後）外資口徑標籤 SSOT 與外資 L3 的設計草稿**：先解 `:Foreign` 斷點揭露方式、「外資」vs「三大法人合計」字樣分離，再談 L3 | 是（外資 L3 屬未授權另案；涉畫面字樣須先出文字線框） | 外資 L3 授權；DG-LIC／DG-PIT；`I1144-WIRING-GATE` | 中；易被讀成授權接線，且口徑斷點成分仍 NOT VERIFIED（需重抓驗證，新來源／新儲存須另授權） | 暫不推薦自動啟動；列為客戶可選項，**不跨越 Gate** |
-| 4 | **是否處置每日資料 PR #1124～#1126**（合併／關閉／維持 HOLD；TWII 資料日停在 2026-11-09 與此相關，因果＝INFERENCE） | **是**（客戶裁示；現為 HOLD、PIT 未驗，客戶先前指示不處置） | 先有 PIT 證據（#1126 PIT 未驗；#1124／#1125 亦記 NOT VERIFIED）；PR 內文要求人工審閱與 `ui2-browser-gate` 同 head 綠燈；三 PR 皆 `behind` | **風險（INFERENCE）**：自動資料未經審閱進主線；即使合併 #1124，TWII 也只到 2026-11-10；釘住快取日期的測試可能改變；Cloud 顯示口徑改變。**不處置的風險**：卡片持續顯示舊資料日、固定字樣仍寫「每日更新」 | **推薦**：本批與下一批都**不處置**；先做 docs-only 唯讀 PIT 驗證與 cron 成功率查證，再出商業語言決策單請客戶裁示。**本批不得處置那些 PR** |
+| 1 | **非作者獨立 QA 本文與五頁稽核**：第二組重核 §9.1 的 V3／V4／V5／V10／V11／V15 與 §3.3、§4（基準日差異屬既有 `I1140-TODAY-TZ`，該併入為 INFERENCE），並覆核 N-1～N-4 是否成立 | 否（內部 QA；§-2 規則 4） | 無 | 低；docs-only。不做的風險＝全稱句長期停在單組待驗 | **推薦先做** |
+| 2 | **整理 DG-SCOPE／DG-COV／DG-PIT／DG-LIC 的商業語言決策單**（附 AI 推薦；PREGATE 研究的推薦為「先關 Gate、不動程式」，必要時最小面積只接融資一項） | 是（決策單給客戶） | `I1144-WIRING-GATE` 不在此批解除，僅整理決策材料 | 低；不動 runtime。風險＝被讀成授權（本文各表已標 HOLD） | 推薦；在 #1 之後。（N-1～N-4 的 BACKLOG 登記屬總管治理流程〔另案 PR〕，**不計入本批施工項**） |
+| 3 | **（需客戶先裁示，未裁示則不計入該批）外資口徑標籤 SSOT 與外資 L3 的設計草稿**：先解 `:Foreign` 斷點揭露方式、「外資」vs「三大法人合計」字樣分離，再談 L3 | 是（外資 L3 屬未授權另案；涉畫面字樣須先出文字線框） | 外資 L3 授權；DG-LIC／DG-PIT；`I1144-WIRING-GATE` | 中；易被讀成授權接線，且口徑斷點成分仍 NOT VERIFIED（需重抓驗證，新來源／新儲存須另授權） | 暫不推薦自動啟動；列為客戶可選項，**不跨越 Gate** |
+
+### 10.1 需客戶裁示的待決事項（不計入批次項數）
+
+| 待決事項 | 現況 | 前置 | 風險 | AI 總管推薦 |
+|---|---|---|---|---|
+| **是否處置每日資料 PR #1124～#1126**（合併／關閉／維持 HOLD；TWII 資料日停在 2026-11-09 與此相關，因果＝INFERENCE） | DEC-174 的 HOLD 清單與 BACKLOG 記為維持未處置，禁止順手合併／改寫／rebase；PIT 未驗（#1126 PIT 未驗；#1124／#1125 亦記 NOT VERIFIED）。#1124 內文「資料狀態」段（本回合重讀）顯示：分支上 `finmind_inst`／`finmind_margin` 資料日到 2026-11-11、`twii_ohlcv` 到 2026-11-10 | 先有 PIT 證據；PR 內文要求人工審閱與 `ui2-browser-gate` 同 head 綠燈；`mergeable_state`：讀取當時為 `behind`（另有審查讀到 `unknown`）；三 PR 的 base 仍是舊的 `043a4d21`；該欄位由 GitHub 惰性計算、隨時會變，不作為判斷依據 | **風險（INFERENCE）**：自動資料未經審閱進主線；即使合併 #1124，TWII 也只到 2026-11-10；釘住快取日期的測試可能改變；Cloud 顯示口徑改變。**不處置的風險**：卡片持續顯示舊資料日、固定字樣仍寫「每日更新」 | **推薦：本批與下一批都不處置**；先做唯讀 PIT 檢查與 cron 成功率檢查，再出商業語言決策單請客戶裁示。**本批不得處置那些 PR** |
 
 > 本文為稽核證據。接線、新增 L3、改文案、改 UI 結構、改資料保存方式——**每一項都需客戶另行授權**。
