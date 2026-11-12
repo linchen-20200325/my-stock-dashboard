@@ -8395,3 +8395,20 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 - **另註（同名不同義）**：DEC-158 轉錄的 **D1～D5 為 Issue #1110 題號**（US10Y 口徑／VIX／利差／台灣 PMI／每日落地 cron），與 **DEC-172 治理用 D1～D5**（Skip-PR 廢除、GitHub-first、來源規則、CI 與視覺 Gate、文件重整路線）為**不同組**。
 - **結果指標**：Batch 1 實際成果（稽核文件）以 PR #1165 為載體；**登錄待其合併後另行追加**，本條不寫結果。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性（撰寫組只見總管派工訊息轉錄；原始對話 repo 內不存在）；本條 AI 整理與消歧查證為單組撰寫，未經第二組獨立複驗（§-2 規則 6）。
+
+#### DEC-174 結果指標（2026-11-12；只追加；**結果指標，非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> 本段履行上方「結果指標」條「登錄待其合併後另行追加」的自述。**為何不另開 DEC 號**：`PROJECT_RULES.md` 的登錄規則（客戶裁示→新 DEC）管的是**客戶裁示**，本段只登錄 DEC-174 Batch 1 的**執行結果**，無任何新客戶裁示；同檔 DEC-159 合併後註記亦為就地追加。**另立編號作法的理由仍成立**：DEC-166（A2 執行結果）曾另立編號，好處是查找容易、結果與裁示不混在同一條；本組取不佔號，是因本段內容全為指標、不含裁示。
+
+- **Batch 1 載體**：PR **#1165** 已 squash 合併，main `68e56ff0`（2026-11-12 `git fetch origin main` 實取；PR 頁記錄 `merged=true`、merge 時間 2026-11-12 11:23 UTC、2 檔、+905 行、docs-only）。PR 描述自述最終 head `9ef6b81a` 同 head 五項原生 CI 全綠、兩組非作者 QA PASS；**該 CI／QA 數字本組僅轉述 PR 描述，未重查**。
+- **兩份文件**（結果與證據都在這兩份，本段不重抄）：`docs/vnext/NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md`（A1＋B1；結論見其 §0、§7、§11）、`docs/vnext/NEWUI2_MARKET_DATA_CONTRACT_VALIDATION_2026-11-12.md`（C1；結論見其 §0、§7、§10）。
+- **B1 結論**：**未發現「契約內、可重現、不涉及新設計決策」的缺陷**（五頁稽核 §7.1），故**未開 UI 修復 PR**；Visual Gate 候選、文案漂移、守衛缺口只登記（BACKLOG 檔尾「方案 B Batch 1 收尾」段），不動 UI。
+- **主要發現摘要（5 行內；單組稽核，待獨立複驗）**：
+  1. 預設路徑只到 FAKE；REAL 軸帶真值的畫面欄位只有台股卡與日 K；市場位階已接線但在 UI2 獨立 session 目前恆為「⬜ 尚未載入」（五頁稽核 §0-1～3）。
+  2. 「市場資金與籌碼」不在 UI2 VM；融資／板塊 L3 在 UI2 引用數為 0；外資無 L3（五頁稽核 §0-4；市場契約 §0-1／§0-2）。
+  3. 口徑問題有實證：`finmind_inst` 同欄兩種 `source` 標籤；板塊外資分項與 FinMind 大盤外資同日不等；板塊 stale 4 日 vs 融資／外資 7 日（市場契約 §3、§4）。
+  4. 台股卡資料日停在 2026-11-09，疑為每日資料 PR #1124～#1126 未合併（INFERENCE；cron 成功率 NOT VERIFIED）。
+  5. 新候選 N-1～N-4、文案漂移、Visual Gate 候選 VG1／VG2、守衛缺口 G1／G2、CAPMAP 漂移已登記於 BACKLOG，皆非授權。
+- **HOLD／Gate 全部未動**：#1119、#1124～#1126、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、OneBrain runtime／provider、Digest v2 等**維持原狀**；Batch 1 **未關閉任何 Gate、未新增任何接線授權**，也不是 runtime／資料／UI 授權。
+- **仍待客戶裁示（皆為既有或新登記項；附推薦者為 AI 推薦，非客戶裁示）**：(1) 是否處置每日資料 PR #1124～#1126（推薦本批與下一批皆不處置，先做唯讀 PIT 檢查與 cron 成功率檢查）；(2) VG1／VG2（Visual Gate 候選）的文字線框（草稿先行，`CLAUDE.md` §-1.5.D §03-2 ①，客戶拍板前不得寫 UI code）；另「只接 2 項真資料」文案漂移**先確認類別**（開發面文案＝內部自決；產品畫面才需文字線框），不預設請客戶為它出線框；(3) `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`（DEC-171）；(4) Q5（DEC-173：暫不執行，是否及何時重議）。
+- **NOT VERIFIED**：兩份文件的第二組獨立複驗（五頁稽核 §11 推薦項 1 尚未執行）；Cloud／真機／Real 軸瀏覽器量測；授權原文；PIT。本段單組撰寫，未經第二組獨立複驗（§-2 規則 6）。
