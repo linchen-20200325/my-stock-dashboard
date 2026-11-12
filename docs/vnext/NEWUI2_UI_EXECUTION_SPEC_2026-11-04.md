@@ -1,5 +1,7 @@
 # New UI2 四頁 UI 施工說明（乾淨版；2026-11-04）
 
+> 📌 **HISTORICAL／REFERENCE — 版型部分已被取代（2026-11-12 補註 R2；本檔以下原文一字未刪未改；有意識的政策變更，不是漏刪；決策者 客戶，DEC-142／DEC-146＋2026-11-12 D4 裁示）**：本檔的**版型**（四頁、手機／桌機導覽、§7「第五頁／第五導覽 REMOVE」等）已被 **DEC-142／DEC-146 五頁頂部導覽**取代，現行五頁版型以 [`NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`](NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md)（Top-Five Gate）為準；**語意／規則**仍以 [Active Presentation Contract](NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md) 為準。本檔**僅作歷史／參考**，不得再據以施工版型。兩邊理由：本檔 2026-11-04 寫成時四頁是現行版型（成立）；其後客戶核准五頁頂部導覽，續讀本檔版型會造成第五頁被誤刪。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC 號待補。
+
 > **定位**：本文件是現行唯一 Active Presentation Contract 的**人類可讀施工附件**，不是第二套產品憲法。規則效力依序以客戶原文 DEC-128／129／130、[Active Presentation Contract](NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md) 為準。本文件只將其轉為可施工的版面與驗收清單；任何未核准的畫法均標「待線框核准／待 Gate」，**不藉施工附件創造新 Decision**。
 >
 > **新 UI2 施工只讀本文件＋Active Contract，勿再從 2026-11-02 舊線框中挑選 L2/L3 段落。** 舊線框、Freeze、Legacy 文件為歷史、差異查核與仍有效的非衝突語意參照；已被取代的呈現語句**不再是施工規則**。決策歷史維持 append-only。實際 src/UI 尚未因本文件改變。
