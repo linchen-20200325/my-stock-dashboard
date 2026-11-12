@@ -2433,3 +2433,14 @@
 | **DEC176-REVERIFY-R1R5-CANDIDATES** | #1169 複驗 B1 紅隊找到的 R1～R5 **候選**：R1 🎯 閒置時「查詢摘要」重複兩次（畫面結構取捨）；R2 真資料軸橫幅宣稱位階為真資料（文案與事實矛盾）；R3 🗂 資料頁原因句沿用 🎯 頁文案；R4 示意軸缺行內示意標記（併入 `DEC174-VG1-FAKE-REAL-LOOK`）；R5 相對路徑 `Path("data_cache")`（**環境依賴，不是缺陷**，只需在「沙箱實測」註明「從專案根啟動」）。紅隊以渲染輸出重現，**FACT 來自紅隊自報，文件組未重做渲染** | P2 | open（候選；只分類） | `NEWUI2_INDEPENDENT_REVERIFICATION_2026-11-12.md` §5.1；DEC-174；`DEC174-B1-INDEP-QA`；`DEC176-INDEP-REVERIFY-DONE` | **任何 UI 動作須先文字線框＋客戶拍板**（`CLAUDE.md` §-1.5.D §03-2 ①）；R2／R3 的類別（開發面文案或產品畫面）由總管先判定；R4 走 VG1；R5 不開工。**非授權**，無客戶指派不動工（§-1）。本列單組撰寫，R1～R5 未被再次重驗 |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3 仍 HOLD。
+
+
+## 2026-11-12｜76ed4b7b push CI 紅燈證據追蹤（只追加；不改既有列；依據 `docs/DECISIONS.md`「後續註記：76ed4b7b push CI 紅燈證據」；登記不等於施工授權）
+
+> ID 前綴 `DEC176-`（落盤前 `git grep -c "DEC176-CI-D6" docs/BACKLOG.md` ＝ 0，無重複）。已先 `git grep` 既有 CI 列：`ui2-browser` pip exit 127 已有 `DEC174-CI-UI2BROWSER-EXIT127`、`DEC175-CI-UI2BROWSER-EXIT127-RECUR`、`DEC176-CI-1171-VALIDITY`（涵蓋 #1171 後的被動觀察），故**不另建** `...PIP-127-OBSERVE` 列，只在下表以指標補記 `aa98de4c`／`68e56ff0` 兩次 `ui2-browser` 失敗的事實。本段單組撰寫，未經非作者獨立 QA。
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM** | main push `76ed4b7b`（#1173 squash）PR Check run 43253404141 failure：`Fast checks` 9 個失敗全在 `tests/test_d6_diagnostic_no_secret_display.py`，斷言皆 `assert ["LONG:'5678'"] == []`（`LONG`＝測試檔內合成假秘密；日誌不含任何真實 secret）。**機制（兩組獨立調查，本機實測）**：禁字集含假秘密的 4 字元片段，`screen_text` 掃描每個元素 `str(proto)`；元素 ID `$$ID-<32hex>-api_diag_run` **每個 pytest 行程隨機、行程內固定**（`app_test` 模組層 `TMP_DIR` 隨行程不同），純 hex 片段命中機率約 0.5～0.6%。反事實：本機把 ID 換成含 `5678` → 同檔 9 failed，與 CI 同名；中性字元 → 無命中。→ 頁面輸出沒有輸出真秘密，命中在元素 ID。**同 head `8140a952` 的 PR CI（43250372531）success；最新 main push `85c65dfc` success（43265246088）。** **口徑**：高度可能為測試偵測器的非決定性缺陷（誤報）；**CI 當次實例未被直接驗證 → 不記為「已證實的偶發誤報」**。**NOT VERIFIED**：CI 行程實際 ID 字串、同版（py3.11）重現、其他測試是否有同類「禁字 vs 隨機 ID」缺陷（未掃） | P2 | open（待客戶另案授權才可修測試；無授權不動） | DEC 同名後續註記；run 43253404141／43250372531／43265246088 | **RECOMMENDATION（非裁示）**：若客戶另行授權，修法方向＝掃描前正規化 `$$ID-<32hex>` 或排除 proto 的 id 欄位，**且不得放寬禁字集覆蓋**；未經新授權不改測試、不重構、不放寬 CI Gate。之後再遇類似 D6 紅燈：先看失敗片段是否出現在元素 ID 內；**rerun 通過不等於已修**。與 #1171（只動 `ui2-browser` pip 步驟）無關 |
+
+> **指標補記（不新建列）**：`aa98de4c`（run 43229484406）與 `68e56ff0`（#1166，run 43208678198）兩次 main push 失敗**不是** D6 測試檔：兩者 `Fast checks` 皆 success，失敗在容器 job `ui2-browser` 的 `Install dependencies`；`aa98de4c` 為 `pip: cannot execute: required file not found`／exit 127（#1171 要修的症狀），`68e56ff0` 只確認同一步驟失敗、**退出碼 NOT VERIFIED**（調查組回報；本組僅重讀 `aa98de4c` 的 run 層級 failure）。追蹤沿用 `DEC176-CI-1171-VALIDITY`（被動觀察）。另 `57885e6e`／`169b74ed` 的 push run 為 cancelled：`pr-check.yml` 設 `cancel-in-progress: true`，**INFERENCE** 被後續 push 取消（無取消明文），副作用＝#1172、#1168 的 push 沒有完整 push CI。

@@ -1259,3 +1259,7 @@
 - **N-1 部分推翻（複驗 E-7；FACT）**：§70.13 稱此不一致「登記為 N-1／`DEC174-N1-STALE-THRESHOLD`」——該登記仍成立，但 N-1 原論述漏引 `shared/freshness_policy.py`（兩份 #1165 文件對它的引用數為 0）；且複驗自身的反向勘誤 R-A 指出：紅隊原句「`assess_daily` 無行事曆會是 UNDETERMINED」錯誤，實測在 11-09／今日 11-12 情境為 FRESH（落後 3 個交易日）。§70.13 此條中對 `assess_daily` 休市表取不到的描述（上界 ≤ 3 → FRESH、下界 > 3 → STALE、否則 UNDETERMINED）與此一致，不需更正。是否統一各規則屬客戶 Gate，**未裁示**。
 - **B1 有效讀法**：**未證明違反已核准契約，但不能說「無」**；紅隊找到 R1～R5 **候選**（只分類，不修、不授權 UI 施工；涉及畫面結構須先文字線框＋客戶拍板；R4 併入 VG1；R5 為環境依賴非缺陷）。§70.13 的「UI2 實際接入真資料 2／8」「🗂 資料頁固定空殼」等條，複驗未推翻（核心事實獨立重現，0 個被整體推翻；紅隊盤點非盲測、單組）。
 - **仍須注意**：複驗文件是**單組產出**，不等於 `DEC174-B1-INDEP-QA` 結案；其內事實未被再次重驗；#1165 兩份文件仍含被修正措辭、本批不改（是否回寫勘誤附註另待總管／客戶決定）。出處：BACKLOG「#1169 獨立複驗結論的勘誤指標」。
+
+#### 70.14.2 76ed4b7b push CI 紅燈（指標；不重複全文）
+
+- **FACT**：main push `76ed4b7b` 的 PR Check run 43253404141 failure，9 個失敗全在 `tests/test_d6_diagnostic_no_secret_display.py`；同 head PR CI 與最新 main push `85c65dfc` 皆 success。**高度可能為測試偵測器的非決定性缺陷（元素 ID 隨機 hex 命中合成假秘密片段），但 CI 當次實例未被直接驗證 → 不記為「已證實的偶發誤報」。** 只記錄、不修；未經客戶新授權不改測試、不放寬 CI Gate。證據與口徑見 DECISIONS「後續註記：76ed4b7b push CI 紅燈證據」；追蹤 BACKLOG `DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`。與 §70.13 的 `ui2-browser` pip exit 127（#1171）是**不同事項**。

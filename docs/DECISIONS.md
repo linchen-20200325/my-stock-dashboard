@@ -8575,3 +8575,46 @@ DEC-175 是已生效的工作優先序、資料架構與交接治理決策，不
 **(h) #1165 兩份文件仍含被修正措辭，本批不改**：撰寫時 main `85c65dfc`，至少 `NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md` 的第 23 行（§0-7 新鮮度「日曆天>7、無交易日曆」）與第 25 行（§0-9「所有 Gate 維持 HOLD／未授權」）、`NEWUI2_MARKET_DATA_CONTRACT_VALIDATION_2026-11-12.md` 的第 23 行（§0-7「所有接線相關 Gate 維持 HOLD／未授權」）含上述被修正的措辭；**這是抽查到的行，不是窮舉**（該兩檔其他章節如 X-08、X-09、§4、§9 亦有相關敘述，未逐行盤點，NOT VERIFIED）。本批範圍僅 `DECISIONS`／`BACKLOG`／`HANDOFF`／`PROJECT_STATE` 四檔，**不改 `docs/vnext/` 既有檔**；以本小節為有效讀法。**是否以附註方式回寫勘誤，另待總管／客戶決定**（複驗文件 §7 第 3 點的建議是「勘誤附註、不要重寫」，屬 RECOMMENDATION，非裁示）。
 
 **NOT VERIFIED（本小節）**：複驗文件內事實的再驗；R1～R5 的渲染重現；E-10／E-13 的處置；本小節為單組撰寫，**未經非作者獨立 QA**（§-2 規則 6），不得被引用為「已 QA PASS」。
+
+
+#### 後續註記：76ed4b7b push CI 紅燈證據（FACT／INFERENCE／NOT VERIFIED）（2026-11-12；只追加；**只記錄，不修**；**非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> **為何有本小節**：main push `76ed4b7b`（#1173 squash）的 PR Check 為 failure，與同 head 的 PR CI 全綠不一致。本小節把兩組獨立調查（互相驗證、皆唯讀）的證據落盤，避免下一位接手者重複調查或把它誤讀為「#1173 內容有問題」。**不修測試、不重構、不放寬 CI Gate、不重跑任何 workflow**；未經客戶新授權不得改測試。
+> **標籤**：FACT＝本組以 GitHub MCP 重讀（僅 run 層級欄位）或讀碼直接確認；其餘「調查組」欄位＝兩組調查員回報、**本組未重做**（見末段「本組自己驗過／沒驗過」）。**單組撰寫，未經非作者獨立 QA**（§-2 規則 6）。
+> **安全聲明**：測試檔內的 secret 皆為**合成假秘密**；日誌不含任何真實 secret 值。本小節只引用片段 `5678`，**不抄出假秘密完整字串**。
+
+**1. 事實（FACT）**
+
+- main push `76ed4b7b`（#1173 squash）PR Check run **43253404141**：`conclusion=failure`（本組 MCP 重讀 run 層級：event=push、head_branch=main、created 2026-11-12T15:57:34Z）。只有 `Fast checks` job 失敗；日誌結尾 `9 failed, 39449 passed, 36 skipped, 226 deselected, 3 xfailed … in 1021.62s`（調查組讀日誌）。
+- 9 個失敗**全在** `tests/test_d6_diagnostic_no_secret_display.py`，斷言皆為 `assert ["LONG:'5678'"] == []`（`LONG` 為測試檔內合成假秘密的常數名，片段 `5678`）：`test_baseline_page_contains_none_of_the_forbidden_strings`、`test_page_shows_only_names_state_source_never_values`、`test_env_fallback_reports_source_without_value`、`test_no_secrets_file_at_all_unset_keys_say_unset_not_parse_failure`、`test_secrets_parse_failure_shows_state_only`、`test_probe_results_are_status_and_category_only`、`test_page_probe_without_proxy_shows_direct_only`、`test_unmutated_page_passes_the_same_check`、`test_page_when_proxy_config_raises_shows_fixed_text_only`（本組 `grep` 確認 9 個測試名皆存在於該檔）。
+- 同 head `8140a952` 的 `pull_request` CI run **43250372531** `success`（本組 MCP 重讀 run 層級）；更早 head `df4cc872` 的 run 43245091926 success（調查組）。**僅看 run 層級結論，未逐一展開該測試檔個別結果。**
+- main push PR Check 近期結論（調查組列出；**其中標 ◆ 者本組 MCP 重讀 run 層級確認**）：`85c65dfc` success（43265246088 ◆；涵蓋同一測試檔，以 fast job 綠為據）、`76ed4b7b` failure（43253404141 ◆）、`57885e6e` cancelled（43252166395 ◆）、`40d21c7f` success（43242041455）、`169b74ed` cancelled（43241999040）、`2a1623e8` success（43235433151）、`aa98de4c` failure（43229484406 ◆）、`6241ad3b` success（43214840927）、`68e56ff0`（#1166）failure（43208678198）。
+- **`aa98de4c` 與 `68e56ff0` 的失敗不是同一測試檔**：兩者 `Fast checks` 都 success，失敗的是容器 job `ui2-browser` 的 `Install dependencies`；`aa98de4c` 日誌為 `pip: cannot execute: required file not found`／exit code 127（#1171 要修的症狀）；`68e56ff0` 只確認同一步驟失敗，**退出碼 NOT VERIFIED**。（既有追蹤列：BACKLOG `DEC174-CI-UI2BROWSER-EXIT127`、`DEC175-CI-UI2BROWSER-EXIT127-RECUR`、`DEC176-CI-1171-VALIDITY`；本組先 `git grep` 確認，故**不另建重複列**。）
+- **兩個 cancelled**（`57885e6e`、`169b74ed`）：`.github/workflows/pr-check.yml` 第 10～12 行設 `concurrency: group: pr-check-${{ github.ref }}` ＋ `cancel-in-progress: true`（本組讀檔確認）。**INFERENCE**：被後續 push 取消——例如 43252166395 於 15:50:40Z 建立、15:57:51Z 更新，而下一個 push run 43253404141 於 15:57:34Z 建立，時間吻合；**沒抓到取消明文**。副作用：#1172、#1168 的 push 沒有完整的 push CI。
+
+**2. 機制（FACT；本機實測，兩組獨立；本組未重做）**
+
+- 該測試把測試檔內假秘密的每個 4 字元片段列為禁字（`_frags`），`screen_text` 把每個 Streamlit 元素的 `str(proto)` 納入掃描（本組讀碼確認 `screen_text` 確實納入 `str(proto)`）。元素 ID 形如 `$$ID-<32 位小寫 hex>-api_diag_run`；`streamlit.testing.v1.app_test` 模組層 `TMP_DIR=tempfile.TemporaryDirectory()` 使暫存腳本路徑每個 pytest 行程不同 → **ID 每行程隨機、行程內固定**，故同一行程 9 個測試同紅同綠（調查組讀碼推論）。
+- CI fast lane 為單一 `pytest -v`：無 xdist／randomly／PYTHONHASHSEED；`pytest.ini` addopts 只有 `--strict-markers -m "not slow and not ui2_browser"`（本組讀檔確認）。
+- 純 hex 4-gram：假秘密的禁字片段共 13 個（本組**不逐一列出**，以免還原假秘密）；另 PROXY_URL 禁字集的 `3128`、`1280`、`31280` 與 `-012` 也可能命中。精確機率（自動機 DP）LONG 單項約 **0.542%**；加其他禁字的 Monte Carlo（200,000 次）任一命中約 **0.63%**。
+- **反事實實測**：本機整檔 3 次皆 56 passed；在**不改 repo** 的 pytest plugin 把 ID 換成含 `5678` 後，同檔 **9 failed／47 passed，且失敗的 9 個與 CI 同名**；把 ID 換成中性字元則無洩漏命中；本機 118 次 baseline 單測重跑有 1 次自然失敗，該次 ID 含 `5678`。→ 頁面輸出本身沒有輸出真正的秘密，命中位置在元素 ID。
+
+**3. 推論與口徑（INFERENCE）**
+
+- **INFERENCE**：`76ed4b7b` 那次 CI 行程的 ID 碰巧含 `5678`（約 0.5% 級偶發事件），故為**測試偵測器缺陷（誤報）**而非真洩漏；與 #1173 docs-only 內容無關。
+- **結論口徑（必須這樣寫）**：「**高度可能為測試偵測器的非決定性缺陷（兩組獨立調查一致），但 CI 當次實例未被直接驗證 → 不記為『已證實的偶發誤報』**」。#1171 與此無關（只動 `ui2-browser` 的 pip 步驟；調查組僅看 stat 與訊息，未讀 diff 全文）。
+
+**4. NOT VERIFIED**
+
+CI 失敗行程實際的 ID 字串（日誌只印斷言，未印 blob，且無權限重跑）；本機為 py3.13＋streamlit 1.59.2，CI 為 py3.11，**未於同版重現**（`TMP_DIR` 機制與版本無關為讀碼推論）；repo 其他測試是否有同類「禁字 vs 隨機 ID」缺陷（**未掃**）；`68e56ff0` 的退出碼；取消明文；本節數字（機率、118 次重跑）本組未重算。
+
+**5. RECOMMENDATION（非裁示）**
+
+- 若客戶**另行授權**，修法方向是**掃描前正規化 `$$ID-<32hex>` 或排除 proto 的 id 欄位，且不得放寬禁字集覆蓋**；**未經新授權不改測試、不重構、不放寬 CI Gate**。
+- 之後遇到類似 D6 紅燈：先看失敗片段是否出現在元素 ID 內；**rerun 通過不等於已修**。
+- 追蹤：BACKLOG `DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`（P2、open、待客戶另案授權才可修測試）。
+
+**6. 本組自己驗過／沒驗過**
+
+- 驗過（FACT）：run 43253404141／43250372531／43265246088／43229484406／43252166395 的 run 層級 conclusion 與建立時間（GitHub MCP）；`pr-check.yml` 第 10～12 行 concurrency；`pytest.ini` addopts；9 個測試名存在；`screen_text` 納入 `str(proto)`。
+- 沒驗過：日誌內容、機率計算、反事實實測、本機重跑次數、其餘 run 的結論（調查組回報）。**本小節不是 QA PASS，不得被引用為「已證實的偶發誤報」。**
