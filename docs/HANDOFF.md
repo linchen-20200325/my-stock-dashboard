@@ -451,7 +451,7 @@
 |---|---|
 | latest verified main SHA | `68e56ff0`（#1165 合併點；2026-11-12 `git rev-parse origin/main` 實查；cron 與其他 PR 會推進 main，一律重查） |
 | current working branch | `docs/batch1-ssot-closure-20261112`（本收尾 docs PR 的 head；合併後可為任何新分支） |
-| current PR | 本收尾 docs PR（Draft；PR 號於開 PR 後補記，以 GitHub 上 head＝上列分支者為準）；其餘 Open PR：#1164（REORG3C 歸檔，Draft，不碰）、資料 PR #1124／#1125／#1126（HOLD，不碰） |
+| current PR | 本收尾 docs PR **#1167**（Draft；以 GitHub 上 head＝上列分支者為準）；其餘 Open PR：#1164（REORG3C 歸檔，Draft，不碰）、資料 PR #1124／#1125／#1126（HOLD，不碰） |
 | current task / batch | DEC-174 方案 B Batch 1 SSOT 收尾：DECISIONS 結果指標＋BACKLOG 後續待辦登記＋本段 |
 | completed in this batch | A1／C1（#1165，兩份稽核文件）、DEC-174 登錄（#1166）；B1 結論＝未發現契約內可重現缺陷，故無 UI 修復 PR；本收尾 PR 本身尚未合併 |
 | exact current stopping point | 本收尾 PR 已推送、Draft；待非作者獨立 QA 與同 head 原生 CI |
