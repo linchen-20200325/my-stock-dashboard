@@ -470,10 +470,10 @@ floor 已於 2026-08-27（commit `fa8e90b`）自 1.36.0 抬高 —— 現有程�
 
 ### §-1.5.C 本節的掃描範圍與**未複驗事項**（依 §-2 規則 6 誠實標註）
 
-<!-- CLAUDE_HISTORY_INDEX:BEGIN lines=473-476 archive=docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md -->
-- 📦 **路徑索引（2026-11-12，DEC-173 Q4；只搬不改）**：原 L473–L476（屬 `### §-1.5.C 本節的掃描範圍與**未複驗事項**（依 §-2 規則 6 誠實標註）`）已逐字搬至 `docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md`（分冊 L10–L13）；純歷史紀錄，非現行規則。本處原為下列 1 個條列（首行逐字）：
-  - [分冊 L10–L13](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-1-5-c)：- **掃描方法**：對 `CLAUDE.md` 全檔（700 行，量測日 2026-08-27）grep 關鍵字
-<!-- CLAUDE_HISTORY_INDEX:END -->
+- **掃描方法**：對 `CLAUDE.md` 全檔（700 行，量測日 2026-08-27）grep 關鍵字
+  `請示` / `裁示` / `派工` / `稽核` / `複驗` / `交付` / `報告` / `user` / `客戶` /
+  `停手` / `動工` / `核准` / `對齊` / `先停下來問` / `讓我決定` / `給我確認`，
+  逐一判讀命中處是「規則」還是「歷史紀錄 / 稽核現況」，只對**規則**做牴觸判定。
 - ⚠️ **未複驗事項（不得當成既定前提使用）**：上述「牴觸的舊條文只有 §7 第 4 點 + §7 收尾句
   + §8.1 前言句 + §8.5 末句」這句**全稱結論，是本編修組單組掃出來的，沒有第二組獨立驗過**。
   依 §-2 規則 6，它只能當**待驗事項**；後續若要據以宣稱「本檔已無牴觸」，
@@ -978,11 +978,32 @@ dummy 資料 / `except: pass` / 自己估一個合理值）**一項未減**。
 > §-1.5.C 記錄的是**第一輪（v1 編入）**與其補正輪的方法與盲點，**一字未刪未改、全部仍然有效**。
 > 本小節是**本輪（v3 編入）**自己的，**不覆蓋** §-1.5.C。
 
-<!-- CLAUDE_HISTORY_INDEX:BEGIN lines=981-1006 archive=docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md -->
-- 📦 **路徑索引（2026-11-12，DEC-173 Q4；只搬不改）**：原 L981–L1006（屬 `### §-1.5.G 本輪（v3 編入）的掃描方法與盲點（誠實揭露，依 §-2 規則 6）`）已逐字搬至 `docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md`（分冊 L20–L45）；純歷史紀錄，非現行規則。本處原為下列 2 小段（小標題逐字；「掃描結果」內含下文盲點 1「牴觸只有上述 5 處」所指之清單，該條列首行逐字：- **反向命中的真張力共 5 處**，全部已就地處置：）：
-  - [分冊 L20–L45](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-1-5-g)：**方法（三步）**
-  - [分冊 L20–L45](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-1-5-g)：**掃描結果（據實）**
-<!-- CLAUDE_HISTORY_INDEX:END -->
+**方法（三步）**
+1. **逐字對讀**：把 v3 原文與 v1 逐句對映，先產出 §-1.5.E 的對照表（新增／收斂／不變 三種判定），
+   **先 diff 再落筆**，不是把新版貼一遍。
+2. **雙向關鍵字掃描**（v3 同時有收緊與放寬，**兩個方向都掃**）：
+   - **正向**（v3 新增主題，找既有條文有沒有講同一件事）：
+     `搬遷 / 目錄 / 孤兒 / Orphan / Archive / 死碼 / dead code / 實體刪除 / 清理 /
+      退避 / 轟炸 / backoff / 成交量 / 融資…單位 / 灰色 / 紅色 / 假性 /
+      網格 / 3 欄 / 三欄 / Checkbox / 延遲載入 / 重繪 / st.form`
+   - **反向**（v3 是**收緊型**規範 → **必須**掃既有的**放寬句／豁免句**）：
+     `免 / 不必 / 無需 / 直接做 / 不觸發 / 豁免 / 例外 / 逕行 / 自決`
+     ⚠️ **這一輪的反向掃描是照 §8 前言那條方法論教訓做的**：`c901d47` 那一輪掃「要問客戶」類
+     關鍵字，**結構上永遠掃不到**一個關鍵字都不含的豁免句。**本輪的主要收穫全部來自反向掃描。**
+3. **實地查證**（不憑文件轉述）：`ls src/`、`ls src/data/`、`ls src/ui/`、`ls src/compute/`、
+   `ls shared/`、`grep -n streamlit requirements.txt`、`grep -n tab_macro_v2 app.py`、
+   `find . -name tab1_macro.py`、`grep -rn '\^VIX' src/`。**結果逐項寫進 §-1.5.D 與判定內文。**
+
+**掃描結果（據實）**
+- **正向命中 0 的項目**（→ 該處為純新增，**沒有舊表述需要加刪除線**）：
+  `退避` / `轟炸` / `backoff` / `成交量` / `灰色` / `紅色` / `假性` / `網格` / `3 欄` / `Checkbox` / `延遲載入`。
+- **反向命中的真張力共 5 處**，全部已就地處置：
+  (1) §-1.5.A-2 邊界段「不是趁機清全 repo」（判定 3）；
+  (2) §8 前言「不觸發…直接做」清單（判定 3，就地補註）；
+  (3) §8.2.A.1 **EX-PASSTHRU-1**（判定 2）；
+  (4) §8.2.A.2 待修表前言「本表不構成主動動工的授權」＋ §8.3「無 bug 觸發不主動動工」（判定 3）；
+  (5) §8.4 step 4「分開提案讓我決定範圍」vs v3「嚴禁拋選擇題」（判定 8）。
+- **跨檔**：`PROCESS.md §2`「動工前大掃除」的同精神補註**已同步**（本次授權含該檔）。
 
 **⚠️ 本輪已知盲點（不要當成「全都查過了」）**
 
@@ -1051,12 +1072,12 @@ dummy 資料 / `except: pass` / 自己估一個合理值）**一項未減**。
 ## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）
 
 <!-- CLAUDE_HISTORY_INDEX:BEGIN lines=1074-1114 archive=docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md -->
-- 📦 **路徑索引（2026-11-12，DEC-173 Q4；只搬不改）**：原 L1074–L1114（屬 `## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）`）已逐字搬至 `docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md`（分冊 L52–L92）；純歷史紀錄，非現行規則。本處原為下列引言與 4 個步驟（引言首行與步驟小標題逐字；他處引用「§0 步驟 1」「§0 步驟 4」即指此）：
-  - [分冊 L52–L92](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：> Bootstrap 流程全 4 步完成,§0 已從「BOOTSTRAP 紀錄」改名為「填寫紀錄」。
-  - [分冊 L52–L92](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
-  - [分冊 L52–L92](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 2｜填寫待填欄位** — 已完成,以下節次依現有 code 證據填妥（每條附 `file:line`）：
-  - [分冊 L52–L92](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
-  - [分冊 L52–L92](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 4｜收尾** — 已完成。
+- 📦 **路徑索引（2026-11-12，DEC-173 Q4；只搬不改）**：原 L1074–L1114（屬 `## §0. 填寫紀錄（首次填寫 2026-06-22；v3 升級 2026-06-22 新增 §8；步驟 4 收尾 2026-06-23）`）已逐字搬至 `docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md`（分冊 L10–L50）；純歷史紀錄，非現行規則。本處原為下列引言與 4 個步驟（引言首行與步驟小標題逐字；他處引用「§0 步驟 1」「§0 步驟 4」即指此）：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：> Bootstrap 流程全 4 步完成,§0 已從「BOOTSTRAP 紀錄」改名為「填寫紀錄」。
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 1｜探查專案** — 已完成,三組並行 Explore agent 掃描,涵蓋：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 2｜填寫待填欄位** — 已完成,以下節次依現有 code 證據填妥（每條附 `file:line`）：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 3｜回溯稽核** — 已完成,違憲清單分高/中/低三級;以下 W 系列 + S-H 系列 PR 逐一收斂：
+  - [分冊 L10–L50](docs/archive/historical/CLAUDE_HISTORY_2026-11-12.md#claude-hist-0)：**步驟 4｜收尾** — 已完成。
 <!-- CLAUDE_HISTORY_INDEX:END -->
 
 ---
