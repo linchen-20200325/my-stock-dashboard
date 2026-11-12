@@ -8416,15 +8416,25 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 
 
 ### DEC-175｜UI2 與既有資料層整理優先；Actions／死碼清理延後；跨對話持續落盤（2026-11-12）
-- **決策者**：客戶。**狀態**：生效（工作優先序與交接要求；不構成任何新的資料接線／UI 施工 Gate 核准）。
-- **客戶原文（本次對話；來源 D，待獨立逐字 QA）**：
-  > 「這有空處理，最後死碼清理的時候再來處理，先處理UI+資料庫」
-  >
-  > 「這邊更新專案AI問題，請將這次新增的規則加進GITHUB中，後續比較不會因為對話斷而進度不見，記得按造之前談過的資料層整理。」
+- **決策者**：客戶。**狀態**：生效（工作優先序與交接要求；不構成任何新的資料接線／UI 施工 Gate 核准）；**非 QA PASS**（本 PR 為 Draft，待 Delta QA 與同 head 原生 CI）。
+- **客戶原文（逐字，fence 內未改一字，含原文「按造」）**：
+
+> 2026-11-12 修正（獨立 QA 項目 2，客戶授權方案 A；本 PR 新增文字內的格式更正，句子本文未改一字）：原以 blockquote 收錄，現改為 fence 並附 sha256，格式比照 DEC-173／174（fence 內不含包覆引號符號「」；兩句以換行連接）。**來源類別 D：客戶 2026-11-12 與 ChatGPT 的對話；本條由 ChatGPT 編擬並經派工訊息轉錄，撰寫組未見客戶原訊息本身，repo 內無獨立原始對話紀錄——依 DEC-172 D3 精神標示「經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED」。** fence 內容（不含首尾 fence 行與結尾換行）sha256＝`af650bbb261fe697634c05b294ef56fbe972fe49cd875b4748e63039f4d14663`（撰寫時計算，供比對；尚未由測試釘住）。
+> 第一句「這有空處理」的「這」指稱什麼，原文未寫、repo 內無前文；本條下文與 BACKLOG 把它解讀為 GitHub Actions Runs／Artifacts 清理（**INFERENCE**，依派工訊息脈絡，非客戶逐字）。
+
+```
+這有空處理，最後死碼清理的時候再來處理，先處理UI+資料庫
+這邊更新專案AI問題，請將這次新增的規則加進GITHUB中，後續比較不會因為對話斷而進度不見，記得按造之前談過的資料層整理。
+```
+
+#### AI 整理（非客戶原文；撰寫組依上方原文與派工訊息整理，不得據以擴大授權）
+
 - **範圍**：股票儀表板 `my-stock-dashboard`。延續 **DEC-174** 的 UI 與資料契約雙軌；「資料庫」先解讀為既有資料來源、資料快取、Canonical Data／L3、契約、觀測日／新鮮度、PIT、授權與覆蓋率的整理／驗證，**不**代表授權重建 DB、資料遷移、改變存放方式、新 API、cron、模型或真實接線。遇到與既有正式決策不同的設計，另請客戶裁示。
-- **執行順序**：(P0) UI2 五頁與既有資料層雙軌盤點／已核准範圍內改善；(P1) 逐 Gate 做資料契約與 Real 接線決策，僅授權後實作；(P2) 真實資料、跨頁、瀏覽器與 PIT 驗收；(P3) 新 UI 完整驗收與 cutover／rollback Gate 後才處理 Old UI／死碼；GitHub Actions Runs／Artifacts 清理安排在此收尾階段，**現在停止相關施工，不執行刪除**。
+- **執行順序**：(P0) UI2 五頁與既有資料層雙軌盤點／已核准範圍內改善；(P1) 逐 Gate 做資料契約與 Real 接線決策，僅授權後實作；(P2) 真實資料、跨頁、瀏覽器與 PIT 驗收；(P3) 新 UI 完整驗收與 cutover／rollback Gate 後才處理 Old UI／死碼；GitHub Actions Runs／Artifacts 清理安排在此收尾階段，**現在停止相關施工，不執行刪除**。**「安排在收尾階段」只表示順序，不是日後刪除授權**：屆時仍須客戶逐批明示授權（Runs／Artifacts 刪除為不可逆操作，屬 `CLAUDE.md` §-1.5.D §03-2 ②）。Old UI／死碼清理仍受 **Old UI Removal Gate**（DEC-019／DEC-020／DEC-097；BACKLOG `UIM-REMOVAL-GATE`、`NUI2-CUTOVER`）與 **DEC-173 Q6**（逐字搬移≠刪除）拘束，本條不解除。
 - **持續化要求**：每批最多三項。每次啟動先獨立確認 GitHub main SHA、Open／Draft PR、head/base/diff、CI、review 與治理 SSOT；進度分別落在 DECISIONS（裁示）、BACKLOG（未完成及 Gate）、PROJECT_STATE（有效架構知識）、HANDOFF（當前／下一安全點），不可只在對話或短暫 scratchpad。跨對話以 GitHub 最新事實優先，HANDOFF 不是完成證明；不建立重複交接文件。
 - **資料層整理邊界**：沿用現有資料架構與核准來源、分開資料事實與 AI 分析；從 Old UI → 新 UI 五頁逐欄比對 source、source authority、as_of／publication／fetched_at、PIT、coverage、completeness、單位、staleness、missing／unavailable／not_evaluated／proxy、L3／UI2 consumer、License、測試證據、對應 Gate；不得補 0、把未驗判 safe、把板塊外資當大盤外資或把 Cron 執行時刻冒充觀測日。每項標 FACT／INFERENCE／NOT VERIFIED，缺證據維持 HOLD。
 - **保留原有阻塞**：#1124～#1126 資料 PR 不合併、不關閉、不 rebase；其 PIT 與 cron 成功率先唯讀調查、再提交商業語言決策單。AI 推薦「暫不處置」**不是本 DEC 客戶對 A／B 的新裁示**。#1164、#1119 及 DEC-174、DEC-171、I1144-WIRING-GATE、DG-COV／DG-PIT／DG-LIC／DG-SCOPE 等保持原狀。舊 UI 不改、不刪；預設 UI 不切換。
 - **執行治理**：本條只保存優先序與安全界線，不允許越過舊 UI First、文字線框、非作者獨立 QA、同 head CI、Review／Merge Gate；不得將「先做 UI」誤解為能直接更改 UI Layout／文案／欄位。
-- **provenance**：本條由 ChatGPT 根據客戶本對話編擬、尚待非作者獨立 QA；若客戶逐字性或範圍有異議，停止並修正，不升格推論為客戶裁示。
+- **provenance**：本條由 ChatGPT 根據客戶本對話編擬；若客戶逐字性或範圍有異議，停止並修正，不升格推論為客戶裁示。
+- **QA 軌跡（2026-11-12）**：已有單組非作者獨立 QA（判定 PASS with fixes〔內容層〕，單組判讀，非窮舉）；客戶裁示「方案 A」授權在本 PR 依其 8 項意見做文字修正；修正後的 **Delta QA 與同 head 原生 CI 尚未完成**，故本條仍「非 QA PASS」。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性（含「按造」是否為客戶原字）；「這有空處理」之「這」的指稱；DEC-164／165／170／171／172 與本條的相容性僅經關鍵字比對，未逐條精讀。
