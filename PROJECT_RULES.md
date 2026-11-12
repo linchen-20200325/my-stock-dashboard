@@ -501,6 +501,7 @@ Effort：Low / Medium / High
    - **D.** 有沒有目前 blocker／next safe point 只存在聊天裡？→ 有則分類進 `docs/HANDOFF.md`。
    - **E.** 有沒有會影響未來架構判斷的重要背景、研究結論、限制或模組關係，只存在聊天裡？→ 有則分類進 `docs/PROJECT_STATE.md`。
    - **F.**（2026-10-23 新增，DEC-073）`docs/HANDOFF.md` 是否已記錄**下一階段建議模型／能力等級與建議 Effort**？→ 否則補記於 HANDOFF 第 0 節。
+   - 📌 **2026-11-12 REF-SYNC（舊 F 原文保留）**：「HANDOFF 第 0 節」是舊位置用語；請以 `docs/HANDOFF.md` 檔尾最新有效 15 欄 Resume Checkpoint 為目前紀錄點，並在動工前依當下 GitHub 實況重驗。
    - ⛔ **任何答案為「有」且尚未保存時：不得宣告交接完成。**
    - 分類時：尚未核准的構想一律進 BACKLOG 的 Candidate／Decision Gate，⛔ 禁止升格成 Approved；已正式存在者不重複登記。
 6. **Model／Effort Gate 納入啟動與交接**（2026-10-23 新增，DEC-073；客戶原文「並納入 Context Loss Check／交接規則，確保新 Claude 對話也會自動讀到，不再依賴客戶每次提醒。」）：(1) 新對話完成第 3 點啟動程序後、以及每個下一完整階段／Batch 開始前，**必須執行第 9.0 節強制 Model／Effort Gate**；(2) `docs/HANDOFF.md` 第 0 節須記錄**下一階段建議模型／能力等級與建議 Effort**（Context Loss Check F 項）；(3) HANDOFF 記錄的建議只是參考，新對話仍須依實際工作重新判斷，不得當成已切換的證明（客戶原文第 3 步「不得自行假設模型或 Effort 已切換」）。
@@ -740,6 +741,7 @@ HANDOFF 維持一個極短 Resume Checkpoint，至少含 15 欄：
 
 - **（撰寫組註記／讀法，非客戶原文）過渡條款**：Resume Checkpoint 尚未落地於 `docs/HANDOFF.md` 前，以 HANDOFF 第 0 節現行短版為唯一接手點；缺 Checkpoint 不視為違規，但須在下一個 safe checkpoint 補上。
 - **（撰寫組註記／讀法，非客戶原文）欄位同源**：第 13、14 欄（recommended Model／Effort）與 HANDOFF 第 0 節的「下一階段建議模型／Effort」（第 15 節 F 項）為同一份資料，只留 Resume Checkpoint 一處為準，另一處指向它，不得兩處各寫。
+- 📌 **2026-11-12 REF-SYNC 修正索引（客戶已授權；舊文原樣保留）**：上方兩項「HANDOFF 第 0 節現行短版／Resume Checkpoint 尚未落地」是歷史過渡讀法，已不適用。現行交接必先 GitHub-first 查核，再讀 `docs/HANDOFF.md` 檔尾最新有效 Safe Handoff／15 欄 Resume Checkpoint；`HANDOFF.md` 第 0 節現存 2026-10-29 索引僅作歷史，不得覆寫最新接手狀態。模型／Effort 仍必寫入最新有效 Resume Checkpoint，禁止在歷史索引重複維護第二份現行值。依 DEC-172 D2、DEC-173 Q1／Q6、#1156／#1160；這是引用同步，不改原規範效力。
 
 ### 20.3 觸發時機
 
