@@ -558,6 +558,7 @@ Risk Cap **怎麼獨立顯示**（數字、7 天沿用、必要／選配清單�
 | B8 | `DATA_HEALTH_AUDIT_2026-10-23.md` 仍寫 BIAS240／PCR「違反 DEC-062 Q5」 | `DH-C2GATE-DOC-DRIFT` | 已登記（`docs/BACKLOG.md:838`） |
 | B9 | PROJECT_STATE §20 仍把「自動來源 vs Proxy」列為無定義 | `docs/PROJECT_STATE.md` §20 | 待同步 |
 | B10 | HANDOFF 短版寫 #920「未合併」 | `docs/HANDOFF.md:178-194` | 待同步 |
+> 📌 **2026-11-12 REF-SYNC（原 B10 證據列保留，僅更新引用位置）**：B10 原 `docs/HANDOFF.md:178-194` 是 2026-10-30 時點的歷史引用，已由 #1156 逐字歸檔到 [`HANDOFF_HISTORY_2026-11-12.md` 原 L178–194／分冊 L124–140](../archive/historical/HANDOFF_HISTORY_2026-11-12.md)。此引用只證明當時的歷史快照，不代表 #920 今日 PR 狀態；今日狀態請查 live GitHub。依 DEC-173 Q1／Q6 與客戶 `REORG3C-REF-SYNC` 授權，不更改 B10 原判定。
 | B11 | ARCHITECTURE §0.13 寫五頁掛成頂層頁籤；SPEC §16 頭註過期 | `ARCHITECTURE.md:338-354` | 待同步 |
 | B12 | Blueprint §4.2／§8 仍以「今天／Investment Inbox」為主頁 | `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` | `BP-DR-01` |
 | B13 | DEC-072 列「重要警示」、DEC-076 未列；對應到今日關鍵警示屬總管判定 | — | 線框拍板時一併確認 |
