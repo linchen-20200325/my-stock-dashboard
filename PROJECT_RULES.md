@@ -1135,8 +1135,8 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 
 ## 2026-11-12｜工作優先序與 GitHub 跨對話續接索引（DEC-175；本節只索引，不授權）
 - **現行優先事項**：延續 DEC-174 的 **New UI2 五頁＋既有資料層／資料契約雙軌**；資料層是整理／驗證已存在的資料架構（source→cache→L3→canonical／VM→UI2），不是重建資料庫或繞過資料 Gate。每批最多三項。
-- **延後事項**：Actions Run／Artifact 紀錄清理與 Old UI／死碼清理，放在新 UI 接線、測試、正式 cutover／rollback Gate 完成後的收尾；不因有 CSV 候選便取得刪除權限。「安排在收尾階段」只表示順序，**不是日後刪除授權**：Runs／Artifacts 刪除為不可逆操作，屆時仍須客戶逐批明示授權（`CLAUDE.md` §-1.5.D §03-2 ②）；Old UI／死碼清理仍受 Old UI Removal Gate（DEC-019／DEC-020／DEC-097、BACKLOG `UIM-REMOVAL-GATE`／`NUI2-CUTOVER`）與 DEC-173 Q6 拘束。
+- **延後事項**：Actions Run／Artifact 紀錄清理與 Old UI／死碼清理，放在新 UI 接線、測試、正式 cutover／rollback Gate 完成後的收尾；不因有 CSV 候選便取得刪除權限（DEC-175「這」＝Actions 清理與「CSV 候選」皆為 **INFERENCE、來源僅派工對話**；脈絡佐證 Issue #1119 留言 6768487486／6822675191，**未證實等同**）。「安排在收尾階段」只表示順序，**不是日後刪除授權**：Runs／Artifacts 刪除為不可逆操作，屆時仍須客戶逐批明示授權（`CLAUDE.md` §-1.5.D §03-2 ②）；Old UI／死碼清理仍受 Old UI Removal Gate（DEC-019／DEC-020／DEC-097、BACKLOG `UIM-REMOVAL-GATE`／`NUI2-CUTOVER`）與 DEC-173 Q6 拘束。
 - **跨對話保存**：每批結束前依本檔 §0.3 五檔分工（本檔＋DECISIONS＋BACKLOG＋PROJECT_STATE＋HANDOFF）同步；本檔只作導航索引。若該批無新增有效架構知識，PROJECT_STATE 可不更新，但須在 HANDOFF 或 PR 描述明寫「PROJECT_STATE 未更新及原因」（本 PR 即如此：docs-only 優先序與續接索引，無新增架構知識）。新 Agent 先獨立驗證 GitHub main、Open／Draft PR、CI、review、branch、最新 DEC 與 STOP Gates，再讀 HANDOFF；不可讓聊天摘要推翻 GitHub。
 - **不變之禁止**：#1124～#1126 資料 PR HOLD，PIT／cron 先唯讀核查；#1164 與其餘 open PR 不順手處置；I1144-WIRING-GATE、DG-COV／DG-PIT／DG-LIC／DG-SCOPE、資料授權、儲存架構及正式 UI 切換均未因 DEC-175 解除。舊 UI First、線框先行、資料狀態、安全測試與獨立 QA 規則照舊。
 - 詳細可追溯客戶裁示見 `docs/DECISIONS.md` DEC-175；現行任務列見 `docs/BACKLOG.md`，最新安全接手點見 `docs/HANDOFF.md`。本節不得作為獨立施工授權。
-- **漂移責任（2026-11-12 Delta 修正，QA 項目 7）**：本節的「現行優先事項」與 PR 編號（#1124～#1126、#1164）是 **2026-11-12 的快照索引**；日後狀態變動時，現行值的維護責任在 `docs/HANDOFF.md` 與 `docs/BACKLOG.md`，**以其為準、不回頭改本節**；本節與 DEC-175 不一致時以 DEC-175 為準。本節不新增任何規則。
+- **漂移責任（2026-11-12 Delta 修正，QA 項目 7）**：本節的「現行優先事項」與 PR 編號（#1124～#1126、#1164）是 **2026-11-12 的快照索引**；日後狀態變動時，現行值的維護責任在 `docs/HANDOFF.md` 與 `docs/BACKLOG.md`，**以其為準、不回頭改本節**；本節與 DEC-175 不一致時以 DEC-175 為準。本節不新增授權。
