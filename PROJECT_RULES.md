@@ -492,7 +492,7 @@ Effort：Low / Medium / High
    3. 驗證：main SHA、open／draft PR、relevant commits／diffs、CI／QA、relevant branches。
    4. 優先序：**GitHub factual reality > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` 中的狀態快照 > AI memory／conversation summary**（與第 1.1 節 Fact Truth 同向；這是判斷「現在實際是什麼」的順序，不是規範效力順序）。
    5. 文件與 GitHub 實況不一致時：以 GitHub evidence 為準；不得猜測；必要時修正正式文件。
-   - 📌 **2026-11-12 補註（上列 1～5 原文一字未刪未改）**：客戶 2026-11-12 **D2** 裁示的查核順序（GitHub → 高位階治理與正式契約 → 五檔相關有效部分 → 最新 handoff → 必要時歷史）見第 25 節末「D2～D5 索引」；兩者同向，衝突時以 D2 為準。DEC 號待補（待 #1152 同檔排程排除後追加）。
+   - 📌 **2026-11-12 補註（上列 1～5 原文一字未刪未改）**：客戶 2026-11-12 **D2** 裁示的查核順序（GitHub → 高位階治理與正式契約 → 五檔相關有效部分 → 最新 handoff → 必要時歷史）見第 25 節末「D2～D5 索引」；兩者同向，衝突時以 D2 為準。DEC-172（待 #1152 同檔排程排除後追加）。
 4. 不得把完整聊天紀錄、腦暴或未裁示想法大量寫入 GitHub；只保存會影響未來工作的正式專案狀態。
 5. **Context Loss Check**（2026-10-22 新增，DEC-068）：Claude 或 ChatGPT 的完整專案對話結束前，必須問：「如果下一個 AI 完全看不到目前聊天內容，只讀 GitHub，它能否正確理解目前專案並安全接手？」至少檢查：
    - **A.** 有沒有正式裁示只存在聊天裡？→ 有則分類進 `docs/DECISIONS.md`。
@@ -984,7 +984,7 @@ Scope Inflation Guard
 3. `PROJECT_RULES.md`＋`docs/governance/*`（例 `MODEL_EFFORT_POLICY_2026-10-25.md`、`UI_VISUAL_FIDELITY_GATE.md`）
 4. 最新有效 DEC（`docs/DECISIONS.md`；**客戶 DEC > AI 總管內部 DEC**；被取代者看條頭 📌 與第 5 節取代鏈）
 5. 正式契約／Visual SSOT：Phase 1 新文件（Presentation Contract、Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）＋D2.5 A／B／C 規格（`docs/vnext/NEWUI_D25_{A,B,C}_*.md`；與 Phase 1 契約衝突時以 Phase 1 契約為準）＋核准 blueprint（`docs/vnext/d25_wireframes/*.html`）。⚠️ **用語區分**：小寫 **blueprint**＝DEC-092 核准的 d25 mockup（`docs/vnext/d25_wireframes/*.html`），是 **Visual SSOT**（視覺驗收基準）；大寫 **Blueprint**＝產品方向文件 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點／DEC-057；最終產品方向，非實作授權、非視覺規格）。產品方向相關工作讀 Blueprint；視覺／呈現依 blueprint 與 Presentation Contract。
-   - 📌 **2026-11-12 補註 R1（第 5 點原文一字未刪未改；有意識的政策變更，不是漏刪；決策者 客戶，D4 裁示＋DEC-142／DEC-146）**：**New UI2 正式契約**＝ `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（**語意／規則**）＋ DEC-142／DEC-146 五頁導覽與 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`（**版型**）。上列 Legacy Presentation Contract（`PRESENTATION_CONTRACT_vNext_2026-10-29.md`）、D2.5 A／B／C 規格與 d25 blueprint（`docs/vnext/d25_wireframes/*.html`）屬 **Legacy New UI 歷史／參考**，**不再是 New UI2 的施工或視覺驗收基準**；第 5 點其餘 Phase 1 文件（Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）地位本註不變。兩邊理由：舊列在 2026-10-29 時是唯一正式契約（成立）；其後 DEC-128 起的 Active Contract 與 DEC-142／146 五頁導覽＋Top-Five Gate 已接手 New UI2 的語意與版型，續列為第 5 層會讓新 session 依舊版型施工。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC 號待補。
+   - 📌 **2026-11-12 補註 R1（第 5 點原文一字未刪未改；有意識的政策變更，不是漏刪；決策者 客戶，D4 裁示＋DEC-142／DEC-146）**：**New UI2 正式契約**＝ `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（**語意／規則**）＋ DEC-142／DEC-146 五頁導覽與 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`（**版型**）。上列 Legacy Presentation Contract（`PRESENTATION_CONTRACT_vNext_2026-10-29.md`）、D2.5 A／B／C 規格與 d25 blueprint（`docs/vnext/d25_wireframes/*.html`）屬 **Legacy New UI 歷史／參考**，**不再是 New UI2 的施工或視覺驗收基準**；第 5 點其餘 Phase 1 文件（Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）地位本註不變。兩邊理由：舊列在 2026-10-29 時是唯一正式契約（成立）；其後 DEC-128 起的 Active Contract 與 DEC-142／146 五頁導覽＋Top-Five Gate 已接手 New UI2 的語意與版型，續列為第 5 層會讓新 session 依舊版型施工。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC-172。
 6. `docs/PROJECT_STATE.md`
 7. `docs/BACKLOG.md`
 8. `docs/HANDOFF.md`（**只當索引**，指向正式文件；不是規格 SSOT）
@@ -1001,7 +1001,7 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - ⚠️ **已知未調和**：`PROCESS.md` §1「每次任務只讀 STATE.md」與第 15 節五檔讀序衝突（`CV1-DR-04`，未裁示）。本節**不改 `PROCESS.md`**；在客戶裁示前，新 session 依第 15 節五檔讀序＋讀 `CLAUDE.md`，`STATE.md` 只作歷史參考（撰寫組讀法，單組）。
   - 📌 **2026-11-12 補註（上句原文一字未刪未改）**：上句所稱「未裁示」已由客戶 2026-11-12 **D2** 裁示解決——`PROCESS.md` §1 已加取代註記，讀序見下方索引。
 
-> 📌 **2026-11-12 客戶裁示 D2～D5 索引（註記；不改第 25.1～25.3 節既有條文語意；有意識的政策變更，不是漏刪；決策者 客戶）**。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC 號待補。
+> 📌 **2026-11-12 客戶裁示 D2～D5 索引（註記；不改第 25.1～25.3 節既有條文語意；有意識的政策變更，不是漏刪；決策者 客戶）**。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC-172。
 >
 > - **D2 讀序（GitHub-first＋五檔 SSOT）**：① 即時 GitHub main／Open PR／Issue／CI／branches → ② 現行高位階治理（`CLAUDE.md`、`PROCESS.md`、本檔）與相關正式契約 → ③ 五檔 SSOT 中與本任務相關的最新有效部分 → ④ 最新 handoff → ⑤ 必要時才查歷史與原始 Decision。`STATE.md` 保留作歷史／相容來源，不得刪除（`PROCESS.md` §1 取代註記）。與第 15 節第 3 點、第 25.2 節事實軸同向。
 > - **D3 決策來源分類**：有可追溯原文的直接裁示才記為**客戶 Decision**；Issue 轉錄／AI 摘要／AI 研究**不得擴大原授權**，須標來源與範圍；無法確認原始裁示者標 **NOT VERIFIED**；AI 推薦與客戶已批准**分開記**。DEC-155、DEC-158～171 依來源與合併狀態**逐項查核**，不因編號新就推翻未被取代的規範（與第 25.1 節第 4 點「客戶 DEC > AI 總管內部 DEC」同向）。

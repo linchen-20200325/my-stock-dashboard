@@ -8328,3 +8328,45 @@ Digest v1 Schema／validator 凍結；Digest v2；OneBrain runtime／provider／
 | **已授權** | 唯讀稽核與 GitHub SSOT 只追加更新（本 DEC 客戶原文） |
 | **未授權** | 資料遷移、刪檔、改歷史、改 repo 可見性、改 workflow／Secrets／儲存／網路、任何程式／資料／`data_cache` 變更、採用新母體或門檻、UI2 runtime 接線／上線、A3、health 範圍、外資 L3、Digest v2、OneBrain、production caller |
 | **NOT VERIFIED** | TWSE／TPEX／MOPS／data.gov.tw／央行／Yahoo 條款原文與適用性；FinMind 官網即時版本、方案等級、是否商業、與來源機關契約；Streamlit Cloud 部署設定；UI 來源標示是否顯示；raw URL 等實際可取得性；歷史 Secret 掃描窮盡性；裸 push 是否被 branch protection 擋下；本批結論的第二組獨立複驗 |
+
+
+### DEC-172｜客戶 2026-11-12 五項治理裁示 D1–D5（客戶回覆「我同意」；內容轉錄自總派工 §六）；就地註記已由 PR #1153 完成（2026-11-12；只追加；非 QA PASS）
+
+> 2026-11-12 補登（ID 取下一個未用號；落盤前 `grep -n "DEC-172\|DEC-173" docs/DECISIONS.md` 0 命中，DEC-171 為上一號）。**來源類別（依本條 D3）**：客戶直接可追溯的原文**僅為「我同意」**；D1～D5 的內容是**總派工 §六的轉錄**（撰寫組未見客戶原訊息本身，只見總管轉交之內容；若有出入以客戶原訊息為準）。故下列 D1～D5 為**轉錄摘要、非客戶逐字原文**，不得據以擴大授權。
+
+- **決策者**：**客戶**（2026-11-12）。｜**效力日期**：2026-11-12 起。
+- **D1｜廢除 `PROCESS.md` §4 Skip-PR 直推例外**：正式檔案修改一律走 PR、獨立 QA、同 head CI 與分支保護；typo／文件／版本字串亦不得 bypass。本裁示不改 branch protection 設定。
+- **D2｜GitHub-first＋五檔 SSOT 取代 `PROCESS.md` §1「只讀 STATE.md」**：查核順序為即時 GitHub（main／Open PR／Issue／CI／branches）→ 現行高位階治理與正式契約 → 五檔 SSOT 相關最新有效部分 → 最新 handoff → 必要時才查歷史與原始 Decision。`STATE.md` **保留**作歷史／相容來源，不得刪除。
+- **D3｜客戶裁示來源規則**：有可追溯原文者才記為客戶 Decision；Issue 轉錄／AI 摘要／AI 研究**不得擴權**，須標來源與範圍；無法確認者標 NOT VERIFIED；AI 推薦與客戶已批准分開記。DEC-155、DEC-158～171 須**逐項**依來源與合併狀態查核（**本 DEC 未執行該查核**，屬待辦）。
+- **D4｜CI 與視覺 Gate**：`ui2-browser-gate` 是否為 required check **須實查**，無權限者標 NOT VERIFIED；不得降低門檻、不得自行解除 `UI_VISUAL_FIDELITY_GATE`；New UI2 視覺以最新正式五頁契約（DEC-142／DEC-146＋Top-Five Gate）為準。
+- **D5｜文件重整路線**：A 修正入口 → B 建立新骨架 → 分批 C 安全遷移；「新增目錄方向已同意」≠「既有文件已准搬移」（既有文件搬移的範圍另見 DEC-173）。
+- **落地**：`PROCESS.md`（§1 D2、§4 D1 取代註記）、`PROJECT_RULES.md`（第 15 節補註、第 25.1 節 R1 補註、第 25.3 節 D2～D5 索引）、`docs/vnext/NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`（檔頭 R2 註記）之就地註記**已由 PR #1153 完成**（main `e5a8ec05`）；該 PR 留下的「DEC 號待補」字樣於本 DEC 同一 PR 改為「DEC-172」。
+- **未授權／不含**：改 branch protection 設定；任何 `src/`／`tests/`／workflow／資料變更；既有文件搬移（見 DEC-173）；關閉任何 Gate。
+- **NOT VERIFIED**：`ui2-browser-gate` 是否已設為 required check（本工作階段無權限查 branch protection）；D1～D5 轉錄與客戶原訊息的逐字一致性；本條撰寫為單組，未經第二組獨立複驗（§-2 規則 6）。
+
+
+### DEC-173｜客戶 2026-11-12 對 3C 文件重整六項正式裁示 Q1～Q6（Q1～Q4、Q6 同意〔Q6 有嚴格條件〕，Q5 暫不執行）（2026-11-12；只追加；非 QA PASS）
+
+> 2026-11-12 補登（ID 取下一個未用號，DEC-172 為上一號）。**來源類別 D：客戶 2026-11-12 正式裁示，經總管轉交；下方 fence 逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。fence 內容（不含首尾 fence 行與結尾換行）sha256＝`e99433da07494aef458896e983c5d2e097190edd93a440c55450c978c81ed504`（撰寫時計算，供比對；尚未由測試釘住）。
+
+- **決策者**：**客戶**（2026-11-12）。｜**效力日期**：2026-11-12 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：
+
+```
+- Q1＝同意：HANDOFF 歷史段逐字遷入歷史分冊，主檔保留最新有效交接及路徑索引。必須先確認受影響的測試、章節字串、歷史錨點與復原能力，完成必要的測試適配。
+- Q2＝同意：PROJECT_STATE 指定歷史段可分冊歸檔。但不得只留下空標題而遺失仍有效的知識；有效架構、限制、產品狀態及 Decision 關係必須留在可直接查閱的現行內容。
+- Q3＝同意：BACKLOG 已結案內容可逐字歸檔，但必須由獨立 QA 逐項查證狀態，未結案、待驗證、HOLD、待客戶裁示的項目不得移出唯一現行 BACKLOG。
+- Q4＝同意：CLAUDE.md 僅允許真正失效的純歷史內容歸檔；重複補註可在不改變規範效力下收斂為指向。永久規則、現行補註、客戶原文、規範位階及必要上下文一律保留。
+- Q5＝暫不執行：不得拆分 CLAUDE §-1.5 判定本文，先實測 Q4 的 Token 成效與 Agent 遵循能力。
+- Q6＝同意但有嚴格條件：允許將歷史內容逐字搬至 Repo 內的正式歷史分冊，保留 Git 歷史與可還原路徑；不得刪除任何客戶原文、Decision、不可變 hash 證據或尚有效的規範。新 Decision 必須精確記錄這次裁示的範圍，不得宣稱所有歷史文件皆已獲准自由搬移。
+```
+
+#### AI 整理（非客戶原文；撰寫組依上方原文與總派工整理，不得據以擴大授權）
+
+- **範圍**：僅 `docs/HANDOFF.md`（Q1）、`docs/PROJECT_STATE.md`（Q2）、`docs/BACKLOG.md`（Q3）、`CLAUDE.md`（Q4）四檔；**依序、每份獨立 PR**。
+- **逐字搬移≠刪除**：此讀法**僅於本裁示範圍內成立**；DEC-068 及其他情境不受本條影響。
+- **不涵蓋**：`docs/DECISIONS.md`、`PROCESS.md`、`PROJECT_RULES.md`、`STATE.md` 或其他任何歷史文件；不得宣稱所有歷史文件皆已獲准自由搬移（Q6 原文）。
+- **Q5**：暫不執行——不得拆分 `CLAUDE.md` §-1.5 判定本文；待 Q4 實測 Token 成效與 Agent 遵循能力後再議。
+- **每批必要條件**：非作者獨立 QA；同 head 五項 CI 全綠；附「原段落 → 新路徑」對照表與內容等價驗證（逐字一致）；保留 Git 歷史與可還原路徑；不得刪除客戶原文、Decision、不可變 hash 證據或尚有效規範；Q1 須先確認受影響的測試、章節字串、歷史錨點與復原能力並完成測試適配；Q3 未結案／待驗證／HOLD／待客戶裁示項目不得移出現行 BACKLOG。
+- **其餘 Gate**：一律維持 HOLD；本 DEC **未關閉任何 Gate**，也不是任何 runtime／資料／UI 接線授權。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性（撰寫組只見轉交全文）；本條 AI 整理為單組撰寫，未經第二組獨立複驗（§-2 規則 6）。
