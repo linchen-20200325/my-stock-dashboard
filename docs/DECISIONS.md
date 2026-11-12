@@ -8527,17 +8527,17 @@ DEC-175 是已生效的工作優先序、資料架構與交接治理決策，不
 | 舊位置（撰寫時 main `85c65dfc`） | 舊說法（摘要） | 有效讀法 | 複驗文件出處 |
 |---|---|---|---|
 | `DECISIONS.md:8405`（DEC-174 結果指標「B1 結論」） | 「未發現契約內、可重現、不涉及新設計決策的缺陷」 | 見下 (c)：**未證明違反已核准契約，但不能說「無」；R1～R5 為候選**（候選、只分類，不修） | §5、§7 第 3 點 |
-| `DECISIONS.md:8409`（主要發現 3） | 「板塊 stale 4 日 vs 融資／外資 7 日」 | 外資 `finmind_inst` 現行唯一 consumer 走 **10 日曆日**（極端風險兩腿），7 日對它只被校準腳本使用；過期門檻實為**三種**（4／7／10），且 repo 另有以交易日計的 `shared/freshness_policy.py` SSOT（見 (b) E-1、E-7） | §4 E-1、E-7 |
+| `DECISIONS.md:8409`（主要發現 3） | 「板塊 stale 4 日 vs 融資／外資 7 日」 | 外資 `finmind_inst` 現行唯一 consumer 走 **10 日曆日**（複驗文件自述，單組）（極端風險兩腿），7 日對它只被校準腳本使用；過期門檻實為**三種**（4／7／10），且 repo 另有以交易日計的 `shared/freshness_policy.py` SSOT（見 (b) E-1、E-7） | §4 E-1、E-7 |
 | `DECISIONS.md:8411`（主要發現 5） | 「新候選 N-1～N-4……皆已登記」 | N-2／N-3／N-4 紅隊自報成立；**N-1 部分推翻**（漏引 `shared/freshness_policy.py`，見 (d)）。「已登記」屬實，但 N-1 的論述需補註 | §2.2 第 8 列；§4 E-7 |
 | `DECISIONS.md:8414`（NOT VERIFIED） | 「第二組獨立複驗（五頁稽核 §11 推薦項 1）尚未執行」 | **已過期**：#1169 已產出一份單組複驗文件。但這**不等於** `DEC174-B1-INDEP-QA` 結案（見 (f)） | 複驗文件 §0、§7、§9 |
-| `DECISIONS.md:8460`（DEC-176(a) 對應結果） | 只列 A／B／C 三份文件檔名 | 補：A（複驗文件）的結論＝核心事實獨立重現、**0 個被整體推翻**，但有 13 條措辭／查法勘誤與 B1 結論修正；細節見本小節 (b)(c)(d)(e) | 複驗文件 §0、§2.2 |
+| `DECISIONS.md:8460`（DEC-176(a) 對應結果） | 只列 A／B／C 三份文件檔名 | 補：A（複驗文件）的結論＝核心事實獨立重現、**0 個被整體推翻**（複驗文件自述，單組），但有 13 條措辭／查法勘誤與 B1 結論修正；細節見本小節 (b)(c)(d)(e) | 複驗文件 §0、§2.2 |
 | 同 `DECISIONS.md:8405`／五頁稽核 §0-9、市場文件 §0-7 | 「所有 Gate 維持 HOLD／未授權」 | 正確說法是「**未解除任何 Gate**」（見 (g)） | §4 E-8 |
 
 **(b) E-1～E-13 與 R-A／R-B／R-C 精簡結果表**（狀態詞：修正＝措辭／事實需更正；補註＝事實不變、需補一句；部分推翻＝複驗者自己的論點僅部分成立；待判定＝需總管／客戶判定，本小節不代判）
 
 | 編號 | 一句話有效讀法 | 狀態 |
 |---|---|---|
-| E-1 | 外資門檻**不是只有 4 vs 7**：現行 consumer 走 10 日曆日（`macro_cache_reader.load_extreme_risk_legs`／`EXTREME_STALE_MAX_CALENDAR_DAYS`），7 日僅校準腳本使用；「若日後接 L3 外資會落在 7 日」屬假想 | 修正 |
+| E-1 | 外資門檻**不是只有 4 vs 7**：現行 consumer 走 10 日曆日（複驗文件自述，單組）（`macro_cache_reader.load_extreme_risk_legs`／`EXTREME_STALE_MAX_CALENDAR_DAYS`），7 日僅校準腳本使用；「若日後接 L3 外資會落在 7 日」屬假想 | 修正 |
 | E-2 | 「無交易日曆」過度絕對：repo 有交易日曆服務與休市表抓取、也有以交易日計的新鮮度 SSOT，但**這幾條 stale 判定未接到它們** | 修正 |
 | E-3 | `15761` 在 `metadata.json` 的 `coverage.n_dropped_missing_price`，**不在** `per_day`（五頁稽核 X-03、§10 尾段位置不準；算術正確） | 修正 |
 | E-4 | 五頁稽核 §8 Q5 的 FAKE 字串 grep 關鍵字未含「無異常」；`scenarios.py` 另有 FAKE 值「無異常（FAKE）」（帶 FAKE 標示，無實質危害） | 補註 |
@@ -8556,7 +8556,7 @@ DEC-175 是已生效的工作優先序、資料架構與交接治理決策，不
 
 **(c) B1 有效讀法**：**未證明任何「違反已核准契約」的缺陷，但不能說「無」**——紅隊以渲染輸出找到 5 個可重現候選 R1～R5（紅隊自報，文件組未重做渲染）。DEC-174 結果指標「未發現契約內、可重現……缺陷」一句，讀作此義。
 
-**(d) N-1 部分推翻（E-7）**：N-1（市場契約 §5）所指「板塊 4 日 vs 融資／外資 7 日」的**不一致本身仍成立**，但論述漏了 (1) 外資現行 consumer 走 10 日（E-1）、(2) 客戶核准的交易日 SSOT `shared/freshness_policy.py` 與顯示用日曆日規則並存（E-7）。是否統一屬客戶 Gate，**未裁示**；`DEC174-N1-STALE-THRESHOLD` 仍 open。
+**(d) N-1 部分推翻（E-7）**：N-1（市場契約 §5）所指「板塊 4 日 vs 融資／外資 7 日」的**不一致本身仍成立**，但論述漏了 (1) 外資現行 consumer 走 10 日（E-1）（複驗文件自述，單組）、(2) 客戶核准的交易日 SSOT `shared/freshness_policy.py` 與顯示用日曆日規則並存（E-7）。是否統一屬客戶 Gate，**未裁示**；`DEC174-N1-STALE-THRESHOLD` 仍 open。
 
 **(e) R1～R5 一覽（皆為**候選、只分類、不修、不授權 UI 施工**；涉及畫面結構須先文字線框＋客戶拍板；**R4 併入 VG1**；**R5 為環境依賴非缺陷**）**
 
@@ -8588,15 +8588,15 @@ DEC-175 是已生效的工作優先序、資料架構與交接治理決策，不
 - main push `76ed4b7b`（#1173 squash）PR Check run **43253404141**：`conclusion=failure`（本組 MCP 重讀 run 層級：event=push、head_branch=main、created 2026-11-12T15:57:34Z）。只有 `Fast checks` job 失敗；日誌結尾 `9 failed, 39449 passed, 36 skipped, 226 deselected, 3 xfailed … in 1021.62s`（調查組讀日誌）。
 - 9 個失敗**全在** `tests/test_d6_diagnostic_no_secret_display.py`，斷言皆為 `assert ["LONG:'5678'"] == []`（`LONG` 為測試檔內合成假秘密的常數名，片段 `5678`）：`test_baseline_page_contains_none_of_the_forbidden_strings`、`test_page_shows_only_names_state_source_never_values`、`test_env_fallback_reports_source_without_value`、`test_no_secrets_file_at_all_unset_keys_say_unset_not_parse_failure`、`test_secrets_parse_failure_shows_state_only`、`test_probe_results_are_status_and_category_only`、`test_page_probe_without_proxy_shows_direct_only`、`test_unmutated_page_passes_the_same_check`、`test_page_when_proxy_config_raises_shows_fixed_text_only`（本組 `grep` 確認 9 個測試名皆存在於該檔）。
 - 同 head `8140a952` 的 `pull_request` CI run **43250372531** `success`（本組 MCP 重讀 run 層級）；更早 head `df4cc872` 的 run 43245091926 success（調查組）。**僅看 run 層級結論，未逐一展開該測試檔個別結果。**
-- main push PR Check 近期結論（調查組列出；**其中標 ◆ 者本組 MCP 重讀 run 層級確認**）：`85c65dfc` success（43265246088 ◆；涵蓋同一測試檔，以 fast job 綠為據）、`76ed4b7b` failure（43253404141 ◆）、`57885e6e` cancelled（43252166395 ◆）、`40d21c7f` success（43242041455）、`169b74ed` cancelled（43241999040）、`2a1623e8` success（43235433151）、`aa98de4c` failure（43229484406 ◆）、`6241ad3b` success（43214840927）、`68e56ff0`（#1166）failure（43208678198）。
+- main push PR Check 近期結論（調查組列出；**其中標 ◆ 者本組 MCP 重讀 run 層級確認**）：`85c65dfc` success（43265246088 ◆；涵蓋同一測試檔，以 fast job 綠為據）、`76ed4b7b` failure（43253404141 ◆）、`57885e6e` cancelled（43252166395 ◆）、`40d21c7f` success（43242041455）、`169b74ed` cancelled（43241999040）、`2a1623e8` success（43235433151）、`aa98de4c` failure（43229484406 ◆）、`6241ad3b` success（43214840927）、`68e56ff0`（#1165）failure（43208678198）。
 - **`aa98de4c` 與 `68e56ff0` 的失敗不是同一測試檔**：兩者 `Fast checks` 都 success，失敗的是容器 job `ui2-browser` 的 `Install dependencies`；`aa98de4c` 日誌為 `pip: cannot execute: required file not found`／exit code 127（#1171 要修的症狀）；`68e56ff0` 只確認同一步驟失敗，**退出碼 NOT VERIFIED**。（既有追蹤列：BACKLOG `DEC174-CI-UI2BROWSER-EXIT127`、`DEC175-CI-UI2BROWSER-EXIT127-RECUR`、`DEC176-CI-1171-VALIDITY`；本組先 `git grep` 確認，故**不另建重複列**。）
 - **兩個 cancelled**（`57885e6e`、`169b74ed`）：`.github/workflows/pr-check.yml` 第 10～12 行設 `concurrency: group: pr-check-${{ github.ref }}` ＋ `cancel-in-progress: true`（本組讀檔確認）。**INFERENCE**：被後續 push 取消——例如 43252166395 於 15:50:40Z 建立、15:57:51Z 更新，而下一個 push run 43253404141 於 15:57:34Z 建立，時間吻合；**沒抓到取消明文**。副作用：#1172、#1168 的 push 沒有完整的 push CI。
 
-**2. 機制（FACT；本機實測，兩組獨立；本組未重做）**
+**2. 調查組回報（機制與本機實測；本組未重做；不得當 FACT 引用——僅括號內標「本組讀碼／讀檔確認」者為本組自己驗過）**
 
-- 該測試把測試檔內假秘密的每個 4 字元片段列為禁字（`_frags`），`screen_text` 把每個 Streamlit 元素的 `str(proto)` 納入掃描（本組讀碼確認 `screen_text` 確實納入 `str(proto)`）。元素 ID 形如 `$$ID-<32 位小寫 hex>-api_diag_run`；`streamlit.testing.v1.app_test` 模組層 `TMP_DIR=tempfile.TemporaryDirectory()` 使暫存腳本路徑每個 pytest 行程不同 → **ID 每行程隨機、行程內固定**，故同一行程 9 個測試同紅同綠（調查組讀碼推論）。
+- 該測試把測試檔內假秘密的每個 4 字元片段列為禁字（`_frags`），`screen_text` 把每個 Streamlit 元素的 `str(proto)` 納入掃描（本組讀碼確認 `screen_text` 確實納入 `str(proto)`）。元素 ID 形如 `$$ID-<32 位小寫 hex>-api_diag_run`；`streamlit.testing.v1.app_test` 模組層 `TMP_DIR=tempfile.TemporaryDirectory()` 使暫存腳本路徑每個 pytest 行程不同 → **ID 每行程隨機、行程內固定**，故同一行程內**這 9 個**測試同紅同綠（調查組讀碼推論；該檔共 33 個測試函式〔本組 `grep` 計數〕，其餘只掃部分群組或不掃整頁〔協調者複驗，本組未逐一驗〕）。
 - CI fast lane 為單一 `pytest -v`：無 xdist／randomly／PYTHONHASHSEED；`pytest.ini` addopts 只有 `--strict-markers -m "not slow and not ui2_browser"`（本組讀檔確認）。
-- 純 hex 4-gram：假秘密的禁字片段共 13 個（本組**不逐一列出**，以免還原假秘密）；另 PROXY_URL 禁字集的 `3128`、`1280`、`31280` 與 `-012` 也可能命中。精確機率（自動機 DP）LONG 單項約 **0.542%**；加其他禁字的 Monte Carlo（200,000 次）任一命中約 **0.63%**。
+- 純 hex 4-gram：純 hex 的 4 字元片段（本組**不逐一列出**，以免還原假秘密）可能命中；另有其他禁字來源的 hex 片段也可能命中。精確機率（自動機 DP）LONG 單項約 **0.542%**；加其他禁字的 Monte Carlo（200,000 次）任一命中約 **0.63%**。
 - **反事實實測**：本機整檔 3 次皆 56 passed；在**不改 repo** 的 pytest plugin 把 ID 換成含 `5678` 後，同檔 **9 failed／47 passed，且失敗的 9 個與 CI 同名**；把 ID 換成中性字元則無洩漏命中；本機 118 次 baseline 單測重跑有 1 次自然失敗，該次 ID 含 `5678`。→ 頁面輸出本身沒有輸出真正的秘密，命中位置在元素 ID。
 
 **3. 推論與口徑（INFERENCE）**

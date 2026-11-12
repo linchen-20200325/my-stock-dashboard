@@ -1255,9 +1255,9 @@
 
 #### 70.14.1 #1169 複驗結論對 §70.13 的有效讀法
 
-- **新鮮度規則：外資門檻的有效讀法（複驗 E-1；FACT，讀碼）**：§70.13「三套新鮮度規則並存」條（撰寫時第 1244 行）把 `shared/staleness.py::STALE_DAYS_DAILY`＝7 曆日描述為「套用於台股指數／外資／融資」，與同一條後段「極端風險兩腿 `EXTREME_STALE_MAX_CALENDAR_DAYS`＝10 曆日（現行唯一讀 `finmind_inst` 的 consumer）」**自相矛盾**。有效讀法：**外資 `finmind_inst` 的現行 consumer 走 10 日曆日門檻**（`macro_cache_reader.load_extreme_risk_legs`），不經 7 日規則；7 日對 `finmind_inst` 只被校準腳本使用；7 日對台股指數與融資的適用，沿 §70.13 原述（複驗僅就外資更正，台股指數／融資部分未重驗）。因此過期門檻共**三種**（板塊 4／日頻顯示 7／極端風險 10），另有客戶核准的交易日 SSOT `shared/freshness_policy.py`（`DAILY_MAX_LAG_TRADING_DAYS`＝3，**尚未接到 UI2 stale 判定**）；「若日後接 L3 外資會落在 7 日」屬假想，門檻另行決定。另（複驗 E-2）「無交易日曆」過度絕對：repo 有交易日曆服務與休市表抓取，只是這幾條 stale 判定未接。
+- **新鮮度規則：外資門檻的有效讀法（複驗 E-1；FACT，讀碼）**：§70.13「三套新鮮度規則並存」條（撰寫時第 1244 行）把 `shared/staleness.py::STALE_DAYS_DAILY`＝7 曆日描述為「套用於台股指數／外資／融資」，與同一條後段「極端風險兩腿 `EXTREME_STALE_MAX_CALENDAR_DAYS`＝10 曆日（現行唯一讀 `finmind_inst` 的 consumer）」**自相矛盾**。有效讀法：**外資 `finmind_inst` 的現行 consumer 走 10 日曆日門檻**（複驗文件自述，單組）（`macro_cache_reader.load_extreme_risk_legs`），不經 7 日規則；7 日對 `finmind_inst` 只被校準腳本使用；7 日對台股指數與融資的適用，沿 §70.13 原述（複驗僅就外資更正，台股指數／融資部分未重驗）。因此過期門檻共**三種**（板塊 4／日頻顯示 7／極端風險 10），另有客戶核准的交易日 SSOT `shared/freshness_policy.py`（`DAILY_MAX_LAG_TRADING_DAYS`＝3，**尚未接到 UI2 stale 判定**）；「若日後接 L3 外資會落在 7 日」屬假想，門檻另行決定。另（複驗 E-2）「無交易日曆」過度絕對：repo 有交易日曆服務與休市表抓取，只是這幾條 stale 判定未接。
 - **N-1 部分推翻（複驗 E-7；FACT）**：§70.13 稱此不一致「登記為 N-1／`DEC174-N1-STALE-THRESHOLD`」——該登記仍成立，但 N-1 原論述漏引 `shared/freshness_policy.py`（兩份 #1165 文件對它的引用數為 0）；且複驗自身的反向勘誤 R-A 指出：紅隊原句「`assess_daily` 無行事曆會是 UNDETERMINED」錯誤，實測在 11-09／今日 11-12 情境為 FRESH（落後 3 個交易日）。§70.13 此條中對 `assess_daily` 休市表取不到的描述（上界 ≤ 3 → FRESH、下界 > 3 → STALE、否則 UNDETERMINED）與此一致，不需更正。是否統一各規則屬客戶 Gate，**未裁示**。
-- **B1 有效讀法**：**未證明違反已核准契約，但不能說「無」**；紅隊找到 R1～R5 **候選**（只分類，不修、不授權 UI 施工；涉及畫面結構須先文字線框＋客戶拍板；R4 併入 VG1；R5 為環境依賴非缺陷）。§70.13 的「UI2 實際接入真資料 2／8」「🗂 資料頁固定空殼」等條，複驗未推翻（核心事實獨立重現，0 個被整體推翻；紅隊盤點非盲測、單組）。
+- **B1 有效讀法**：**未證明違反已核准契約，但不能說「無」**；紅隊找到 R1～R5 **候選**（只分類，不修、不授權 UI 施工；涉及畫面結構須先文字線框＋客戶拍板；R4 併入 VG1；R5 為環境依賴非缺陷）。§70.13 的「UI2 實際接入真資料 2／8」「🗂 資料頁固定空殼」等條，複驗未推翻（核心事實獨立重現，0 個被整體推翻（複驗文件自述，單組）；紅隊盤點非盲測、單組）。
 - **仍須注意**：複驗文件是**單組產出**，不等於 `DEC174-B1-INDEP-QA` 結案；其內事實未被再次重驗；#1165 兩份文件仍含被修正措辭、本批不改（是否回寫勘誤附註另待總管／客戶決定）。出處：BACKLOG「#1169 獨立複驗結論的勘誤指標」。
 
 #### 70.14.2 76ed4b7b push CI 紅燈（指標；不重複全文）
@@ -1267,5 +1267,5 @@
 #### 70.14.3 §70.13 基準更新（2026-11-12；Open PR 清單為時點快照）
 
 - **基準 main**：§70.13 檔頭寫「基準 main `76ed4b7b`」（撰寫時第 1238 行）已過期一個 commit——#1174（DEC-176 登錄與五檔同步）於 2026-11-12T17:02:54Z squash 合併為 main **`85c65dfc`**（head `e589be3b`；GitHub MCP 重讀，FACT）。#1174 為 docs-only，**未改 §70.13 所述 UI2／資料層事實**（§70.13 各條仍沿用，除 §70.14.1 所列勘誤）。main 以 `git fetch origin main` 實查為準，cron 與其他 PR 會推進，一律重查。
-- **Open PR（2026-11-12 約 17:29–17:45Z GitHub MCP 實查的時點快照；cron 會推進，一律重查）**：#1164（REORG3C 歸檔，Draft，base `7eb48d6c`，head `6fddc582`）；資料 PR #1124（head `3cd3f525`）、#1125（head `cf4739c5`）、#1126（head `1654ae60`）——皆 open、HOLD，base 皆為 main `85c65dfc`。§70.13 HOLD 清單（#1124～#1126、#1164 等）與實況一致，未變。#1124 的 commit 數已由「3 個提交」（`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER` DPE-1 等）增為 5（派工訊息所述，本組未重讀 commit 列表）——與資料 PR 隨 cron 持續推進一致（INFERENCE），不構成任何處置授權。
+- **Open PR（各 PR 最後更新／fetched_at 約 2026-11-12 17:29–17:45Z 的時點快照，讀取時間以 HANDOFF 檔尾 checkpoint 為準；cron 會推進，一律重查）**：#1164（REORG3C 歸檔，Draft，base `7eb48d6c`，head `6fddc582`）；資料 PR #1124（head `3cd3f525`）、#1125（head `cf4739c5`）、#1126（head `1654ae60`）——皆 open、HOLD，base 皆為 main `85c65dfc`。§70.13 HOLD 清單（#1124～#1126、#1164 等）與實況一致，未變。#1124 的 commit 數已由「各 3 個提交」（`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md` §1 第 1 點約第 21 行、資料 PR 現況表約第 37 行）增為 5（派工訊息所述，本組未重讀 commit 列表）——與資料 PR 隨 cron 持續推進一致（INFERENCE），不構成任何處置授權。
 - **出處**：HANDOFF 檔尾「六處差異收尾後最新接手點」；BACKLOG 檔尾「六處差異收尾」段。本節單組撰寫，未經非作者獨立 QA。
