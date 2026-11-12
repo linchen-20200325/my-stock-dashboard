@@ -23,7 +23,7 @@
     - 原 L77 → 分冊 L73：最新接手點（2026-11-08｜#1057／#1054／#1059／#1060／ #106…
 <!-- HANDOFF_HISTORY_INDEX:END -->
 
-- 📦 **歷史接手點總指標（2026-11-12 追加；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）**：2026-11-10 晚 Issue #1121 段以前的所有 Safe Handoff／舊接手點條目（含下方第 0 節前言所指「本檔最末 Safe Handoff」各段）逐字在 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`；本檔只留第 0 節 2026-10-29 Resume Checkpoint 索引（historical）、仍有效的必讀規則，以及 2026-11-10 晚起的接手段；**現行接手點＝檔尾 2026-11-12 段**。
+- 📦 **歷史接手點總指標（2026-11-12 追加；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）**：2026-11-10 晚 Issue #1121 段以前的~~所有~~ Safe Handoff／舊接手點條目（含下方第 0 節前言所指「本檔最末 Safe Handoff」各段）逐字在 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`；~~本檔只留第 0 節 2026-10-29 Resume Checkpoint 索引（historical）、仍有效的必讀規則，以及 2026-11-10 晚起的接手段；~~〔更正（有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕；#1160 獨立 QA 指出）：上句「所有」與「本檔只留」清單不成立。實情：#1121 以前的 Safe Handoff／舊接手點條目**大部分**逐字在上述分冊（三個 `HANDOFF_HISTORY_INDEX` 區塊標原行號→分冊行號），但仍有舊接手點留在本檔。本檔現存：檔頭 2026-11-09 快照（已標過期）；第 0 節前言的 2026-11-02／2026-11-03 現行接手點指標（所指段落已在分冊）；DEC-126 新永久規則索引；第 0 節 2026-10-29 Resume Checkpoint 索引（historical）；三個 `HANDOFF_HISTORY_INDEX` 區塊；仍有效的必讀規則與交接治理教訓；2026-11-10 晚起的接手段。〕；**現行接手點＝檔尾 2026-11-12 段**。
 
 ## 0. 短版交接（現行，2026-10-22）
 
@@ -393,7 +393,7 @@
 |---|---|
 | latest verified main SHA | `cb3b698a828a797a45d2082c27636bc3a7331f09`（#1159 合併點；2026-11-12 `git fetch origin main` 實查；cron 會推進 main，一律重查） |
 | current working branch | `docs/reorg-3c-closure-20261112`（本收尾 docs PR 的 head；合併後可為任何新分支） |
-| current PR | 本收尾 docs PR（Draft；以 GitHub 上 head＝上列分支的 PR 為準）；其餘 Open PR 只有資料 PR #1124／#1125／#1126（不碰） |
+| current PR | 本收尾 docs PR **#1160**〔PR 號補記：有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕〕（Draft；以 GitHub 上 head＝上列分支的 PR 為準）；其餘 Open PR 只有資料 PR #1124／#1125／#1126（不碰） |
 | current task / batch | 文件重整 3C（DEC-173 Q1～Q4、Q6）SSOT 收尾：HANDOFF 檔頭過期標示＋本段＋BACKLOG 後續待辦登記 |
 | completed in this batch | 見下方「完成項」表（#1153～#1159 全已合併）；本收尾 PR 本身尚未合併 |
 | exact current stopping point | 本收尾 PR 已推送、Draft；待非作者獨立 QA 與同 head 原生 CI |
@@ -428,6 +428,10 @@
 ### 未完成／HOLD／待客戶
 
 - **未執行**：Q5（DEC-173：不得拆分 `CLAUDE.md` §-1.5 判定本文）；DEC-173 範圍外的 `docs/DECISIONS.md`／`PROCESS.md`／`PROJECT_RULES.md`／`STATE.md` 等其他文件歸檔 —— 均需客戶另行裁示（`REORG3C-Q5-GATE`）。
+- **待客戶裁示（2026-11-12 補列；有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕；附推薦者為 AI 推薦，非客戶裁示）**：
+  1. `I1144-DATA-STORAGE-DECISION`（DEC-171；`docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md` §7）：是否修改資料保存方式（儲存方案），以及授權三問——本專案是否商業、是否公開對外、公開 repo 保留個股級來源列是否可接受（`I1144-LIC-THREE-QUESTIONS`）。
+  2. `REORG3C-REF-SYNC` 的授權與範圍確認：是否授權引用同步；改 `PROJECT_RULES.md`／`docs/DECISIONS.md` 是否在 DEC-173 範圍內。
+  3. Q5（DEC-173 原文）：「Q5＝暫不執行：不得拆分 CLAUDE §-1.5 判定本文，先實測 Q4 的 Token 成效與 Agent 遵循能力。」——是否及何時重議。
 - **已知後續（登記於 BACKLOG 檔尾，皆未動工）**：`REORG3C-REF-SYNC`、`REORG3C-DEC092-L309-MOVE`、`REORG3C-DLF1S8-ROW`、`REORG3C-SEC3-HEADER`。
 - **HOLD／不碰**：#1124～#1126（資料 PR）、#1119；UI2／OneBrain／資料 Gates（同上表 Stop Gates）。
 - **禁止**：無客戶指派不動工；不合併／改寫／rebase #1124～#1126；不把 AI 推薦寫成客戶裁示；不把歸檔讀成刪除授權（DEC-173 Q6）；不刪客戶原文、DEC、hash 證據或有效規範。
