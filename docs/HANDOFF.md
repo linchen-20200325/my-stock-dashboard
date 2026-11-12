@@ -606,7 +606,7 @@ Model／Mode／Effort（客戶最新派工訊息指定，經轉錄、逐字 NOT 
 - **仍 NOT VERIFIED**：PIT、cron 成功率（台股缺 11-11 原因）、來源授權原文、Cloud／真機／Real 軸量測、Streamlit Cloud 追蹤分支、部署端市場位階實況、「V1 CSV」來源、ETF Managers 2026-11-16 20:00 UTC 首次排程、DEC-175／DEC-176 fence 逐字一致性。本段單組撰寫，未經第二組驗證。
 
 
-## 2026-11-12｜六處差異收尾後最新接手點（只追加；非 QA PASS；本段為現行有效接手點）
+## 2026-11-12｜六處差異收尾後最新接手點（只追加；非 QA PASS；~~本段為現行有效接手點~~〔已被檔尾 2026-11-12「DEC-177 登錄後」短段取代（有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）〕）
 
 > **取代關係**：本段取代上方「2026-11-12｜Batch 3 同步後最新接手點」（`docs/HANDOFF.md` 第 517 行起，撰寫時 main `85c65dfc` 的行號，僅供定位）的現況效力（有意識的更新，不是漏刪；2026-11-12；決策者 AI 總管〔事實更新〕）。**該段（含其 Resume Checkpoint 表 `:525`～`:539` 各欄的「Draft／待 QA／待合併」敘述、時間戳 `2026-11-12T16:07:07Z`、main 欄 `76ed4b7b`、分支 `docs/ssot-sync-batch3-20261112`、current PR 欄「#1174（Draft）」、「已完成」表缺 #1174）皆為 #1174 合併前的時點快照，已過期**；該段標題中的「本段為現行有效接手點」已就地以刪除線標示（同一行內、原文保留）。GitHub 操作事實優先於本段；接手前先做 LIVE GitHub Verification Gate。**不另建第二份 handoff**（`PROJECT_RULES.md` §20.1）。本段不重複 BACKLOG／DECISIONS 全文，細項見指標。 **另：標題的「六」為派工用詞，與下方處置表的列數無對應。**
 > **單組聲明**：本段與本 PR 的四檔同步為**單組作者撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；不得被引用為「已 QA PASS」。**不是授權**；不解除任何 Gate／HOLD。
@@ -713,3 +713,18 @@ Model／Mode／Effort（客戶派工訊息指定，經轉錄、逐字 NOT VERIFI
 ```
 
 - **仍 NOT VERIFIED**：PIT、cron 成功率（台股缺 11-11 原因）、來源授權原文、Cloud／真機／Real 軸量測、Streamlit Cloud 追蹤分支、部署端市場位階實況、D6 紅燈 CI 當次實例、REORG3C-REF-SYNC 剩餘舊引用、`.claude/worktrees/` 舊 worktree 內容、DEC-175／DEC-176 fence 逐字一致性。本段單組撰寫，未經第二組驗證。
+
+
+## 2026-11-12｜DEC-177 登錄後（短段；現行有效接手點；只追加；非 QA PASS）
+
+> 本段取代上方「六處差異收尾後最新接手點」的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。**短段，不是 15 欄 Resume Checkpoint**；細項見 `docs/DECISIONS.md` DEC-177、`docs/BACKLOG.md` 檔尾「DEC-177 登記」、`PROJECT_RULES.md` 第 33 節。GitHub 實況優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。**單組撰寫，未經非作者獨立 QA；不是授權。**
+
+- **main**：`880bc17c`（#1175 squash；2026-11-12 本組 `git fetch origin main` 實查；**時點快照，會漂移，一律重查**）。DEC-177 所在 docs PR 合併後 main 會前進。
+- **Open PR（2026-11-12 GitHub MCP 實查，時點快照）**：#1164（Draft，REORG3C DEC092 歸檔，head `6fddc582`，HOLD）；#1124／#1125／#1126（每日資料 PR，head 各自推進，HOLD）。
+- **本批三項狀態（客戶 2026-11-12 DEC-177「二」）**：① 獨立 docs PR（記錄 UI 方向、授權邊界、預防性交接制度）＝**本 PR（A），待非作者 QA 與同 head 五項原生 CI，未合併**；② 最小 UI 第一版實作＝**尚未開始**；③ 非作者 QA／同 head CI／手機首屏與缺值語意驗收＋同步收尾＝**尚未開始**。
+- **已裁示（DEC-177）**：🗂 資料新鮮度總覽採 **A 首屏＋B 展開明細**（八項固定清單與既有順序；首屏顯示已接入／尚未接線／五態計數含 0；明細預設收合；只用既有資料日與距今天數、不新增 `fetched_at`／`published_at`；保留授權與發布時點「未知／未評估」說明；保留手機首屏四問與主 CTA；完整資料健康度仍在 👤 我的、不搬入口；C-16 採既有固定順序、C-17 不適用；§10 ⑥ 採 (a)；§10 ⑦ 確認為本次明確派工）。允許依核准線框做**最小 UI 第一版實作**，**不解除**資料接線、來源授權、PIT、Coverage、Old UI Removal、正式切換 Gate。**預防性交接制度**已登錄 `PROJECT_RULES.md` 第 33 節（「更早核准紀錄」NOT FOUND，依本次客戶訊息登錄）。
+- **仍 HOLD**：#1124～#1126、#1164、#1119；`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-WIRING-GATE`；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察）、**11-19 檢查點**保留；Old UI、正式 UI 切換、資料庫重建、新 API／來源、Actions 清理；不清理 `.claude/worktrees/`。
+- **待客戶裁示（A／B／C、C-16／C-17、§10 ⑥⑦ 已裁示，不再列；以下為仍待項，附推薦者為 AI 推薦＝RECOMMENDATION，非裁示；沒答＝維持 HOLD）**：(1) **`DEC177-SHOWN-FOLDS-QUESTION`**（條件式：UI 調查若確認第一版需新增 `SHOWN_FOLDS` 條目／UI 契約／測試 allowlist，須先提精確範圍與最小修改方案；**尚未確認是否需要**）；(2) **DPE-7 的 11-19 檢查點**（`DEC176-DPE7-1119-CHECKPOINT`；不答＝維持 A 觀察）；(3) **VG1／VG2**（`DEC174-VG1-FAKE-REAL-LOOK`／`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`）；(4) **DPE-3／DPE-6**（若日後考慮放行 #1124～#1126；`DEC176-DATA-PR-EVIDENCE-DECISIONS`）；(5) 接線前決策單 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`／`I1144-WIRING-GATE`（`DEC176-GATE-SHEET-CUSTOMER`）；(6) `DEC174-B1-INDEP-QA` 判定與 #1165 勘誤附註回寫；(7) D6 偵測器是否修（`DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`，客戶已定為「另批提案」）；(8) `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`、Q5（`REORG3C-Q5-GATE`）。（此清單由 HANDOFF 前一段「待客戶裁示清單」扣除已裁示項目整理，**單組核對，非窮舉宣稱**；`DEC176-HEALTH-ESCALATION-1` 的結案與否由總管判定。）
+- **下一個唯一安全動作**：本 docs PR 通過非作者 QA、同 head 五項原生 CI 並合併後，由**調查**確認 `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` 第一版是否需要突破 `SHOWN_FOLDS`／UI 契約／測試 allowlist。**調查結論出來之前不得寫 UI code。** 不需要突破 → 依核准線框做最小實作；需要 → 停在安全點、提裁示單。
+- **先讀 SSOT 順序**：`CLAUDE.md`（§-2、§-1.5.D、§1）→ `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§32、§33）→ `docs/DECISIONS.md`（DEC-177、DEC-176、DEC-174）→ `docs/BACKLOG.md` 檔尾（「DEC-177 登記」）→ `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md`（§1.2、§2、§3、§4、§8、§9、§10）→ `docs/PROJECT_STATE.md` §70.13～§70.14（收尾 PR 才會更新 PROJECT_STATE）→ 本段；歷史接手點見 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`。
+- **NOT VERIFIED**：DEC-177 fence 與客戶原訊息的逐字一致性；預防性交接制度更早核准紀錄；`SHOWN_FOLDS` 是否必須新增條目；#1124～#1126 之 PIT／cron／授權；其餘同上一段。
