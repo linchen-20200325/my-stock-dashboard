@@ -6,6 +6,7 @@
 
 ## §1 狀態與記憶管理 (State & Memory)
 - **冷熱資料分離**：專案根目錄必須維持極簡 `STATE.md`。每次任務**僅限讀取此檔與目錄結構**來理解專案目標，嚴禁要求使用者重複解釋。
+    - 📌 **2026-11-12 取代註記 D2（本條原文一字未刪未改；有意識的政策變更，不是漏刪；決策者 客戶）**：「每次任務**僅限讀取此檔**（`STATE.md`）與目錄結構」**不再是唯一接手方式**。現行查核順序（GitHub-first＋五檔 SSOT）：① 即時 GitHub main／Open PR／Issue／CI／branches → ② 現行高位階治理（`CLAUDE.md`、本檔、`PROJECT_RULES.md`）與相關正式契約 → ③ 五檔 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`）中與本任務相關的最新有效部分 → ④ 最新 handoff → ⑤ 必要時才查歷史與原始 Decision。`STATE.md` **保留**作歷史／相容來源，**不得刪除**；「嚴禁要求使用者重複解釋」**仍有效**。兩邊理由：舊條（單一極簡檔接手）省 token、免客戶重複解釋，理由仍成立；被權衡掉是因為 `STATE.md` 已不是現況唯一來源，GitHub 實況與五檔 SSOT 才是（見 `PROJECT_RULES.md` 第 15 節、第 25 節；原 `CV1-DR-04` 未調和衝突由本裁示解決）。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC 號待補。
 - **防幻覺機制**：對話超過 10 輪時，修改程式碼前**必須重新讀取目標檔**（不准信任記憶）。
 - **主動壓縮**：階段任務完成時，主動提醒我執行 `/compact` 指令，保留核心決策並清理無用推理鏈。
     - ✅ **與 `CLAUDE.md §-1.5` 第二條「嚴禁打擾客戶」正交，本條未動（2026-08-27 判定）**：提醒執行 `/compact` **不是請示** —— 沒有把任何技術決策外包給客戶，而是**只有客戶按得到的操作**的交班通知，性質同 `CLAUDE.md §-1.5.A-7` 的「這項沒實測到，客戶請看哪裡判讀」。**但**不得夾帶技術問題搭便車：提醒就只是提醒。
@@ -47,13 +48,15 @@
 - **環境與效能**：限用 .py 腳本（禁 .ipynb），維護 requirements.txt。必須確保 st.cache_data 的正確使用以優化 Streamlit 效能。
     - ⭐ **2026-08-27 v3 補註（本條原文一字未刪未改）**：`CLAUDE.md §-1.5.D`（v3）§00 前端/UI 組要求「**固定 3 欄自適應網格、防重繪 st.form 與 Checkbox Gate 延遲載入**」，§03-1 把三者列入**內部自決**。與本條**同向互補**：**gate 擋的是「執行」，cache 擋的是「重算」，兩者都不能省。** ⚠️ **關鍵邊界**：**把一個分頁改排成 3 欄網格＝版面佈局異動 → 落在 v3 §03-2 ①，必須先出線框草稿送客戶**；**不得**引用「Checkbox Gate 屬內部自決」去夾帶版面重排 —— §03-1 自決的是「**要不要用 gate 把重運算擋在點擊之後**」（畫面結構不變），§03-2 ① 管的是「**畫面長什麼樣**」。**手段自決，版面問客戶。** ⚠️ **v3 的「基準 Streamlit 1.56」不寫進本檔**：依 `CLAUDE.md §8.2.A.0` 規則 4，會漂移的量測值不釘死在治理文件，**現場讀 `requirements.txt`**（由 `tests/test_macro_v2_tab.py::TestStreamlitFloorCompatibility` 反解並守衛）。詳見 `CLAUDE.md §-1.5.F` 判定 5 與判定 7。
 - **PR 規範**：請直接 merge PR + 存檔 (STATE.md) 與同步 ARCHITECTURE.md、SPEC.md。
-- **跳 PR 直推例外 (Skip-PR Whitelist)**：以下三類改動可走 scripts/quick_merge.sh 直推主分支，免 PR：
+- ~~**跳 PR 直推例外 (Skip-PR Whitelist)**：以下三類改動可走 scripts/quick_merge.sh 直推主分支，免 PR：~~ ⛔ **2026-11-12 起不再有效（D1 廢除，見下方 📌）**
 
-    1.STATE.md / CLAUDE.md / 程式註解 / typo 修正
-    2.版本字串 bump（不含任何程式邏輯／演算法／介面行為改動）
-    3.不影響功能行為的純文件改動（README、ARCHITECTURE.md、SPEC.md 等）
+    ~~1.STATE.md / CLAUDE.md / 程式註解 / typo 修正~~
+    ~~2.版本字串 bump（不含任何程式邏輯／演算法／介面行為改動）~~
+    ~~3.不影響功能行為的純文件改動（README、ARCHITECTURE.md、SPEC.md 等）~~
 
 其他一律走 PR 流程，保留 CI gate 與變更紀錄。任何一行 .py 邏輯變動 → 強制 PR。
+
+- 📌 **2026-11-12 取代註記 D1（上方 Skip-PR Whitelist 原文保留、僅加刪除線；有意識的政策變更，不是漏刪；決策者 客戶）**：**廢除 Skip-PR 直推例外**。正式檔案修改**一律**走 PR、獨立 QA、同 head CI 與分支保護；**typo／文件／版本字串亦不得 bypass**（上方三類全數失效）。本裁示**不改 branch protection 設定**。上一句「其他一律走 PR 流程…強制 PR」**仍有效**，射程擴大為全部正式檔案。兩邊理由：舊例外的理由（typo／純文件跑完整 PR 是儀式性開銷）仍成立；被權衡掉是因為直推繞過 CI gate 與獨立 QA、事後難追溯，且治理文件本身就是高承重檔案。⚠️ `CLAUDE.md §-1.5.A-6` 末項仍提及本白名單，本批未動該檔；該處所指白名單已由本註廢除。（實測 2026-11-12，單點：`scripts/quick_merge.sh` 已不存在於 main。）來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式 DEC 登錄待 #1152 同檔排程排除後追加，DEC 號待補。
 
 ## §5 卡關救援 (Anti-Loop Protocol)
 - 針對同一個報錯，若連續重試 2 次未果，**立即停機**。
