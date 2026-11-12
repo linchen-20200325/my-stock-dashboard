@@ -27,6 +27,8 @@
 
 ## 0. 短版交接（現行，2026-10-22）
 
+> 📌 **2026-11-12 REORG3C-REF-SYNC（舊標題與歷史原文不改）**：本節的「現行，2026-10-22」僅為當時命名與分工規則，不代表其下 2026-10／11 舊接手快照仍有效；新對話請先即時驗證 GitHub，再讀**本檔最末尾**最新有效 Safe Handoff／Resume Checkpoint，並核對正式 DECISIONS／BACKLOG／PROJECT_STATE。早期 Safe Handoff 已部分逐字搬至 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`，其餘保留段亦是時點紀錄；依 DEC-172 D2、DEC-173 Q1／Q6 與客戶 REORG3C-REF-SYNC 授權。
+
 > 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
 
 > 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ ~~Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）~~ **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate）**（④ 2026-11-02 DEC-124 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔事實更新〕；原文刪除線保留；Batch 1 段亦已標過期）」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。② 2026-11-02 客戶 New UI2 裁示後更新（DEC-123；決策者 客戶（DEC-123）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（DEC-123 裁示；決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）。（#997 稽核 m3：上一版把 #996 的括號標註改寫為「更新紀錄 ①」，已還原為 #996 原文逐字、再追加 ②③。）
@@ -38,6 +40,8 @@
 > 📌 **新永久規則（2026-11-03，DEC-126）**：**多元解法與最小成本決策規則**＝`PROJECT_RULES.md` **第 29 節**。一句話：遇到問題先在內部比較 ≥3 個方案、選 Minimum Sufficient Path，不得在同一路徑原地試錯或用更高模型／更多 Token 掩蓋錯誤路徑；僅 6 種情形才回報客戶 3 方案（須附推薦）。**新 session 先讀 `PROJECT_RULES.md` 第 29 節**（原文逐字見 `docs/DECISIONS.md` DEC-126）。本段僅為索引，非規格 SSOT。
 
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
+
+> 📌 **2026-11-12 REORG3C-REF-SYNC（原索引標題保留）**：此處「現行」已過期，本表是 **2026-10-29 歷史 Resume Checkpoint**，不可當成最新 main／PR／下一步；目前有效的 15 欄 Resume Checkpoint 在檔尾 2026-11-12 Safe Handoff，使用前仍須重查 GitHub。當前下一安全行動以即時 main／PR／CI 與已核准裁示交叉驗證，禁止按舊表執行。
 
 > **HANDOFF 只是索引，不是規格 SSOT**（客戶 DEC-109 二十六）；本節只指向正式文件。**GitHub 操作事實優先於本節；不一致時修正本節**（`PROJECT_RULES.md` 第 20 節、第 25 節事實軸）。本節以下全部內容為 **historical**——⚠️ **例外**：舊段中仍有效的**必讀規則不屬 historical**，例如「⛔ 禁止事件回音」、Hard Output Gate（DEC-104）、DEC-106（Model×Effort 不重複要求切換）、Scope Inflation Guard（DEC-103）；其效力以 `docs/DECISIONS.md` 各條為準，不因所在段落被標 historical 而失效。
 
