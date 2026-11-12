@@ -1263,3 +1263,9 @@
 #### 70.14.2 76ed4b7b push CI 紅燈（指標；不重複全文）
 
 - **FACT**：main push `76ed4b7b` 的 PR Check run 43253404141 failure，9 個失敗全在 `tests/test_d6_diagnostic_no_secret_display.py`；同 head PR CI 與最新 main push `85c65dfc` 皆 success。**高度可能為測試偵測器的非決定性缺陷（元素 ID 隨機 hex 命中合成假秘密片段），但 CI 當次實例未被直接驗證 → 不記為「已證實的偶發誤報」。** 只記錄、不修；未經客戶新授權不改測試、不放寬 CI Gate。證據與口徑見 DECISIONS「後續註記：76ed4b7b push CI 紅燈證據」；追蹤 BACKLOG `DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`。與 §70.13 的 `ui2-browser` pip exit 127（#1171）是**不同事項**。
+
+#### 70.14.3 §70.13 基準更新（2026-11-12；Open PR 清單為時點快照）
+
+- **基準 main**：§70.13 檔頭寫「基準 main `76ed4b7b`」（撰寫時第 1238 行）已過期一個 commit——#1174（DEC-176 登錄與五檔同步）於 2026-11-12T17:02:54Z squash 合併為 main **`85c65dfc`**（head `e589be3b`；GitHub MCP 重讀，FACT）。#1174 為 docs-only，**未改 §70.13 所述 UI2／資料層事實**（§70.13 各條仍沿用，除 §70.14.1 所列勘誤）。main 以 `git fetch origin main` 實查為準，cron 與其他 PR 會推進，一律重查。
+- **Open PR（2026-11-12 約 17:29–17:45Z GitHub MCP 實查的時點快照；cron 會推進，一律重查）**：#1164（REORG3C 歸檔，Draft，base `7eb48d6c`，head `6fddc582`）；資料 PR #1124（head `3cd3f525`）、#1125（head `cf4739c5`）、#1126（head `1654ae60`）——皆 open、HOLD，base 皆為 main `85c65dfc`。§70.13 HOLD 清單（#1124～#1126、#1164 等）與實況一致，未變。#1124 的 commit 數已由「3 個提交」（`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER` DPE-1 等）增為 5（派工訊息所述，本組未重讀 commit 列表）——與資料 PR 隨 cron 持續推進一致（INFERENCE），不構成任何處置授權。
+- **出處**：HANDOFF 檔尾「六處差異收尾後最新接手點」；BACKLOG 檔尾「六處差異收尾」段。本節單組撰寫，未經非作者獨立 QA。
