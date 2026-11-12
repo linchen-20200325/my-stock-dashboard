@@ -492,6 +492,7 @@ Effort：Low / Medium / High
    3. 驗證：main SHA、open／draft PR、relevant commits／diffs、CI／QA、relevant branches。
    4. 優先序：**GitHub factual reality > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` 中的狀態快照 > AI memory／conversation summary**（與第 1.1 節 Fact Truth 同向；這是判斷「現在實際是什麼」的順序，不是規範效力順序）。
    5. 文件與 GitHub 實況不一致時：以 GitHub evidence 為準；不得猜測；必要時修正正式文件。
+   - 📌 **2026-11-12 補註（上列 1～5 原文一字未刪未改）**：客戶 2026-11-12 **D2** 裁示的查核順序（GitHub → 高位階治理與正式契約 → 五檔相關有效部分 → 最新 handoff → 必要時歷史）見第 25 節末「D2～D5 索引」；兩者同向，衝突時以 D2 為準。DECISIONS 正式登錄：DEC-172（#1152 合併後補登）。
 4. 不得把完整聊天紀錄、腦暴或未裁示想法大量寫入 GitHub；只保存會影響未來工作的正式專案狀態。
 5. **Context Loss Check**（2026-10-22 新增，DEC-068）：Claude 或 ChatGPT 的完整專案對話結束前，必須問：「如果下一個 AI 完全看不到目前聊天內容，只讀 GitHub，它能否正確理解目前專案並安全接手？」至少檢查：
    - **A.** 有沒有正式裁示只存在聊天裡？→ 有則分類進 `docs/DECISIONS.md`。
@@ -500,6 +501,7 @@ Effort：Low / Medium / High
    - **D.** 有沒有目前 blocker／next safe point 只存在聊天裡？→ 有則分類進 `docs/HANDOFF.md`。
    - **E.** 有沒有會影響未來架構判斷的重要背景、研究結論、限制或模組關係，只存在聊天裡？→ 有則分類進 `docs/PROJECT_STATE.md`。
    - **F.**（2026-10-23 新增，DEC-073）`docs/HANDOFF.md` 是否已記錄**下一階段建議模型／能力等級與建議 Effort**？→ 否則補記於 HANDOFF 第 0 節。
+   - 📌 **2026-11-12 REF-SYNC（舊 F 原文保留）**：「HANDOFF 第 0 節」是舊位置用語；請以 `docs/HANDOFF.md` 檔尾最新有效 15 欄 Resume Checkpoint 為目前紀錄點，並在動工前依當下 GitHub 實況重驗。
    - ⛔ **任何答案為「有」且尚未保存時：不得宣告交接完成。**
    - 分類時：尚未核准的構想一律進 BACKLOG 的 Candidate／Decision Gate，⛔ 禁止升格成 Approved；已正式存在者不重複登記。
 6. **Model／Effort Gate 納入啟動與交接**（2026-10-23 新增，DEC-073；客戶原文「並納入 Context Loss Check／交接規則，確保新 Claude 對話也會自動讀到，不再依賴客戶每次提醒。」）：(1) 新對話完成第 3 點啟動程序後、以及每個下一完整階段／Batch 開始前，**必須執行第 9.0 節強制 Model／Effort Gate**；(2) `docs/HANDOFF.md` 第 0 節須記錄**下一階段建議模型／能力等級與建議 Effort**（Context Loss Check F 項）；(3) HANDOFF 記錄的建議只是參考，新對話仍須依實際工作重新判斷，不得當成已切換的證明（客戶原文第 3 步「不得自行假設模型或 Effort 已切換」）。
@@ -739,6 +741,7 @@ HANDOFF 維持一個極短 Resume Checkpoint，至少含 15 欄：
 
 - **（撰寫組註記／讀法，非客戶原文）過渡條款**：Resume Checkpoint 尚未落地於 `docs/HANDOFF.md` 前，以 HANDOFF 第 0 節現行短版為唯一接手點；缺 Checkpoint 不視為違規，但須在下一個 safe checkpoint 補上。
 - **（撰寫組註記／讀法，非客戶原文）欄位同源**：第 13、14 欄（recommended Model／Effort）與 HANDOFF 第 0 節的「下一階段建議模型／Effort」（第 15 節 F 項）為同一份資料，只留 Resume Checkpoint 一處為準，另一處指向它，不得兩處各寫。
+- 📌 **2026-11-12 REF-SYNC 修正索引（客戶已授權；舊文原樣保留）**：上方兩項「HANDOFF 第 0 節現行短版／Resume Checkpoint 尚未落地」是歷史過渡讀法，已不適用。現行交接必先 GitHub-first 查核，再讀 `docs/HANDOFF.md` 檔尾最新有效 Safe Handoff／15 欄 Resume Checkpoint；`HANDOFF.md` 第 0 節現存 2026-10-29 索引僅作歷史，不得覆寫最新接手狀態。模型／Effort 仍必寫入最新有效 Resume Checkpoint，禁止在歷史索引重複維護第二份現行值。依 DEC-172 D2、DEC-173 Q1／Q6、#1156／#1160；這是引用同步，不改原規範效力。
 
 ### 20.3 觸發時機
 
@@ -983,6 +986,7 @@ Scope Inflation Guard
 3. `PROJECT_RULES.md`＋`docs/governance/*`（例 `MODEL_EFFORT_POLICY_2026-10-25.md`、`UI_VISUAL_FIDELITY_GATE.md`）
 4. 最新有效 DEC（`docs/DECISIONS.md`；**客戶 DEC > AI 總管內部 DEC**；被取代者看條頭 📌 與第 5 節取代鏈）
 5. 正式契約／Visual SSOT：Phase 1 新文件（Presentation Contract、Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）＋D2.5 A／B／C 規格（`docs/vnext/NEWUI_D25_{A,B,C}_*.md`；與 Phase 1 契約衝突時以 Phase 1 契約為準）＋核准 blueprint（`docs/vnext/d25_wireframes/*.html`）。⚠️ **用語區分**：小寫 **blueprint**＝DEC-092 核准的 d25 mockup（`docs/vnext/d25_wireframes/*.html`），是 **Visual SSOT**（視覺驗收基準）；大寫 **Blueprint**＝產品方向文件 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點／DEC-057；最終產品方向，非實作授權、非視覺規格）。產品方向相關工作讀 Blueprint；視覺／呈現依 blueprint 與 Presentation Contract。
+   - 📌 **2026-11-12 補註 R1（第 5 點原文一字未刪未改；有意識的政策變更，不是漏刪；決策者 客戶，D4 裁示＋DEC-142／DEC-146）**：**New UI2 正式契約**＝ `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（**語意／規則**）＋ DEC-142／DEC-146 五頁導覽與 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`（**版型**）。上列 Legacy Presentation Contract（`PRESENTATION_CONTRACT_vNext_2026-10-29.md`）、D2.5 A／B／C 規格與 d25 blueprint（`docs/vnext/d25_wireframes/*.html`）屬 **Legacy New UI 歷史／參考**，**不再是 New UI2 的施工或視覺驗收基準**；第 5 點其餘 Phase 1 文件（Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）地位本註不變。兩邊理由：舊列在 2026-10-29 時是唯一正式契約（成立）；其後 DEC-128 起的 Active Contract 與 DEC-142／146 五頁導覽＋Top-Five Gate 已接手 New UI2 的語意與版型，續列為第 5 層會讓新 session 依舊版型施工。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式登錄：DEC-172（#1152 合併後補登）。
 6. `docs/PROJECT_STATE.md`
 7. `docs/BACKLOG.md`
 8. `docs/HANDOFF.md`（**只當索引**，指向正式文件；不是規格 SSOT）
@@ -997,6 +1001,14 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - 規範軸 PROJECT_STATE > HANDOFF（知識摘要的效力高於索引）；事實軸 HANDOFF > PROJECT_STATE（熱狀態快照較新）。兩者回答不同問題，**不牴觸**。
 - 呈現衝突：舊 helper／test／wireframe 的呈現要求 vs Presentation Contract → 以 Presentation Contract＋blueprint 為準；資料／投資／安全仍取較嚴（第 19.11 節補註）。**客戶 DEC 的呈現裁示**只有在 DEC-109 或同日前序指示（客戶 2026-10-29T15:18Z）**明確點名**處才被取代；其餘一律「**維持＋列入該頁 phase 線框待拍板**」（Presentation Contract §22），⛔ 以 AI 總管讀法推翻（2026-10-29 第二輪 QA 總管裁定；本句為本 PR 內撰寫之文字，直接改寫）。
 - ⚠️ **已知未調和**：`PROCESS.md` §1「每次任務只讀 STATE.md」與第 15 節五檔讀序衝突（`CV1-DR-04`，未裁示）。本節**不改 `PROCESS.md`**；在客戶裁示前，新 session 依第 15 節五檔讀序＋讀 `CLAUDE.md`，`STATE.md` 只作歷史參考（撰寫組讀法，單組）。
+  - 📌 **2026-11-12 補註（上句原文一字未刪未改）**：上句所稱「未裁示」已由客戶 2026-11-12 **D2** 裁示解決——`PROCESS.md` §1 已加取代註記，讀序見下方索引。
+
+> 📌 **2026-11-12 客戶裁示 D2～D5 索引（註記；不改第 25.1～25.3 節既有條文語意；有意識的政策變更，不是漏刪；決策者 客戶）**。來源：客戶 2026-11-12 正式裁示（客戶回覆「我同意」；內容轉錄自總派工 §六）；DECISIONS 正式登錄：DEC-172（#1152 合併後補登）。
+>
+> - **D2 讀序（GitHub-first＋五檔 SSOT）**：① 即時 GitHub main／Open PR／Issue／CI／branches → ② 現行高位階治理（`CLAUDE.md`、`PROCESS.md`、本檔）與相關正式契約 → ③ 五檔 SSOT 中與本任務相關的最新有效部分 → ④ 最新 handoff → ⑤ 必要時才查歷史與原始 Decision。`STATE.md` 保留作歷史／相容來源，不得刪除（`PROCESS.md` §1 取代註記）。與第 15 節第 3 點、第 25.2 節事實軸同向。
+> - **D3 決策來源分類**：有可追溯原文的直接裁示才記為**客戶 Decision**；Issue 轉錄／AI 摘要／AI 研究**不得擴大原授權**，須標來源與範圍；無法確認原始裁示者標 **NOT VERIFIED**；AI 推薦與客戶已批准**分開記**。DEC-155、DEC-158～171 依來源與合併狀態**逐項查核**，不因編號新就推翻未被取代的規範（與第 25.1 節第 4 點「客戶 DEC > AI 總管內部 DEC」同向）。
+> - **D4 CI 與視覺 Gate**：`ui2-browser-gate` 是否為 required check **必須實查**，無權限者標 **NOT VERIFIED**；確認前**不得**以 CI 成功取代 required-check 設定證據、**不得**降低門檻、**不得**自行解除 `UI_VISUAL_FIDELITY_GATE`；New UI2 視覺驗收以最新正式五頁契約（DEC-142／146＋Top-Five Gate，見第 25.1 節第 5 點 R1 補註）為準；既有 Stage Gate 未解除者 **HOLD**。
+> - **D5 文件重整路線**：A 修正入口 → B 建立新骨架 → 分批 C 安全遷移；歷史 Decision、不可逆資料、Git 歷史**不得刪改**；「新增目錄方向已同意」≠「既有文件已准搬移」。
 
 ## 第 26 節｜Durable Memory Contract（客戶 2026-10-29，DEC-109 二十五～二十七）
 
@@ -1118,3 +1130,14 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 6. **主動提供『可直接複製的新對話提示語』**：完成可恢復的遠端保存後，由 AI 主動告知「🟡 建議換新對話」／適當的狀態燈，附一份完整提示語，至少寫 repo、GitHub Verification Gate、必讀治理文件、未合併 PR head、正式 vs 候選需求、禁止事項、下一個唯一安全動作、Model／Mode／Minimum Sufficient Effort。**不能只給短摘要、不能只說『看上一個對話』**。若保存失敗則先說明阻塞，提供尚可驗證的手動救援提示語，不宣稱安全落盤。
 7. **與靜默巡航併用**：這是「對話不安全／需要安全交接」的明確狀態報告，而非逐 commit／CI 等待的進度碎訊；安全時保持靜默，只有真正接近無法可靠續聊或客戶要求時才提醒一次，避免重複打擾。
 8. **驗收／定義完成**：新對話只靠最新 GitHub main＋必要 Open／Draft PR head＋既有治理檔案即可正確恢復已核准內容、候選方向、阻塞和 next safe action；若恢復不全，交接尚未完成，不能把聊天中的記憶當補洞來源。此項屬文件／流程治理，不授權實作新功能或更動正式投資公式。
+
+
+
+## 2026-11-12｜工作優先序與 GitHub 跨對話續接索引（DEC-175；本節只索引，不授權）
+- **現行優先事項**：延續 DEC-174 的 **New UI2 五頁＋既有資料層／資料契約雙軌**；資料層是整理／驗證已存在的資料架構（source→cache→L3→canonical／VM→UI2），不是重建資料庫或繞過資料 Gate。每批最多三項。
+- **延後事項**：Actions Run／Artifact 紀錄清理與 Old UI／死碼清理，放在新 UI 接線、測試、正式 cutover／rollback Gate 完成後的收尾；不因有 CSV 候選便取得刪除權限（DEC-175「這」＝Actions 清理與「CSV 候選」皆為 **INFERENCE、來源僅派工對話**；脈絡佐證 Issue #1119 留言 6768487486／6822675191，**未證實等同**）。「安排在收尾階段」只表示順序，**不是日後刪除授權**：Runs／Artifacts 刪除為不可逆操作，屆時仍須客戶逐批明示授權（`CLAUDE.md` §-1.5.D §03-2 ②）；Old UI／死碼清理仍受 Old UI Removal Gate（DEC-019／DEC-020／DEC-097、BACKLOG `UIM-REMOVAL-GATE`／`NUI2-CUTOVER`）與 DEC-173 Q6 拘束。
+- **跨對話保存**：每批結束前依本檔 §0.3 五檔分工（本檔＋DECISIONS＋BACKLOG＋PROJECT_STATE＋HANDOFF）同步；本檔只作導航索引。若該批無新增有效架構知識，PROJECT_STATE 可不更新，但須在 HANDOFF 或 PR 描述明寫「PROJECT_STATE 未更新及原因」（本 PR 即如此：docs-only 優先序與續接索引，無新增架構知識）。新 Agent 先獨立驗證 GitHub main、Open／Draft PR、CI、review、branch、最新 DEC 與 STOP Gates，再讀 HANDOFF；不可讓聊天摘要推翻 GitHub。
+- **不變之禁止**：#1124～#1126 資料 PR HOLD，PIT／cron 先唯讀核查；#1164 與其餘 open PR 不順手處置；I1144-WIRING-GATE、DG-COV／DG-PIT／DG-LIC／DG-SCOPE、資料授權、儲存架構及正式 UI 切換均未因 DEC-175 解除。舊 UI First、線框先行、資料狀態、安全測試與獨立 QA 規則照舊。
+- 詳細可追溯客戶裁示見 `docs/DECISIONS.md` DEC-175；現行任務列見 `docs/BACKLOG.md`，最新安全接手點見 `docs/HANDOFF.md`。本節不得作為獨立施工授權。
+- **漂移責任（2026-11-12 Delta 修正，QA 項目 7）**：本節的「現行優先事項」與 PR 編號（#1124～#1126、#1164）是 **2026-11-12 的快照索引**；日後狀態變動時，現行值的維護責任在 `docs/HANDOFF.md` 與 `docs/BACKLOG.md`，**以其為準、不回頭改本節**；本節與 DEC-175 不一致時以 DEC-175 為準。本節不新增授權。
+- **DEC-176(c) 釐清（2026-11-12 追加；上文一字未改；只索引，不授權；細節見 `docs/DECISIONS.md` DEC-176(c)，經派工訊息轉錄、逐字一致性 NOT VERIFIED）**：DEC-175 是**已生效的工作優先序、資料架構與交接治理決策，不是無條件的 UI／資料施工授權**；它**不解除** `CLAUDE.md` §-1、文字線框 Gate、資料接線 Gate、獨立 QA、CI 或任何其他既有治理要求；**但既有明確核准的工作不必重新請示，可依已批准範圍繼續**（不因本釐清而擴大任何既有核准的範圍）。此釐清**回答**了先前「DEC-175 是否構成開工指派」的待決問題（結論：不是；`CLAUDE.md` §-1 仍是動工入口）。本段不新增其他規則。
