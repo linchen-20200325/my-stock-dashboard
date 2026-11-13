@@ -278,6 +278,25 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 - 沒跑的就寫沒跑；不得虛構驗證；不得把自己的結果寫成第二組已複驗。
 - 來源：客戶 MSG 1 §24、MSG 2 第 6 點（研究 → 實作 → tests → independent audit → push → PR → CI → fix → merge → main verification → handover）；`docs/BACKLOG.md` 0.3 第 1 條；`CLAUDE.md` §-2 規則 3、6。
 - 📌 **2026-10-29 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶（DEC-109 二十三））**：**UI Stage 的 Definition of Done ＝ CI 綠＋Visual Fidelity PASS**（第 24 節；`docs/governance/UI_VISUAL_FIDELITY_GATE.md`）：`… → independent audit → Visual Fidelity Gate → … → merge`。客戶原文「CI / QA / tests / mutation 全綠 ≠ UI Stage complete」；Gate 未過，BACKLOG 不得移入「已結案」、HANDOFF 不得寫 complete。
+- 📌 **2026-11-13 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶授權之 Quality Batch 1 ②（DEC-178）；內容為 AI 整理，單組撰寫，未經非作者獨立 QA）**：
+  - **(a) DoR（Definition of Ready）最小定義**：動工前須能填上 `.github/PULL_REQUEST_TEMPLATE.md`「需求 ID／核准／Gate／Impact」小節的 7 項（需求／規格 ID；核准狀態；影響範圍＋資料依賴；Producer→Consumer；不可變更事項＋適用 Gate；驗收案例；完成層級）；填不出者屬 Candidate／Decision Gate，**不得動工**（第 4 節；第 15 節第 5 點「Candidate 不得升格 Approved」）。沿用 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md` §1／§4 與 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §1 六問，**不重新定義、不另設第二套問卷**。「不適用」或「無」視為已填；第 4 節「可自行處理」層級（已確認 bug、單一安全修法）不因 DoR 而被擋。
+  - **(b) Preview 完成 ≠ Production 完成**：Preview（FAKE／REAL shadow、capability marker）完成**不得**宣稱 Production 完成；Production 完成須引用 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` 的現行條件與第 16.7 節 Production 安全狀態，無證據標 NOT VERIFIED。**CI 綠 ≠ Production 有效**（CI 只證明該 head SHA 的測試通過，不證明正式部署已接線、資料已更新或通知可用）。
+  - **(c) 本補註不解除任何 Gate、不授權任何施工**：`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、DEC-177 Q1～Q7 及所有 HOLD 維持原狀；本補註只新增「動工前須能回答什麼」與「完成要寫到哪一層」的最小入口。
+- 📌 **2026-11-13 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶授權之 Quality Batch 2 ⑤ 最小 PR Impact Check（DEC-178）；內容為 AI 整理，單組撰寫，待非作者獨立 QA；不解除任何 Gate、不授權任何施工）**：
+  - **(a) 變更類型→至少重跑的測試（最小對照表，只列 grep 有證據者，2026-11-13 量測）**：
+
+    | 變更類型 | 至少重跑（`tests/`） |
+    |---|---|
+    | `src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py` | `test_ui2_guards.py`、`test_ui2_registration_and_boot.py`、`test_c3_layering_guard.py` |
+    | `shared/`、`src/`、`scripts/` 任一 `.py`，或 `app.py`／`app_ui2.py` 的 import 結構 | `test_c3_layering_guard.py` |
+    | `.claude/agents/*.md`；本檔第 34 節 | `test_agent_definitions_guard.py` |
+    | 本檔第 30 節／§24.2 被釘住的舊句；`docs/DECISIONS.md` DEC-128；`docs/BACKLOG.md` §5.1.26；`docs/HANDOFF.md`＋HANDOFF_HISTORY；`docs/vnext/` Active Contract 與被取代文件橫幅；`docs/governance/UI_VISUAL_FIDELITY_GATE.md` | `test_ui2_active_contract_docs.py` |
+    | `.github/workflows/pr-check.yml`；三支資料 cron（`update_macro_history`／`update_sector_flow`／`update_macro_forward_test`）；`update_etf_managers.yml`／`push_holdings_daily.yml`／`probe_finmind_monthrev.yml` | `test_batch_z59.py`；`test_cron_workflows_no_direct_push.py`；`test_etf_managers_data_pr.py`／`test_push_holdings_daily.py`／`test_probe_finmind_monthrev.py` |
+    | `scripts/push_weekly_report.py` | `test_push_weekly_report_main.py`、`test_push_weekly_report.py` |
+    | `src/services/fundamental_screener_service.py`、`src/services/dividend_station_service.py`、`src/compute/notify/holdings_digest_message.py` | `test_pick_chain_to_line_contract.py`、`test_push_holdings_daily.py` |
+  - **(b) 這是作者／QA 的最低集，不是縮減 CI**：CI（`pr-check.yml` fast lane `pytest -v` 全跑）不縮減，不放寬任何 Merge Gate；`NOT VERIFIED` 或表外變更（例：`docs/PROJECT_STATE.md`、`src/compute/**`、`src/data/**`、資料檔）**不得視為免重跑**，須自行判斷並如實寫明；表以 `grep` 為準、可能過期。
+  - **(c) 硬連動提醒**：Active Contract 標題被 `test_ui2_active_contract_docs.py` 釘住、第 34 節被 `test_agent_definitions_guard.py` 釘住，改動會令守衛轉紅；**守衛調整須客戶裁示，不得為過測而放寬**。新增 `decision_digest_*` 的 caller 須同步 `test_decision_digest_invariants_guard.py` 的 `ALLOWED_CALLERS` 並附核准依據。
+  - **(d) 無機械強制**：`.github/PULL_REQUEST_TEMPLATE.md` 未被任何測試釘住，branch protection 為 `NOT VERIFIED`（`pr-check.yml` 註解自陳 AI 無權讀寫）；本補註與範本新增欄位屬自律性最小入口，非新 Gate。DoR 的 7 項為 ② 所列；⑤ 於範本新增「測試應重跑」「正式文件引用需同步」兩欄，屬 PR Impact Check，不增加 DoR 項數。
 
 ## 第 8 節｜Independent Audit／Red Team
 
@@ -1141,3 +1160,54 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - 詳細可追溯客戶裁示見 `docs/DECISIONS.md` DEC-175；現行任務列見 `docs/BACKLOG.md`，最新安全接手點見 `docs/HANDOFF.md`。本節不得作為獨立施工授權。
 - **漂移責任（2026-11-12 Delta 修正，QA 項目 7）**：本節的「現行優先事項」與 PR 編號（#1124～#1126、#1164）是 **2026-11-12 的快照索引**；日後狀態變動時，現行值的維護責任在 `docs/HANDOFF.md` 與 `docs/BACKLOG.md`，**以其為準、不回頭改本節**；本節與 DEC-175 不一致時以 DEC-175 為準。本節不新增授權。
 - **DEC-176(c) 釐清（2026-11-12 追加；上文一字未改；只索引，不授權；細節見 `docs/DECISIONS.md` DEC-176(c)，經派工訊息轉錄、逐字一致性 NOT VERIFIED）**：DEC-175 是**已生效的工作優先序、資料架構與交接治理決策，不是無條件的 UI／資料施工授權**；它**不解除** `CLAUDE.md` §-1、文字線框 Gate、資料接線 Gate、獨立 QA、CI 或任何其他既有治理要求；**但既有明確核准的工作不必重新請示，可依已批准範圍繼續**（不因本釐清而擴大任何既有核准的範圍）。此釐清**回答**了先前「DEC-175 是否構成開工指派」的待決問題（結論：不是；`CLAUDE.md` §-1 仍是動工入口）。本段不新增其他規則。
+
+## 第 33 節｜預防性交接制度（客戶 2026-11-12，DEC-177；第 32 節的補充與觸發條件前移，不取代）
+
+> **永久治理規則。來源**：`docs/DECISIONS.md` DEC-177（客戶 2026-11-12「UI 主線恢復與預防性交接制度」第四節「交接要求」，經派工訊息轉錄、逐字 fence、原始對話 repo 內 NOT VERIFIED）。**「已核准」的來源**：客戶該訊息稱其為已核准的預防性交接制度；本節撰寫時 `git grep -n "預防性交接\|三批\|主動換對話"`、`git grep -n "預防性\|風險提前\|累積約"` 皆**未找到更早的客戶核准紀錄**（範圍含本檔、DECISIONS、BACKLOG、HANDOFF、CLAUDE.md、PROCESS.md）→ **依本次客戶訊息（DEC-177）登錄；更早核准紀錄 NOT FOUND**，不編造。本節要點為忠實濃縮，與 DEC-177 fence 有出入以 fence 為準。本節**不授權**任何施工，不解除任何 Gate。
+
+### 33.1 與既有規則的關係（先讀這段）
+
+- **第 32 節原文一字不動、仍然有效。** 本節是其**補充**，並把觸發條件**前移**：第 32 節以「對話已長到需大量回溯／已發生 compaction／跨越多個已完成 Batch…」等**症狀**為觸發；本節增加**以批次節奏為準的預防性檢查**，不必等症狀出現。第 32 節的步驟（Save Gate、只更新既有權威文件、先落盤再宣告可換對話、可直接複製的新對話提示語、與靜默巡航併用、驗收定義）**全部沿用**，本節不另立第二套流程或第二份 handoff（第 20.1 節）。
+- **與第 22 節（DEC-088）的張力與讀法**：第 22.1 節寫「若目前 context 仍健康，不得為形式頻繁要求換對話」。本節的「約三批優先交接」**不是**要求每批換對話——它只要求**每批結束做檢查**，且在**累積約三批、或出現長篇 QA／CI、重大決策變動**時**優先安排**安全交接。兩者並讀：沒有上述條件、context 健康時，仍不得為形式要求換對話（第 22.1 節）；出現上述條件時，依客戶 2026-11-12 指示優先安排交接（本節）。第 22 節與第 32 節原文均不改；若日後客戶認為兩者衝突，以客戶裁示為準。〔此並讀為本節撰寫組的 AI 讀法，非客戶逐字。〕
+
+### 33.2 規則（客戶訊息「四、交接要求」的整理）
+
+> (3)(4)(6) 的括號內延伸與「約三批非硬上限」等為撰寫組依第 21、32 節補充，非客戶逐字；「風險提前觸發」出自客戶訊息二.1 與四，不只第四節。
+
+1. **每批結束檢查交接風險。**
+2. **優先安排安全交接的條件（擇一）**：累積約三批；出現長篇 QA／CI；重大決策變動。「約三批」是檢查觸發點，**不是**精確計數或硬性上限。
+3. **風險提前觸發**：不等對話真正不穩定；有上述徵兆即先做第 4 點。
+4. **順序不得調換**：**先**把已完成、未完成、HOLD、NOT VERIFIED、待裁示問題寫入 GitHub（走獨立 branch／PR，依第 32 節第 3、5 點與第 15 節，只更新既有權威文件）→ **驗證** main／PR／CI／QA（以 GitHub 實況為準，不以聊天記憶為準）→ **然後**才結束舊對話 → 再**依最後狀態**產生新對話提示語（第 32 節第 6 點）。落盤或驗證未完成，不得宣稱可安全換對話。
+5. **不承諾能準確讀取剩餘上下文 Token**（與第 32 節不發明固定 Token 百分比一致）；判斷依批次節奏與上述事件，不依 Token 計量。
+6. **Agent 進度回報最小化**：不要每個 Agent 完成就輸出長篇進度；僅在**真正阻塞、需要客戶裁示、重大里程碑**時報告（與靜默自主巡航、第 32 節第 7 點、第 21 節 No Silent Stop 並用——不得因此無聲停手；停手須有提示）。
+7. **每批最多三項；未授權的新工作不得自行啟動**（沿 DEC-174、`CLAUDE.md` §-1）。
+
+### 33.3 不是什麼
+
+- 不是施工授權、不是 Gate 解除；不改變任何既有 HOLD。
+- 不要求、也不允許 AI 在客戶離線或應用程式中斷後自行背景救援（第 32 節第 1 點同）。
+- 不新增 SSOT 檔；權威文件分工照第 32 節第 3 點。
+- 本節**單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」。
+
+## 第 34 節｜專業 Agent 路由（最小規則；客戶 2026-11-13，DEC-178）
+
+> **來源與位階**：`docs/DECISIONS.md` DEC-178（客戶 2026-11-13「專業 AI Agent＋六項品質補強」，經派工訊息轉錄、逐字 fence、原始對話 repo 內 NOT VERIFIED）。本節是**路由索引**，不是授權、不解除任何 Gate／HOLD、不是第二份 SSOT；與 `CLAUDE.md`／本檔其他節衝突時以後者為準。Agent 的 Role／Trigger／Inputs／Tools／Forbidden／Output／Escalation 只維護於 `.claude/agents/`，**本節不複製其內容**。
+
+1. **定義位置**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md`。結構與權限由 `tests/test_agent_definitions_guard.py` 守衛（目錄內只准這三檔）。
+2. **路由表（任務特徵 → Agent）**：
+
+| 任務特徵 | Agent |
+|---|---|
+| 資料來源／品質、`auto/data-*` 資料發布 PR（例如 #1124～#1126；HOLD 中，僅限資料面查證）、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯 | `stock-data-integrity` |
+| UI 設計、五頁契約、手機首屏、互動一致性、Old UI First、390／1440 驗收 | `stock-ui-ux`（Write／Edit 工具不可用；實作規則見下方第 2a 點） |
+| PR diff、CI、回歸風險、Merge Gate、資料完整性、金融語意**驗收**（是否符合已核准語意；不判定語意本身） | `stock-independent-qa`（Write／Edit 工具不可用；Bash 唯讀為指示性約束） |
+| 投資公式／Risk Cap／System Action、新資料源或授權、UI 版面變更、Gate 解除 | **不派任何 Agent 自行處理**；總管依 `CLAUDE.md` §-1.5／本檔第 4 節 Stop Gate 向客戶提 A／B／C（正確性、風險、速度、Token）＋推薦＋最小變更範圍後停手 |
+| 跨類任務 | 總管拆分；各 Agent 只處理自己面向，不重疊 |
+
+2a. **UI Agent 的寫入與授權**：`stock-ui-ux` 定義**硬性不含寫入工具**。UI 實作須有客戶正式授權（DEC-177 Q1～Q7 回覆前不寫 UI code）；授權後由總管另派一般實作 AI，並以 UI Agent 的 Forbidden／Escalation 為約束。⚠️ 這是撰寫組對客戶「預設唯讀；實作依正式授權」的解讀，**比客戶字面更保守**；客戶若要 UI Agent 可在授權下直接實作，另行裁示。
+3. **「按需」＝怎麼派，不是要不要派**：三個 Agent 預設不全數**派工**，依任務特徵挑選（三個 description 常駐父層 context，成本未量測，NOT VERIFIED，併入工作項 ⑧）；**不改** `CLAUDE.md` §-2 規則 1「每一次任務都派工」。重疊時順序：Data（事實）→ UI（呈現）→ 實作 → QA（最後、非作者）。
+4. **獨立性**：QA 不得驗收自己修改的檔案或自己派生之 Agent 的產出；同一 PR 至少兩組不同角度（例：事實查證／治理越權）——此為 `CLAUDE.md` §-2 規則 4，Agent 定義不取代它。CI 證據須對應 PR 當前 head SHA。
+5. **不得擴權**：三個 Agent 皆不含 Write／Edit／NotebookEdit／Agent 工具，不得由 Agent 定義取得任何新權限；與第 31 節（ChatGPT×Claude 分工）、第 31.2 節自主 merge 條件、第 33 節預防性交接並存，互不取代。
+6. **第二批候選（Investment Logic、OneBrain、GitHub Auditor）僅為候選、本批不建立**；日後建立須客戶另行授權並同步守衛測試白名單。
+7. **NOT VERIFIED**：(a) Bash 唯讀僅為內文**指示性約束**，非機械強制，是否有 settings 層強制 NOT VERIFIED（本批不改 `.claude/settings*`；BACKLOG `DEC178-AGENT-BASH-READONLY-ENFORCEMENT`）；(b) 三檔在 Claude Code 實際載入與路由效果（新對話以 `/agents`、`/doctor` 實測；BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；(c) MCP 工具名在其他環境是否存在（官方未明載）。
+8. 本節**單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」。
