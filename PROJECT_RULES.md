@@ -282,6 +282,21 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
   - **(a) DoR（Definition of Ready）最小定義**：動工前須能填上 `.github/PULL_REQUEST_TEMPLATE.md`「需求 ID／核准／Gate／Impact」小節的 7 項（需求／規格 ID；核准狀態；影響範圍＋資料依賴；Producer→Consumer；不可變更事項＋適用 Gate；驗收案例；完成層級）；填不出者屬 Candidate／Decision Gate，**不得動工**（第 4 節；第 15 節第 5 點「Candidate 不得升格 Approved」）。沿用 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md` §1／§4 與 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §1 六問，**不重新定義、不另設第二套問卷**。「不適用」或「無」視為已填；第 4 節「可自行處理」層級（已確認 bug、單一安全修法）不因 DoR 而被擋。
   - **(b) Preview 完成 ≠ Production 完成**：Preview（FAKE／REAL shadow、capability marker）完成**不得**宣稱 Production 完成；Production 完成須引用 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` 的現行條件與第 16.7 節 Production 安全狀態，無證據標 NOT VERIFIED。**CI 綠 ≠ Production 有效**（CI 只證明該 head SHA 的測試通過，不證明正式部署已接線、資料已更新或通知可用）。
   - **(c) 本補註不解除任何 Gate、不授權任何施工**：`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、DEC-177 Q1～Q7 及所有 HOLD 維持原狀；本補註只新增「動工前須能回答什麼」與「完成要寫到哪一層」的最小入口。
+- 📌 **2026-11-13 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶授權之 Quality Batch 2 ⑤ 最小 PR Impact Check（DEC-178）；內容為 AI 整理，單組撰寫，待非作者獨立 QA；不解除任何 Gate、不授權任何施工）**：
+  - **(a) 變更類型→至少重跑的測試（最小對照表，只列 grep 有證據者，2026-11-13 量測）**：
+
+    | 變更類型 | 至少重跑（`tests/`） |
+    |---|---|
+    | `src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py` | `test_ui2_guards.py`、`test_ui2_registration_and_boot.py`、`test_c3_layering_guard.py` |
+    | `shared/`、`src/`、`scripts/` 任一 `.py`，或 `app.py`／`app_ui2.py` 的 import 結構 | `test_c3_layering_guard.py` |
+    | `.claude/agents/*.md`；本檔第 34 節 | `test_agent_definitions_guard.py` |
+    | 本檔第 30 節／§24.2 被釘住的舊句；`docs/DECISIONS.md` DEC-128；`docs/BACKLOG.md` §5.1.26；`docs/HANDOFF.md`＋HANDOFF_HISTORY；`docs/vnext/` Active Contract 與被取代文件橫幅；`docs/governance/UI_VISUAL_FIDELITY_GATE.md` | `test_ui2_active_contract_docs.py` |
+    | `.github/workflows/pr-check.yml`；三支資料 cron（`update_macro_history`／`update_sector_flow`／`update_macro_forward_test`）；`update_etf_managers.yml`／`push_holdings_daily.yml`／`probe_finmind_monthrev.yml` | `test_batch_z59.py`；`test_cron_workflows_no_direct_push.py`；`test_etf_managers_data_pr.py`／`test_push_holdings_daily.py`／`test_probe_finmind_monthrev.py` |
+    | `scripts/push_weekly_report.py` | `test_push_weekly_report_main.py`、`test_push_weekly_report.py` |
+    | `src/services/fundamental_screener_service.py`、`src/services/dividend_station_service.py`、`src/compute/notify/holdings_digest_message.py` | `test_pick_chain_to_line_contract.py`、`test_push_holdings_daily.py` |
+  - **(b) 這是作者／QA 的最低集，不是縮減 CI**：CI（`pr-check.yml` fast lane `pytest -v` 全跑）不縮減，不放寬任何 Merge Gate；`NOT VERIFIED` 或表外變更（例：`docs/PROJECT_STATE.md`、`src/compute/**`、`src/data/**`、資料檔）**不得視為免重跑**，須自行判斷並如實寫明；表以 `grep` 為準、可能過期。
+  - **(c) 硬連動提醒**：Active Contract 標題被 `test_ui2_active_contract_docs.py` 釘住、第 34 節被 `test_agent_definitions_guard.py` 釘住，改動會令守衛轉紅；**守衛調整須客戶裁示，不得為過測而放寬**。新增 `decision_digest_*` 的 caller 須同步 `test_decision_digest_invariants_guard.py` 的 `ALLOWED_CALLERS` 並附核准依據。
+  - **(d) 無機械強制**：`.github/PULL_REQUEST_TEMPLATE.md` 未被任何測試釘住，branch protection 為 `NOT VERIFIED`（`pr-check.yml` 註解自陳 AI 無權讀寫）；本補註與範本新增欄位屬自律性最小入口，非新 Gate。
 
 ## 第 8 節｜Independent Audit／Red Team
 
