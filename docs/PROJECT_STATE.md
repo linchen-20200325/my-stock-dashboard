@@ -1269,3 +1269,19 @@
 - **基準 main**：§70.13 檔頭寫「基準 main `76ed4b7b`」（撰寫時第 1238 行）已過期一個 commit——#1174（DEC-176 登錄與五檔同步）於 2026-11-12T17:02:54Z squash 合併為 main **`85c65dfc`**（head `e589be3b`；GitHub MCP 重讀，FACT）。#1174 為 docs-only，**未改 §70.13 所述 UI2／資料層事實**（§70.13 各條仍沿用，除 §70.14.1 所列勘誤）。main 以 `git fetch origin main` 實查為準，cron 與其他 PR 會推進，一律重查。
 - **Open PR（各 PR 最後更新／fetched_at 約 2026-11-12 17:29–17:45Z 的時點快照，讀取時間以 HANDOFF 檔尾 checkpoint 為準；cron 會推進，一律重查）**：#1164（REORG3C 歸檔，Draft，base `7eb48d6c`，head `6fddc582`）；資料 PR #1124（head `3cd3f525`）、#1125（head `cf4739c5`）、#1126（head `1654ae60`）——皆 open、HOLD，base 皆為 main `85c65dfc`。§70.13 HOLD 清單（#1124～#1126、#1164 等）與實況一致，未變。#1124 的 commit 數已由「各 3 個提交」（`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md` §1 第 1 點約第 21 行、資料 PR 現況表約第 37 行）增為 5（派工訊息所述，本組未重讀 commit 列表）——與資料 PR 隨 cron 持續推進一致（INFERENCE），不構成任何處置授權。
 - **出處**：HANDOFF 檔尾「六處差異收尾後最新接手點」；BACKLOG 檔尾「六處差異收尾」段。本節單組撰寫，未經非作者獨立 QA。
+
+### 70.15 DEC-177 後 🗂 資料頁現況與三組守衛連動（2026-11-13；只追加；不改既有節；依據 DEC-177 與其後續註記、`docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`；非授權；非 QA PASS；單組撰寫，未經非作者獨立 QA）
+
+> 只記**目前有效的事實**；基準 main `093b323d`（#1176 squash，2026-11-13；時點快照）。客戶已裁示「🗂 資料新鮮度總覽＝A 首屏＋B 展開明細」並允許最小 UI 第一版實作（DEC-177），但**不解除任何 Gate**；實作前調查發現須先裁示 7 題（決策單 Q1～Q7），故**尚未有任何 UI／測試變更**。以下 FACT＝作者 2026-11-13 讀碼／複本實測；全稱句只當待驗事項。
+
+- **🗂 資料頁今日仍是固定空殼（FACT）**：`src/services/ui2/data_page.py::data_page_canonical` 為 FAKE／Real 兩軸共用的固定內容，只有 `data_overview` 一個 L1 區塊（3 欄皆 capability `⬜ 尚未提供`）；`src/services/ui2/real_canonical.py::_data()` 不吃 snapshot。第一屏四問與舊區塊文字明寫「資料健康度尚未開放；這裡不顯示任何來源狀態與資料日」。
+- **八項固定清單的接入現況＝2／8（FACT；單組盤點，量測日 2026-11-12／13）**：台股加權指數（有資料日＋距今天數，唯一）、市場位階（`as_of=None`；UI2 獨立 session 沙箱恆為 `source=unloaded`，部署端 NOT VERIFIED）；其餘 6 項 UI2 無讀取路徑，接上屬「接線」，受 `I1144-WIRING-GATE`／`DG-SCOPE`／`DG-LIC`／`DG-PIT`（板塊另 `DG-COV`）約束，本批不碰。清單順序以線框 §1.2 為準（線框 §2.4 示意把位階排第 2，為內部不一致，INFERENCE）。
+- **三組守衛與連動檔案（FACT；各守衛的放寬都需客戶裁示，見決策單）**：
+  1. **帶值欄位白名單**：`tests/test_ui2_real_feed.py` `WIRED_PATHS`（2 頁 5 條路徑，🗂 不在內）；🗂 任何帶 value／source／as_of 的欄位使 19 個測試紅（複本實測）。
+  2. **預設收合白名單**：`src/ui2/views/_page.py` `SHOWN_FOLDS`（3 項，🗂 無）；連動 `tests/test_ui2_p3_evidence_preservation.py` `EXPECTED_SHOWN_FOLDS`、`tests/ui2_viewport/measure_viewport.py` `P3_ALLOWED_EXPANDER_TITLES["p4_data"]`；新增 1 條＋1 個 L2 區塊使 21 個測試紅（含 5 個 viewport 證據過期）。
+  3. **viewport 證據新鮮度**：`source_hash` 涵蓋 `src/ui2/**/*.py`＋`app_ui2.py`＋`measure_viewport.py`；4 份證據 JSON（`docs/vnext/newui2_realfeed/`、`newui2_batch3b/` 各 2 份）；只改 `src/services/ui2/*` 不觸發（複本實測）。重生需真瀏覽器，本沙箱無 Python Playwright（NOT VERIFIED）。
+  4. **P3 證據基準**：`tests/fixtures/ui2_p3_evidence_baseline.json`＋雜湊釘 `tests/test_ui2_active_contract_docs.py` `_P3_BASELINE_SHA256`；改第一屏／舊區塊文案須重生基準（規則：只能擴大、不得縮小）。
+  5. **詞彙守衛**：`tests/test_ui2_p1_human_text.py` `ENGINEERING_VOCAB` 含「接線」「尚未接線」；capability 欄位合法字樣僅 `⬜ 尚未提供`（`shared/ui2_contract/text.py`）。
+- **五態符號 ✅ ◷ ◇ ⛔（FACT）**：只存在於文件；程式內無別名常數、無守衛。DEC-128 (a) 寫「僅用於 👤 我的·資料健康度面」，已由 DEC-130 升為 Active，DEC-130 (a) 客戶原文未重述「僅 👤」；用於 🗂 的適用範圍待客戶裁示（決策單 Q4）。
+- **基準線（FACT；作者 2026-11-13 於 venv、Streamlit 1.59.2 實跑，會漂移）**：17 個 `tests/test_ui2_*.py` 檔 1705 passed、3 xfailed、41 deselected。
+- **仍 HOLD／未授權**：同 DEC-177「仍 HOLD」與 HANDOFF 檔尾。出處：DECISIONS 檔尾「DEC-177 後續註記：實作前調查結果」；BACKLOG 檔尾「2026-11-13｜DEC-177 實作前調查與裁示單提交」；HANDOFF 檔尾最新接手點。本節單組撰寫，未經非作者獨立 QA。

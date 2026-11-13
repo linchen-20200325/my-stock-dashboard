@@ -715,7 +715,7 @@ Model／Mode／Effort（客戶派工訊息指定，經轉錄、逐字 NOT VERIFI
 - **仍 NOT VERIFIED**：PIT、cron 成功率（台股缺 11-11 原因）、來源授權原文、Cloud／真機／Real 軸量測、Streamlit Cloud 追蹤分支、部署端市場位階實況、D6 紅燈 CI 當次實例、REORG3C-REF-SYNC 剩餘舊引用、`.claude/worktrees/` 舊 worktree 內容、DEC-175／DEC-176 fence 逐字一致性。本段單組撰寫，未經第二組驗證。
 
 
-## 2026-11-12｜DEC-177 登錄後（現行有效接手點；只追加；非 QA PASS；15 欄 Resume Checkpoint 於下方）
+## 2026-11-12｜DEC-177 登錄後（~~現行有效接手點~~〔已被檔尾 2026-11-13「UI 實作前調查與裁示單提交後最新接手點」取代（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕；只追加；非 QA PASS；15 欄 Resume Checkpoint 於下方）
 
 > 本段取代上方「六處差異收尾後最新接手點」的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。15 欄 Resume Checkpoint 見本段下方「Resume Checkpoint」表（`PROJECT_RULES.md` §20.2）；細項見 `docs/DECISIONS.md` DEC-177、`docs/BACKLOG.md` 檔尾「DEC-177 登記」、`PROJECT_RULES.md` 第 33 節。GitHub 實況優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。**單組撰寫；本段所在 PR（#1176）兩組非作者 QA 已回報 PASS with fixes，修正於後續 commit，QA 複驗與同 head 原生 CI 仍待完成。不是授權。**
 > **PROJECT_RULES 落點**：本 PR 修改 `PROJECT_RULES.md` 的落點為撰寫組依該檔為永久規則 SSOT 的角色所選，客戶訊息二.1 只要求「以獨立 docs PR 記錄…預防性交接制度」，未逐字點名檔案；#1175 時期 HANDOFF 的「不改 `PROJECT_RULES.md`」為該批範圍限制，不適用本批。
@@ -773,3 +773,91 @@ AI 推薦不是客戶裁示；FACT／INFERENCE／NOT VERIFIED 要分開寫；CI 
 Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High（客戶訊息指定，經轉錄；現行值只以 HANDOFF 檔尾最新 Resume Checkpoint 為準）。
 沒有客戶新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
 ```
+
+
+## 2026-11-13｜UI 實作前調查與裁示單提交後最新接手點（現行有效接手點；只追加；非 QA PASS）
+
+> **取代關係**：本段取代上方「2026-11-12｜DEC-177 登錄後」段的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。**該段內的「新對話接手提示語」已過期，改指本段末的提示語**。GitHub 操作事實優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。不另建第二份 handoff（`PROJECT_RULES.md` §20.1）。
+> **單組聲明**：本段與本 PR 為**作者單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；裁示單內的事實來自三組單組調查，作者另自行重核檔案行號並重跑複本實驗。**不是授權**；不解除任何 Gate／HOLD。AI 推薦（含決策單內全部「總管推薦」）一律是 RECOMMENDATION，不是客戶裁示。
+
+### Resume Checkpoint（`PROJECT_RULES.md` §20.2 十五欄；欄位名稱與次序與上方 2026-11-12 各段表頭一致）
+
+| 欄位（§20.2） | 內容（2026-11-13） |
+|---|---|
+| latest verified main SHA | `093b323d5f88ce5a1b590948fd7ebbb007131be6`（#1176 squash 合併點；2026-11-13 `git fetch origin main` 實查，FACT；cron 與其他 PR 會推進 main，**一律重查**） |
+| current working branch | `claude/stock-dashboard-handoff-sync-ulwq8s`（本 docs PR「B」的 head；#1176 合併後遠端同名分支已刪除，本 PR 為重新推送；合併後可為任何新分支） |
+| current PR | 本 PR「B」（號碼以 GitHub 為準；head＝上列分支者）。其餘 Open PR（2026-11-13 GitHub MCP 實查，時點快照）：**#1164**（Draft，head `6fddc582`，HOLD）；資料 PR **#1124**（head `3cd3f525`）、**#1125**（head `cf4739c5`）、**#1126**（head `1654ae60`），皆 HOLD，cron 會推進，一律重查 |
+| current task / batch | 客戶 2026-11-12 DEC-177 本批三項：① 獨立 docs PR＝**完成（#1176 已合併）**；② 最小 UI 第一版實作＝**停在安全點**（未改 `src/`、`tests/`；已提交裁示單 Q1～Q7）；③ 非作者 QA／同 head CI／手機首屏與缺值語意驗收＋同步＝本 PR 為其 docs 同步部分，UI 驗收部分隨 ② 未開始。依序進行，不得多組同時寫同一治理文件 |
+| completed in this batch | #1176（DEC-177 登錄、`PROJECT_RULES.md` 第 33 節、BACKLOG 三列、HANDOFF 15 欄段）；本 PR：裁示單 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`、DECISIONS 檔尾後續註記、BACKLOG 檔尾追加、PROJECT_STATE §70.15、本段。見下方「已完成」表 |
+| exact current stopping point | 實作前調查完成、裁示單已提交；**等客戶回覆 Q1～Q7**。本 PR 待非作者獨立 QA 與同 head 五項原生 CI。**未做**：任何 UI／資料／workflow／測試變更；`SHOWN_FOLDS`、`WIRED_PATHS`、詞彙守衛、viewport 證據、P3 基準一律未動 |
+| next single action | 本 PR：非作者 QA＋同 head 五項原生 CI 全綠＋review threads＝0＋mergeable clean 後依 Auto-Ship Gate 判斷（作者不自行合併）。**合併後依第 33 節安全交接**；客戶回覆 Q1～Q7 前不寫 UI code（見下方「下一個唯一安全動作」） |
+| tests / CI 已完成 | #1176 同 head `1af7976a` 五項原生 CI 全綠（總管訊息與 #1176 合併提交訊息自述，作者未逐項重讀 check runs）；#1175 main push CI run 43325022430 success（2026-11-13 GitHub MCP 重讀 run 層級）。本 PR 作者端：17 個 `tests/test_ui2_*.py` 基準 1705 passed、3 xfailed、41 deselected（複本實驗用；repo 工作樹未動）；grep 命中治理文件名稱的測試檔實跑結果見 PR 描述／回報（作者端自查，**非 QA**） |
+| tests / CI 尚未完成 | #1176 合併後 main push CI run 43334257638（head `093b323d`）撰寫時為 in_progress（2026-11-13 MCP 查），結果 **NOT VERIFIED**；本 PR 的非作者 QA 與同 head 五項原生 CI；D6 測試（`tests/test_d6_diagnostic_no_secret_display.py`）有已知約 0.54～0.63%（每個跑到該檔的 pytest 行程）的非決定性紅燈機率，rerun 通過不等於已修；最小 UI 實作的 QA／CI（尚未開始） |
+| unresolved true Stop Gates | #1119 HOLD；#1124～#1126 HOLD；#1164 HOLD；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6、`REORG3C-Q5-GATE`、Old UI Removal Gate、預設 UI 切換（全部未動；本 PR 未解除任何一項）。Q1～Q7（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）是**實作 Gate**（blocked-on-customer）；VG1／VG2 是 Visual Gate 候選，不是 Stop Gate |
+| 是否存在 uncommitted / unpushed work | 以 `git status`／GitHub 實查為準：本段撰寫時尚未提交；本 PR 推送後預期為「否」（若讀到此段時分支落後或有新 commit，請重查） |
+| relevant evidence location | `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`（裁示單；§5 複本實驗、§6.1 工程對照）；`docs/DECISIONS.md` DEC-177 與檔尾「DEC-177 後續註記：實作前調查結果」；`docs/BACKLOG.md` 檔尾「2026-11-13｜DEC-177 實作前調查與裁示單提交」；`docs/PROJECT_STATE.md` §70.15；`PROJECT_RULES.md` 第 33 節；線框 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md`；歷史接手點 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md` |
+| recommended Model | Sonnet 5.5（依客戶 2026-11-12 訊息；經派工訊息轉錄，逐字 NOT VERIFIED；**現行值只維護於此處**） |
+| recommended Effort | High；Mode：靜默自主巡航（依客戶 2026-11-12 訊息；**現行值只維護於此處**） |
+| last checkpoint timestamp | 2026-11-13T00:19:50Z（`date -u` 實查；本段撰寫時） |
+
+### 已完成（FACT 除另註）
+
+| PR／commit | 內容 | merge／commit SHA | 非作者 QA | 同 head 原生 CI |
+|---|---|---|---|---|
+| #1175 | 六處交接差異收尾 | `880bc17c`（main） | 獨立 QA 兩組＋Delta（提交訊息自述） | 同 head `6e4dfc16` 五項全綠（提交訊息自述）；main push run 43325022430 success（2026-11-13 MCP 重讀 run 層級） |
+| #1176 | DEC-177 登錄（fence sha256 `8b059bb5…eae053`）、`PROJECT_RULES.md` 第 33 節、BACKLOG 三列、HANDOFF 15 欄段 | `093b323d`（2026-11-13T00:05:39Z squash；GitHub MCP 重讀 PR 狀態 merged，FACT） | 兩組非作者 QA 首輪 PASS with fixes（已修於 `1af7976a`）＋兩組 Delta PASS（PR 描述與合併提交訊息自述；作者未重讀 review 紀錄） | 同 head `1af7976a` 五項原生 CI 全綠、review threads 0（PR 描述與合併提交訊息自述）；其 main push run 43334257638 撰寫時 in_progress，**NOT VERIFIED** |
+| 本 PR「B」 | 裁示單（Q1～Q7）、DECISIONS 後續註記、BACKLOG 追加列、PROJECT_STATE §70.15、本段 | 未合併 | 待 | 待 |
+
+### 本批三項狀態
+
+1. **獨立 docs PR（登錄 UI 方向、授權邊界、預防性交接制度）＝完成**（#1176 `093b323d`）。
+2. **最小 UI 第一版實作＝停在安全點**：實作前調查發現完整「A 首屏＋B 收合明細」在不放寬既有守衛下做不出來（複本實驗：只追加無資料骨架〔方案 X〕全綠但無新鮮度資訊，**總管不建議**；多一列帶台股資料日〔方案 Y〕19 個測試紅，皆為「只有白名單欄位可帶資料」守衛）。**未改任何 `src/`、`tests/`**，已提交裁示單（Q1～Q7）。
+3. **非作者 QA／同 head CI／手機首屏與缺值語意驗收＋同步**：docs 同步部分＝本 PR；UI 驗收部分待 ② 有實作後才有對象，**尚未開始**。
+
+### 待客戶裁示（附推薦者為 AI 推薦＝RECOMMENDATION，非客戶裁示；沒答的項目視為維持 HOLD／現狀）
+
+**A. 新增：🗂 資料新鮮度總覽實作裁示單（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）Q1～Q7**（可一行回覆「全部照總管推薦」；範本見裁示單 §0.1）：Q1 是否允許 🗂 頁出現帶真值的欄位（推薦 A 允許，僅白名單新增＋突變測試）；Q2 「尚未接線」字樣（推薦 B 改用既有「尚未提供」）；Q3 第一屏三問與舊區塊文字自相矛盾（推薦 A 有意識改寫，裁示單附擬議文案）；Q4 五態符號 ✅◷◇⛔ 用於 🗂（推薦 A 允許，追加註記修正 DEC-128 (a) 適用範圍）；Q5 規格缺口（推薦 A）；Q6 收合明細（推薦 C 分兩階段，先做 A 首屏）；Q7 線框文案候選 C-2／C-4 照線框原文，C-7／C-8 階段 2 才定，C-9 不顯示。
+**B. 仍待（前段清單扣除已裁示項目；單組核對，非窮舉宣稱）**：(1) **VG1／VG2**（`DEC174-VG1-FAKE-REAL-LOOK`／`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`，Visual Gate 候選，先文字線框＋推薦理由）；(2) **DPE-3／DPE-6**（若日後考慮放行 #1124～#1126；`DEC176-DATA-PR-EVIDENCE-DECISIONS`；處置本身仍須另行裁示）；(3) 接線前決策單 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`／`I1144-WIRING-GATE`（`DEC176-GATE-SHEET-CUSTOMER`）；(4) `DEC174-B1-INDEP-QA` 判定與 #1165 兩份文件勘誤附註回寫、複驗 E-10／E-13 的處置；(5) `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`（DEC-171）；Q5（DEC-173，`REORG3C-Q5-GATE`）是否及何時重議。
+**C. 已有客戶定論、不列為待裁示**：DPE-7 **維持 A（觀察）**，保留 **11 月 19 日檢查點**（`DEC176-DPE7-1119-CHECKPOINT`；僅在客戶想讓 11-21 `update_fundamentals` 財報進 main 時才需另答）；D6 偵測器程式修復＝**另批提案**（`DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`，客戶未授權修測試前不動）。
+
+### 仍 HOLD
+
+#1124～#1126（不合併／關閉／rebase）、#1164（不擅自處置）、#1119；`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-WIRING-GATE`；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察）＋11-19 檢查點保留；Old UI、正式 UI 切換、資料庫重建、新 API／來源、Actions 清理（Runs／Artifacts 刪除不可逆，屆時須客戶逐批明示）；不清理 `.claude/worktrees/`（含一個有 staged changes 的舊 worktree——不在本容器，**未從此處驗證**）；不改 `CLAUDE.md`／`PROCESS.md`；不降低 CI matrix／no-skip／`ui2-browser-gate`；不把 AI 推薦寫成客戶裁示；不把 DEC-175／DEC-176／DEC-177 讀成無條件開工指派。
+
+### 風險
+
+(1) 本 PR 與裁示單單組撰寫，未經非作者獨立 QA；(2) 裁示單事實來自三組單組調查，作者重核了檔案行號並重跑 X、Y 與收合區三個複本實驗，但**未重跑組 V 的 15 檔子集基準**；(3) 部署端位階是否恆 unloaded、viewport 證據能否重生（本沙箱無 Python Playwright）、真瀏覽器 390／1440 實際畫面均 NOT VERIFIED；(4) 階段 1 不動 `src/ui2/**` 是推測，實作時若需動即停手回報；(5) D6 測試約 0.54～0.63% 非決定性紅燈機率仍在，紅燈時先看失敗片段是否在元素 ID 內；(6) `concurrency: cancel-in-progress` 使連續 push 的前一個 push run 可能被取消；(7) 資料 PR 長期不處理：台股卡持續落後（自 2026-11-09）；11-21 `update_fundamentals` 直推 main 預期被保護擋下（INFERENCE）；(8) 未合併 PR head 為 2026-11-13 查詢時點快照，cron 會推進。
+
+### 交接風險檢查（`PROJECT_RULES.md` 第 33 節）
+
+本對話已累積多批（#1175、#1176、本 PR）、長篇 QA／CI 往返與重大決策變動（DEC-177、實作停在安全點、7 題裁示單）→ 依第 33 節「累積約三批或出現長篇 QA／CI、重大決策變動時優先安排安全交接」，**建議在本 PR 合併後安全交接**：先確認本 PR 內容已進 main 並驗證 main push CI、本段與裁示單已在 GitHub，**然後**才結束舊對話，再依 GitHub 最後狀態使用下方提示語開新對話。此為 AI 建議，不是硬性規則；不承諾能讀取剩餘上下文 Token。
+
+### 下一個唯一安全動作
+
+**客戶回覆 Q1～Q7 前不寫 UI code。** 客戶回覆後的第一步：依回覆範圍，以**獨立 PR**做階段 1（A 首屏；預期只動 `src/services/ui2/data_page.py`、`real_canonical.py` 與測試，不動 `src/ui2/**`），遵守寫入序列化、一次一模組、每個放寬附突變測試且不得全域放寬、非作者 QA、同 head 五項原生 CI；若實作中發現需動 `src/ui2/**`（會使 4 份 viewport 證據過期）或超出客戶回覆的範圍，**立即停手回報**。客戶無回覆時：停手，只做被動觀察。
+
+### 先讀 SSOT 順序
+
+`CLAUDE.md`（§-2、§-1.5.D、§1）→ `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§32、§33）→ `docs/DECISIONS.md`（DEC-177 與檔尾「DEC-177 後續註記」、DEC-176、DEC-174）→ **裁示單** `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md` → `docs/BACKLOG.md` 檔尾 → 線框 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md` → `docs/PROJECT_STATE.md` §70.13～§70.15 → 本段；歷史接手點見 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`。
+
+### #1176 已知 Low 級瑕疵更正註記（有意識的更正，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕；上方各段原文不改）
+
+1. 上一段「六處差異收尾後最新接手點」標題上的取代註記稱「DEC-177 登錄後**短段**」——實際上該段是**完整接手點段**（含 15 欄 Resume Checkpoint、已完成表與新對話接手提示語），不是短段。
+2. 「DEC-177 登錄後」段 Checkpoint「tests / CI 尚未完成」欄把 D6 機率寫成「約 0.5～0.6%」——以 **0.54～0.63%（每個跑到該檔的 pytest 行程）** 為準（出處：DECISIONS 檔尾 `76ed4b7b` 小節，調查組估算）。
+3. `PROJECT_RULES.md` 33.2 開頭註記稱「『風險提前觸發』出自客戶訊息二.1 與四」——更正：「風險提前觸發」字樣**只出現在客戶訊息二.1**（制度摘要）；第四節原文是「每批結束檢查交接風險；累積約三批或出現長篇 QA／CI、重大決策變動時，優先安排安全交接」，並無該詞。（`PROJECT_RULES.md` 本批不改，僅在此更正。）
+4. 「DEC-177 登錄後」段待裁示清單把 DPE-7 的 11-19 檢查點放在列表中（位置與「不屬仍待裁示」的說法拉扯）——更正：DPE-7 **客戶已定維持 A（觀察）**，11-19 僅為保留檢查點，**不屬待裁示**；本段已移至「已有客戶定論」。
+
+### 新對話接手提示語（可直接貼入新對話；改指本段）
+
+```
+你接手 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）。先做 GitHub-first 重核，不要信聊天摘要：
+1. 取回 main 最新 SHA、Open／Draft PR（head／base／CI／review；含本批 docs PR「B」〔裁示單那一個〕是否已合併）；2. 讀 docs/DECISIONS.md 最新 DEC（目前 DEC-177，檔尾另有「DEC-177 後續註記：實作前調查結果」，其上 DEC-176／175／174）；3. 讀 docs/HANDOFF.md 檔尾最新接手點段（標題「2026-11-13｜UI 實作前調查與裁示單提交後最新接手點」，含十五欄 Resume Checkpoint；其上各 2026-11-12 接手點段及其內舊提示語已過期，不要照舊提示語行事）；4. 讀裁示單 docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md；5. 再讀 CLAUDE.md（§-2、§-1.5.D、§1）、PROCESS.md、PROJECT_RULES.md（§20、§32、§33）。
+狀態：客戶已裁示 🗂 資料新鮮度總覽採 A 首屏＋B 展開明細（DEC-177），允許最小 UI 第一版實作但不解除任何 Gate；實作前調查發現須先裁示 Q1～Q7（裁示單；可一行回覆「全部照總管推薦」，範本見裁示單 §0.1）。客戶回覆前不得寫 UI code，不得改 SHOWN_FOLDS／WIRED_PATHS／詞彙守衛／viewport 證據／P3 基準。回覆後第一步＝依回覆範圍以獨立 PR 做階段 1（預期只動 src/services/ui2/* 與測試，不動 src/ui2/**；若需動 src/ui2/** 立即停手回報）；每個放寬附突變測試、不得全域放寬；非作者 QA＋同 head 五項原生 CI；作者不自行合併。
+HOLD／禁止（全部未解除）：#1124～#1126 資料 PR（不合併／關閉／rebase）、#1164、#1119；DG-SCOPE／DG-COV／DG-PIT／DG-LIC、I1144-WIRING-GATE；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察），11 月 19 日為保留檢查點；Old UI、正式 UI 切換、資料庫重建、新 API／來源、Actions 清理；不清理 .claude/worktrees/；不降低 CI matrix／no-skip／ui2-browser-gate。
+每批最多三項；未授權的新工作不得自行啟動；Agent 進度回報最小化（僅阻塞、需客戶裁示、重大里程碑才報告）；預防性交接見 PROJECT_RULES 第 33 節。AI 推薦（含裁示單全部「總管推薦」）不是客戶裁示；FACT／INFERENCE／NOT VERIFIED 要分開寫；CI 綠不等於 Cloud／資料來源已驗證。
+未合併 PR 的 head 為 2026-11-13 查詢時點快照，一律以最新 GitHub 為準：#1164 6fddc582（Draft）、#1124 3cd3f525、#1125 cf4739c5、#1126 1654ae60——全部不碰。
+Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High（客戶訊息指定，經轉錄；現行值只以 HANDOFF 檔尾最新 Resume Checkpoint 為準）。
+沒有客戶新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
+```
+
+- **仍 NOT VERIFIED**：DEC-177 fence 與客戶原訊息逐字一致性；預防性交接制度更早核准紀錄；部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440；#1176 合併後 main push CI（run 43334257638）結果；裁示單 §6.1 與調查事實的單組性。本段單組撰寫，未經第二組驗證。

@@ -8738,3 +8738,19 @@ Repository："linchen-20200325/my-stock-dashboard"
 - **PROJECT_RULES 落點說明**：本 PR 修改 `PROJECT_RULES.md` 的落點為撰寫組依該檔為永久規則 SSOT 的角色所選，客戶訊息二.1 只要求「以獨立 docs PR 記錄…預防性交接制度」，未逐字點名檔案；#1175 時期 HANDOFF 的「不改 `PROJECT_RULES.md`」為該批範圍限制，不適用本批。
 - **範圍外／未授權**：本條**不是**資料接線、新欄位（`fetched_at`／`published_at`）、新 API／來源／cron／Secrets、`SHOWN_FOLDS`／UI 契約／測試 allowlist 的授權；不解除任何 Gate；不處置 #1124～#1126／#1164／#1119；不是 Actions／Old UI／死碼清理授權；不是 D6 偵測器程式修復授權。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性（本組只見派工訊息附檔）；預防性交接制度「更早核准紀錄」是否存在於 repo 外；線框文件 §1.2 的 8 項盤點內容（單組、會漂移）；`SHOWN_FOLDS` 實際內容與是否必須新增條目；本條 AI 整理單組撰寫，**未經第二組獨立複驗（§-2 規則 6），不得被引用為「已 QA PASS」**。
+
+
+#### DEC-177 後續註記：實作前調查結果（事實更新；2026-11-13；只追加；DEC-177 上文一字未改；**非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> **為何有本小節**：DEC-177 要求「需突破 `SHOWN_FOLDS`／UI 契約／測試 allowlist 時，先提精確範圍與最小修改方案、等另行裁示」。本批第 2 項因此**停在安全點**：作者完成實作前調查（三組單組調查彙整＋作者自行重核檔案行號並重跑複本實驗），**未改任何 `src/`、`tests/`**，並提交裁示單 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`（Q1～Q7，含「總管推薦」與一鍵回覆範本）。**所有推薦皆 RECOMMENDATION，不是客戶裁示；沉默＝維持現狀、不寫 UI code。**
+
+**調查結論要點（FACT＝作者讀碼／複本實測；詳見決策單 §5、§6）**
+
+1. **完整「A 首屏＋B 收合明細」在不放寬任何既有守衛下做不出來。** 🗂 頁目前被測試規定為「無資料」頁：未列入 `tests/test_ui2_real_feed.py` `WIRED_PATHS` 的欄位不得帶 value／source／as_of。複本實驗（`origin/main` `093b323d`、17 個 `tests/test_ui2_*.py`、基準 1705 passed／3 xfailed／41 deselected）：**方案 X**（只追加 capability 骨架區塊）全綠，但畫面沒有任何新鮮度資訊；**方案 Y**（多一列帶台股資料日）19 個測試紅，皆為同一道「只有白名單欄位可帶資料」守衛。
+2. **`SHOWN_FOLDS` 問題＝已確認需要（若走 B 收合明細）**：`src/ui2/views/_page.py` 的 `SHOWN_FOLDS` 現 3 項、🗂 無；線框要 3 個預設收合區。複本加 1 條＋1 個 L2 區塊：21 個測試紅（16 個為收合白名單／expander 渲染、5 個為 viewport 證據過期）。若先做 A 首屏（不含收合明細），階段 1 **預期**不需要新增（推測；實作時確認）。追蹤列 `DEC177-SHOWN-FOLDS-QUESTION` 因而由「尚未確認是否需要」更新為「**B 明細需要；A 首屏預期不需要**」（BACKLOG 以追加列註記，原列不改）。
+3. **改 `src/ui2/**` 任一檔會使 4 份 viewport 證據過期**（`source_hash` 涵蓋 `src/ui2/**/*.py`＋`app_ui2.py`＋量測腳本），須在真瀏覽器重生；只改 `src/services/ui2/*` 不觸發（複本實測）。本沙箱無 Python Playwright，**能否重生 NOT VERIFIED**。
+4. **其他需要裁示的政策點（決策單 Q1～Q7）**：Q1 是否允許 🗂 帶真值欄位（`WIRED_PATHS` 新增）；Q2 「尚未接線」字樣 vs 詞彙守衛 `ENGINEERING_VOCAB`（DEC-130 (a) 客戶曾列 `⬜ 尚未接線` 為資料健康度字樣；BACKLOG `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT` 觸發條件是否成立待裁示）；Q3 第一屏三問與舊區塊「資料健康度尚未開放／這裡不顯示任何來源狀態與資料日」與新區塊自相矛盾（線框 C-15），且文案被 P3 證據基準釘住；Q4 五態符號 ✅◷◇⛔ 用於 🗂；Q5 規格缺口（位階「無法判定」不在五態內、位階已載入卻無資料日）；Q6 收合明細三種做法與分階段；Q7 線框文案候選 C-2／C-4／C-7／C-8／C-9。
+5. **DEC-128 (a) 旁註（不改原文）**：DEC-128 (a)（本檔第 6941 行）寫五態符號「僅用於 👤 我的·資料健康度面…不外溢」，已由 DEC-130 升為正式 Active；DEC-130 (a) 客戶原文寫「資料健康度可使用」該組符號，未重述「僅 👤」。**兩者在 🗂 的適用範圍是否一致，本註記不判定**，列為決策單 Q4 待客戶裁示。
+6. **內部拍板項（`CLAUDE.md` §-1.5.D §03-1，不需客戶回覆，揭露於決策單 §3）**：距今天數基準沿用現行主機日 `age_days`（N-1／`I1140-TODAY-TZ` 維持 open）；FAKE 軸維持靜態、真值只走 Real 軸；新 builder 放 `data_page.py`／`real_canonical.py`；TOP_FIVE Gate 文件註記被 DEC-177 取代（docs 同步）；新增 AST 守衛禁 `published_at`／`fetched_at`；每項放寬附突變測試且不得全域放寬。
+
+**本註記不改變任何授權**：DEC-177 的「允許最小 UI 第一版實作、不解除任何 Gate」原樣有效；在客戶回覆決策單前，作者**不寫 UI code**。**NOT VERIFIED**：部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440 實際畫面；三組調查皆單組、決策單 §6.1 為作者單組核對、未經非作者獨立 QA（§-2 規則 6），不得被引用為「已 QA PASS」。
