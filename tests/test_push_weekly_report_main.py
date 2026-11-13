@@ -48,7 +48,7 @@ def _run(mod, argv=(), *, env=None, tickers=("2330", "0050"), collect_raises=Non
     """
     env = env or {}
     sent: list[str] = []
-    calls = {"collect": 0, "review": [], }
+    calls = {"collect": 0, "urls": [], "review": []}
     with pytest.MonkeyPatch.context() as mp:
         for k in ("WEEKLY_WATCH_CSV_URL", "GEMINI_API_KEY"):
             mp.delenv(k, raising=False)
@@ -58,6 +58,7 @@ def _run(mod, argv=(), *, env=None, tickers=("2330", "0050"), collect_raises=Non
         if http_raises is None:
             def _collect(urls, **kw):
                 calls["collect"] += 1
+                calls["urls"].append(list(urls))
                 if collect_raises is not None:
                     raise collect_raises
                 return list(tickers)
@@ -126,6 +127,7 @@ def test_collect_tickers_exception_returns_1_no_send_no_url_in_output(capsys):
     assert sent == [] and calls["review"] == []
     assert "抓取失敗" in out and "第 1/1 份來源處理失敗" in out, "應能定位是第幾份來源壞掉"
     assert _SECRET_URL not in out and "SECRET-SHEET-ID" not in out, "輸出不得洩漏 CSV 連結"
+    assert "0 個台股代號" not in out, "例外分支須自己 return 1，不得落入『0 代號』分支（獨立守住 except 的 return）"
 
 
 def test_collect_tickers_stub_exception_returns_1_no_send(capsys):
@@ -134,6 +136,7 @@ def test_collect_tickers_stub_exception_returns_1_no_send(capsys):
                                 capsys=capsys)
     assert rc == 1 and sent == [] and calls["review"] == []
     assert _SECRET_URL not in out
+    assert "0 個台股代號" not in out, "例外分支須自己 return 1，不得落入『0 代號』分支"
 
 
 def test_zero_tickers_returns_1_and_does_not_send(capsys):
@@ -162,16 +165,12 @@ def test_dry_run_returns_0_and_does_not_send(capsys):
 
 def test_multi_line_urls_passed_through_as_list(capsys):
     """多行 URL（ETF 分頁 + 個股分頁）→ 來源份數反映在輸出；collect_tickers 收到去重後的 list。"""
-    _seen = {}
-    with pytest.MonkeyPatch.context() as mp:
-        mp.delenv("GEMINI_API_KEY", raising=False)
-        mp.setenv("WEEKLY_WATCH_CSV_URL", _SECRET_URL + "\n" + _SECRET_URL + "\nhttps://b.example.invalid/x\n")
-        mp.setattr(W, "collect_tickers", lambda urls, **k: (_seen.setdefault("u", list(urls)), ["2330"])[1])
-        mp.setattr(WRS, "build_weekly_review", lambda *a, **k: dict(_FAKE_REVIEW))
-        mp.setattr(D, "send_notification", lambda text, **k: 1)
-        assert W.main([]) == 0
-    assert _seen["u"] == [_SECRET_URL, "https://b.example.invalid/x"]
-    assert "來源 2 份" in capsys.readouterr().out
+    _multi = _SECRET_URL + "\n" + _SECRET_URL + "\nhttps://b.example.invalid/x\n"
+    rc, sent, calls, out = _run(W, env={"WEEKLY_WATCH_CSV_URL": _multi}, tickers=("2330",),
+                                capsys=capsys)
+    assert rc == 0 and len(sent) == 1
+    assert calls["urls"] == [[_SECRET_URL, "https://b.example.invalid/x"]]
+    assert "來源 2 份" in out
 
 
 # ───────────────────────── GEMINI_API_KEY 傳遞 ─────────────────────────

@@ -296,7 +296,7 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
     | `src/services/fundamental_screener_service.py`、`src/services/dividend_station_service.py`、`src/compute/notify/holdings_digest_message.py` | `test_pick_chain_to_line_contract.py`、`test_push_holdings_daily.py` |
   - **(b) 這是作者／QA 的最低集，不是縮減 CI**：CI（`pr-check.yml` fast lane `pytest -v` 全跑）不縮減，不放寬任何 Merge Gate；`NOT VERIFIED` 或表外變更（例：`docs/PROJECT_STATE.md`、`src/compute/**`、`src/data/**`、資料檔）**不得視為免重跑**，須自行判斷並如實寫明；表以 `grep` 為準、可能過期。
   - **(c) 硬連動提醒**：Active Contract 標題被 `test_ui2_active_contract_docs.py` 釘住、第 34 節被 `test_agent_definitions_guard.py` 釘住，改動會令守衛轉紅；**守衛調整須客戶裁示，不得為過測而放寬**。新增 `decision_digest_*` 的 caller 須同步 `test_decision_digest_invariants_guard.py` 的 `ALLOWED_CALLERS` 並附核准依據。
-  - **(d) 無機械強制**：`.github/PULL_REQUEST_TEMPLATE.md` 未被任何測試釘住，branch protection 為 `NOT VERIFIED`（`pr-check.yml` 註解自陳 AI 無權讀寫）；本補註與範本新增欄位屬自律性最小入口，非新 Gate。
+  - **(d) 無機械強制**：`.github/PULL_REQUEST_TEMPLATE.md` 未被任何測試釘住，branch protection 為 `NOT VERIFIED`（`pr-check.yml` 註解自陳 AI 無權讀寫）；本補註與範本新增欄位屬自律性最小入口，非新 Gate。DoR 的 7 項為 ② 所列；⑤ 於範本新增「測試應重跑」「正式文件引用需同步」兩欄，屬 PR Impact Check，不增加 DoR 項數。
 
 ## 第 8 節｜Independent Audit／Red Team
 

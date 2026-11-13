@@ -28,6 +28,11 @@ survivors_df / pe_map / name_map / shortage_rows / rs_rows / trend_map、auto_fe
 
 突變反向驗證（tests/_fina_mutants.py::load_mutant；原碼為綠的對照在同一測試內）：
   `drop_unscored=True,`→False／涵蓋門檻比較放寬／`if not _code or _code in _exclude:`→只留 `if not _code:`。
+
+另有兩支『獨立小型 fixture』測試（不動上方 golden；直接呼叫真 `composite_rank_candidates`）：
+  (T1) 綜合分只平均「有資料的因子」（分母 = 該股有值因子數，不是勾選因子數）；
+  (T2) 涵蓋門檻邊界（effective_n=2 → min_present=1.0，嚴格 >：present=1 必被擋，`>=` 突變須轉紅）。
+  手算過程見各測試 docstring。
 """
 from __future__ import annotations
 
@@ -182,3 +187,105 @@ def test_mutant_is_killed(name):
         r = _run_chain(ds_mod=mut)
     with pytest.raises(AssertionError):                 # 拔掉保護 → 契約轉紅
         chk(r)
+
+
+# ───────────────────────── 獨立小型 fixture（不影響上方 golden）─────────────────────────
+_FACTORS_3 = ["pe_low", "eps_high", "rs_leader"]
+
+
+def _rank_small(mod, *, survivors, pe_map, rs_rows, factors):
+    """直接呼叫真（或突變）`composite_rank_candidates`；drop_unscored=True 與生產入口一致。"""
+    return mod.composite_rank_candidates(
+        pd.DataFrame(survivors), factors=factors, top_n=50, pe_map=pe_map,
+        name_map={}, shortage_rows=[], rs_rows=rs_rows, trend_map={}, drop_unscored=True)
+
+
+def _t1_inputs():
+    # 2412 缺本益比（pe_map 無此檔）→ 只有 eps / rs 兩個因子有值，仍過涵蓋門檻。
+    return dict(
+        survivors={"stock_id": ["1101", "2330", "2317", "2412"], "eps": [5.0, 20.0, 10.0, 2.0]},
+        pe_map={"1101": 10.0, "2330": 20.0, "2317": 15.0},
+        rs_rows=[{"代碼": "1101", "RS(σ)": 2.0}, {"代碼": "2330", "RS(σ)": 3.0},
+                 {"代碼": "2317", "RS(σ)": 1.0}, {"代碼": "2412", "RS(σ)": 0.5}],
+        factors=_FACTORS_3)
+
+
+def _t1_scores(df) -> dict:
+    return {str(c): round(float(s), 1) for c, s in zip(df["代碼"], df["綜合分"])}
+
+
+def _check_mean_over_present_only(df):
+    got = _t1_scores(df)
+    assert got["2412"] == 25.0, f"2412 只有 eps/rs 兩因子有值，綜合分應為 (25+25)/2=25.0，實得 {got['2412']}"
+    assert got == {"2330": 77.8, "1101": 75.0, "2317": 63.9, "2412": 25.0}
+
+
+def test_composite_averages_only_present_factors():
+    """綜合分只平均『有資料的因子』（缺料因子不計入分母、不當 0）。
+
+    手算（三因子 pe_low / eps_high / rs_leader；2412 缺本益比 → 只有 2 個因子有值）：
+      effective_n = 3（三個因子各至少 1 檔有值）→ min_present = 0.5×3 = 1.5；嚴格 >：present≥2 才入榜 → 2412 (present=2) 入榜。
+      pe_low（3 檔有值，值越小分越高，pct×100 四捨五入 0.1）：1101(10)=100.0、2317(15)=66.7、2330(20)=33.3
+      eps_high（4 檔：2,5,10,20）：2412=25.0、1101=50.0、2317=75.0、2330=100.0
+      rs_leader（4 檔：0.5,1,2,3）：2412=25.0、2317=50.0、1101=75.0、2330=100.0
+      綜合分：
+        1101 = (100.0+50.0+75.0)/3 = 75.0
+        2330 = (33.3+100.0+100.0)/3 = 233.3/3 = 77.77… → 77.8
+        2317 = (66.7+75.0+50.0)/3 = 191.7/3 = 63.9
+        2412 = (25.0+25.0)/2 = 25.0   ← 分母是『有值因子數 2』；若誤用勾選因子數 3 → 16.7
+    """
+    df, _note = _rank_small(FS, **_t1_inputs())
+    _check_mean_over_present_only(df)
+    _row = df.set_index("代碼").loc["2412"]
+    assert pd.isna(_row["估值分"]), "缺料因子須為空白（None/NaN），不得被填成 0"
+
+
+def test_mutant_denominator_fixed_3_is_killed():
+    """把分母 len(_present) 改成固定 3 → 2412 變 16.7，契約須轉紅（先確認錨點恰出現 1 次，load_mutant 內 assert）。"""
+    _old = "round(sum(_present) / len(_present), 1)"
+    _check_mean_over_present_only(_rank_small(FS, **_t1_inputs())[0])     # 原碼為綠
+    mut = load_mutant(_FS_REL, _old, "round(sum(_present) / 3, 1)", name="_pick_denom3")
+    df_m, _ = _rank_small(mut, **_t1_inputs())
+    assert _t1_scores(df_m)["2412"] == 16.7, "突變確實生效（(25+25)/3=16.7）"
+    with pytest.raises(AssertionError):
+        _check_mean_over_present_only(df_m)
+
+
+def _t2_inputs():
+    # 兩因子（eps_high / rs_leader）；2412 只有 eps（rs_rows 無此檔）→ present=1。
+    return dict(
+        survivors={"stock_id": ["1101", "2330", "2412"], "eps": [5.0, 20.0, 2.0]},
+        pe_map={},
+        rs_rows=[{"代碼": "1101", "RS(σ)": 2.0}, {"代碼": "2330", "RS(σ)": 3.0}],
+        factors=["eps_high", "rs_leader"])
+
+
+def _check_boundary_present1_blocked(df):
+    assert "2412" not in _codes(df), "effective_n=2 → min_present=1.0；present=1 時 1 > 1.0 不成立，必須被擋下"
+    assert _codes(df) == ["2330", "1101"]
+
+
+def test_coverage_gate_boundary_present_equals_threshold_is_blocked():
+    """涵蓋門檻邊界：present 恰等於 min_present 時被擋（嚴格 >）。
+
+    手算：SCREENER_MIN_FACTOR_COVERAGE_RATIO = 0.5；兩個勾選因子 eps_high / rs_leader 各至少 1 檔有值
+      → _effective_n = 2 → _min_present = 0.5×2 = 1.0。
+      1101、2330：present=2 > 1.0 → 入榜；2412：只有 eps → present=1，1 > 1.0 不成立 → composite=None → drop_unscored 剔除。
+      （排名：eps 2330=100.0、1101=66.7；rs 2330=100.0、1101=50.0 → 2330 (100.0) > 1101 (58.35)。）
+    """
+    from shared.signal_thresholds import SCREENER_MIN_FACTOR_COVERAGE_RATIO
+    assert SCREENER_MIN_FACTOR_COVERAGE_RATIO == 0.5, "手算前提：涵蓋比例 0.5（SSOT 若改，須重算本測試）"
+    df, note = _rank_small(FS, **_t2_inputs())
+    _check_boundary_present1_blocked(df)
+    assert "1 檔" in note and "涵蓋未過半" in note, f"被擋 1 檔應在 note 揭露，實得 {note!r}"
+
+
+def test_mutant_coverage_gate_ge_is_killed():
+    """`>` 改 `>=`（present=1 >= 1.0 成立）→ 2412 以單因子 eps=33.3 混進榜單，契約須轉紅。"""
+    _check_boundary_present1_blocked(_rank_small(FS, **_t2_inputs())[0])  # 原碼為綠
+    mut = load_mutant(_FS_REL, "len(_present) > _min_present", "len(_present) >= _min_present",
+                      name="_pick_cov_ge")
+    df_m, _ = _rank_small(mut, **_t2_inputs())
+    assert "2412" in _codes(df_m), "突變確實生效（單因子股混入）"
+    with pytest.raises(AssertionError):
+        _check_boundary_present1_blocked(df_m)

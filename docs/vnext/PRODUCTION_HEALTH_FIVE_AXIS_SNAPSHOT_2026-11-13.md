@@ -4,7 +4,7 @@
 > - **是快照文件**：DEC-178 Quality Batch 2 工作項 ⑥。定義「Production 健康」的五個軸、每軸的判讀規則，並附**一個時點**的唯讀實測。
 > - **不是授權**：不解除任何 Gate／HOLD（`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177` Q1～Q7、#1124～#1126、#1164、#1119 全部維持原狀）；不新增 API／cron／Secrets；不觸發 workflow；不寫入任何外部系統。
 > - **不是 QA PASS**：單組撰寫（執行 AI），輸入為一份單組唯讀調查報告，撰寫者已重取關鍵事實（差異見 §7）；**尚未經非作者獨立 QA**。
-> - **快照會漂移**：下列 MEASURED 只對「**2026-11-13 約 06:15 UTC（TW 14:15，盤中）、origin/main＝`25e1930d`**」成立。日後引用請重跑 §6 指令，不得直接引用本文數字。
+> - **快照會漂移**：下列 MEASURED 只對「**2026-11-13 約 06:15 UTC（TW 約 14:15，收盤〔13:30〕後、官方盤後資料〔約 14:30〕尚未發布）、origin/main＝`25e1930d`**」成立。日後引用請重跑 §6 指令，不得直接引用本文數字。
 > - **標註**：**FACT**＝本次讀檔／`git show`／`gh api` GET 直接確認；**MEASURED**＝FACT 且附時點／SHA／run id；**INFERENCE**＝由事實推論；**NOT VERIFIED**＝本沙箱無從查證。
 > - **不得混讀的六組概念**：CI success ≠ Production success；抓取成功 ≠ 資料有效（空抓取不得讀成新鮮）；cron success ≠ 資料已進 main（發布 PR 未併入）；FAKE Preview ≠ 正式接線；workflow success ≠ 通知送達；沒有部署端證據一律 NOT VERIFIED。
 
@@ -13,7 +13,7 @@
 | 軸 | 判定 | 一句話 |
 |---|---|---|
 | 1 CI | **OK（僅限 CI）** | main `25e1930d` 的 push run 與 5 個 check run 全 success；不代表 Production OK |
-| 2 資料是否更新 | **FAIL（main 層面）** | main 的 `data_cache` 停在 2026-11-09；cron 照跑且 success，但發布 PR #1124～#1126 仍 open |
+| 2 資料是否更新 | **FAIL（讀法 A：落後 4，超過上限 3）／邊界（讀法 B：落後 3，剛好在上限）；兩者共同事實＝發布 PR 未併入 main** | main 的 `data_cache` 停在 2026-11-09；cron 照跑且 success，但發布 PR #1124～#1126 仍 open；讀法 A／B 見 §3 日頻落後天數 |
 | 3 資料是否有效 | **警示** | 3 個日頻 dataset 無 `last_error`；`finmind_m1m2`＝NO_NEW_DATA、`tw_pmi`＝UNDETERMINED（空抓取）；日頻已在 STALE 邊界 |
 | 4 正式 UI 接線 | **OK＝「未接線」屬實；部署端 NOT VERIFIED** | `app.py` 對 ui2 引用 0；UI2 只在 `app_ui2.py` Preview |
 | 5 決策與通知 | **警示；送達／Secrets NOT VERIFIED** | 持股推播 workflow success；其餘推播已停排程；Decision Digest 無非 digest 家族的 caller |
@@ -74,7 +74,7 @@
 | tw_pmi | 2026-10-01 | 2026-10-01 | 2026-10-01 | 2026-10-01 |
 
   main 的 `metadata.json` `updated_at`＝2026-11-09T19:40:36Z；`sector_flow/metadata.json` `updated_at`＝2026-11-09T19:57:52Z。`macro_forward_test` 分支只改 `signals.parquet`（`git diff --stat` 對 merge-base `85c65dfc`）。
-- **MEASURED 2：資料 cron 最近一輪（皆 event=schedule、head_branch=main、checkout SHA `85c65dfc`）**
+- **MEASURED 2：資料 cron 最近一輪（皆 event=schedule、head_branch=main；checkout SHA 只有前三列〔update_macro_history／update_sector_flow／update_macro_forward_test〕同為 `85c65dfc`，其餘各列不同：export_db `63da9515`、update_forward_test `acd1648c`、update_fundamentals `c07ae468`、update_etf_managers `1f3c4895`、recalibrate_macro `a9b327ef`；`gh api repos/…/actions/runs/<id>` 的 `head_sha` 親驗）**
 
 | workflow | run id | 建立（UTC） | 結論 |
 |---|---|---|---|
@@ -101,7 +101,7 @@
   - **INFERENCE**：main 停在 11-09 的直接原因是資料 PR 未併入 main。PR Check 為 action_required 是否卡住併入，NOT VERIFIED（branch protection 403）。
   - **FACT（觀察，不解釋）**：macro-history 分支上 `twii_ohlcv` 為 11-11，而 `finmind_inst`／`finmind_margin` 為 11-12；原因未查，NOT VERIFIED。
   - **處置待客戶裁示**：本文件**不建議** merge／close／rebase #1124～#1126，亦不建議任何外部對帳。決策節點為 DPE-3（外部對帳是否牽涉資料來源使用條款）、DPE-6（Streamlit Cloud 追蹤分支確認）、DPE-7（其他直推 main 的 workflow，下次排程 11-21）。已親驗存在於 `docs/BACKLOG.md`：`DEC176-DATA-PR-EVIDENCE-DECISIONS`、`DEC174-DATA-PR-1124-1126-DISPOSITION`、`DEC176-DPE7-1119-CHECKPOINT`；決策內容見 `docs/vnext/DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`。沒答覆＝維持 HOLD。
-- **本次判定：FAIL（main 層面資料未更新）**。這是「資料沒進 main」的判定，不是「cron 壞了」。
+- **本次判定：FAIL（讀法 A：以 11-13 為評估日、落後 4 個交易日，超過上限 3）／邊界（讀法 B：以 11-12 為預期最新日、落後 3，剛好在上限）；兩者共同事實＝發布 PR #1124～#1126 未併入 main**（兩種讀法差在評估日取哪天，詳見 §3；無休市日曆故不擇一）。這是「資料沒進 main」的判定，不是「cron 壞了」。
 
 ## 3. 軸 3：資料是否有效（有效 ≠ 抓取成功）
 
@@ -127,7 +127,7 @@
 | tw_pmi | 2026-10-01 | 172 | 抓取結果為空 | UNDETERMINED；「data.gov.tw 6100: CSV 解析出歷史列,窗口內 0 列,但 parser 略過列數無從核對」 |
 
 - **MEASURED（用 repo 自己的工具，`assess_daily(as_of=2026-11-09, calendar=None)`）**：`today=2026-11-12` → FRESH，落後「至多 3」；`today=2026-11-13` → **UNDETERMINED**，「休市表取不到，落後 0～4 個交易日，上限 3」。`count_weekdays_after(2026-11-09, 2026-11-13)`＝4。
-- **日頻落後天數＝自推，未接 TWSE 休市日曆**：沙箱取不到 TWSE 休市表，`calendar=None`。若 11-10～11-13 皆為交易日，以 11-13 為評估日落後 4 個交易日（> 3，會是 STALE）；若把「11-13 盤後才出資料」當作預期最新日為 11-12，則落後 3，剛好壓在邊界。**這兩種讀法的差別在於評估日取哪天，不是資料有變**；`freshness_policy` 本身沒有盤中／盤後概念。
+- **日頻落後天數＝自推，未接 TWSE 休市日曆**：沙箱取不到 TWSE 休市表，`calendar=None`。若 11-10～11-13 皆為交易日，以 11-13 為評估日落後 4 個交易日（> 3，會是 STALE）；若把「11-13 官方盤後資料（約 14:30）在快照時點（TW 約 14:15）尚未發布」納入考量、以 11-12 為預期最新日，則落後 3，剛好壓在邊界。**這兩種讀法的差別在於評估日取哪天，不是資料有變**；`freshness_policy` 本身沒有盤中／盤後概念。
 - **INFERENCE**：`finmind_m1m2` 停在 09-01 需對照 CBC M1B／M2「月後約 27 天才上架」（`CLAUDE.md` §2.3，2026-09-28 更正；程式端 SSOT `shared/staleness.MACRO_PUBLICATION_LAG_DAYS["m1b_m2"]`）判讀，不能單看日期；`tw_pmi` 的 UNDETERMINED 表示「窗口內 0 列」是否真為無新資料**無從核對**。
 - **本次判定：警示**。三個日頻資料沒有錯誤紀錄但已在 STALE 邊界；`tw_pmi` 有效性未決；`m1m2` 為已核對的 NO_NEW_DATA。
 
@@ -170,7 +170,7 @@
 | push_daily_signals／push_watchlist_signals | **只有 workflow_dispatch**（註解：排程已停用 user 2026-08-23） | 32467759881／32468140799，2026-08-21 | success／success（停排程前） |
 
 - **`--health-check` 心跳**：腳本有該參數（`scripts/push_watchlist_signals.py` 第 97、188 行），原設計週一自動帶；但該 workflow 排程已停，**目前沒有任何排程中的 `--health-check` 心跳**。
-- **Decision Digest**：`src/`、`app.py`、`app_ui2.py`、`scripts/`、`shared/` 內 `decision_digest_builder` 的引用僅在 digest 家族自身（`shared/decision_digest_coverage.py`、`src/services/decision_digest_assembly.py`、`decision_digest_builder.py`）；`tests/test_decision_digest_invariants_guard.py:286` 的 `ALLOWED_CALLERS: frozenset = frozenset()`。**無非 digest 家族的 production caller**；推播目前不經 Digest。
+- **Decision Digest**：`git grep -l decision_digest_builder origin/main -- src app.py app_ui2.py scripts shared`（親驗，origin/main＝`25e1930d`）實際命中**僅 1 檔**：`src/services/decision_digest_assembly.py`（digest 家族自身的組裝層；`app.py`、`app_ui2.py`、`scripts/`、`shared/` 命中 0）；`tests/test_decision_digest_invariants_guard.py:286` 的 `ALLOWED_CALLERS: frozenset = frozenset()`。**無非 digest 家族的 production caller**（其餘引用只在 `tests/`）；推播目前不經 Digest。
 - **INFERENCE**：持股推播吃 main 上的資料（軸 2：停在 11-09）；訊息內是否標示資料日，**未讀 run log，NOT VERIFIED**。
 - **本次判定：警示**。workflow success 只代表 job 沒報錯；LINE／Telegram 實際送達、Secrets 有效性＝**NOT VERIFIED**。
 
@@ -188,7 +188,8 @@ for w in update_macro_history update_sector_flow update_macro_forward_test updat
 python3 -c "import sys;sys.path.insert(0,'.');from datetime import date;from shared.freshness_policy import assess_daily;print(assess_daily(date(2026,11,9),today=date.today(),calendar=None))"   # 軸3
 git grep -c ui2 origin/main -- app.py; git grep -n R_DATA_NOT_WIRED origin/main -- src                         # 軸4
 for w in push_holdings_daily push_weekly_report push_daily_signals push_watchlist_signals; do git show origin/main:.github/workflows/$w.yml | sed -n '/^on:/,/^concurrency:/p' | head -8; done   # 軸5
-git grep -l decision_digest_builder origin/main -- src app.py app_ui2.py scripts shared; git grep -n "ALLOWED_CALLERS: frozenset" origin/main -- tests
+git grep -l decision_digest_builder origin/main -- src app.py app_ui2.py scripts shared   # 預期僅 src/services/decision_digest_assembly.py
+git grep -n "ALLOWED_CALLERS: frozenset" origin/main -- tests
 ```
 - 注意：`gh pr view`／GraphQL 與 `…/branches/main/protection` 在此環境皆 403，一律用 REST。讀 main 請用 `git show origin/main:<path>`（本工作樹在 `ccr-6ca9d77e-90ji2g`，不是 main）。
 
