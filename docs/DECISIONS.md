@@ -9336,3 +9336,156 @@ CI success 不代表資料已更新，更不代表 Production 已有效。
 - **本條不授權**：任何外部對帳、連網、登入第三方、抓取或儲存外部資料、修改 `data_cache`、合併／關閉／rebase #1124～#1126、處置 #1164、清理 #1119、修改或刪除不明 worktree、UI 施工、施工六項 P3 候選。
 - **更早紀錄**：DPE-3／DPE-6 的選項與 AI 推薦（先 D、再 B；DPE-6 選 B）出自 `DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（RECOMMENDATION，非裁示）；客戶（經訊息轉述）**採納其中 DPE-3 的 D 與 DPE-6 的 B**；推薦中「**D 之後的 B**」（條款確認後選 DPE-3 的 B 做小範圍唯讀對帳）**未被採納**，仍待客戶在條款確認後另行明示。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶「聽你的建議」原始回覆（repo 內無）；「資料優先方案 A」提案全文（repo 內無）；DPE-3 所涉各來源的條款原文（僅 FinMind 有 PARTIALLY VERIFIED 原文，見證據文件 §1）；Streamlit Cloud 的實際 Repository／Branch／Main file path／部署觸發方式（見證據文件 §2）。本條 AI 整理與本批證據文件為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-180｜客戶 2026-11-13「DPE-6 Cloud 證據補登與 NAS／舊 UI 取數路徑稽核」授權轉錄：Cloud 啟動日誌資訊補登（分級）、唯讀稽核五假說 A–E（2026-11-13；只追加；非 QA PASS）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-180" docs/DECISIONS.md` 0 命中，DEC-179 為上一號）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～179 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **特別注意（來源鏈）**：訊息所述「客戶提供的 Cloud 啟動日誌」——**日誌原文不在 repo**，本條只收錄客戶訊息對日誌內容的轉述（Repository／Branch／Main file／Python／Streamlit 五項），日誌的日期、commit SHA、repo owner 訊息均未給。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～179 同一算法**（本組先以同法重算 DEC-179 的 fence，得 `beb57044…e6951e6`，與其登記值相符；DEC-178 得 `3479c09d…a924b473`，亦相符，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力；但見上方來源鏈提醒）**：fence 內容 sha256＝`3e0ee8f12e2ba53bb0d2fcafe562aac84f74ba607b43109dfc867a01c34dc19f`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜DPE-6 Cloud 證據補登與 NAS／舊 UI 取數路徑稽核
+Model：Claude Sonnet 5.5
+Mode：靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard
+客戶新增正式資訊：
+Cloud App：
+https://my-stock-dashboard-fh2pfdgs2amdtlgvkxvest.streamlit.app/
+客戶提供的 Cloud 啟動日誌顯示：
+
+* Repository：my-stock-dashboard
+* Branch：main
+* Main file：app_ui2.py
+* Python：3.14.10
+* Streamlit：1.59.2
+
+客戶確認：
+
+* 部署更新需要手動 Reboot／重新部署。
+
+請標明客戶陳述、日誌觀測與尚未驗證的事項，不要將其混成同一級證據。
+新增調查要求：
+「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？請參考舊 UI 的方式。」
+本次授權：
+① GitHub-first，核實最新 main、PR、CI、DEC-179 與相關 Gate。
+② 將 DPE-6 新證據按既有 SSOT 規範補登。不得把客戶對部署方式的說明冒充 Cloud 自動部署機制的實測。
+③ 進行唯讀技術稽核，直接比對：
+
+* app.py 舊 UI 的實際資料取得流程。
+* app_ui2.py New UI2 的 Preview／Real Feed。
+* proxy_helper.fetch_url。
+* NAS Squid 與 nas_relay_fetch。
+* 既有 L1 fetcher／L3 canonical services。
+* New UI2 已接線及未接線的資料欄位。
+* GitHub 資料發布 PR 與本地 parquet 的關係。
+
+特別確認以下假說：
+A. New UI2 預設為 FAKE Preview。
+B. New UI2 Real Feed 不連網，只讀已發布資料。
+C. NAS 未配置或不通造成舊 UI 的部分資料失敗。
+D. 資料 PR HOLD 使 main 快取過期。
+E. Cloud 未重新部署造成畫面版本落後。
+逐項標 FACT／INFERENCE／NOT VERIFIED。
+交付一份最小資料流對照：
+來源 → NAS／Proxy → L1 → L3 → 快取／資料契約 → New UI2 → 畫面
+區分「資料未抓到」「資料尚未發布」「尚未接線」「部署版本未更新」，不得混為同一原因。
+禁止：
+
+* 修改 NAS／Proxy／Secrets。
+* 顯示任何憑證值或含密碼 URL。
+* 修改 app.py 或 app_ui2.py。
+* 修改正式資料接線、UI、資料契約或 allowlist。
+* 外部 API 探測、資料回補。
+* Merge／Close／Rebase #1124～#1126。
+* 自行解除 DG-LIC、WIRING-GATE 或其他 HOLD。
+
+若需要文件留證，沿用既有 QA／CI／Merge Gate 流程；不要建立第二套 SSOT。
+最終回報：
+
+1. New UI2 缺資料的已確認原因。
+2. NAS 在舊 UI 與 New UI2 的實際位置。
+3. 哪些問題只需資料發布，哪些需要正式接線。
+4. 最小、安全、可重用的建議架構。
+5. 尚待客戶裁示的 Gate。
+6. 是否需要客戶再提供資訊。
+
+不施工正式接線，完成後停在安全點。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 本次授權範圍與禁止清單（逐條對照，原樣不增不減）**
+
+| 客戶原文 | 本組整理 |
+|---|---|
+| ① GitHub-first，核實最新 main、PR、CI、DEC-179 與相關 Gate | 授權（前置核實）。本組基準：`origin/main`＝`587e1944f546df142fb134578b3f64887b451026`（`git rev-parse` 實查；時點快照，以最新 GitHub 為準）。main push CI run `43425164513`（head_sha＝587e194）：completed／success（**總管 2026-11-13 查，本組未連網重取**）；CI success ≠ 資料已更新 ≠ Production 有效 |
+| ② 將 DPE-6 新證據按既有 SSOT 規範補登；不得把客戶對部署方式的說明冒充 Cloud 自動部署機制的實測 | 授權（登錄）。分級見 (二)。客戶「部署更新需要手動 Reboot／重新部署」**登錄為客戶陳述**，**不是** Cloud 設定頁實測，**不證明** Cloud 自動部署或不自動部署 |
+| ③ 唯讀技術稽核，直接比對：`app.py` 舊 UI 實際取得流程；`app_ui2.py` New UI2 Preview／Real Feed；`proxy_helper.fetch_url`；NAS Squid 與 `nas_relay_fetch`；既有 L1 fetcher／L3 canonical services；New UI2 已接線及未接線欄位；GitHub 資料發布 PR 與本地 parquet 的關係 | 授權（**唯讀**：讀碼、讀 repo 內文件、讀 git 物件）。結論見 (四)，細節見證據文件 `docs/vnext/UI2_NO_DATA_ROOT_CAUSE_NAS_AND_DPE6_CLOUD_EVIDENCE_2026-11-13.md` |
+| 特別確認假說 A～E，逐項標 FACT／INFERENCE／NOT VERIFIED | 見 (四) 判定表 |
+| 交付最小資料流對照（來源→NAS／Proxy→L1→L3→快取／資料契約→New UI2→畫面），區分「資料未抓到」「資料尚未發布」「尚未接線」「部署版本未更新」，不得混為同一原因 | 見證據文件 §6、§8 |
+| 若需要文件留證，沿用既有 QA／CI／Merge Gate；不要建立第二套 SSOT | 遵守：決策只在本條；證據文件是證據不是決策來源 |
+
+禁止清單（客戶原文「禁止」段，逐項原樣對照；**本組全部遵守，無一項被放寬**）：修改 NAS／Proxy／Secrets；顯示任何憑證值或含密碼 URL；修改 `app.py` 或 `app_ui2.py`；修改正式資料接線、UI、資料契約或 allowlist；外部 API 探測、資料回補；Merge／Close／Rebase #1124～#1126；自行解除 `DG-LIC`、`WIRING-GATE` 或其他 HOLD。另依客戶「不施工正式接線，完成後停在安全點」。
+
+**(二) 客戶新資訊分級（客戶明示「不要混成同一級證據」）與 DPE-6 四欄位更新讀法**
+
+| 級別 | 內容 | 說明 |
+|---|---|---|
+| **客戶陳述** | Cloud App 網址（完整網址見 fence；子網域前綴 `fh2pfdgs2am…`）；「部署更新需要手動 Reboot／重新部署」 | 客戶說的話；**不是** Cloud 設定頁實測、不是機制證明 |
+| **日誌觀測**（客戶提供的 Cloud 啟動日誌；**原文不在 repo、經客戶訊息轉述；觀測日期未給；未含 commit SHA、repo owner**） | Repository＝`my-stock-dashboard`；Branch＝`main`；Main file＝`app_ui2.py`；Python 3.14.10；Streamlit 1.59.2 | 仍屬客戶轉述：**日誌本身不在 repo，無法複驗**；不是設定頁（其證據力是否高於「客戶陳述」＝INFERENCE，不據以升級） |
+| **NOT VERIFIED** | repo owner（可能是 fork）；實際部署 commit；日誌日期；該 app 是否即客戶畫面所見的 app；Cloud Secrets 是否配置 NAS；Cloud 是否自動部署；畫面實際版本 | 全部待客戶補件，見 (六) |
+
+一致性（FACT，本組核對）：Streamlit 1.59.2 落在 `requirements.txt:60` 的 `streamlit>=1.56.0,<1.60.0` 範圍內（只證明在範圍內）；Python 3.14.10 與 `ARCHITECTURE.md:613`、`STATE.md:3398` 的「Cloud 3.14」記載一致，但 `.python-version` 內容為 `3.12`、所有 workflow 為 3.11（CI 綠不證明 Cloud 3.14 行為；Cloud 是否採用 `.python-version` 無文件，NOT VERIFIED）。**INFERENCE**：新網址前綴 `fh2pfdgs2am…`（repo 內此前 0 命中）與 repo 內舊記載前綴 `namd8rh9b8s…`（`STATE.md:663` 等）不同，很可能是兩個不同的 app（舊 `app.py` 站 vs 新建 `app_ui2.py` Preview 站；無平台證據）。
+
+**DPE-6 四欄位更新讀法**（針對「產生該日誌的那個 app」；**取代** `DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §2.3 的「全部 NOT VERIFIED」讀法，該文件原文不改）：
+
+| 欄位 | 更新後讀法 |
+|---|---|
+| Repository | 客戶轉述日誌：`my-stock-dashboard`；**owner NOT VERIFIED**（不能排除 fork） |
+| Branch | 客戶轉述日誌：`main`；**日誌日期與部署 commit NOT VERIFIED** |
+| Main file path | 客戶轉述日誌：`app_ui2.py`；**至少存在一個此入口的 app**；是否另有 `app.py` 的 app NOT VERIFIED |
+| 部署觸發方式 | **客戶陳述**「需手動 Reboot」；非實測、非設定頁證據 |
+
+**仍不得宣稱部署追蹤 main 最新提交；仍不得宣稱 Cloud 自動部署，也不得宣稱不自動部署。**
+
+**(三) 本條不是新的施工授權；對 DEC-179 的關係**
+
+- 本條授權範圍僅限 (一) ③ 的**唯讀稽核**與文件登錄。**不解除任何 Gate／HOLD**（`DG-LIC`、`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-PIT`、DPE-1／2／4／5、DEC-177 Q1～Q7、`REORG3C-Q5-GATE`、D6、Old UI 移除、OneBrain 接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist 均未動）。
+- **DEC-179**：DPE-6＝B 的裁示維持。客戶本次提供的是**部分補件**（三級分類見 (二)），**仍未達性質 iv（Cloud 設定頁證據）**。DEC-179 原文不改；其「DPE-6 尚待客戶補件」自本條起讀作「已有部分補件（日誌轉述＋客戶陳述），設定頁證據與 owner／commit 仍缺」。DPE-3＝D 不受影響，仍 BLOCKED。DEC-179 對「聽你的建議」不外推的限制不受影響。
+- 本條單組撰寫，**待非作者獨立 QA**（QA 結果由總管於 PR 補記；本條**不得被引用為「已 QA PASS」**）。
+
+**(四) 稽核結論摘要（假說 A～E；單組、唯讀、未連網、未執行任何程式）**
+
+| 假說 | 判定 | 要點 |
+|---|---|---|
+| A. New UI2 預設為 FAKE Preview | **FACT（程式碼層）** | `src/ui2/shell/app.py:86-87` 預設 `FEED_FAKE`；預設場景 cold；切換只在 `?ui2_dev=1`；Cloud 實際畫面是否為 FAKE＝NOT VERIFIED（需客戶看頂部標示） |
+| B. Real Feed 不連網，只讀已發布資料 | **FACT（UI2 呼叫路徑）** | `real_feed.read_real_snapshot` 只呼叫三個唯讀 reader；UI2 目錄 grep 網路／proxy／secrets 關鍵字 0 命中；有守衛 G2F。**UI2 不用 NAS 是設計並有守衛強制，不是漏接**。測試是否 PASS＝NOT VERIFIED（未執行） |
+| C. NAS 未配置或不通造成舊 UI 部分資料失敗 | **NOT VERIFIED** | repo 內「NAS 變數皆未設定」的 2026-11 紀錄描述的是 AI 沙箱，不是客戶 Cloud，不可外推；最後一筆 Cloud 側「NAS 狀態」紀錄在 2026-07-13（`STATE.md:2953-2955`），其後 2026-08 的 Cloud 紀錄（`STATE.md:663` 實機驗收、`HANDOFF_2026-08-15.md`）未涉及 NAS 配置；即使 NAS 正常 UI2 也不呼叫它 |
+| D. 資料 PR HOLD 使 main 快取過期 | **分層**：main 資料停在 2026-11-09＝FACT；較新資料在 PR 分支＝FACT；「PR 未併入是原因」＝INFERENCE；「因此畫面完全沒資料」**不成立**（INFERENCE） | 台股卡讀 main 的 11-09，距今 4 天 ≤ 日頻門檻 7 天，顯示資料日但不出現過期警示（時點註記：僅 2026-11-13 成立；2026-11-17 起 age_days＝8 將轉為過期；UI2 實際 as_of 來自 parquet 最後一列〔未直接讀，沙箱無 pyarrow〕，此處用 metadata 自陳值）；`finmind_m1m2`＝NO_NEW_DATA（請求窗口內無新月份，非連線／抓取失敗）、`tw_pmi`＝UNDETERMINED（最近一次抓取結果無法判定：無新資料或 parser 略過，metadata `fetch_evidence` 寫「parser 略過列數無從核對」；定義見 `shared/upstream_state.py:37`）；故 tw_pmi 不歸入「資料未抓到」，也不確認為「資料已是最新」；二者皆非 PR HOLD 造成 |
+| E. Cloud 未重新部署造成畫面版本落後 | **NOT VERIFIED** | repo 無 deploy／webhook workflow；UI2 畫面無 commit／版本字串，無從分辨「舊部署」與「新部署但資料舊」；客戶陳述需手動 Reboot 僅為陳述 |
+
+**一句話答覆客戶問題「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？」**：**New UI2 沒有用 NAS，這是設計（並有守衛強制），不是漏接**；Cloud 上的 UI2 即使配好 NAS 也不會用。要讓 UI2 顯示更多真資料，路徑不是「讓 UI2 走 NAS」，而是 (1) 資料發布（cron 用 NAS 抓→PR 併入 main），(2) 正式接線（L3 唯讀 adapter＋白名單），**兩者皆是 Gate 項**。畫面「沒資料」最可能的直接原因（INFERENCE，未實機驗）：預設 FAKE cold 的「尚未載入」＋Real 模式下絕大多數欄位尚未接線＋位階狀態檔在 Cloud 不存在；資料落後（11-09）是次要，且不會顯示成空白（11-17 起轉過期，屆時需重評）。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）**不得混為一談**，對照見證據文件 §8。
+
+**(五) 建議架構方案 A／B／C（RECOMMENDATION，非裁示；全部未獲授權）**
+
+| 方案 | 做法 | 結論 |
+|---|---|---|
+| A（總管推薦） | 維持 UI2 無網路架構：先解資料發布（DPE-1／2／4／5 另案）→逐欄位走 WIRING-GATE 接線（重用既有 `*_fact_service`）→位階狀態檔改由 cron 發布到 `data_cache`→UI2 加「版本＋資料日」小標（需線框草稿 Gate）。**前置 Gate**：②外資／融資／板塊接線除 `I1144-WIRING-GATE` 外，另受 `DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE` 阻塞（見 BACKLOG「Quality Batch 1 完成同步」段）；③位階狀態檔改由 cron 發布涉及新增發布流程＝「新增 API／cron／Secrets」類 HOLD，需另行裁示，且單獨**不保證**位階顯示——位階還需 session `warroom_summary` 來源（`real_feed.py:11`、ISSUE1110）且 `BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds.py:277`；`real_canonical.py:303-305`），即使狀態檔發布，位階仍可能是灰「尚缺市場廣度」，需另案裁示 | 推薦；多個客戶裁示、速度慢 |
+| B | 讓 UI2 Real Feed 在 Cloud 直接呼叫 L1 fetcher（走 proxy_helper／NAS） | **不建議**：違反 G2F 守衛與「UI 不抓資料」，牽涉 `DG-LIC`，NAS 配置未驗。A 與 B 呈現的 TWSE／FinMind／Yahoo 資料同樣受 `DG-LIC` 約束（呈現與再散布面）；B 的額外問題是 Cloud 執行期自動化存取（Cloud 側可能被來源擋〔`STATE.md:2859-2873` 記載 2026-07-14 雲端 proxy 對 FRED 回 403〕、timeout 64 秒〔`ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md` 的 `fetch_url` 順序段〕、200 錯誤頁被快取 300 秒）與需放寬 G2F 守衛（放寬 allowlist 屬禁區） |
+| C | 只改文案／標示（FAKE cold 理由句與 CTA、部署版本標），不接新資料 | 可併入 A 的草稿；屬 UI 文案／版面 Gate，需草稿 |
+
+比較（正確性、風險、速度、Token／成本）見證據文件 §11。**A／B／C 皆為 RECOMMENDATION，皆未獲授權**；客戶本次明示「不施工正式接線」。
+
+**(六) 尚待客戶裁示的 Gate 與需客戶再提供的資訊**
+
+- **Gate（本條不授權、不施工）**：`DG-LIC`（DPE-3＝D 進行中，BLOCKED）；`I1144-WIRING-GATE`（逐欄位正式接線）；DPE-1／2／4／5（**不得自行推進、不得 merge #1124～#1126**）；UI 草稿 Gate（FAKE cold 理由句與 disabled CTA 文案／互動語意；UI2 版本＋資料日標示；🗂 資料新鮮度總覽 Q1～Q7）；位階狀態檔發布方式；`DEC178-QB3-*` P3 候選仍未授權。
+- **需客戶再提供（最小；全部排除 Secrets／API Key／Token／密碼）**：(1) 打開該 Cloud 網址（不加 `?ui2_dev=1`），頂部第一列是「示意資料（FAKE）」還是「Real-data Preview」（或截圖頂部＋台股卡）；(2) 啟動日誌日期，以及 Manage app 內可見的 repo owner（owner/repo）與部署 commit 前 7 碼（看得到才填）；(3) 舊 app（前綴 `namd8rh9b8s…`）是否仍存在、Main file 是否 `app.py`；(4) （選填）Cloud Secrets 內 `PROXY_URL`、`NAS_PROXY_URL`、`PROXY_HOST`、`NAS_BASE_URL`、`NAS_API_KEY` 是否非空——只要「是／否」，**不要貼任何值**。可複製回覆範本見證據文件 §13。
+
+#### DEC-180 範圍外與 NOT VERIFIED
+
+- **範圍外**：本條不修改 NAS／Proxy／Secrets、`app.py`／`app_ui2.py`、`src/`、`tests/`、`shared/`、`scripts/`、`.github/`、`data_cache`、`.claude/`；不授權外部 API 探測、資料回補、對帳；不授權合併／關閉／rebase #1124～#1126；不授權 UI 施工；舊 UI 觀察到的資料問題 P1～P9 僅登記為 backlog 候選觀察（P3），**不修、不登為授權工作**。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Cloud 啟動日誌原文、日期、commit、owner；客戶畫面實際版本與頂部標示；Cloud 是否自動部署；Cloud Secrets 內容（含 NAS 配置）；GitHub 端 secret 是否有值；舊 app 現況；parquet 最後一列日期（沙箱無 pyarrow，資料日為 metadata 自陳值）；相關測試是否通過（未執行任何測試／程式）；UI2 卡片實際走哪套新鮮度門檻；GitHub Issue #1107／#1108 與 Deployments／Environments 未檢視；本地為淺層複製。四組稽核皆單組，總管另親驗 3 點（見證據文件 §0）。本條 AI 整理與本批證據為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
