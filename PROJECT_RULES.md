@@ -1169,3 +1169,24 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 - 不要求、也不允許 AI 在客戶離線或應用程式中斷後自行背景救援（第 32 節第 1 點同）。
 - 不新增 SSOT 檔；權威文件分工照第 32 節第 3 點。
 - 本節**單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」。
+
+## 第 34 節｜專業 Agent 路由（最小規則；客戶 2026-11-13，DEC-178）
+
+> **來源與位階**：`docs/DECISIONS.md` DEC-178（客戶 2026-11-13「專業 AI Agent＋六項品質補強」，經派工訊息轉錄、逐字 fence、原始對話 repo 內 NOT VERIFIED）。本節是**路由索引**，不是授權、不解除任何 Gate／HOLD、不是第二份 SSOT；與 `CLAUDE.md`／本檔其他節衝突時以後者為準。Agent 的 Role／Trigger／Inputs／Tools／Forbidden／Output／Escalation 只維護於 `.claude/agents/`，**本節不複製其內容**。
+
+1. **定義位置**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md`。結構與權限由 `tests/test_agent_definitions_guard.py` 守衛（目錄內只准這三檔）。
+2. **路由表（任務特徵 → Agent）**：
+
+| 任務特徵 | Agent |
+|---|---|
+| 資料來源／品質、DataPR（資料 PR）、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯 | `stock-data-integrity` |
+| UI 設計、五頁契約、手機首屏、互動一致性、Old UI First、390／1440 驗收 | `stock-ui-ux`（本定義唯讀；實作時由總管另派一般實作 AI，並以其規則為約束） |
+| PR diff、CI、回歸風險、Merge Gate、金融語意驗收 | `stock-independent-qa` |
+| 跨類任務 | 總管拆分；各 Agent 只處理自己面向，不重疊 |
+
+3. **「按需」＝怎麼派，不是要不要派**：三個 Agent 預設不全數載入，依任務特徵挑選；**不改** `CLAUDE.md` §-2 規則 1「每一次任務都派工」。重疊時順序：Data（事實）→ UI（呈現）→ 實作 → QA（最後、非作者）。
+4. **獨立性**：QA 不得驗收自己修改的檔案或自己派生之 Agent 的產出；同一 PR 至少兩組不同角度（例：事實查證／治理越權）——此為 `CLAUDE.md` §-2 規則 4，Agent 定義不取代它。CI 證據須對應 PR 當前 head SHA。
+5. **不得擴權**：三個 Agent 皆不含 Write／Edit／NotebookEdit／Agent 工具，不得由 Agent 定義取得任何新權限；與第 31 節（ChatGPT×Claude 分工）、第 31.2 節自主 merge 條件、第 33 節預防性交接並存，互不取代。
+6. **第二批候選（Investment Logic、OneBrain、GitHub Auditor）僅為候選、本批不建立**；日後建立須客戶另行授權並同步守衛測試白名單。
+7. **NOT VERIFIED**：(a) Bash 唯讀僅為內文**指示性約束**，非機械強制，是否有 settings 層強制 NOT VERIFIED（本批不改 `.claude/settings*`；BACKLOG `DEC178-AGENT-BASH-READONLY-ENFORCEMENT`）；(b) 三檔在 Claude Code 實際載入與路由效果（新對話以 `/agents`、`/doctor` 實測；BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；(c) MCP 工具名在其他環境是否存在（官方未明載）。
+8. 本節**單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」。
