@@ -71,6 +71,7 @@
 4. 新客戶裁示先登記於「1. Decision Register」，再在受影響列的 customer decision 欄引用其 ID。
 5. `HANDOFF.md` 只寫「見 `docs/BACKLOG.md` <ID>」，⛔ 不在 HANDOFF 重複維護細項。
 6. （2026-10-28 新增，append-only；客戶 DEC-103）**新增列須標 P0／P1／P2**（定義與排程規則依 `PROJECT_RULES.md` 第 23 節 Scope Inflation Guard；P2 只能登記、不得自動插隊）；**既有列不回溯重標**（避免為整理規則開 Stage）。
+7. （2026-11-13 新增，append-only；客戶授權之 DEC-178 Quality Batch 1 ②；內容為 AI 整理）**新增列須在 `source／PR` 或 `dependency` 欄寫規格／需求 ID（DEC-NNN、BACKLOG ID 或規格文件名），並於 `next action` 欄註明 Producer／Consumer（可寫「無」）**；「不適用」或「無」視為已填；對應 `.github/PULL_REQUEST_TEMPLATE.md`「需求 ID／核准／Gate／Impact」小節與 `PROJECT_RULES.md` 第 7 節 2026-11-13 補註（DoR）；**既有列不回溯**（避免為整理規則開 Stage）。本規則不解除任何 Gate、不授權任何施工。
 
 ### 0.4 證據來源揭露（§-2 規則 6）
 

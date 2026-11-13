@@ -10,6 +10,19 @@
 -->
 
 
+## 需求 ID／核准／Gate／Impact（DEC-178 Quality Batch 1 ② 的最小入口；非 UI PR 也填，不適用寫「無」）
+
+> Producer→Consumer／不可變更事項為 ② 開發前契約項（客戶訊息明列）；**完整 PR Impact Check（⑤）於 Batch 2 完成**，本小節不等於 ⑤ 已落地。
+
+- 需求／規格 ID（DEC-NNN／BACKLOG ID）：______
+- 核准狀態（已核准／Candidate／不適用；⛔ Candidate 不得當 Approved）：______
+- 影響範圍＋資料依賴：______
+- Producer→Consumer（一行；可寫「無」）：______
+- 不可變更事項＋適用 Gate（引用 `PROJECT_RULES.md` 第 4 節／`DG-*`／`I1144-WIRING-GATE` 名稱，不在此重新定義）：______
+- 驗收案例（測試名或步驟）：______
+- 完成層級：[ ] Preview（FAKE／REAL shadow）　[ ] Production（正式接線，附證據；無證據標 NOT VERIFIED）
+- UI2 主線 PR 另答 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §1 六問（不另設第二套問卷）
+
 ## §-1 工作準則對齊
 
 <!-- 勾選或留空 -->
