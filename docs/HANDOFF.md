@@ -864,7 +864,7 @@ Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High�
 - **仍 NOT VERIFIED**：DEC-177 fence 與客戶原訊息逐字一致性；預防性交接制度更早核准紀錄；部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440；#1176 合併後 main push CI（run 43334257638）結果；裁示單 §6.1 與調查事實的單組性。本段單組撰寫，未經第二組驗證。
 
 
-## 2026-11-13｜Agents 批次後最新接手點（現行有效接手點；只追加；非 QA PASS）
+## 2026-11-13｜Agents 批次後最新接手點（~~現行有效接手點~~〔已被檔尾「#1178 合併後狀態更新」段取代為現況；15 欄僅作欄位模板，下列欄位現況以檔尾新段為準（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕；只追加；非 QA PASS）
 
 > **取代關係**：本段取代上方「2026-11-13｜UI 實作前調查與裁示單提交後最新接手點」段的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。**該段末的「新對話接手提示語」已過期，改指本段末的提示語**。GitHub 操作事實優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。不另建第二份 handoff（`PROJECT_RULES.md` §20.1）。
 > **單組聲明**：本段與本 PR 為**作者單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）。**不是授權**；不解除任何 Gate／HOLD。AI 推薦一律是 RECOMMENDATION，不是客戶裁示。
@@ -948,3 +948,89 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ```
 
 - **仍 NOT VERIFIED**：DEC-178 fence 與客戶原訊息逐字一致性；三個 Agent 的實際載入與路由效果；Bash 唯讀 settings 層是否強制；#1177 的非作者 QA／CI 細節與 #1177 合併後 main push CI；Agent frontmatter 格式官方文件（單組轉述）。本段單組撰寫，未經第二組驗證。
+
+
+### 📌 狀態更新（2026-11-13，#1178 合併後；更新上一段 15 欄中已過期的欄位，其餘欄位仍有效）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「Agents 批次後最新接手點」段除**標題行就地加刪除線**（「現行有效接手點」→ 已被本段取代為現況）外，內文**一字未動**；其中「current PR ＝ #1178（Draft）」「本 PR 未合併」「待非作者 QA」等描述，自本段起以本段為準（時點快照，一律以 GitHub 重查）。**本段是檔尾唯一現況段**；上一段 15 欄僅作欄位模板，逐欄現況見下表。**單組聲明**：本段為作者單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。
+
+**〇、上一段 15 欄逐欄現況（本段開頭明列；欄位名稱沿用 `PROJECT_RULES.md` §20.2）**
+
+| 狀態 | 欄位 | 說明 |
+|---|---|---|
+| **已過期（以本段為準）** | latest verified main SHA | 上段 `63da9515` → 本段 `c56afd45`（見一） |
+| 已過期 | current working branch | 上段為 #1178 的 head 分支；#1178 已合併，本同步 PR 使用同名新推送分支（以 GitHub 為準） |
+| 已過期 | current PR | 上段 #1178（Draft）→ 已合併；本批無開啟中的功能 PR（見一） |
+| 已過期 | completed in this batch／exact current stopping point | 上段「待非作者 QA／同 head CI」已完成並合併（轉述自 PR 描述，細節 NOT VERIFIED）；已完成表補 #1178（見一） |
+| 已過期 | next single action 的**前置條件** | 上段「本 PR 合併後…」：條件已成立；動作本身實質不變，另補前置查核（見五） |
+| 已過期 | tests／CI 已完成／尚未完成、uncommitted work、last checkpoint timestamp | 皆為 #1178 合併前時點快照；現況見一與 BACKLOG `DEC178-PUSH-CI-C56AFD45` |
+| **仍有效** | unresolved true Stop Gates | 全部未解除（含 🗂 Q1～Q7 仍待客戶回覆） |
+| 仍有效 | relevant evidence location | `.claude/agents/`、守衛測試、第 34 節、DEC-178 等位置不變 |
+| 仍有效 | recommended Model／Effort（含 Mode） | Sonnet 5.5／High／靜默自主巡航（現行值仍只以檔尾最新 Resume Checkpoint 為準） |
+| 仍有效 | current task／batch 中的 Quality Batch 1～3 | 尚未開始；順序、前置與限制見 DEC-178 與 BACKLOG |
+| 仍有效（其餘各節） | 客戶授權（DEC-178）、仍 HOLD、Gate、禁止事項、風險；上段提示語中的**規則部分**（HOLD／禁止、靜默回報、FACT／INFERENCE／NOT VERIFIED、Token 基準、時點快照警語） | 內容仍有效；提示語中「確認 Agents PR 已合併」「唯一 NEXT 前置」等**時點部分**已過期，改用下方第七節提示語 |
+
+**一、已核對事實（FACT；作者 2026-11-13 02:13Z 起以 `git`／`gh api` REST 實查，會漂移）**
+
+| 項目 | 內容 |
+|---|---|
+| latest verified main SHA | `c56afd454dec77985df053d8a9909193d86364fb`（#1178 squash 合併點；`git fetch origin main` 實查）。取代上段 `63da9515`；cron 與其他 PR 會推進 main，**一律重查** |
+| #1178 | `merged ＝ true`，`merged_at ＝ 2026-11-13T02:12:15Z`，`merge_commit_sha` ＝ 上列 SHA；PR head 為 `1eba9383…`（`gh api repos/…/pulls/1178` 實查）。PR 描述所載（**轉述、本組未重讀 check runs 與 QA 紀錄，NOT VERIFIED**）：同 head 五項原生 CI success；review threads 0（`…/pulls/1178/ccr/review_threads` 回 `[]`，FACT）；非作者獨立 QA 兩組首輪 PASS with fixes → 兩組 Delta QA PASS，QA 摘要見 PR #1178 描述 |
+| 已合併序列 | #1175 `880bc17c`、#1176 `093b323d`、#1177 `63da9515`、#1178 `c56afd45`（`git log origin/main` 實查） |
+| current PR | **本批無開啟中的功能 PR**；本同步 PR 另計，號碼以 GitHub 為準 |
+| Open PR（`gh api …/pulls?state=open`） | **#1164**（Draft，`6fddc582`）；**#1124**（`3cd3f525`）、**#1125**（`cf4739c5`）、**#1126**（`1654ae60`）。head 為時點快照，cron 會推進，全部 HOLD、不碰 |
+| #1178 合併後 main push CI | `PR Check（pytest fast + AppTest slow）` run **43350471209**（event ＝ push，head ＝ `c56afd45`）：撰寫時 **`in_progress`**（`gh api …/actions/runs/43350471209`），**尚無結論；NOT VERIFIED，接手者重查**。同 commit 其他 workflow 是否另有 run，本組僅以 `gh run list --commit` 查得上述一筆 |
+
+**二、Agent 載入的初步證據（FACT，單次觀察，由總管自 harness 訊息取得並轉述給本組；本組未獨立重現）**
+
+2026-11-13 在 #1178 head `1eba9383` 檢出後，總管本 session 的 Agent 工具可用類型清單新增 `stock-data-integrity`、`stock-independent-qa`、`stock-ui-ux` 三項，附帶的 description 與 tools 清單與 `.claude/agents/*.md` 檔案內容一致（`stock-independent-qa` 含 10 個 `mcp__github__` 讀取類工具；三者皆 Read、Grep、Glob、Bash）。
+
+- **FACT（單次觀察）**：harness 從工作樹讀到並登錄了三個 Agent 定義。
+- **INFERENCE**：frontmatter 格式至少被 harness 解析成功（否則不會列出）。
+- **尚未證明（NOT VERIFIED）**：`/agents`／`/doctor` 是否無警告；自動路由（Claude 依 description 自動委派）是否正確；Write／Edit 是否實際不可用（未實測呼叫）；新對話零記憶下是否仍載入；description 常駐 Token 成本。這些留給 Quality Batch 3 的 ⑦（Agent 路由整合）與 ⑨（零記憶接手測試）。
+- 單次觀察不等於載入驗證完成；不得據此宣稱 `DEC178-AGENT-LOAD-VERIFY` 已結案。
+
+**三、低嚴重度備忘（兩組 Delta QA 提出、**未再推 commit**；登記於 BACKLOG `DEC178-AGENT-LOW-NOTES`，P3、不阻塞）**
+
+- **E1**：`PROJECT_RULES.md` 第 34 節路由表第 1 列以 #1124～#1126（HOLD）為例，只寫「HOLD 中，僅限資料面查證」；「不是處置授權」**只出現在** `.claude/agents/stock-data-integrity.md` Trigger 段（`git grep -n "不是處置授權" -- PROJECT_RULES.md .claude/agents` 實查，FACT）。可在第 34 節路由表補「不得因此合併、關閉或 rebase」，或兩處皆改泛稱。
+- **E2**：路由表第 2 列（UI 設計）與第 4 列（UI 版面變更→Stop Gate）邊界可再加註「UI Agent 可做唯讀審查，決定權在客戶」。
+- **E3**：守衛測試 `tests/test_agent_definitions_guard.py` 的 `_content_checks` 只檢查章節標題與少數固定字串，Forbidden 段內容被刪（例如移除 gh／curl 寫入禁令）不會紅；flow list 解析為最小子集（不支援跨行或含逗號引號字串，會被拒＝偏嚴）。
+
+**四、`DEC178-AGENT-LOAD-VERIFY` 狀態更新**：改為「**部分**：harness 已列出三 Agent（FACT，單次觀察）；`/agents`／`/doctor`／自動路由仍 NOT VERIFIED」。BACKLOG 原列未改，以追加註記更新。
+
+**五、唯一 NEXT 實質不變，補充前置查核**：新對話零記憶啟動 → 重新驗證 GitHub（含 main 最新 SHA 與 run `43350471209` 結論；**查核 run 結論是作者／總管自加的謹慎措施，非客戶指示**）→ 驗證三 Agent 在新對話被載入並能自動選擇（Quality Batch 3 工作項 ⑦⑨ 的前置觀察；`/agents`／`/doctor` 無法使用時以檔案＋守衛測試為證並標 NOT VERIFIED）→ Quality Batch 1（①②③）。🗂 資料新鮮度總覽 **Q1～Q7** 仍待客戶裁示（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）；回覆前不寫 UI code。載入失敗或與定義不符：停手回報，不自行改權限或 settings。無新指派時：停手，只做被動觀察。
+
+**五之一、待客戶裁示（對照上方各接手點段「待客戶裁示」與 BACKLOG 逐項如實列；非窮舉宣稱〔單組核對〕；附推薦者為 AI 推薦＝RECOMMENDATION，非客戶裁示；沒答的項目視為維持 HOLD／現狀）**
+
+1. 🗂 資料新鮮度總覽 **Q1～Q7**（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`；裁示單 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`；可一行回覆「全部照總管推薦」，範本見裁示單 §0.1；回覆前不寫 UI code）。
+2. **VG1／VG2**（`DEC174-VG1-FAKE-REAL-LOOK`、`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`；追蹤項 `DEC176-VG1-VG2-PENDING-TRACK`；Visual Gate 候選，先文字線框＋推薦理由，客戶拍板前不寫 UI code）。
+3. **DPE-3／DPE-6**（若日後考慮放行 #1124～#1126；`DEC176-DATA-PR-EVIDENCE-DECISIONS`；處置本身仍須另行裁示）。
+4. 接線前決策單 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`／`I1144-WIRING-GATE`（`DEC176-GATE-SHEET-CUSTOMER`）。
+5. `DEC174-B1-INDEP-QA` 判定與 #1165 兩份文件勘誤附註回寫、複驗 E-10／E-13 的處置。
+6. `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`（DEC-171）；Q5（DEC-173，`REORG3C-Q5-GATE`）是否及何時重議。
+7. `DEC178-AGENT-BASH-READONLY-ENFORCEMENT`（是否在 settings 層機械強制 Bash 唯讀；客戶另行裁示事項，**非阻塞**，沉默＝維持現狀）。
+- **已有客戶定論、不列為待裁示**：DPE-7 **維持 A（觀察）**，11 月 19 日為保留檢查點（`DEC176-DPE7-1119-CHECKPOINT`；僅在客戶想讓 11-21 財報進 main 時才需另答）；D6 偵測器程式修復＝另批提案（客戶未授權修測試前不動）。
+
+**五之二、風險（精簡）**：(1) D6 偵測器測試（`tests/test_d6_diagnostic_no_secret_display.py`）有非決定性紅燈，約 0.54～0.63%／每個跑到該檔的 pytest 行程（調查組估算）；rerun 通過不等於已修；(2) 三 Agent 的 Bash「唯讀」僅為指示性約束，非機械強制；(3) Agent 載入證據只有單次觀察（總管自 harness 訊息取得，本組未重現）；(4) 三個 description 常駐父層 context 的 Token 成本未量測（NOT VERIFIED，屬 Quality Batch 3 ⑧）；(5) 未合併 HOLD PR 的 head 為時點快照，cron 會推進；(6) main push CI 尚無結論（見一）。
+
+**六、交接風險檢查結論（`PROJECT_RULES.md` 第 33 節）重申**：本對話已累積四批（#1175～#1178）與多輪長篇 QA／CI，**建議在本同步 PR 合併後結束舊對話**：先確認本同步 PR 已進 main、main push CI 有結論、本段已在 GitHub，**然後**才換對話。此為 AI 建議，不是硬性規則；不承諾能讀取剩餘上下文 Token。
+
+**七、更新後的新對話接手提示語（可直接貼入新對話；取代上段提示語；改指本段與上段 15 欄）**
+
+```
+你接手 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）。先做 GitHub-first 重核，不要信聊天摘要：
+1. 取回 main 最新 SHA（時點快照：#1178 squash 為 c56afd45，之後必已推進）、Open／Draft PR（head／base／CI／review；含本「#1178 合併後狀態同步」docs PR 是否已合併）、main push CI 結論（run 43350471209 撰寫時 in_progress，需重查；查核是作者自加的謹慎措施，非客戶指示）。
+2. 依下列單一有序清單閱讀：(1) CLAUDE.md（§-2、§-1、§-1.5）→ (2) PROCESS.md → (3) PROJECT_RULES.md（§15、§20、§32、§33、§34）→ (4) docs/DECISIONS.md（DEC-178，含客戶 2026-11-13 原文 fence；其上 DEC-177 及後續註記）→ (5) docs/BACKLOG.md 檔尾 DEC178-* 各列（含 DEC178-AGENT-LOW-NOTES、DEC178-PUSH-CI-C56AFD45 與 DEC178-AGENT-LOAD-VERIFY 的追加註記）→ (6) docs/HANDOFF.md 檔尾最末「📌 狀態更新（2026-11-13，#1178 合併後）」小段（現況以它為準），並以其上「2026-11-13｜Agents 批次後最新接手點」段的十五欄為欄位模板（逐欄現況見新段「〇」表；較早各接手點段及其內舊提示語已過期，不要照舊提示語行事）→ (7) docs/vnext 的 🗂 資料新鮮度總覽裁示單（NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md）。
+狀態：客戶 DEC-178 正式裁示位於 docs/DECISIONS.md（含客戶原文 fence，逐字一致性 NOT VERIFIED）。核心：(1) 三個按需專業 Agent 已入庫（#1178 已合併）；(2) 六項品質補強分三批依序進行，每批最多三項、寫入序列化、非作者多組獨立 QA、同最新 head 五項原生 CI、review threads 與 Merge Gate 核實、合格才 merge、GitHub 留證後才進下一批：Quality Batch 1＝①現有覆蓋與缺口稽核（REUSE／GAP／BLOCKED／NOT VERIFIED）②Definition of Ready／Done 最小補強③New UI2 五頁資料／功能／驗收矩陣；Batch 2＝④E2E／Golden／Mutation Tests（只補真正缺口，不放寬 PIT／Risk Cap／資料完整性）⑤最小 PR Impact Check⑥Production 健康度五軸（缺證據標 NOT VERIFIED）；Batch 3＝⑦Agent 路由整合⑧Token 與返工基準⑨零記憶接手測試。
+三個 Agent 位置與用法：.claude/agents/ 下 stock-data-integrity、stock-ui-ux、stock-independent-qa；路由見 PROJECT_RULES 第 34 節；按需使用，只用於挑選專家，不免除 CLAUDE.md §-2 每次任務都派工與多組獨立稽核；三者皆無 Write／Edit／NotebookEdit／Agent 工具，QA 另有 GitHub 讀取類 MCP 工具；Bash 唯讀僅為指示性約束（非機械強制）。載入證據目前僅「單次觀察：harness 列出三 Agent」，/agents、/doctor、自動路由仍 NOT VERIFIED。
+唯一 NEXT（實質不變，補充前置查核）：新對話零記憶啟動 → 重新驗證 GitHub → 驗證三 Agent 在新對話被載入並能自動選擇（工作項 ⑦⑨ 的前置觀察；無法使用互動式 /agents 時以 .claude/agents/ 檔案＋守衛測試為證並標 NOT VERIFIED）→ 再開工 Quality Batch 1（①②③）。載入失敗就停手回報，不自行改權限或 settings。不要重做已完成工作（#1175～#1178 與本狀態同步）。
+靜默回報規則：靜默自主巡航，只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報；累積約三批或長篇 QA／CI 時依 PROJECT_RULES 第 33 節主動安排安全交接（先存 GitHub、驗證、再換對話）。需客戶裁示時：提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手。FACT／INFERENCE／NOT VERIFIED 分開寫；CI 綠不等於 Cloud／資料來源已驗證。
+HOLD／禁止（全部未解除）：#1124～#1126 資料 PR（不合併／關閉／rebase）、#1164、#1119；DG-SCOPE／DG-COV／DG-PIT／DG-LIC、I1144-WIRING-GATE；OneBrain／New UI2 資料接線 Gate；🗂 資料新鮮度總覽 Q1～Q7 仍待客戶回覆（回覆前不寫 UI code，不改 SHOWN_FOLDS／WIRED_PATHS／詞彙守衛／viewport 證據／P3 基準）；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察），11 月 19 日為保留檢查點；不修改投資公式／Risk Cap／System Action；不新增未授權 API／來源／cron／Secrets；不把 missing 填 0（unavailable ≠ neutral、not evaluated ≠ safe、FAKE Preview ≠ 正式接線）；Old UI、正式 UI 切換、資料庫重建、Actions 清理；不清理 .claude/worktrees/；不動 .claude/settings*；不突破 SHOWN_FOLDS、UI 契約與測試 allowlist；不降低 CI／QA／Merge Gate；第二批候選 Agent（Investment Logic、OneBrain、GitHub Auditor）不建立。
+Token 基準（Batch 3 ⑧）：必須區分真實量測、估算與 NOT VERIFIED，禁止用 bytes 冒充 Token；單次樣本不得冒充基準，亦不構成 REORG3C-Q5-GATE／DEC-173 Q5 重議。
+時點快照警語：本提示語內所有 SHA／PR head／run id 皆為 2026-11-13 時點快照，一律以最新 GitHub 為準；未合併 PR head（#1164 6fddc582、#1124 3cd3f525、#1125 cf4739c5、#1126 1654ae60）cron 會推進，全部不碰。
+Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型）／Mode：靜默自主巡航／Effort：High（客戶訊息指定，經轉錄；現行值只以 HANDOFF 檔尾最新 Resume Checkpoint 為準）。
+待客戶裁示（逐項如實列，AI 推薦不是客戶裁示）：🗂 Q1～Q7（DEC177-FRESHNESS-IMPL-DECISION-SHEET 與裁示單）；VG1／VG2（DEC174-VG1-FAKE-REAL-LOOK、DEC174-VG2-FAKE-ACCOUNT-CONFLICT、DEC176-VG1-VG2-PENDING-TRACK）；DPE-3／DPE-6（DEC176-DATA-PR-EVIDENCE-DECISIONS）；接線前決策單 DG-SCOPE／DG-COV／DG-PIT／DG-LIC／I1144-WIRING-GATE（DEC176-GATE-SHEET-CUSTOMER）；DEC174-B1-INDEP-QA 判定與 #1165 勘誤附註回寫、E-10／E-13 複驗處置；I1144-DATA-STORAGE-DECISION／I1144-LIC-THREE-QUESTIONS（DEC-171）；Q5（REORG3C-Q5-GATE）是否及何時重議；DEC178-AGENT-BASH-READONLY-ENFORCEMENT（非阻塞，沉默＝維持現狀）。已有定論、不列待裁示：DPE-7 維持 A（11-19 檢查點僅在客戶想讓 11-21 財報進 main 時才需另答）；D6 偵測器程式修復＝另批提案。
+沒有新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
+```
+
+- **仍 NOT VERIFIED**：run `43350471209` 的結論；#1178 同 head 五項原生 CI 與兩組 Delta QA 的細節（轉述自 PR 描述，本組未重讀）；三 Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測；新對話零記憶載入；DEC-178 fence 與客戶原訊息逐字一致性。本段單組撰寫，未經第二組驗證。

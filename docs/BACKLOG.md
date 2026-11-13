@@ -2521,3 +2521,17 @@
 | **DEC178-AGENT-SECOND-CANDIDATES** | 候選（未授權）：Investment Logic、OneBrain、GitHub Auditor 三個 Agent 為**第二批候選**，客戶原文明定本批**不建立**。守衛測試的目錄白名單會擋住未登記的新檔 | P3 | candidate（未授權；不是 Approved） | DEC-178「三、Agent 共通要求」 | 無；待客戶另行授權後才可評估，並須同步守衛白名單與 `PROJECT_RULES.md` 第 34 節 |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 檢查點）、Old UI、正式 UI 切換仍 HOLD。
+
+
+## 2026-11-13｜DEC-178 後續（#1178 合併後狀態同步；只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方 `DEC178-*` 各列原文**一字未動**；本段以追加註記更新其狀態。ID 前綴 `DEC178-`（落盤前 `git grep -c "DEC178-AGENT-LOW-NOTES\|DEC178-PUSH-CI-C56AFD45" -- docs` 無命中，無重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**。
+>
+> **追加註記（對既有列；原列不改）**：`DEC178-AGENTS-BATCH-A` — #1178 已於 2026-11-13T02:12:15Z squash 合併為 `c56afd454dec77985df053d8a9909193d86364fb`（`gh api repos/…/pulls/1178` 實查，FACT；PR head `1eba9383`；同 head 五項原生 CI、非作者兩組 Delta QA 之細節為 PR 描述轉述，本組未重讀，NOT VERIFIED），原列的「in-progress（本 PR…）」自此視為 **done（已合併）**。`DEC178-AGENT-LOAD-VERIFY` — 狀態由 open 改為 **部分：harness 已列出三 Agent（FACT，單次觀察，由總管自 harness 訊息取得；三者 description／tools 與 `.claude/agents/*.md` 一致）；`/agents`／`/doctor`、自動路由、Write／Edit 實際不可用、新對話零記憶載入、description 常駐 Token 成本仍 NOT VERIFIED**；單次觀察不等於載入驗證完成，仍併入 `DEC178-QUALITY-BATCH-3` ⑨（HANDOFF 另將前置觀察掛 ⑦）。
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC178-AGENT-LOW-NOTES** | 低嚴重度備忘（#1178 兩組 Delta QA 提出、**未再推 commit**）：(E1) `PROJECT_RULES.md` 第 34 節路由表第 1 列以 #1124～#1126（HOLD）為例，只寫「HOLD 中，僅限資料面查證」；「不是處置授權」**只出現在** `.claude/agents/stock-data-integrity.md` Trigger 段（`git grep -n "不是處置授權" -- PROJECT_RULES.md .claude/agents` 實查，FACT），可在第 34 節補「不得因此合併、關閉或 rebase」或兩處皆改泛稱；(E2) 路由表第 2 列（UI 設計）與第 4 列（UI 版面變更→Stop Gate）邊界可再加註「UI Agent 可做唯讀審查，決定權在客戶」；(E3) 守衛 `tests/test_agent_definitions_guard.py` 的 `_content_checks` 只檢查章節標題與少數固定字串，Forbidden 段內容被刪（例如移除 gh／curl 寫入禁令）不會紅；flow list 解析為最小子集（不支援跨行或含逗號引號字串，會被拒＝偏嚴） | P3 | open（觀察；不阻塞） | #1178 Delta QA（轉述自 PR 描述／總管，本組未重讀 QA 原文）；`PROJECT_RULES.md` 第 34 節；`tests/test_agent_definitions_guard.py` | 無主動動工（`CLAUDE.md` §-1）；下次有任務碰到第 34 節、Agent 檔或守衛測試時，順手於同一任務邊界內評估 E1～E3；E3 若要補，須含突變測試且不得放寬現有檢查 |
+| **DEC178-PUSH-CI-C56AFD45** | #1178 合併後 main push CI：`PR Check（pytest fast + AppTest slow）` run **43350471209**（event ＝ push，head ＝ `c56afd45`）。**撰寫時（2026-11-13 約 02:13Z）`status ＝ in_progress`、`conclusion ＝ null`**（`gh api repos/…/actions/runs/43350471209`，FACT）；**尚無結論，NOT VERIFIED**。同 commit 是否另有其他 workflow run，本組僅以 `gh run list --commit` 查得此一筆 | P2 | **待重查**（結論未知） | `gh api` 實查；`PROJECT_RULES.md` 第 32、33 節（合併後驗證 main push CI） | 接手者重查該 run 結論並寫回本列；若非 success，先判斷是否為 D6 已知非決定性紅燈（`tests/test_d6_diagnostic_no_secret_display.py`，約 0.54～0.63%；rerun 通過不等於已修），不得以 rerun 通過就宣稱已修；結論回報前不啟動 Quality Batch 1（**此為總管自加的謹慎措施，非客戶指示**） |
+
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 為保留檢查點）、Old UI、正式 UI 切換均**未動**。
