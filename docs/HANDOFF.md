@@ -775,7 +775,7 @@ Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High�
 ```
 
 
-## 2026-11-13｜UI 實作前調查與裁示單提交後最新接手點（現行有效接手點；只追加；非 QA PASS）
+## 2026-11-13｜UI 實作前調查與裁示單提交後最新接手點（~~現行有效接手點~~〔已被檔尾 2026-11-13「Agents 批次後最新接手點」取代（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕；只追加；非 QA PASS）
 
 > **取代關係**：本段取代上方「2026-11-12｜DEC-177 登錄後」段的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。**該段內的「新對話接手提示語」已過期，改指本段末的提示語**。GitHub 操作事實優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。不另建第二份 handoff（`PROJECT_RULES.md` §20.1）。
 > **單組聲明**：本段與本 PR 為**作者單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；裁示單內的事實來自三組單組調查，作者另自行重核檔案行號並重跑複本實驗。**不是授權**；不解除任何 Gate／HOLD。AI 推薦（含決策單內全部「總管推薦」）一律是 RECOMMENDATION，不是客戶裁示。
@@ -862,3 +862,89 @@ Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High�
 ```
 
 - **仍 NOT VERIFIED**：DEC-177 fence 與客戶原訊息逐字一致性；預防性交接制度更早核准紀錄；部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440；#1176 合併後 main push CI（run 43334257638）結果；裁示單 §6.1 與調查事實的單組性。本段單組撰寫，未經第二組驗證。
+
+
+## 2026-11-13｜Agents 批次後最新接手點（現行有效接手點；只追加；非 QA PASS）
+
+> **取代關係**：本段取代上方「2026-11-13｜UI 實作前調查與裁示單提交後最新接手點」段的現況效力（該段標題已就地以刪除線標示；有意識的更新，不是漏刪）。**該段末的「新對話接手提示語」已過期，改指本段末的提示語**。GitHub 操作事實優先於本段；接手前先做 LIVE GitHub Verification Gate（`PROJECT_RULES.md` 第 32 節）。不另建第二份 handoff（`PROJECT_RULES.md` §20.1）。
+> **單組聲明**：本段與本 PR 為**作者單組撰寫，未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）。**不是授權**；不解除任何 Gate／HOLD。AI 推薦一律是 RECOMMENDATION，不是客戶裁示。
+
+### Resume Checkpoint（`PROJECT_RULES.md` §20.2 十五欄）
+
+| 欄位（§20.2） | 內容（2026-11-13） |
+|---|---|
+| latest verified main SHA | `63da9515c2f35549aa943a2728e287168632cdb0`（#1177 squash 合併點；2026-11-13 作者 `git fetch origin main` 實查，FACT；cron 與其他 PR 會推進 main，**一律重查**） |
+| current working branch | `claude/stock-dashboard-handoff-sync-ulwq8s`（本批 Agents PR 的 head；#1177 合併後遠端同名分支已刪，本批為重新推送；合併後可為任何新分支） |
+| current PR | **尚未建立**（作者依派工不建 PR，由總管建立；PR 號與 head SHA 以 GitHub 為準）。其餘 Open PR 本批**未重查**，沿用前段時點快照：**#1164**（Draft，head `6fddc582`，HOLD）；資料 PR **#1124**（`3cd3f525`）、**#1125**（`cf4739c5`）、**#1126**（`1654ae60`），皆 HOLD，cron 會推進，一律重查 |
+| current task / batch | 客戶 2026-11-13「專業 AI Agent＋六項品質補強」（DEC-178）：**Agents 批次（`DEC178-AGENTS-BATCH-A`）＝本 PR**（三項：三個 Agent 檔＋守衛測試、`PROJECT_RULES.md` 第 34 節路由、DEC-178／BACKLOG／PROJECT_STATE／HANDOFF 同步）。品質補強 Quality Batch 1～3 **尚未開始** |
+| completed in this batch | 見下方「已完成」表。本 PR 內容：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md`；`tests/test_agent_definitions_guard.py`（含突變測試）；`PROJECT_RULES.md` 第 34 節；DEC-178（fence sha256 `3479c09d…b473`）；BACKLOG 檔尾 `DEC178-*` 七列；PROJECT_STATE §70.16；本段 |
+| exact current stopping point | 本 PR 已推送、待非作者多組獨立 QA 與同 head 五項原生 CI。**未做**：任何 `src/`、`scripts/`、`.github/`、`.claude/settings*`、`CLAUDE.md`、`PROCESS.md`、資料變更；Agent 實際載入驗證（須新對話） |
+| next single action | **本 PR 合併後**：新對話以零記憶方式啟動 → **先 `/agents`（及 `/doctor`）驗證三個 Agent 是否被載入**，結果寫回 BACKLOG `DEC178-AGENT-LOAD-VERIFY` → 再開工 **Quality Batch 1（①②③，`DEC178-QUALITY-BATCH-1`）**。本 PR 本身：非作者 QA＋同 head 五項原生 CI 全綠＋review threads＝0＋mergeable clean 後依 Merge Gate 判斷（作者不自行合併） |
+| tests / CI 已完成 | 作者端實跑（venv，會漂移）：`tests/test_agent_definitions_guard.py` 31 passed（含 20 個突變測試類測試）；grep 命中治理文件名稱的 6 個測試檔＋`test_ui2_active_contract_docs`＋`tests/test_sec_*`＋`test_c3_layering_guard`＋`test_resample_audit`＋新守衛，合計 **4712 passed、6 skipped、13 deselected、3 xfailed**（含本段 HANDOFF 變更後的完整重跑，同為 4712 passed）。**作者自查，非 QA** |
+| tests / CI 尚未完成 | 本 PR 的非作者多組 QA 與同 head 五項原生 CI；#1177 合併後 main push CI 結果本批**未重查（NOT VERIFIED）**；D6 測試（`tests/test_d6_diagnostic_no_secret_display.py`）有已知約 0.54～0.63% 非決定性紅燈機率，rerun 通過不等於已修；三個 Agent 的實際載入（NOT VERIFIED） |
+| unresolved true Stop Gates | #1119 HOLD；#1124～#1126 HOLD；#1164 HOLD；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、G-F2～G-F6、`REORG3C-Q5-GATE`、Old UI Removal Gate、預設 UI 切換（全部未動）。🗂 資料新鮮度總覽 Q1～Q7（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）仍 blocked-on-customer，**本批未回答其中任何一題** |
+| 是否存在 uncommitted / unpushed work | 以 `git status`／GitHub 實查為準：本段寫入時作者工作樹有待提交變更；推送後預期為「否」（若讀到此段時分支落後或有新 commit，請重查） |
+| relevant evidence location | `.claude/agents/`（三檔）；`tests/test_agent_definitions_guard.py`；`PROJECT_RULES.md` 第 34 節；`docs/DECISIONS.md` DEC-178（客戶原文 fence）；`docs/BACKLOG.md` 檔尾「2026-11-13｜DEC-178 登記」；`docs/PROJECT_STATE.md` §70.16；客戶訊息逐字見 DEC-178 fence；🗂 裁示單 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`；歷史接手點 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md` |
+| recommended Model | Sonnet 5.5（依客戶 2026-11-13 訊息，不可用則選目前高可靠程式模型；經派工訊息轉錄，逐字 NOT VERIFIED；**現行值只維護於此處**） |
+| recommended Effort | High；Mode：靜默自主巡航（依客戶 2026-11-13 訊息；**現行值只維護於此處**） |
+| last checkpoint timestamp | 2026-11-13T01:27:20Z（`date -u` 實查；本段撰寫時） |
+
+### 已完成（FACT 除另註）
+
+| PR／commit | 內容 | merge／commit SHA | 非作者 QA | 同 head 原生 CI |
+|---|---|---|---|---|
+| #1175 | 六處交接差異收尾 | `880bc17c`（main） | 見前段（自述） | 見前段（自述） |
+| #1176 | DEC-177 登錄、`PROJECT_RULES.md` 第 33 節、BACKLOG 三列、HANDOFF 15 欄段 | `093b323d`（main） | 兩組＋Delta（前段自述） | 同 head `1af7976a` 五項全綠（前段自述） |
+| #1177 | 🗂 資料新鮮度總覽實作前調查與裁示單（Q1～Q7）、DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF 同步 | `63da9515`（main；作者 `git fetch` 實查 main 頂端 commit 為此 SHA，FACT） | 派工訊息稱已完成（本組未重讀 review 紀錄，NOT VERIFIED） | 派工訊息稱已完成（本組未重讀 check runs，NOT VERIFIED） |
+| 本 PR（Agents 批次） | 三個 Agent 入庫、守衛測試、第 34 節、DEC-178 等同步 | 未合併 | 待 | 待 |
+
+### 本批三項狀態
+
+1. **三個 Agent 檔＋守衛測試**＝已撰寫並於作者端靜態驗證通過；**實際載入 NOT VERIFIED**（須新對話 `/agents`、`/doctor`）。
+2. **最小任務路由規則**＝`PROJECT_RULES.md` 第 34 節（只追加）。
+3. **DEC-178／BACKLOG／PROJECT_STATE／HANDOFF 同步**＝本 PR。
+**品質補強三批尚未開始**：Quality Batch 1（①現有覆蓋與缺口稽核、②DoR／DoD、③五頁資料／功能／驗收矩陣）→ Batch 2（④E2E／Golden／Mutation、⑤最小 PR Impact Check、⑥Production 健康度五軸）→ Batch 3（⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試）；順序、前置與限制見 DEC-178 與 BACKLOG `DEC178-QUALITY-BATCH-1`～`3`。
+
+### 待客戶裁示
+
+🗂 資料新鮮度總覽 **Q1～Q7** 仍待客戶回覆（見裁示單與前段「待客戶裁示」A～C，**不在此重複細節**）；回覆前不寫 UI code。`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`（是否在 settings 層機械強制 Bash 唯讀）屬客戶另行裁示事項，**非阻塞**；沉默＝維持現狀。
+
+### 仍 HOLD（客戶 2026-11-13 訊息第五節＋既有）
+
+#1124～#1126（不合併／關閉／rebase）、#1164、#1119（不處置）；`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-WIRING-GATE`、OneBrain／New UI2 資料接線 Gate；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察），11 月 19 日檢查點保留；不修改投資公式、Risk Cap、System Action；不新增未授權 API／來源／cron／Secrets；不擅改 UI 布局、`SHOWN_FOLDS`、UI 契約與測試 allowlist；不把 missing 填 0；Old UI、正式 UI 切換、資料庫重建、Actions 清理；不清理 `.claude/worktrees/`；不降低 CI／QA／Merge Gate；第二批候選 Agent（Investment Logic、OneBrain、GitHub Auditor）未授權、不建立。
+
+### 風險
+
+(1) 本 PR 單組撰寫，未經非作者獨立 QA；(2) Agent frontmatter 格式依派工訊息轉述的官方文件（單組，作者未重新查官方文件）；無法辨識的欄位會被靜默忽略，故以守衛測試擋拼錯；(3) Bash 唯讀僅為指示性約束；(4) 三檔實際載入與路由效果 NOT VERIFIED；(5) MCP 工具名在其他環境是否存在，官方未明載；(6) D6 測試約 0.54～0.63% 非決定性紅燈機率；(7) 未合併 PR head 為時點快照，cron 會推進；(8) 本批 `description` 常駐父層 context，三檔合計很短，但實際 Token 成本未量測（NOT VERIFIED，屬 Quality Batch 3 ⑧）。
+
+### 交接風險檢查（`PROJECT_RULES.md` 第 33 節）
+
+本對話已累積多批（#1175、#1176、#1177、本批 Agents）、長篇 QA／CI 往返與重大決策變動（DEC-177、DEC-178）→ 依第 33 節「累積約三批或出現長篇 QA／CI、重大決策變動時優先安排安全交接」，**建議在本 PR 合併後安全交接**：先確認本 PR 內容已進 main 並驗證 main push CI、本段已在 GitHub，**然後**才結束舊對話，再依 GitHub 最後狀態使用下方提示語開新對話。此為 AI 建議，不是硬性規則；不承諾能讀取剩餘上下文 Token。
+
+### Low 級備忘（指標；不重述）
+
+PROJECT_STATE §70.15 與 🗂 裁示單已更正的 Q4 前提（五態符號 ✅◷◇⛔ 放進狀態欄位會被 `FieldVM`／`ALLOWED_STATUS_PREFIXES` 拒絕，Q4 總管推薦因而由 A 改為 B）：見上一接手點段「#1176 已知 Low 級瑕疵更正註記」第 5 點與裁示單 Q4、§5；本批未再改動。
+
+### 下一個唯一安全動作
+
+**本 PR 合併後**，新對話零記憶啟動，先驗證三個 Agent 是否被載入（`/agents`，必要時 `/doctor`），再開工 Quality Batch 1（①②③）。載入失敗或與定義不符：停手回報，不自行改權限或 settings。客戶回覆 🗂 Q1～Q7 前不寫 UI code。無新指派時：停手，只做被動觀察。
+
+### 先讀 SSOT 順序
+
+`CLAUDE.md`（§-2、§-1、§-1.5、§1）→ `PROCESS.md` → `PROJECT_RULES.md`（§15、§20、§32、§33、**§34**）→ `docs/DECISIONS.md`（**DEC-178** 與客戶原文 fence；其上 DEC-177 及其後續註記、DEC-176、DEC-174）→ `docs/BACKLOG.md` 檔尾 `DEC178-*` → `.claude/agents/`（三檔）→ `docs/PROJECT_STATE.md` §70.13～§70.16 → 本段；🗂 裁示單與線框見上一接手點段；歷史接手點見 `docs/archive/historical/HANDOFF_HISTORY_2026-11-12.md`。
+
+### 新對話接手提示語（可直接貼入新對話；改指本段）
+
+```
+你接手 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）。先做 GitHub-first 重核，不要信聊天摘要：
+1. 取回 main 最新 SHA、Open／Draft PR（head／base／CI／review；含本批 Agents PR 是否已合併）；2. 讀 docs/DECISIONS.md 最新 DEC（目前 DEC-178，含客戶 2026-11-13 原文 fence；其上 DEC-177 及其後續註記）；3. 讀 docs/HANDOFF.md 檔尾最新接手點段（標題「2026-11-13｜Agents 批次後最新接手點」，含十五欄 Resume Checkpoint；其上各接手點段及其內舊提示語已過期，不要照舊提示語行事）；4. 讀 docs/BACKLOG.md 檔尾 DEC178-* 七列；5. 再讀 CLAUDE.md（§-2、§-1、§-1.5）、PROCESS.md、PROJECT_RULES.md（§20、§32、§33、§34）。
+狀態：客戶已核准兩項工作（DEC-178）：(1) 三個按需專業 Agent（.claude/agents/ 下 stock-data-integrity、stock-ui-ux、stock-independent-qa；路由見 PROJECT_RULES 第 34 節；三者皆無 Write／Edit／NotebookEdit／Agent 工具，QA 另有 GitHub 讀取類 MCP 工具；Bash 唯讀僅為指示性約束；「按需」不改 CLAUDE.md §-2 每次任務都派工與多組獨立稽核）；(2) 六項品質補強，分三批、每批最多三項、依序進行：Batch 1＝①現有覆蓋與缺口稽核（REUSE／GAP／BLOCKED／NOT VERIFIED）、②Definition of Ready／Done 最小補強、③New UI2 五頁資料／功能／驗收矩陣；Batch 2＝④E2E／Golden／Mutation Tests（只補真正缺口，不放寬 PIT／Risk Cap／資料完整性）、⑤最小 PR Impact Check、⑥Production 健康度五軸（CI／資料更新／資料有效／正式 UI 接線／投資決策與通知可用；缺證據標 NOT VERIFIED）；Batch 3＝⑦Agent 路由整合、⑧Token 與返工基準（真實量測／估算／NOT VERIFIED 分開，禁止 bytes 冒充 Token；是 REORG3C-Q5-GATE 的前置證據、不構成 Q5 重議）、⑨零記憶接手測試。每批：GitHub-first、非作者多組獨立 QA、同最新 head 五項原生 CI、review threads 與 Merge Gate 核實、合格才 merge、GitHub 留證後才進下一批。
+唯一 NEXT：確認 Agents PR 已合併後，先以 /agents（必要時 /doctor）驗證三個 Agent 是否被載入並把結果寫回 BACKLOG DEC178-AGENT-LOAD-VERIFY；載入失敗就停手回報，不自行改權限或 settings。然後開工 Quality Batch 1。不要重做已完成工作（#1175～#1177、Agents 批次）。
+HOLD／禁止（全部未解除）：#1124～#1126 資料 PR（不合併／關閉／rebase）、#1164、#1119；DG-SCOPE／DG-COV／DG-PIT／DG-LIC、I1144-WIRING-GATE；OneBrain／New UI2 資料接線 Gate；🗂 資料新鮮度總覽 Q1～Q7 仍待客戶回覆（回覆前不寫 UI code，不改 SHOWN_FOLDS／WIRED_PATHS／詞彙守衛／viewport 證據／P3 基準）；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察），11 月 19 日為保留檢查點；不修改投資公式／Risk Cap／System Action；不新增未授權 API／來源／cron／Secrets；不把 missing 填 0（unavailable ≠ neutral、not evaluated ≠ safe、FAKE Preview ≠ 正式接線）；Old UI、正式 UI 切換、資料庫重建、Actions 清理；不清理 .claude/worktrees/；不降低 CI／QA／Merge Gate；第二批候選 Agent（Investment Logic、OneBrain、GitHub Auditor）不建立。
+需客戶裁示時：提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手。靜默自主巡航：只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報；累積約三批或長篇 QA／CI 時依 PROJECT_RULES 第 33 節主動安排安全交接（先存 GitHub、驗證、再換對話）。FACT／INFERENCE／NOT VERIFIED 分開寫；CI 綠不等於 Cloud／資料來源已驗證。
+時點快照警語：本段與提示語內的 SHA／PR head 皆為 2026-11-13 時點快照，一律以最新 GitHub 為準；未合併 PR head（#1164 6fddc582、#1124 3cd3f525、#1125 cf4739c5、#1126 1654ae60）cron 會推進，全部不碰。
+Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型）／Mode：靜默自主巡航／Effort：High（客戶訊息指定，經轉錄；現行值只以 HANDOFF 檔尾最新 Resume Checkpoint 為準）。
+沒有新指派時：停手，只做被動觀察，並回報目前狀態與待客戶裁示清單。
+```
+
+- **仍 NOT VERIFIED**：DEC-178 fence 與客戶原訊息逐字一致性；三個 Agent 的實際載入與路由效果；Bash 唯讀 settings 層是否強制；#1177 的非作者 QA／CI 細節與 #1177 合併後 main push CI；Agent frontmatter 格式官方文件（單組轉述）。本段單組撰寫，未經第二組驗證。

@@ -8754,3 +8754,353 @@ Repository："linchen-20200325/my-stock-dashboard"
 6. **內部拍板項（`CLAUDE.md` §-1.5.D §03-1，不需客戶回覆，揭露於決策單 §3）**：距今天數基準沿用現行主機日 `age_days`（N-1／`I1140-TODAY-TZ` 維持 open）；FAKE 軸維持靜態、真值只走 Real 軸；新 builder 放 `data_page.py`／`real_canonical.py`；TOP_FIVE Gate 文件註記被 DEC-177 取代（docs 同步；**INFERENCE，位階解讀〔`PROJECT_RULES.md` §25：最新有效客戶 DEC 高於 `docs/vnext/` 規格文件〕；客戶若不同意請推翻**）；新增 AST 守衛禁 `published_at`／`fetched_at`；每項放寬附突變測試且不得全域放寬。
 
 **本註記不改變任何授權**：DEC-177 的「允許最小 UI 第一版實作、不解除任何 Gate」原樣有效；在客戶回覆決策單前，作者**不寫 UI code**。**NOT VERIFIED**：部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440 實際畫面；三組調查皆單組、決策單 §6.1 為作者單組核對、未經非作者獨立 QA（§-2 規則 6），不得被引用為「已 QA PASS」。
+
+
+### DEC-178｜客戶 2026-11-13「專業 AI Agent＋六項品質補強」正式執行指令轉錄：三個按需專業 Agent 入庫、六項品質補強分三批（2026-11-13；只追加；非 QA PASS）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-178" docs/DECISIONS.md` 0 命中，DEC-177 為上一號）。**來源類別 D：客戶 2026-11-13 裁示，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～177 同一算法**（本組先以同法重算 DEC-177 的 fence，得 `8b059bb5…eae053`，與其登記值相符，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-13）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`3479c09d9d6f924a2098ba9b11c63d2623e2205ca7b7f66333317c8aa924b473`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜專業 AI Agent＋六項品質補強｜整合正式執行指令
+
+Model：Claude Sonnet 5.5（不可用則選擇目前高可靠程式模型）
+Mode：靜默自主巡航
+Effort：High
+
+Repository："linchen-20200325/my-stock-dashboard"
+
+你是本專案既有的 Claude Code 專案總管。本任務是正式續工，不是重新建立架構或治理制度。
+
+客戶已核准以下兩項工作：
+
+1. 導入三個按需啟動的專業 AI Agent。
+2. 完成六項品質補強，降低返工、資料錯誤、測試缺口及 Token 成本。
+
+本提示語是正式執行授權，不是單純研究任務；但不能解除任何既有 Gate。
+
+---
+
+一、第一步：GitHub-first
+
+先獨立核實：
+
+- main 完整 SHA、最近 commit／diff。
+- Open／Draft PR、head／base SHA、CI、QA、reviews、review threads。
+- branches、worktree 與現有文件修改狀態。
+- "CLAUDE.md"、"PROCESS.md"、"PROJECT_RULES.md"。
+- "docs/DECISIONS.md"、"docs/BACKLOG.md"、"docs/HANDOFF.md"、"docs/PROJECT_STATE.md"。
+- 相關 vNext／New UI2 規格、資料契約、既有測試及文件治理進度。
+
+歷史參考：main "093b323d"；#1177 為 Draft，先前 head "79814147"。以上只是歷史快照，必須重新查核。
+
+不得用 HANDOFF 的過期 SHA 取代 GitHub 即時證據。
+
+二、先處理 #1177
+
+若 #1177 尚未完成：
+
+1. 優先依原授權完成其獨立 QA、最新 head 五項原生 CI、review threads 及 Merge Gate。
+2. 符合原有合併規則才可合併。
+3. 完成後同步 GitHub 安全接手狀態。
+4. 若遇到 Q1～Q7 或未授權的 UI／契約變更，不得擅自替客戶裁示；停在安全點，明確記錄阻塞。
+
+不得因本次新任務干擾、重做或繞過 #1177。
+
+#1164 與 #1124～#1126 仍依既有 HOLD 管理。
+
+#1177 合併完成且無其他真正阻塞時，直接進入以下已核准工作，不需要再次請示客戶。
+
+---
+
+三、第一階段：建立三個專業 Agent
+
+採用「ChatGPT 協作總管 → Claude Code 專案總管 → 按需專業 Agent → 非作者獨立 QA」架構。
+
+建議存放：
+
+".claude/agents/"
+
+Agent 1：stock-data-integrity
+
+檔案："stock-data-integrity.md"
+
+- Role：股票資料完整性專家。
+- Trigger：資料來源、品質、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯。
+- Inputs：既有資料契約、來源證據、schema、metadata、資料讀取路徑及相關測試。
+- Tools：預設唯讀、最小權限。
+- Forbidden：自行新增資料來源、填 0、改歷史資料、投資公式、Risk Cap、突破資料 Gate。
+- Output：FACT／INFERENCE／NOT VERIFIED、資料問題、影響範圍、測試證據、修正建議。
+- Escalation：來源授權、PIT、資料語意、接線 Gate 不明時回報總管。
+
+此 Agent 只負責資料真實性，不負責股票買賣決策。
+
+Agent 2：stock-ui-ux
+
+檔案："stock-ui-ux.md"
+
+- Role：New UI2 五頁與 Mobile-first 介面專家。
+- Trigger：UI 設計、五頁契約、手機首屏、互動一致性、Old UI First。
+- Inputs：已核准線框、五頁規格、舊 UI 功能對照、視覺證據與元件。
+- Tools：預設唯讀；實作依正式授權。
+- Forbidden：擅改布局、資料接線、金融語意、投資公式、OneBrain runtime、Risk Cap。
+- Output：UI 差異、改善範圍、390／1440 驗收、回歸測試及風險。
+- Escalation：Visual Gate、SHOWN_FOLDS、UI 契約及測試 allowlist 需要突破時停手。
+
+此 Agent 可以改善介面，但不能把未接線或未評估顯示成正常。
+
+Agent 3：stock-independent-qa
+
+檔案："stock-independent-qa.md"
+
+- Role：非作者獨立 QA。
+- Trigger：PR diff、資料完整性、金融語意、CI、回歸風險、Merge Gate。
+- Inputs：最新 head／base、完整 diff、驗收契約、測試及 CI 證據。
+- Tools：最小唯讀／驗證權限，必要測試工具按規則使用。
+- Forbidden：驗收自己修改的檔案、以舊 head CI 取代最新 head、自行放寬測試、擅自 merge。
+- Output：PASS／FAIL／BLOCKED、證據、剩餘風險、未驗證事項。
+- Escalation：發現契約違反、證據不足、CI 失敗、獨立性衝突時停止放行。
+
+注意：一個 QA Agent 定義不等於只派一組 QA。仍須遵守 CLAUDE.md §-2 的多組獨立稽核與非作者驗收要求。
+
+Agent 共通要求
+
+每份 Markdown 定義包含 Role、Trigger、Inputs、Tools、Forbidden、Output、Escalation。
+
+先確認 Claude Code 當前支援的 Agent frontmatter 格式及工具名稱。
+
+- 預設按需啟動，不讓三個 Agent 每次全數載入。
+- 不複製整份治理憲法。
+- 不建立新的最高權威或第二份 SSOT。
+- Agent 本身不取得擴權資格。
+- 導入範圍只限三個角色，Investment Logic、OneBrain、GitHub Auditor 留待第二批候選，不建立。
+- 設計最小任務路由規則，避免 Data／UI／QA 職責重疊。
+
+三份 Agent 作為第一個獨立批次，遵守最多三項、寫入序列化、獨立 QA 與同 head CI。
+
+---
+
+四、第二階段：六項品質補強
+
+已完成的能力直接 REUSE，不要重建。以現有 GitHub 文件、測試及程式為 SSOT。
+
+Batch 1：需求與資料契約（最多三項）
+
+① 現有覆蓋與真正缺口稽核
+
+逐項盤點六項補強是否已有對應機制。輸出 REUSE／GAP／BLOCKED／NOT VERIFIED 及證據。
+
+② Definition of Ready／Definition of Done
+
+在既有機制最小補強：
+
+- 已核准需求／規格 ID。
+- 影響範圍與資料依賴。
+- 不可變更事項及必要 Gate。
+- 可驗證的驗收案例。
+- Preview 完成與 Production 完成的差別。
+
+沿用 Old UI First，不建立第二套 UI 規格。
+
+③ New UI2 五頁資料／功能／驗收矩陣
+
+對關鍵 Dataset 查核：
+
+source、schema、unit、currency、as_of、fetched_at、PIT、freshness、missing reason、Canonical／Shadow、Consumer、授權狀態。
+
+缺少的欄位標明 NOT VERIFIED 或 NOT AVAILABLE，不虛構。
+
+已有資料契約時連結既有 SSOT。
+
+Batch 2：測試、返工與 Production（最多三項）
+
+④ E2E／Golden／Mutation Tests
+
+先盤點現有測試，只補真正缺少的高風險路徑：
+
+資料來源 → 正規化 → 選股／決策 → Digest → UI／LINE。
+
+使用固定 fixture、Golden Tests、Mutation Tests。
+
+不得放寬 PIT、Risk Cap、資料完整性或決策門檻。未正式接線的路徑只驗證允許的契約或離線 fixture，不假稱正式 E2E 通過。
+
+⑤ 最小 PR Impact Check
+
+沿用既有 PR／QA 流程，確認：
+
+- 改了什麼？
+- 影響哪些 Producer／Consumer？
+- 哪些測試應重跑？
+- 哪些契約不可變更？
+- 哪些正式文件引用需同步？
+
+不建立冗長重複報告。
+
+⑥ Production 健康度
+
+五軸分開驗證：
+
+1. CI 是否通過。
+2. 資料是否更新。
+3. 資料是否有效。
+4. 正式 UI 是否真正接線。
+5. 投資決策與通知是否可用。
+
+缺少正式部署證據即標 NOT VERIFIED。
+
+Batch 3：Agent 效率與交接（最多三項）
+
+⑦ Agent 路由整合
+
+使用已建立的三個 Agent，驗證任務能自動選擇適合專家，且 QA 保持非作者獨立。
+
+不另建第二套 Agent 架構。
+
+⑧ Token 與返工基準
+
+建立可重現的量測：
+
+- 單件正式驗收完成工作的 Token。
+- Agent 啟動與文件讀取成本。
+- PR 返工次數。
+- QA 修正輪次。
+- 重複讀取及無效探索次數。
+
+必須區分真實量測、估算與 NOT VERIFIED。
+
+禁止用 bytes 冒充 Token。
+
+⑨ 零記憶接手測試
+
+以不依賴舊對話的 Agent 測試：
+
+- 是否找到最新 main 與有效治理。
+- 是否正確辨識唯一 NEXT。
+- 是否知道 HOLD 與資料 Gate。
+- 是否正確選用專業 Agent。
+- 是否避免重做已完成工作。
+
+完成後按既有 GitHub 交接制度同步。
+
+---
+
+五、正式治理與停手邊界
+
+以下一律維持：
+
+- 不修改投資公式、Risk Cap、System Action。
+- 不新增未授權 API、資料來源、cron 或 Secrets。
+- 不突破 OneBrain 或 New UI2 資料接線 Gate。
+- 不擅改 UI 布局、SHOWN_FOLDS、UI 契約與測試 allowlist。
+- 不把 missing 填 0。
+- unavailable ≠ neutral。
+- not evaluated ≠ safe。
+- FAKE Preview ≠ 正式接線。
+- 不擅自合併、關閉或 rebase #1124～#1126。
+- 不處置 HOLD 中的 #1164、#1119。
+- 不清理不明 worktree。
+- 不重建資料庫或修改歷史投資資料。
+- 不降低 CI／QA／Merge Gate。
+
+若出現真正需客戶裁示的問題，提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手。
+
+其餘已授權技術事項自行依序執行，不反覆請示。
+
+六、PR、QA、CI 與永久交接
+
+每批遵守：
+
+1. GitHub-first、確認基準與分支。
+2. 每批最多三項。
+3. 一次只寫一個模組／文件，避免競爭寫入。
+4. 非作者多組獨立 QA。
+5. 同最新 head 五項原生 CI success。
+6. Review threads 與 Merge Gate 核實。
+7. 合格才 merge。
+8. 同步 GitHub 留證後才進下一批。
+
+使用既有權威文件：
+
+- BACKLOG：工作狀態與下一步。
+- DECISIONS：只登記真正正式裁示。
+- HANDOFF：最新接手點、唯一 NEXT、HOLD／NOT VERIFIED。
+- PROJECT_STATE：依現行制度同步專案狀態。
+- 既有治理與測試證據文件：記錄驗收，不建立第二套 SSOT。
+
+不得把全部歷史日誌複製到 HANDOFF。
+
+七、執行模式
+
+維持靜默自主巡航。
+
+不逐步輸出：
+
+- Agent 啟動。
+- 等待 QA。
+- 等待 CI。
+- commit／push 中。
+- 準備下一批。
+- 無需客戶決策的進度訊息。
+
+只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報。
+
+每批完成先檢查對話風險及 GitHub 存檔。累積約三批或發生重大決策、長篇 CI／QA 時，依 PROJECT_RULES 第 33 節主動安排安全交接。
+
+如需更換對話，先完成 GitHub 存檔、QA／CI 核實，再提供結束對話與新對話接手提示語；不得憑記憶宣稱完成。
+
+八、最終完成標準
+
+三個專業 Agent 已正式入庫，且路由、權限與非作者 QA 符合治理。
+
+六項品質補強各有：
+
+- 實際交付與驗收證據；或
+- 既有能力可重用的證據；或
+- 明確 BLOCKED／NOT VERIFIED／未授權邊界。
+
+最後提供：
+
+- 最新 main SHA。
+- 已合併 PR 與同 head CI／QA。
+- 三個 Agent 驗證結果。
+- 六項補強狀態。
+- Token／返工基準。
+- 剩餘 HOLD 與風險。
+- 唯一 NEXT。
+- 是否需要客戶回覆。
+
+現在開始 GitHub-first。先完成 #1177；符合條件後，自動接續上述已核准工作。不重複規劃、不另求同一授權、不突破任何 Gate。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 授權範圍**
+
+| 客戶原文要點 | 本組整理 |
+|---|---|
+| 一、GitHub-first；二、先處理 #1177 | 前置工作。#1177 已於 `63da9515` 合併（派工訊息自述；本組 `git fetch origin main` 實查 main＝`63da9515c2f35549aa943a2728e287168632cdb0`，FACT）。#1164、#1124～#1126、#1119 仍 HOLD |
+| 三、第一階段：建立三個專業 Agent | **本批（`DEC178-AGENTS-BATCH-A`）**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md` 入庫；最小任務路由規則落 `PROJECT_RULES.md` 第 34 節；結構守衛 `tests/test_agent_definitions_guard.py`。Investment Logic、OneBrain、GitHub Auditor 僅為第二批候選，**不建立**（`DEC178-AGENT-SECOND-CANDIDATES`）。「一個 QA Agent 定義不等於只派一組 QA」＝仍遵守 `CLAUDE.md` §-2 規則 4 |
+| 四、第二階段：六項品質補強，分三批、每批最多三項 | Batch 1（`DEC178-QUALITY-BATCH-1`）＝①現有覆蓋與真正缺口稽核、②Definition of Ready／Definition of Done、③New UI2 五頁資料／功能／驗收矩陣；Batch 2（`DEC178-QUALITY-BATCH-2`）＝④E2E／Golden／Mutation Tests、⑤最小 PR Impact Check、⑥Production 健康度五軸；Batch 3（`DEC178-QUALITY-BATCH-3`）＝⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試。已完成的能力 REUSE，不重建；以現有 GitHub 文件、測試及程式為 SSOT |
+| 五、正式治理與停手邊界 | 全部維持（見下方 (三)）。出現真正需客戶裁示的問題：提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手 |
+| 六、PR、QA、CI 與永久交接 | 每批：GitHub-first、最多三項、一次只寫一個模組／文件、非作者多組獨立 QA、同最新 head 五項原生 CI success、review threads 與 Merge Gate 核實、合格才 merge、同步 GitHub 後才進下一批。權威文件分工沿第 15 節（BACKLOG／DECISIONS／HANDOFF／PROJECT_STATE），不另立 SSOT |
+| 七、執行模式 | 靜默自主巡航；每批結束檢查交接風險（第 33 節） |
+
+**(二) 順序（客戶原文的忠實整理）**：#1177 → 三個 Agent（第一階段，獨立批次）→ Quality Batch 1 → Batch 2 → Batch 3；每批合併並於 GitHub 留證後才進下一批。
+
+**(三) 本條不是授權突破任何 Gate**：不修改投資公式、Risk Cap、System Action；不新增未授權 API、資料來源、cron 或 Secrets；不突破 OneBrain 或 New UI2 資料接線 Gate；不擅改 UI 布局、`SHOWN_FOLDS`、UI 契約與測試 allowlist；不把 missing 填 0（unavailable ≠ neutral、not evaluated ≠ safe、FAKE Preview ≠ 正式接線）；不擅自合併、關閉或 rebase #1124～#1126；不處置 HOLD 中的 #1164、#1119；不清理不明 worktree；不重建資料庫或修改歷史投資資料；不降低 CI／QA／Merge Gate。DEC-177 的 🗂 資料新鮮度總覽 Q1～Q7 裁示單**不受影響、仍待客戶回覆**（本條未回答其中任何一題）。
+
+#### 與既有決策的關係
+
+- **DEC-174**（UI 與資料契約雙軌、每批最多三項）、**DEC-175**（工作優先序與交接治理）、**DEC-176**、**DEC-177**（含預防性交接制度、🗂 實作停在安全點）：全部維持，本條不改寫、不擴權。
+- **DEC-173 Q5 / `REORG3C-Q5-GATE`**：Q5＝暫不執行，前置為「先實測 Token 成效與 Agent 遵循能力」。本條⑧（Token 與返工基準）是該前置證據的候選來源，但**不構成 Q5 重議**；不可用單次樣本或 bytes 冒充 Token。
+- **`PROJECT_RULES.md` 第 31 節（ChatGPT×Claude 分工）／第 31.2 節／第 33 節／新增第 34 節**：第 34 節為路由索引，與上列並存，互不取代。
+- **`CLAUDE.md` §-2（每次任務都派工、多組獨立稽核、不得自己驗收自己）、§-1、§-1.5**：不受影響；「按需」只決定挑哪個 Agent，**不改變每次任務都派工**。
+
+#### DEC-178 範圍外與 NOT VERIFIED
+
+- **範圍外**：本條不是 Quality Batch 1～3 的內容授權以外的任何施工授權；不修改 `.claude/settings*`、`CLAUDE.md`、`PROCESS.md`、`src/`、`scripts/`、`.github/`、資料；不授權建立第二批候選 Agent。
+- **更早核准紀錄**：本組 `git grep -n -i "專業 AI Agent\|專業 Agent\|GitHub Auditor\|\.claude/agents"` 於本批前未命中任何更早紀錄（僅限 repo 內搜尋）→ 更早客戶紀錄 **NOT FOUND（repo 外是否存在 NOT VERIFIED）**，不編造。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；三個 Agent 在 Claude Code 的實際載入與路由效果（新對話 `/agents`、`/doctor` 實測，BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；Bash 唯讀為指示性約束、settings 層是否強制（`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`，是否需要由客戶另裁示）；Agent frontmatter 格式依派工訊息轉述的官方文件（單組，本組未重新查官方文件）；本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
