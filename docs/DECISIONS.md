@@ -9082,7 +9082,7 @@ Batch 3：Agent 效率與交接（最多三項）
 | 客戶原文要點 | 本組整理 |
 |---|---|
 | 一、GitHub-first；二、先處理 #1177 | 前置工作。#1177 已於 `63da9515` 合併（派工訊息自述；本組 `git fetch origin main` 實查 main＝`63da9515c2f35549aa943a2728e287168632cdb0`，FACT）。#1164、#1124～#1126、#1119 仍 HOLD |
-| 三、第一階段：建立三個專業 Agent | **本批（`DEC178-AGENTS-BATCH-A`）**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md` 入庫；最小任務路由規則落 `PROJECT_RULES.md` 第 34 節；結構守衛 `tests/test_agent_definitions_guard.py`。Investment Logic、OneBrain、GitHub Auditor 僅為第二批候選，**不建立**（`DEC178-AGENT-SECOND-CANDIDATES`）。「一個 QA Agent 定義不等於只派一組 QA」＝仍遵守 `CLAUDE.md` §-2 規則 4 |
+| 三、第一階段：建立三個專業 Agent | **本批（`DEC178-AGENTS-BATCH-A`）**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md` 入庫；最小任務路由規則落 `PROJECT_RULES.md` 第 34 節；結構守衛 `tests/test_agent_definitions_guard.py`。Investment Logic、OneBrain、GitHub Auditor 僅為第二批候選，**不建立**（`DEC178-AGENT-SECOND-CANDIDATES`）。「一個 QA Agent 定義不等於只派一組 QA」＝仍遵守 `CLAUDE.md` §-2 規則 4。**UI Agent 定義做成硬性無寫入工具＝撰寫組對客戶「預設唯讀；實作依正式授權」的解讀，比客戶字面更保守；客戶若要 UI Agent 可在授權下直接實作，另行裁示**（DEC-177 Q1～Q7 回覆前不寫 UI code） |
 | 四、第二階段：六項品質補強，分三批、每批最多三項 | Batch 1（`DEC178-QUALITY-BATCH-1`）＝①現有覆蓋與真正缺口稽核、②Definition of Ready／Definition of Done、③New UI2 五頁資料／功能／驗收矩陣；Batch 2（`DEC178-QUALITY-BATCH-2`）＝④E2E／Golden／Mutation Tests、⑤最小 PR Impact Check、⑥Production 健康度五軸；Batch 3（`DEC178-QUALITY-BATCH-3`）＝⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試。已完成的能力 REUSE，不重建；以現有 GitHub 文件、測試及程式為 SSOT |
 | 五、正式治理與停手邊界 | 全部維持（見下方 (三)）。出現真正需客戶裁示的問題：提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手 |
 | 六、PR、QA、CI 與永久交接 | 每批：GitHub-first、最多三項、一次只寫一個模組／文件、非作者多組獨立 QA、同最新 head 五項原生 CI success、review threads 與 Merge Gate 核實、合格才 merge、同步 GitHub 後才進下一批。權威文件分工沿第 15 節（BACKLOG／DECISIONS／HANDOFF／PROJECT_STATE），不另立 SSOT |
@@ -9103,4 +9103,4 @@ Batch 3：Agent 效率與交接（最多三項）
 
 - **範圍外**：本條不是 Quality Batch 1～3 的內容授權以外的任何施工授權；不修改 `.claude/settings*`、`CLAUDE.md`、`PROCESS.md`、`src/`、`scripts/`、`.github/`、資料；不授權建立第二批候選 Agent。
 - **更早核准紀錄**：本組 `git grep -n -i "專業 AI Agent\|專業 Agent\|GitHub Auditor\|\.claude/agents"` 於本批前未命中任何更早紀錄（僅限 repo 內搜尋）→ 更早客戶紀錄 **NOT FOUND（repo 外是否存在 NOT VERIFIED）**，不編造。
-- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；三個 Agent 在 Claude Code 的實際載入與路由效果（新對話 `/agents`、`/doctor` 實測，BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；Bash 唯讀為指示性約束、settings 層是否強制（`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`，是否需要由客戶另裁示）；Agent frontmatter 格式依派工訊息轉述的官方文件（單組，本組未重新查官方文件）；本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；三個 Agent 在 Claude Code 的實際載入與路由效果（新對話 `/agents`、`/doctor` 實測，BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；Bash 唯讀為指示性約束、settings 層是否強制（`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`，是否需要由客戶另裁示）；Agent frontmatter 格式：撰寫組依派工訊息轉述的官方文件，其後 2026-11-13 QA-A 已以官方 sub-agents 文件核對（frontmatter 欄位、tools／disallowedTools 語法、MCP 命名、未知欄位被靜默忽略；單組；回傳被截斷尾段 NOT VERIFIED）；本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。

@@ -1179,12 +1179,14 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 
 | 任務特徵 | Agent |
 |---|---|
-| 資料來源／品質、DataPR（資料 PR）、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯 | `stock-data-integrity` |
-| UI 設計、五頁契約、手機首屏、互動一致性、Old UI First、390／1440 驗收 | `stock-ui-ux`（本定義唯讀；實作時由總管另派一般實作 AI，並以其規則為約束） |
-| PR diff、CI、回歸風險、Merge Gate、金融語意驗收 | `stock-independent-qa` |
+| 資料來源／品質、`auto/data-*` 資料發布 PR（例如 #1124～#1126；HOLD 中，僅限資料面查證）、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯 | `stock-data-integrity` |
+| UI 設計、五頁契約、手機首屏、互動一致性、Old UI First、390／1440 驗收 | `stock-ui-ux`（Write／Edit 工具不可用；實作規則見下方第 2a 點） |
+| PR diff、CI、回歸風險、Merge Gate、資料完整性、金融語意**驗收**（是否符合已核准語意；不判定語意本身） | `stock-independent-qa`（Write／Edit 工具不可用；Bash 唯讀為指示性約束） |
+| 投資公式／Risk Cap／System Action、新資料源或授權、UI 版面變更、Gate 解除 | **不派任何 Agent 自行處理**；總管依 `CLAUDE.md` §-1.5／本檔第 4 節 Stop Gate 向客戶提 A／B／C（正確性、風險、速度、Token）＋推薦＋最小變更範圍後停手 |
 | 跨類任務 | 總管拆分；各 Agent 只處理自己面向，不重疊 |
 
-3. **「按需」＝怎麼派，不是要不要派**：三個 Agent 預設不全數載入，依任務特徵挑選；**不改** `CLAUDE.md` §-2 規則 1「每一次任務都派工」。重疊時順序：Data（事實）→ UI（呈現）→ 實作 → QA（最後、非作者）。
+2a. **UI Agent 的寫入與授權**：`stock-ui-ux` 定義**硬性不含寫入工具**。UI 實作須有客戶正式授權（DEC-177 Q1～Q7 回覆前不寫 UI code）；授權後由總管另派一般實作 AI，並以 UI Agent 的 Forbidden／Escalation 為約束。⚠️ 這是撰寫組對客戶「預設唯讀；實作依正式授權」的解讀，**比客戶字面更保守**；客戶若要 UI Agent 可在授權下直接實作，另行裁示。
+3. **「按需」＝怎麼派，不是要不要派**：三個 Agent 預設不全數**派工**，依任務特徵挑選（三個 description 常駐父層 context，成本未量測，NOT VERIFIED，併入工作項 ⑧）；**不改** `CLAUDE.md` §-2 規則 1「每一次任務都派工」。重疊時順序：Data（事實）→ UI（呈現）→ 實作 → QA（最後、非作者）。
 4. **獨立性**：QA 不得驗收自己修改的檔案或自己派生之 Agent 的產出；同一 PR 至少兩組不同角度（例：事實查證／治理越權）——此為 `CLAUDE.md` §-2 規則 4，Agent 定義不取代它。CI 證據須對應 PR 當前 head SHA。
 5. **不得擴權**：三個 Agent 皆不含 Write／Edit／NotebookEdit／Agent 工具，不得由 Agent 定義取得任何新權限；與第 31 節（ChatGPT×Claude 分工）、第 31.2 節自主 merge 條件、第 33 節預防性交接並存，互不取代。
 6. **第二批候選（Investment Logic、OneBrain、GitHub Auditor）僅為候選、本批不建立**；日後建立須客戶另行授權並同步守衛測試白名單。

@@ -29,12 +29,11 @@ REGISTERED_AGENTS = (
 )
 QA_AGENT = "stock-independent-qa"
 
-#: Claude Code subagent frontmatter 官方欄位（camelCase 須完全吻合；不在內者＝可能是拼錯，會被靜默忽略）。
-KNOWN_FIELDS = frozenset({
-    "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
-    "skills", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
-    "mcpServers", "hooks", "initialPrompt",
-})
+#: 嚴格白名單：本 repo 的 Agent frontmatter 只准這四個欄位（最小權限）。
+#: 其餘官方欄位（hooks／mcpServers／omitClaudeMd／isolation／background／skills／memory／initialPrompt／
+#: model／permissionMode／autoCompactWindow…）一律拒絕；拼錯的欄位名 Claude Code 會靜默忽略，同樣由此擋下。
+ALLOWED_FIELDS = frozenset({"name", "description", "tools", "disallowedTools"})
+UNREGISTERED_FIELD_MSG = "未登記欄位；新增須改守衛並經非作者 QA"
 LIST_FIELDS = ("tools", "disallowedTools")
 
 BASE_TOOLS = frozenset({"Read", "Grep", "Glob", "Bash"})
@@ -62,7 +61,6 @@ MCP_WRITE_RE = re.compile(
     r"resolve_review|unresolve_review|request_copilot)"
 )
 FORBIDDEN_PERMISSION_MODES = frozenset({"bypassPermissions", "acceptEdits"})
-ALLOWED_PERMISSION_MODES = frozenset({"default", "plan"})
 
 REQUIRED_SECTIONS = ("Role", "Trigger", "Inputs", "Tools", "Forbidden", "Output", "Escalation")
 DESCRIPTION_MAX = 300
@@ -112,7 +110,11 @@ def parse_agent(text: str):
             cur_list_key = None
             val = val.strip().strip("'\"")
             if key in LIST_FIELDS:
-                fields[key] = [v.strip() for v in val.split(",") if v.strip()]
+                if val.startswith("[") and val.endswith("]"):   # YAML flow list：tools: [Read, Grep]
+                    val = val[1:-1]
+                elif val.startswith("[") or val.endswith("]"):
+                    errors.append(f"flow list 括號不成對：{key}")
+                fields[key] = [v.strip().strip("'\"") for v in val.split(",") if v.strip()]
             else:
                 fields[key] = val
     return fields, body, errors
@@ -125,9 +127,9 @@ def validate_agent(stem: str, text: str) -> list[str]:
     if errors and not fields:
         return errors
 
-    unknown = sorted(set(fields) - KNOWN_FIELDS)
+    unknown = sorted(set(fields) - ALLOWED_FIELDS)
     if unknown:
-        errors.append(f"未知的 frontmatter 欄位（可能拼錯，Claude Code 會靜默忽略）：{unknown}")
+        errors.append(f"{UNREGISTERED_FIELD_MSG}：{unknown}（拼錯的欄位名會被 Claude Code 靜默忽略）")
 
     name = fields.get("name")
     if not name or isinstance(name, list):
@@ -166,11 +168,8 @@ def validate_agent(stem: str, text: str) -> list[str]:
             errors.append(f"tools 含未登記工具：{t}")
 
     pm = fields.get("permissionMode")
-    if pm is not None:
-        if pm in FORBIDDEN_PERMISSION_MODES:
-            errors.append(f"permissionMode 不得為 {pm}")
-        elif pm not in ALLOWED_PERMISSION_MODES:
-            errors.append(f"permissionMode 未登記：{pm}")
+    if pm in FORBIDDEN_PERMISSION_MODES:   # 縱深：即使白名單被放寬，這兩個值仍必拒
+        errors.append(f"permissionMode 不得為 {pm}")
 
     headings = set(re.findall(r"(?m)^## (\S+)", body))
     for sec in REQUIRED_SECTIONS:
@@ -189,6 +188,8 @@ def validate_agent(stem: str, text: str) -> list[str]:
 
 def _content_checks(stem: str, body: str) -> list[str]:
     errs: list[str] = []
+    if "§-2" not in body:
+        errs.append("內文須引用 CLAUDE.md §-2（每次任務都派工；按需不取代它）")
     if "不得擴權" not in body:
         errs.append("缺少『不得擴權』聲明")
     if "Bash" in body and "指示性約束" not in body:
@@ -198,9 +199,11 @@ def _content_checks(stem: str, body: str) -> list[str]:
             if w not in body:
                 errs.append(f"資料 Agent 的 Output 須含 {w}")
     if stem == QA_AGENT:
-        for w in ("PASS", "FAIL", "BLOCKED", "最新 head", "不是作者", "非作者"):
+        for w in ("PASS", "FAIL", "BLOCKED", "最新 head", "不是作者", "非作者", "不等於只派一組", "規則 4"):
             if w not in body:
                 errs.append(f"QA Agent 內文須含 {w}")
+        if "擅自 merge" not in body and "不得 merge" not in body:
+            errs.append("QA Agent 內文須明載擅自 merge／不得 merge")
     return errs
 
 
@@ -234,7 +237,7 @@ class TestRealAgentDefinitions:
         assert errs == []
         assert fields["name"] == stem
         assert 0 < len(fields["description"]) <= DESCRIPTION_MAX
-        assert set(fields) <= KNOWN_FIELDS
+        assert set(fields) <= ALLOWED_FIELDS
 
     def test_names_are_unique(self):
         names = [parse_agent(_read(s))[0]["name"] for s in REGISTERED_AGENTS]
@@ -298,7 +301,38 @@ class TestMutationTeeth:
             "  - Bash\n", "  - Bash\n  - mcp__github__get_commit\n", 1), "只有")
 
     def test_typo_in_field_name_is_rejected(self):
-        self._must_fail("stock-ui-ux", lambda t: t.replace("disallowedTools:", "disallowdTools:", 1), "未知")
+        self._must_fail("stock-ui-ux", lambda t: t.replace("disallowedTools:", "disallowdTools:", 1), "未登記欄位")
+
+    @pytest.mark.parametrize("line", [
+        "hooks: x", "mcpServers: x", "omitClaudeMd: true", "isolation: worktree", "background: true",
+        "skills: x", "memory: project", "initialPrompt: hi", "model: opus", "autoCompactWindow: 1",
+    ])
+    def test_unregistered_official_fields_are_rejected(self, line):
+        self._must_fail("stock-data-integrity",
+                        lambda t: t.replace("disallowedTools:", f"{line}\ndisallowedTools:", 1), "未登記欄位；新增須改守衛並經非作者 QA")
+
+    def test_flow_list_is_supported_and_still_guarded(self):
+        good = _read("stock-data-integrity")
+        flow = good.replace("tools:\n  - Read\n  - Grep\n  - Glob\n  - Bash\n", "tools: [Read, Grep, Glob, Bash]\n", 1)
+        assert flow != good
+        assert validate_agent("stock-data-integrity", flow) == []
+        bad = flow.replace("[Read, Grep, Glob, Bash]", "[Read, Grep, Glob, Bash, Write]", 1)
+        assert any("Write" in e for e in validate_agent("stock-data-integrity", bad))
+        unbalanced = flow.replace("Bash]", "Bash", 1)
+        assert validate_agent("stock-data-integrity", unbalanced)
+
+    @pytest.mark.parametrize("stem", REGISTERED_AGENTS)
+    def test_removing_section_2_reference_is_rejected(self, stem):
+        self._must_fail(stem, lambda t: t.replace("§-2", "§"), "§-2")
+
+    def test_qa_missing_not_only_one_group_phrase_is_rejected(self):
+        self._must_fail(QA_AGENT, lambda t: t.replace("不等於只派一組", "等於"), "不等於只派一組")
+
+    def test_qa_missing_rule_4_is_rejected(self):
+        self._must_fail(QA_AGENT, lambda t: t.replace("規則 4", "規則"), "規則 4")
+
+    def test_qa_missing_no_merge_clause_is_rejected(self):
+        self._must_fail(QA_AGENT, lambda t: t.replace("擅自 merge", "擅自 m"), "merge")
 
     def test_removing_name_is_rejected(self):
         self._must_fail("stock-ui-ux", lambda t: t.replace("name: stock-ui-ux\n", "", 1), "缺少 name")
