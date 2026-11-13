@@ -278,6 +278,10 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 - 沒跑的就寫沒跑；不得虛構驗證；不得把自己的結果寫成第二組已複驗。
 - 來源：客戶 MSG 1 §24、MSG 2 第 6 點（研究 → 實作 → tests → independent audit → push → PR → CI → fix → merge → main verification → handover）；`docs/BACKLOG.md` 0.3 第 1 條；`CLAUDE.md` §-2 規則 3、6。
 - 📌 **2026-10-29 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶（DEC-109 二十三））**：**UI Stage 的 Definition of Done ＝ CI 綠＋Visual Fidelity PASS**（第 24 節；`docs/governance/UI_VISUAL_FIDELITY_GATE.md`）：`… → independent audit → Visual Fidelity Gate → … → merge`。客戶原文「CI / QA / tests / mutation 全綠 ≠ UI Stage complete」；Gate 未過，BACKLOG 不得移入「已結案」、HANDOFF 不得寫 complete。
+- 📌 **2026-11-13 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶授權之 Quality Batch 1 ②（DEC-178）；內容為 AI 整理，單組撰寫，未經非作者獨立 QA）**：
+  - **(a) DoR（Definition of Ready）最小定義**：動工前須能填上 `.github/PULL_REQUEST_TEMPLATE.md`「需求 ID／核准／Gate／Impact」小節的 7 項（需求／規格 ID；核准狀態；影響範圍＋資料依賴；Producer→Consumer；不可變更事項＋適用 Gate；驗收案例；完成層級）；填不出者屬 Candidate／Decision Gate，**不得動工**（第 4 節；第 15 節第 5 點「Candidate 不得升格 Approved」）。沿用 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md` §1／§4 與 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §1 六問，**不重新定義、不另設第二套問卷**。
+  - **(b) Preview 完成 ≠ Production 完成**：Preview（FAKE／REAL shadow、capability marker）完成**不得**宣稱 Production 完成；Production 完成須引用 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` 的現行條件與第 16.7 節 Production 安全狀態，無證據標 NOT VERIFIED。**CI 綠 ≠ Production 有效**（CI 只證明該 head SHA 的測試通過，不證明正式部署已接線、資料已更新或通知可用）。
+  - **(c) 本補註不解除任何 Gate、不授權任何施工**：`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、DEC-177 Q1～Q7 及所有 HOLD 維持原狀；本補註只新增「動工前須能回答什麼」與「完成要寫到哪一層」的最小入口。
 
 ## 第 8 節｜Independent Audit／Red Team
 
