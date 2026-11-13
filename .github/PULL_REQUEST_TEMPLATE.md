@@ -10,7 +10,9 @@
 -->
 
 
-## 需求 ID／核准／Gate／Impact（DEC-178 Quality Batch 1 ②⑤ 的最小入口；非 UI PR 也填，不適用寫「無」）
+## 需求 ID／核准／Gate／Impact（DEC-178 Quality Batch 1 ② 的最小入口；非 UI PR 也填，不適用寫「無」）
+
+> Producer→Consumer／不可變更事項為 ② 開發前契約項（客戶訊息明列）；**完整 PR Impact Check（⑤）於 Batch 2 完成**，本小節不等於 ⑤ 已落地。
 
 - 需求／規格 ID（DEC-NNN／BACKLOG ID）：______
 - 核准狀態（已核准／Candidate／不適用；⛔ Candidate 不得當 Approved）：______
