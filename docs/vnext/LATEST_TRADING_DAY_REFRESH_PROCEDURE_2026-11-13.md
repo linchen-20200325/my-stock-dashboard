@@ -10,7 +10,7 @@
 1. **目前最新有效交易日**：Cloud 會讀到的 main 是 **2026-11-09**（收盤 41,661.70）；repo 內已存在的最新「價格欄位完整且自洽」日是 **2026-11-11**，但只在 #1124 分支（未進 main）；理論上今晚可信上限是 11-12，但**任何已知 ref 都沒有 11-12 的台股列**；11-10～11-12 是否為交易日仍 NOT VERIFIED（G-07）。
 2. **最快安全做法**：不手動觸發、不 bootstrap；等下一輪 schedule（預期台北 11-13 約 23:30～11-14 約 03:45）把 11-12 寫進 `auto/data-macro-history`，AI 做 S0 唯讀檢核後，**在同一個 head** 上走既有路徑（客戶裁示→客戶觸發 CI→非作者審閱→客戶明示 merge→客戶手動 Reboot Cloud）。此為 RECOMMENDATION。
 3. **必須先處理的 Gate**：客戶 HOLD（僅 #1124 的解除）、DPE-4＝B、DPE-5（同 head 的 CI 由客戶觸發）、DPE-3／DG-LIC 與 DG-PIT 的取捨；DG-SCOPE／DG-COV／WIRING-GATE 對「只更新台股卡資料檔」判讀不阻擋（INFERENCE）。
-4. **是否需客戶裁示**：**需要**（§10 有可複製回覆範本）；其中「**可立即執行的已授權步驟**」僅 S0 唯讀檢核、文件與交接同步、非作者唯讀審閱 #1124 diff，其餘皆「待核准」（§8 逐步標註）。
+4. **是否需客戶裁示**：**需要**（§10 有可複製回覆範本）；其中「**可立即執行的步驟（視為已授權〔AI 解讀〕）**」僅 S0 唯讀檢核、文件與交接同步、非作者唯讀審閱 #1124 diff（依據見 §8），其餘皆「待核准」（§8 逐步標註）。
 5. **本文件不構成授權**：不授權觸發任何抓取／bootstrap／回補、不授權合併／關閉／rebase #1124～#1126、不解除任何 Gate／HOLD。
 
 ## 0. 目的與禁止事項
@@ -50,7 +50,7 @@
 | `finmind_inst.parquet` | 2026-11-09（4939） | 2026-11-12（4942） | 11-10、11-11、11-12 | 0 |
 | `finmind_margin.parquet` | 2026-11-09（4939） | 2026-11-12（4942） | 11-10、11-11、11-12 | 0 |
 
-11-12 的台股列缺席的原因 **NOT VERIFIED**（metadata 無錯誤記錄；兩個未區分的假說：抓取時點太早，或 Yahoo 間歇空缺）。
+11-12 的台股列缺席的原因 **NOT VERIFIED**（metadata 無錯誤記錄；兩個未區分的假說：抓取時點太早，或 Yahoo 間歇空缺）。入帳時點事實（FACT，`fetched_at`）：11-10 台股於 T+1（台北 11-11 00:55）即入帳，11-11 台股卻到 T+2（11-12T17:29Z＝台北 11-13 01:29）才入帳，故「早抓取不到」**不是穩定規律**，下一輪（台北約 23:30–03:45）能否帶出 11-12 不確定。
 
 ### 2.2 台股 `twii_ohlcv` 逐列（欄位：date, open, high, low, close, volume, source=`Yahoo:^TWII:chart`, fetched_at；**無** `as_of`／`is_imputed` 欄）
 
@@ -68,7 +68,7 @@
 
 - `finmind_inst.foreign_buy`（億，轉換過程 NOT VERIFIED）：11-05 −1024.61；11-06 −911.88；11-09 −900.56；11-10 −341.17；**11-11 −7.66；11-12 −6.85**。全表無 NaN／0。
   - 寫入組重算：最近 60 列 |值| 中位數約 **417**（有號中位數 −137）；11-11、11-12 比它小約兩個數量級。⚠️ 與素材「中位數 |137|」不符：137 是**有號**中位數，以重算為準（結論不變：偏小一個量級以上）。
-  - 歷史上 2025 年起共 22 列 |值| < 10（例：2025-12-19、2026-01-15、2026-08-25），`fetched_at` 皆 2026-09-24 批次回補；11-11、11-12 是 cron 逐日抓取的新列。11-11 當日加權指數約 +3.6% 而外資僅個位數億——標為**可疑，NOT VERIFIED**（不能推斷是錯，也不能推斷是對；需外部真值）。
+  - 2025-01-01 起計歷史 22 列 |值| < 10（另加 11-11、11-12 共 24 列；例：2025-12-19、2026-01-15、2026-08-25），`fetched_at` 皆 2026-09-24 批次回補；11-11、11-12 是 cron 逐日抓取的新列。11-11 當日加權指數約 +3.6% 而外資僅個位數億——標為**可疑，NOT VERIFIED**（不能推斷是錯，也不能推斷是對；需外部真值）。
 - `finmind_margin.margin_balance`（元）：11-09 539,915,741,000；11-10 536,678,732,000；11-11 541,158,093,000；11-12 533,474,629,000；無 NaN／≤0；量級一致。
 - inst／margin 的 11-10 以後是否也有「先空後補寫」未查（NOT VERIFIED）。
 
@@ -76,7 +76,7 @@
 
 - `metadata.json`：main `updated_at` 2026-11-09T19:40:36Z；分支 2026-11-12T17:29:27Z。twii／inst／margin 的 `last_updated` main 為 11-09，分支為 11-11／11-12／11-12，`last_error` 皆 null。
 - `finmind_m1m2`：`last_updated` 2026-09-01、`fetch_outcome`＝`NO_NEW_DATA`、`last_error`「抓取結果為空」（請求窗口內無新月份，非抓取失敗）；`tw_pmi`：`last_updated` 2026-10-01、`fetch_outcome`＝`UNDETERMINED`（最近一次抓取結果無法判定，**不確認為已是最新**）。兩者在分支亦無改善、非 PR HOLD 造成。
-- #1124 共 5 檔整包：twii／inst／margin parquet、`tw_pmi.json`（僅 `fetched_at`／`cached_at` 刷新，值 62.5、資料月 2026-10-01 不變——素材所述，寫入組未重讀此檔）、`metadata.json`。
+- #1124 共 5 檔整包：twii／inst／margin parquet、`data_cache/macro_last_good/tw_pmi.json`（僅 `fetched_at`／`cached_at` 刷新，值 62.5、資料月 2026-10-01 不變——素材所述，寫入組未重讀此檔；`git diff --stat` 實查該檔 +2／−2）、`metadata.json`。`data_cache/tw_pmi.parquet` 本輪無變更（實查）。
 
 ### 2.5 交易日曆
 
@@ -120,7 +120,7 @@ repo 無靜態休市表（`tests/fixtures/twse_holiday_schedule_115_synthetic.js
 | 發布分支 | 固定 `auto/data-macro-history`（`BRANCH_PREFIX="auto/data-"` L119、`branch=f"{BRANCH_PREFIX}{job}"` L824）；一般 git push；禁 force／`+refspec`／rebase／`reset --hard`／`gh workflow`／`gh pr merge`／dispatch（`_guard` L690-724） | `scripts/publish_data_pr.py` |
 | 分支已存在 | `checkout -B <branch> origin/<branch>`＋一般 `merge --no-edit origin/main`（不 rebase、不 force，commit 累積；衝突則 abort exit 1）；PR `--base main`、非 draft | docstring L41-60 |
 | union（fail-closed） | 舊非 null 而新為 null／缺欄，或兩邊皆非 null 但不同 → `PublishError` exit 1；舊 null→新值採新；揮發欄取舊值 | docstring L48-60 |
-| head 漂移 | 每次實質執行必產生新 commit（metadata `updated_at` 變動）→**手動 dispatch 與每日 cron 都會使 #1124 的 head 再前進**（INFERENCE：週末無新 K 棒時是否仍 commit，NOT VERIFIED） | 素材讀碼 |
+| head 漂移 | **只有出現實質變動才會 commit**：`metadata.json` 的 `updated_at`、`macro_last_good/tw_pmi.json` 的 `cached_at`／`fetched_at`、parquet 列級 `fetched_at` 被登記為揮發欄（`VOLATILE_JSON_KEYS` L126-139、`VOLATILE_PARQUET_COLS` L141），僅揮發欄位變動時「還原工作樹、不開 PR」（L833-851）。故 #1124 的 head 只在有新資料列、新 `last_error` 或 `fetch_outcome` 變化時前進；沒有新交易日的執行（如週末）預期不 commit（INFERENCE，未實測）；手動 dispatch 同理，有實質新資料時才會使 head 前進 | `scripts/publish_data_pr.py` L125-141、L833-851 |
 | NAS／Proxy（只列名稱） | Fetch 步驟注入 `PROXY_URL`、`FINMIND_TOKEN`、`NAS_BASE_URL`、`NAS_API_KEY`；Publish 步驟只有 `GITHUB_TOKEN`。Yahoo／CBC／data.gov.tw／durable PMI 走 `proxy_helper.fetch_url`；FinMind 直連。缺 `PROXY_URL`→靜默直連（任何 200 都印「已透過 Synology NAS 成功抓取」，不能當有走 NAS 證據）；缺 `NAS_BASE_URL`→中繼回 None；缺 `FINMIND_TOKEN`→inst／margin 跳過並寫 `last_error`，**皆不使 job fail**。GitHub secrets 是否有值 NOT VERIFIED | yml L59-64 |
 
 ### 4.1 pr-check 與 `GITHUB_TOKEN`
@@ -147,7 +147,7 @@ repo 刻意不繞過：發布腳本不 dispatch、無 `actions: write`（理由�
 
 | Gate | 現況 | 是否阻擋 | 解除條件／出處 |
 |---|---|---|---|
-| 客戶 HOLD（#1124～#1126） | 方案 A 維持 HOLD；禁止 Merge／Close／Rebase；三 PR 聯合表述 | **阻擋（最直接）** | 客戶另行明示；DEC-176(a)、DEC-179、DEC-180、DEC-182 |
+| 客戶 HOLD（#1124～#1126） | DEC-179 方案 A（維持 HOLD）；禁止 Merge／Close／Rebase；三 PR 聯合表述 | **阻擋（最直接）** | 客戶另行明示；DEC-176(a)、DEC-179、DEC-180、DEC-182 |
 | DPE-4（三 PR 處置方向） | 未裁示；沒答覆＝三 PR 全 HOLD | **阻擋** | 客戶選 B；GAPS 文件 L274。⚠️ GAPS 原 B 範本是「#1124、#1125 進評估」，本程序要的是「**僅 #1124**」變體，**客戶須明示** |
 | DPE-5（`ui2-browser-gate` 同 head 與進 main） | 未裁示；三 PR 近 3 輪 pr-check 全 `action_required`、jobs 0；mergeable_state behind | **阻擋** | 客戶在目前 head 觸發 CI（AI 不代做）；GAPS L286 |
 | DPE-1 | 未裁示 | 部分（DPE-4 的文件依賴） | 客戶回覆 DPE-1 |
@@ -178,14 +178,16 @@ repo 刻意不繞過：發布腳本不 dispatch、無 `actions: write`（理由�
 
 | 步 | 誰 | 做什麼 | 授權狀態 |
 |---|---|---|---|
-| S0 | AI（唯讀） | 下一輪 cron 後重查分支：twii 是否出現 11-12 列、OHLC 自洽、`fetched_at` 晚於該日、inst／margin 值與單位、metadata `last_error`、PR 狀態；產出「head SHA＋資料檢核表」交客戶。**不連外抓資料** | **已授權**（DEC-182 (五)；唯讀；head 漂移時重做） |
+| S0 | AI（唯讀） | 下一輪 cron 後重查分支：twii 是否出現 11-12 列、OHLC 自洽、`fetched_at` 晚於該日、inst／margin 值與單位、metadata `last_error`、PR 狀態；產出「head SHA＋資料檢核表」交客戶。**不連外抓資料**。**決策規則**：若 11-12 列存在但 `fetched_at` 早於該日台北 17:00（`INCOMPLETE_BAR`，且增量 start＝last+1 不會覆寫），或 11-12 仍缺列→S0 結論為「**不建議放行該 head**」，改「再等一輪」或客戶改選路徑 A（合併現 head，twii 到 11-11）並重新取得其裁示 | **視為已授權（解讀）**（唯讀；head 變動時重做；依據見下方註） |
 | S1 | 客戶 | 裁示 DPE-4＝B（僅 #1124 進放行評估，#1125／#1126 維持 HOLD）；DPE-3／DG-LIC 與 DG-PIT 二選一（等條款確認，或明示承擔風險）；表態 inst 11-11／11-12 可疑值是否整包進 main | **待核准**（客戶） |
-| S2 | 客戶 | DPE-5：在 S0 的 head 上 Close→Reopen（或 Update branch）觸發 pr-check，確認 `ui2-browser-gate` 與 head SHA 一致綠燈；head 若再漂移則重來 | **待核准**（客戶動作；AI 不得代做） |
-| S3 | AI（唯讀、非作者） | 獨立審閱 #1124 diff（5 檔；重點：twii 新列、inst 可疑值、metadata、`tw_pmi.json` 僅時間戳）＋核對 CI、review threads、mergeable；head 漂移時重做 | **已授權**（DEC-182 (五)；唯讀） |
+| S2 | 客戶 | DPE-5：在 S0 的 head 上 Close→Reopen（或 Update branch）觸發 pr-check，確認 `ui2-browser-gate` 與 head SHA 一致綠燈；head 若再前進則重來。**註**：Close→Reopen 僅限客戶操作、保留分支、不刪分支，**不等於** §8.2 禁止的「關 PR＋刪分支重建」；優先 Close→Reopen（head 不變）；Update branch 會產生新 head（merge main）→S3／CI 須在新 head 上重做；Close 期間若 cron 跑到，找不到 open PR 可能另開新 PR，請避開 cron 時段（台北約 23:30–03:45）；main 前進（含本 docs PR 合併）後 #1124 會 behind、需 Update branch，視同 head 前進 | **待核准**（客戶動作；AI 不得代做） |
+| S3 | AI（唯讀、非作者） | 獨立審閱 #1124 diff（5 檔；重點：twii 新列、inst 可疑值、metadata、`tw_pmi.json` 僅時間戳）＋核對 CI、review threads、mergeable；head 漂移時重做 | **視為已授權（解讀）**（唯讀；依據見下方註） |
 | S4 | 客戶明示後 | merge #1124；AI 不得自行合併資料 PR | **待核准**（merge 須客戶明示） |
 | S5 | 客戶 | 手動 Reboot Cloud App | **待核准**（客戶動作；非 AI 步驟） |
 | S6 | AI | 依客戶畫面回報核對「資料日前進、無過期警示」並登錄；Cloud 實際部署 commit 仍 NOT VERIFIED | 客戶回報後才執行；登錄屬**已授權**的文件與交接同步 |
-| — | AI | 文件與交接同步（證據／HANDOFF／BACKLOG／PROJECT_STATE），沿用非作者 QA、同 head CI、Merge Gate | **已授權** |
+| — | AI | 文件與交接同步（證據／HANDOFF／BACKLOG／PROJECT_STATE），沿用非作者 QA、同 head CI、Merge Gate | **已授權**（DEC-182 第 3 項客戶原文「證據及交接同步」） |
+
+> **授權依據註（S0、S3 的「視為已授權（解讀）」）**：AI 解讀為落在客戶「唯讀稽核與更新程序規劃」授權內（DEC-181 限制段；DEC-182 第 3 項「證據及交接同步」）；客戶未逐項點名 S0／diff 審閱；不含任何抓取或 Gate 動作。DEC-182 (五) 是 AI 整理表，**不可**當作授權出處。
 
 ### 8.1 替代路徑 A／B／C／D 比較
 
@@ -193,8 +195,8 @@ repo 刻意不繞過：發布腳本不 dispatch、無 `actions: write`（理由�
 
 | 路徑 | 做法 | 正確性 | 風險 | 速度 | Token／成本 | 授權狀態 |
 |---|---|---|---|---|---|---|
-| A | 合併 #1124 **現** head（twii 到 11-11） | 價格自洽；缺 11-12 | head 每日漂移，須同日完成 S1～S5；整包帶入 inst 可疑值 | 最快 | 低 | 待核准（同 S1～S5） |
-| **B（推薦）** | 等下一輪 cron 後，S0→S1～S6 在**同一 head** | 較新（可能含 11-12）；零新 Gate；不違 DEC-156 | 慢約半天；若 11-12 又缺列則退回 A 或再等一輪 | 中 | 低（無額外取數） | S0／S3 已授權，其餘待核准 |
+| A | 合併 #1124 **現** head（twii 到 11-11） | 價格自洽；缺 11-12 | 須在同一 head 內完成 CI→審閱→合併（head 有新資料時才前進，不必然每天）；整包帶入 inst 可疑值 | 最快 | 低 | 待核准（同 S1～S5） |
+| **B（推薦）** | 等下一輪 cron 後，S0→S1～S6 在**同一 head** | 較新（可能含 11-12）；零新 Gate；不違 DEC-156 | 慢約半天；若 11-12 又缺列則退回 A 或再等一輪 | 中 | 低（無額外取數） | S0／S3 視為已授權（解讀），其餘待核准 |
 | C | 客戶手動 dispatch `update_macro_history`（建議台北 11-14 05:00 後、先 `dry_run=true`） | 可能較早取到 11-12 | dry-run 仍連外且不驗發布層；真實執行使 #1124 head 再漂移並重寫 body；**main 不前進**；多一次 Yahoo／FinMind／NAS 取數；fail-closed 風險（§5） | 中 | 中（多一輪外部取數） | **待核准**（是否授權客戶端手動 workflow_dispatch；不建議） |
 | D | 不處理 | main 停 11-09 | 2026-11-17 起 UI2 台股卡轉過期警示 | 0 | 0 | 預設維持 |
 
@@ -204,7 +206,7 @@ repo 刻意不繞過：發布腳本不 dispatch、無 `actions: write`（理由�
 
 ### 8.3 時序注意
 
-2026-11-14 為週六、11-15 為週日（台股無新 K 棒）；cron 含週末每日執行。客戶若在 S0 前先完成 S1，可在 S0 當下立即做 S2，縮短 head 漂移窗口。
+2026-11-14 為週六、11-15 為週日（台股無新 K 棒）；cron 含週末每日執行，但沒有新交易日時預期不 commit（INFERENCE，未實測），head 可能穩定；仍須同一 head 內完成 CI→審閱→合併。客戶若在 S0 前先完成 S1，可在 S0 當下立即做 S2，縮短 head 變動窗口。
 
 ## 9. 尚待客戶裁示的 Gate（本批不授權、不施工）
 
@@ -222,11 +224,13 @@ DPE-4＝B（僅 #1124）；DPE-3／DG-LIC 與 DG-PIT 取捨；DPE-5（客戶於�
 4) DPE-5：我會在 AI 回報的 head（SHA：…）上自行 Close→Reopen 或 Update branch：〈同意／不同意〉
 5) merge #1124：〈待 S3 審閱後，我會另行明示「同意合併 #1124（head SHA：…）」〉
 6) 路徑 C（客戶端手動 workflow_dispatch update_macro_history）：〈不授權（預設）／授權，且我自行操作〉
-7) Cloud 手動 Reboot 後我會回報：畫面頂部標示（FAKE／Real-data Preview）與台股卡「資料日」：…（截圖請遮蔽 NAS 網址／主機名）
+7) 確認 DG-SCOPE／DG-COV／I1144-WIRING-GATE 對「僅台股資料檔更新」不適用：〈同意／不同意〉（AI 的解讀為 INFERENCE，客戶未明文）
+8) Cloud 手動 Reboot 後我會回報：畫面頂部標示（FAKE／Real-data Preview）與台股卡「資料日」：…（截圖請遮蔽 NAS 網址／主機名）
 ```
 
 ## 11. 盲點與 NOT VERIFIED
 
+- 11-12 能否在下一輪入帳不確定（11-10 為 T+1、11-11 為 T+2 才入帳，見 §2.1）；S0 決策規則見 §8。
 - **全部單組**。未讀 GitHub 帳單頁、Actions 核准設定、branch protection（403）；secrets 是否有值；排程延遲與 concurrency pending 行為屬平台；本地 `origin/auto/*` 為 fetch 時點快照；11-13 排程是否已跑 NOT VERIFIED；Yahoo／FinMind 原始回應與外部行情未核對（價格、法人、融資真實性未驗證）；inst／margin 的 11-10 以後是否也有先空後補寫未查；11-12 twii 缺列原因未知；交易日曆 NOT VERIFIED；測試未執行；「DG-SCOPE／COV／WIRING 不阻擋」為依文件適用範圍的解讀，無客戶或文件明文；`tw_pmi.json` 內容寫入組未重讀。
 - GitHub 端事實（PR 狀態、CI run id 與結論、Actions run 清單）＝**總管轉述**，本組未連網重取。
 - **與素材不符或需說明之處**：(1) inst「最近 60 列中位數 |137|」→ 重算 |值| 中位數約 417（137 是有號中位數）；(2) 「9 月下旬後僅 11-05、11-10、11-11 有 volume」→ 精確為 09-23 之後；(3) yml 行號略有位移，本文以實查為準（Fetch 步驟 L59-70、Publish L72-120、`DRY_RUN` 判斷 L114）；(4) 素材「DEC-156 (d2)」本組無法定位對應條目，改引 DEC-156 A（L7957）；(5) 素材「INV §5.1 C」本組讀作 `DAILY_DATA_PR_PIT_CRON_INVESTIGATION_2026-11-12.md` §5.1 方案 C；(6) 「約台北 01:00 抓太早／Yahoo 間歇空缺」兩假說未區分。

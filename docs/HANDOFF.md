@@ -1336,7 +1336,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 **三、客戶 Cloud 實測（口述）與程式碼推論——分開**：口述（repo 內不可驗）＝預設 FAKE；切 Real-data Preview 成功；台股 41,661.70／資料日 2026-11-09；日 K 正常；其他指標多數尚未接線；啟動日誌顯示 main／app_ui2.py；需手動 Reboot；採納資料優先架構方案 A（方向性，非 Gate 授權）。推論＝`origin/main` 的 `twii_ohlcv.parquet` 最後一列 11-09、close 41661.699219 **吻合**（弱旁證，**不證明**部署 commit 或自動部署）。仍 NOT VERIFIED：Cloud 實際部署 commit、舊 App 現況、NAS Secrets、repo owner。
 
-**四、「已授權」與「待核准」**（DEC-182）：**已授權**＝S0 唯讀檢核、文件與交接同步、非作者唯讀審閱 #1124 diff。**待核准**＝DPE-4＝B（僅 #1124）、DPE-3／DG-LIC 與 DG-PIT 取捨、DPE-5、merge 明示、Cloud Reboot 後回報、是否整包接受 inst 可疑值、是否授權客戶端手動 dispatch。**禁止**＝觸發抓取／bootstrap／回補、直推 main、關 PR＋刪分支重建、讓 UI2 呼叫 NAS／L1。Actions 可用性：客戶已澄清（客戶陳述），不再列為阻擋，不得因「帳務」停工；若 CI 因平台原因無法啟動，保留證據、勿反覆重跑。
+**四、「已授權」與「待核准」**（DEC-182）：**視為已授權（AI 解讀，非客戶逐項點名；依據見證據文件 §8 註）**＝S0 唯讀檢核、文件與交接同步、非作者唯讀審閱 #1124 diff。**待核准**＝DPE-4＝B（僅 #1124）、DPE-3／DG-LIC 與 DG-PIT 取捨、DPE-5、merge 明示、Cloud Reboot 後回報、是否整包接受 inst 可疑值、是否授權客戶端手動 dispatch。**禁止**＝觸發抓取／bootstrap／回補、直推 main、關 PR＋刪分支重建、讓 UI2 呼叫 NAS／L1。Actions 可用性：客戶已澄清（客戶陳述），不再列為阻擋，不得因「帳務」停工；若 CI 因平台原因無法啟動，保留證據、勿反覆重跑。
 
 **五、新對話接手提示語（完整、可直接貼入新對話）**：取代 DEC-180 段及更早各段提示語；後者已過期。
 
@@ -1354,6 +1354,6 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 10. 時點警語：所有 SHA／run id／PR head 皆 2026-11-13 時點快照，一律以最新 GitHub 為準；未合併 HOLD PR 的 head 會被 cron 推進，全部不碰。靜默自主巡航；Model／Effort 建議：Sonnet 5.5／High。
 ```
 
-**六、已知風險（精簡）**：(1) 資料停在 11-09 持續到客戶裁示；(2) #1124 head 每日被 cron 推進，S1～S5 須在同一 head 內完成（2026-11-14 週六、11-15 週日，可先行 S1 縮短窗口）；(3) 11-12 台股列可能再缺席（原因 NOT VERIFIED）；(4) inst 11-11／11-12 可疑值隨 #1124 整包進 main；(5) 稽核皆單組、唯讀、未執行任何測試／程式，行號為時點快照；(6) 沿用前段的 DPE-3 條款 BLOCKED 與 P3 備忘。
+**六、已知風險（精簡）**：(1) 資料停在 11-09 持續到客戶裁示；(2) #1124 head 只在有實質新資料時前進（僅揮發欄位變動時發布腳本不開 PR；週末無新交易日預期不 commit，INFERENCE 未實測），但 CI→審閱→合併仍須在同一 head 內完成；main 前進後 #1124 會 behind、需 Update branch＝head 變動（可先行 S1 縮短窗口）；(3) 11-12 台股列可能再缺席（原因 NOT VERIFIED）；(4) inst 11-11／11-12 可疑值隨 #1124 整包進 main；(5) 稽核皆單組、唯讀、未執行任何測試／程式，行號為時點快照；(6) 沿用前段的 DPE-3 條款 BLOCKED 與 P3 備忘。
 
 **七、仍 NOT VERIFIED**：DEC-181／DEC-182 fence 與客戶原訊息的逐字一致性；客戶 Cloud 實測（口述）；Cloud 部署 commit、日誌日期、repo owner、是否自動部署、Cloud Secrets；CI run id 與結論（總管轉述）；Repository 公開狀態與 Actions 設定（客戶陳述）；11-10～11-12 是否為交易日；11-12 台股缺列原因；inst 11-11／11-12 真值；相關測試是否通過。本段單組撰寫，未經第二組驗證。

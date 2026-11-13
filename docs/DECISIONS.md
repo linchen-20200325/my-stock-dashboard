@@ -9577,7 +9577,7 @@ Repository：linchen-20200325/my-stock-dashboard
 
 - **最新有效交易日**：main（Cloud 所見）**2026-11-09**（FACT）；repo 內已存在的最新價格完整日 **2026-11-11**，但**只在 #1124 分支**（FACT；11-10、11-11 OHLC 全有值且自洽，價格真實性未對外部核對）；理論可信上限 11-12（INFERENCE），但**任何已知 ref 上都沒有 11-12 的台股列**（原因 NOT VERIFIED）；11-10～11-12 是否為交易日 NOT VERIFIED（G-07）。三資料集最新日不齊：twii 11-11、inst／margin 11-12（分支）。
 - **資料品質觀察**：11-10 volume 先空後補寫（`d0f14437`→`fc447def`，`fetched_at` 不變）；inst 外資 11-11 −7.66 億、11-12 −6.85 億，比最近 60 列 |值| 中位數（約 417 億）小約兩個數量級，標為**可疑，NOT VERIFIED**；`finmind_m1m2`＝NO_NEW_DATA、`tw_pmi`＝UNDETERMINED（皆非 PR HOLD 造成）。
-- **workflow 行為（FACT，讀碼）**：預設手動 dispatch＝真實發布；`dry_run=true` 仍連外抓取、只跳過發布；`bootstrap=true` 整檔覆寫，**本批與日後都不得用於更新到最新日**；發布分支固定 `auto/data-macro-history`、PR 對 main、不直推；每次實質執行會使 #1124 的 head 再漂移；cron 與手動都不會讓 main 前進。
+- **workflow 行為（FACT，讀碼）**：預設手動 dispatch＝真實發布；`dry_run=true` 仍連外抓取、只跳過發布；`bootstrap=true` 整檔覆寫，**本批與日後都不得用於更新到最新日**；發布分支固定 `auto/data-macro-history`、PR 對 main、不直推；#1124 的 head 只在有實質新資料（新資料列、新 `last_error` 或 `fetch_outcome` 變化）時前進——僅揮發欄位變動時發布腳本還原工作樹、不開 PR（`scripts/publish_data_pr.py` L125-141、L833-851；沒有新交易日的執行預期不 commit，INFERENCE，未實測）；cron 與手動都不會讓 main 前進。
 - **Actions 可用性**：以 **DEC-182** 為準（客戶陳述公開 Repository、Actions 可正常執行；repo 內近期 run 皆正常完成為 INFERENCE 支持；不再列為阻擋事項）。
 - **Gate 對照（INFERENCE，依 docs 適用範圍）**：阻擋＝客戶 HOLD（#1124）、DPE-4、DPE-5；部分＝DPE-3／DG-LIC、DG-PIT、DPE-1；不阻擋＝DG-SCOPE／DG-COV／WIRING-GATE、DPE-2、DPE-7。完整表見證據文件 §6。
 
@@ -9675,11 +9675,11 @@ ChatGPT 最新獨立核實：
 
 | 類別 | 項目 |
 |---|---|
-| **可立即執行的已授權步驟（僅此）** | (a) **S0 唯讀檢核**：下一輪 schedule 後重查 `auto/data-macro-history` 的資料與 PR 狀態，**不連外抓資料**；(b) 文件與交接同步（沿用獨立 QA、同 head CI、Merge Gate）；(c) **非作者唯讀審閱 #1124 diff**（head 漂移時重做） |
+| **可立即執行的步驟（視為已授權〔AI 解讀〕；僅此）** | (a) **S0 唯讀檢核**：下一輪 schedule 後重查 `auto/data-macro-history` 的資料與 PR 狀態，**不連外抓資料**；(b) 文件與交接同步（沿用獨立 QA、同 head CI、Merge Gate）；(c) **非作者唯讀審閱 #1124 diff**（head 漂移時重做） |
 | **仍待核准（客戶）** | DPE-4＝B（僅 #1124）；DPE-3／DG-LIC 與 DG-PIT 取捨；DPE-5（客戶於同 head 觸發 CI）；merge 明示；Cloud 手動 Reboot 後回報資料日；是否整包接受 inst 11-11／11-12 可疑值；是否授權客戶端手動 `workflow_dispatch`（路徑 C） |
 | **禁止** | 觸發任何抓取／bootstrap／回補；合併、關閉、rebase #1124～#1126；直推 main；關 PR＋刪分支重建；只含 twii 的新發布流程；讓 UI2 呼叫 NAS／L1 |
 
-**本條不解除任何 Gate／HOLD**，不授權觸發抓取／bootstrap／回補、不授權合併 #1124。
+**授權依據（解讀，非客戶逐項點名）**：AI 解讀為落在客戶「唯讀稽核與更新程序規劃」授權內（DEC-181 限制段；DEC-182 第 3 項「證據及交接同步」）；客戶未逐項點名 S0／diff 審閱；不含任何抓取或 Gate 動作；(b) 文件與交接同步則有客戶原文第 3 項為據。**本條不解除任何 Gate／HOLD**，不授權觸發抓取／bootstrap／回補、不授權合併 #1124。
 
 #### DEC-182 範圍外與 NOT VERIFIED
 
