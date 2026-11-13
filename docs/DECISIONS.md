@@ -9465,17 +9465,17 @@ E. Cloud 未重新部署造成畫面版本落後。
 | A. New UI2 預設為 FAKE Preview | **FACT（程式碼層）** | `src/ui2/shell/app.py:86-87` 預設 `FEED_FAKE`；預設場景 cold；切換只在 `?ui2_dev=1`；Cloud 實際畫面是否為 FAKE＝NOT VERIFIED（需客戶看頂部標示） |
 | B. Real Feed 不連網，只讀已發布資料 | **FACT（UI2 呼叫路徑）** | `real_feed.read_real_snapshot` 只呼叫三個唯讀 reader；UI2 目錄 grep 網路／proxy／secrets 關鍵字 0 命中；有守衛 G2F。**UI2 不用 NAS 是設計並有守衛強制，不是漏接**。測試是否 PASS＝NOT VERIFIED（未執行） |
 | C. NAS 未配置或不通造成舊 UI 部分資料失敗 | **NOT VERIFIED** | repo 內「NAS 變數皆未設定」的 2026-11 紀錄描述的是 AI 沙箱，不是客戶 Cloud，不可外推；最後一筆 Cloud 側「NAS 狀態」紀錄在 2026-07-13（`STATE.md:2953-2955`），其後 2026-08 的 Cloud 紀錄（`STATE.md:663` 實機驗收、`HANDOFF_2026-08-15.md`）未涉及 NAS 配置；即使 NAS 正常 UI2 也不呼叫它 |
-| D. 資料 PR HOLD 使 main 快取過期 | **分層**：main 資料停在 2026-11-09＝FACT；較新資料在 PR 分支＝FACT；「PR 未併入是原因」＝INFERENCE；「因此畫面完全沒資料」**不成立**（INFERENCE） | 台股卡讀 main 的 11-09，距今 4 天 ≤ 日頻門檻 7 天，顯示資料日但不出現過期警示（時點註記：僅 2026-11-13 成立；2026-11-17 起 age_days＝8 將轉為過期；UI2 實際 as_of 來自 parquet 最後一列〔未直接讀，沙箱無 pyarrow〕，此處用 metadata 自陳值）；`finmind_m1m2`＝NO_NEW_DATA（請求窗口內無新月份，非連線／抓取失敗）、`tw_pmi`＝UNDETERMINED（空抓取），二者皆非 PR HOLD 造成，亦不歸入「資料未抓到」 |
+| D. 資料 PR HOLD 使 main 快取過期 | **分層**：main 資料停在 2026-11-09＝FACT；較新資料在 PR 分支＝FACT；「PR 未併入是原因」＝INFERENCE；「因此畫面完全沒資料」**不成立**（INFERENCE） | 台股卡讀 main 的 11-09，距今 4 天 ≤ 日頻門檻 7 天，顯示資料日但不出現過期警示（時點註記：僅 2026-11-13 成立；2026-11-17 起 age_days＝8 將轉為過期；UI2 實際 as_of 來自 parquet 最後一列〔未直接讀，沙箱無 pyarrow〕，此處用 metadata 自陳值）；`finmind_m1m2`＝NO_NEW_DATA（請求窗口內無新月份，非連線／抓取失敗）、`tw_pmi`＝UNDETERMINED（最近一次抓取結果無法判定：無新資料或 parser 略過，metadata `fetch_evidence` 寫「parser 略過列數無從核對」；定義見 `shared/upstream_state.py:37`）；故 tw_pmi 不歸入「資料未抓到」，也不確認為「資料已是最新」；二者皆非 PR HOLD 造成 |
 | E. Cloud 未重新部署造成畫面版本落後 | **NOT VERIFIED** | repo 無 deploy／webhook workflow；UI2 畫面無 commit／版本字串，無從分辨「舊部署」與「新部署但資料舊」；客戶陳述需手動 Reboot 僅為陳述 |
 
-**一句話答覆客戶問題「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？」**：**New UI2 沒有用 NAS，這是設計（並有守衛強制），不是漏接**；Cloud 上的 UI2 即使配好 NAS 也不會用。要讓 UI2 顯示更多真資料，路徑不是「讓 UI2 走 NAS」，而是 (1) 資料發布（cron 用 NAS 抓→PR 併入 main），(2) 正式接線（L3 唯讀 adapter＋白名單），**兩者皆是 Gate 項**。畫面「沒資料」最可能的直接原因（INFERENCE，未實機驗）：預設 FAKE cold 的「尚未載入」＋Real 模式下絕大多數欄位尚未接線＋位階狀態檔在 Cloud 不存在；資料落後（11-09）是次要，且不會顯示成空白。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）**不得混為一談**，對照見證據文件 §8。
+**一句話答覆客戶問題「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？」**：**New UI2 沒有用 NAS，這是設計（並有守衛強制），不是漏接**；Cloud 上的 UI2 即使配好 NAS 也不會用。要讓 UI2 顯示更多真資料，路徑不是「讓 UI2 走 NAS」，而是 (1) 資料發布（cron 用 NAS 抓→PR 併入 main），(2) 正式接線（L3 唯讀 adapter＋白名單），**兩者皆是 Gate 項**。畫面「沒資料」最可能的直接原因（INFERENCE，未實機驗）：預設 FAKE cold 的「尚未載入」＋Real 模式下絕大多數欄位尚未接線＋位階狀態檔在 Cloud 不存在；資料落後（11-09）是次要，且不會顯示成空白（11-17 起轉過期，屆時需重評）。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）**不得混為一談**，對照見證據文件 §8。
 
 **(五) 建議架構方案 A／B／C（RECOMMENDATION，非裁示；全部未獲授權）**
 
 | 方案 | 做法 | 結論 |
 |---|---|---|
 | A（總管推薦） | 維持 UI2 無網路架構：先解資料發布（DPE-1／2／4／5 另案）→逐欄位走 WIRING-GATE 接線（重用既有 `*_fact_service`）→位階狀態檔改由 cron 發布到 `data_cache`→UI2 加「版本＋資料日」小標（需線框草稿 Gate）。**前置 Gate**：②外資／融資／板塊接線除 `I1144-WIRING-GATE` 外，另受 `DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE` 阻塞（見 BACKLOG「Quality Batch 1 完成同步」段）；③位階狀態檔改由 cron 發布涉及新增發布流程＝「新增 API／cron／Secrets」類 HOLD，需另行裁示，且單獨**不保證**位階顯示——位階還需 session `warroom_summary` 來源（`real_feed.py:11`、ISSUE1110）且 `BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds.py:277`；`real_canonical.py:303-305`），即使狀態檔發布，位階仍可能是灰「尚缺市場廣度」，需另案裁示 | 推薦；多個客戶裁示、速度慢 |
-| B | 讓 UI2 Real Feed 在 Cloud 直接呼叫 L1 fetcher（走 proxy_helper／NAS） | **不建議**：違反 G2F 守衛與「UI 不抓資料」，牽涉 `DG-LIC`，NAS 配置未驗。A 與 B 呈現的 TWSE／FinMind／Yahoo 資料同樣受 `DG-LIC` 約束（呈現與再散布面）；B 的額外問題是 Cloud 執行期自動化存取（Cloud IP 被擋、timeout 64 秒、200 錯誤頁被快取 300 秒）與需放寬 G2F 守衛（放寬 allowlist 屬禁區） |
+| B | 讓 UI2 Real Feed 在 Cloud 直接呼叫 L1 fetcher（走 proxy_helper／NAS） | **不建議**：違反 G2F 守衛與「UI 不抓資料」，牽涉 `DG-LIC`，NAS 配置未驗。A 與 B 呈現的 TWSE／FinMind／Yahoo 資料同樣受 `DG-LIC` 約束（呈現與再散布面）；B 的額外問題是 Cloud 執行期自動化存取（Cloud 側可能被來源擋〔`STATE.md:2859-2873` 記載 2026-07-14 雲端 proxy 對 FRED 回 403〕、timeout 64 秒〔`ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md` 的 `fetch_url` 順序段〕、200 錯誤頁被快取 300 秒）與需放寬 G2F 守衛（放寬 allowlist 屬禁區） |
 | C | 只改文案／標示（FAKE cold 理由句與 CTA、部署版本標），不接新資料 | 可併入 A 的草稿；屬 UI 文案／版面 Gate，需草稿 |
 
 比較（正確性、風險、速度、Token／成本）見證據文件 §11。**A／B／C 皆為 RECOMMENDATION，皆未獲授權**；客戶本次明示「不施工正式接線」。
