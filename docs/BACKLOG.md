@@ -2468,3 +2468,16 @@
 | **DEC176-VG1-VG2-PENDING-TRACK** | 把 `DEC174-VG1-FAKE-REAL-LOOK`、`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`（P2、blocked-on-customer；next action＝先文字線框＋推薦理由，客戶拍板前不寫 UI code）承接為**「待客戶裁示」追蹤**：它們是 **Visual Gate 候選，不是 Stop Gate**，但先前 HANDOFF 檔尾現行段與十五欄、DEC-176 的 BACKLOG 摘要都沒列。複驗 R4 併入 VG1（見上方「#1169 獨立複驗結論的勘誤指標」） | P2 | blocked-on-customer | `DEC174-VG1-FAKE-REAL-LOOK`；`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`；五頁稽核 §7.3 VG1／VG2；複驗文件 §5.1 R4 | 列入 HANDOFF「待客戶裁示清單」。客戶拍板前不寫 UI code（`CLAUDE.md` §-1.5.D §03-2 ①）；本列只是追蹤索引，**不是施工授權、不新增工作** |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、#1124～#1126、#1164、#1119 仍 HOLD。
+
+
+## 2026-11-12｜DEC-177 登記（UI 主線恢復與預防性交接制度；只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-177，經派工訊息轉錄、逐字一致性 NOT VERIFIED；登記不等於施工授權）
+
+> ID 前綴 `DEC177-`（落盤前 `git grep -c "DEC177-" docs/BACKLOG.md` ＝ 0，無重複）。**本段不改既有列**：`DEC176-FRESHNESS-WIREFRAME-PICK`（A／B／C 與 C-16／C-17）已由 DEC-177 裁示、`DEC176-HEALTH-ESCALATION-1` 的本批取向已由客戶表態，但**這些既有列的 status 欄是否改為結案，由總管判定**（本 PR 不改）。本段單組撰寫，未經非作者獨立 QA。
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1** | 🗂 資料新鮮度總覽**最小 UI 第一版實作**：A 首屏（已接入／尚未接線＋五態計數含 0、保留手機首屏四問與主 CTA）＋B 展開明細（預設收合、沿用 B 列格式、八項固定清單與 #1173 §1.2 既有順序）；只用已存在的資料日與距今天數，**不新增 `fetched_at`／`published_at`**；保留授權與發布時點「未知／未評估」說明；未接線／未載入／未評估不視為正常；完整資料健康度仍在 👤 我的、不搬入口 | P1 | open | DEC-177；`docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md` §3、§4、§8.2「採 A」 | **先由調查確認**第一版是否需突破 `SHOWN_FOLDS` 白名單、UI 契約或測試 allowlist（如 `ENGINEERING_VOCAB` 與「接線」字樣）；**不需要**→ 依核准線框做最小實作（寫入序列化、一次一模組、新增「五態計數含 0 都顯示」測試、非作者 QA、同 head 五項原生 CI、手機首屏與缺值語意驗收）；**需要**→ 停在安全點，出精確範圍＋最小修改方案裁示單，**等客戶另行裁示，不得自行放寬**。不以 placeholder 冒充真資料。**線框其他候選（C-2 標題與說明句、C-4 免責句、C-7／C-8 新字樣、C-9 規則名稱、C-13 PMI 狀態映射）未被客戶逐項核准；需要新字樣時先出裁示單。** **不解除** `I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、Old UI Removal、正式切換 Gate |
+| **DEC177-HANDOFF-PREVENTIVE-RULE** | 預防性交接制度（每批檢查、約三批優先交接、風險提前觸發、先存檔驗證再結束舊對話、Agent 進度最小化）**已登錄為永久規則** `PROJECT_RULES.md` 第 33 節；本列追蹤落實 | P2 | open（追蹤；規則已登錄於 PROJECT_RULES 第 33 節） | DEC-177「四、交接要求」；`PROJECT_RULES.md` 第 33 節（補充第 32 節，不取代；與第 22.1 節的並讀見該節 33.1）；「更早核准紀錄」NOT FOUND | 每批結束依第 33 節檢查交接風險並於 HANDOFF 記錄；若客戶認為第 33 節與第 22 節衝突，以客戶裁示為準。本列不是施工授權 |
+| **DEC177-SHOWN-FOLDS-QUESTION** | **候選**：若 B 的「預設收合明細」（及 C-8「資料使用條件」收合區，若採為獨立收合區）需要在 `src/ui2/views/_page.py::SHOWN_FOLDS` 新增 🗂 條目，須客戶另裁示（render policy 例外；線框文件 §8.1-3 自述現僅 3 個預設收合區、🗂 無）。**尚未確認是否需要新增，不預判** | P1 | blocked-on-customer（**條件式**：僅在 `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` 的調查確認需要時才成立；尚未確認） | DEC-177「二」末段；線框文件 §8.1-3、§8.2、C-12 | 由 `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` 的調查先回答「是否需要」；需要則提**精確範圍（哪個 page_id／section_id）＋最小修改方案**請客戶裁示；未裁示前不改 `SHOWN_FOLDS`、不改守衛測試 |
+
+> 以上皆**不暗示任何 Gate 已解除、任何接線已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、#1124～#1126、#1164、#1119、D6 偵測器程式修復、DPE-7（維持 A 觀察，11-19 檢查點）、Old UI、正式 UI 切換仍 HOLD。
