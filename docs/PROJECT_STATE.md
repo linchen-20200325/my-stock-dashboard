@@ -1296,3 +1296,10 @@
 - **Agent 定義不是授權、不是第二份 SSOT**：不解除任何 Gate／HOLD；與 `CLAUDE.md`／`PROJECT_RULES.md` 衝突時以後者為準；「按需」＝挑哪個 Agent（預設不全數**派工**；三個 description 常駐父層 context，成本未量測，NOT VERIFIED，併入工作項 ⑧），**不改** `CLAUDE.md` §-2「每一次任務都派工」與多組獨立稽核要求。第二批候選（Investment Logic、OneBrain、GitHub Auditor）未建立、未授權。
 - **NOT VERIFIED**：三檔在 Claude Code 的實際載入（`/agents`、`/doctor`；須新對話，BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；frontmatter 格式：2026-11-13 QA-A 已以官方 sub-agents 文件核對（frontmatter 欄位、tools／disallowedTools 語法、MCP 命名、未知欄位被靜默忽略；單組；回傳被截斷尾段 NOT VERIFIED），實際載入仍 NOT VERIFIED；路由規則的實際效果（Quality Batch 3 ⑦）。
 - **後續**：品質補強分三批（BACKLOG `DEC178-QUALITY-BATCH-1`～`3`），順序與內容見 DEC-178。出處：`docs/DECISIONS.md` DEC-178；`docs/BACKLOG.md` 檔尾「2026-11-13｜DEC-178 登記」；`docs/HANDOFF.md` 檔尾最新接手點。
+
+### 70.17 §70.16 事實更新：#1178／#1179 已合併（2026-11-13；只追加；不改既有節；非授權；非 QA PASS；單組撰寫，未經非作者獨立 QA）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** §70.16 原文**一字未動**，其「本 PR 合併後才算進 main；FACT：檔案存在於本 PR 分支」**已過期**：#1178 於 2026-11-13T02:12:15Z squash 合併為 `c56afd45`，#1179 於 02:36:05Z 合併為 `c00ed542`（`gh api …/pulls/{n}` 實查，FACT）；三個 Agent 檔現位於 main，最新 main 為 `c00ed542`（時點快照，一律重查）。
+- #1178 push CI run `43350471209` 已 `completed／success`；#1179 push CI run `43353310836`（head `c00ed542`）：撰寫時（2026-11-13 約 02:50Z）`status ＝ in_progress`、`conclusion ＝ null`（`gh api …/actions/runs/43353310836`，FACT）；**尚無結論，NOT VERIFIED，接手者重查**；不得假稱全綠。
+- §70.16 其餘內容（權限邊界、NOT VERIFIED）仍有效；NOT VERIFIED 補列：Bash 唯讀 settings 層是否機械強制、官方 sub-agents 文件尾段被截斷、viewport 證據重生可行性、部署端位階是否恆 `unloaded`。
+- 出處：HANDOFF 檔尾「存檔完整性補註」；BACKLOG 檔尾「DEC-178 存檔完整性補註」。本節單組撰寫，未經非作者獨立 QA。

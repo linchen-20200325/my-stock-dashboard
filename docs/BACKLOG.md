@@ -2535,3 +2535,14 @@
 | **DEC178-PUSH-CI-C56AFD45** | #1178 合併後 main push CI：`PR Check（pytest fast + AppTest slow）` run **43350471209**（event ＝ push，head ＝ `c56afd45`）。**撰寫時（2026-11-13 約 02:13Z）`status ＝ in_progress`、`conclusion ＝ null`**（`gh api repos/…/actions/runs/43350471209`，FACT）；**尚無結論，NOT VERIFIED**。同 commit 是否另有其他 workflow run，本組僅以 `gh run list --commit` 查得此一筆 | P2 | **待重查**（結論未知） | `gh api` 實查；`PROJECT_RULES.md` 第 32、33 節（合併後驗證 main push CI） | 接手者重查該 run 結論並寫回本列；若非 success，先判斷是否為 D6 已知非決定性紅燈（`tests/test_d6_diagnostic_no_secret_display.py`，約 0.54～0.63%；rerun 通過不等於已修），不得以 rerun 通過就宣稱已修；結論回報前不啟動 Quality Batch 1（**此為總管自加的謹慎措施，非客戶指示**） |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 為保留檢查點）、Old UI、正式 UI 切換均**未動**。
+
+
+## 2026-11-13｜DEC-178 存檔完整性補註（交接最後驗收；只追加；不改既有列；不是授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方 `DEC178-*` 各列與前一追加段**一字未動**；作者單組撰寫，**未經非作者獨立 QA；不是 QA PASS**。事實為作者 2026-11-13 約 02:49Z 以 `gh api` REST 實查，會漂移。
+>
+> - **追加註記（對既有列）**：`DEC178-AGENTS-BATCH-A` — **已完成**：#1177 `63da9515`、#1178 `c56afd45`、#1179 `c00ed542`（皆 `merged ＝ true`，FACT）；兩組非作者 QA＋Delta、同 head 五項 CI success 為 PR 描述轉述（NOT VERIFIED）。`DEC178-QUALITY-BATCH-1` — 前置「AGENTS-BATCH-A 合併」**已成立**；**尚未開始**；啟動不需客戶再次指派（DEC-178 fence：「#1177 合併完成且無其他真正阻塞時，直接進入以下已核准工作，不需要再次請示客戶」），仍受所有 Gate／HOLD 與批次紀律約束。
+> - **`DEC178-PUSH-CI-C56AFD45`**：run `43350471209` 已 `completed／success`（head `c56afd45`）；「待重查」自此關閉。#1179 的 push CI run `43353310836`（head `c00ed542`）：撰寫時（2026-11-13 約 02:50Z）`status ＝ in_progress`、`conclusion ＝ null`（`gh api …/actions/runs/43353310836`，FACT）；**尚無結論，NOT VERIFIED，接手者重查**；不得假稱全綠。
+> - **澄清 `DEC178-PUSH-CI-C56AFD45` 與 `DEC178-AGENT-LOAD-VERIFY`**：「結論回報前不啟動 Quality Batch 1」與「先驗證三 Agent 被載入再開工」皆為**總管自加的謹慎措施，不在客戶原文**（客戶把載入驗證放在 ⑦⑨，Batch 3）；新對話若發現 Agent 未載入，處置是**停手並回報**，不是「需客戶授權才能開工」。
+> - **`#1119` 是 Issue（不是 PR）**：`gh api …/issues/1119` 回 open Issue（無 `pull_request` 欄位），即 `WORKFLOW-SLIM-AUDIT-1`；維持 HOLD。
+> - **NOT VERIFIED 補列**：Bash 唯讀 settings 層是否機械強制；官方 sub-agents 文件尾段被截斷（讀了前 100000／116972 字元）；viewport 證據重生可行性（本沙箱無 Python Playwright）；部署端位階是否恆 `unloaded`。
