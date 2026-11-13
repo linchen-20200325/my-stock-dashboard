@@ -2726,3 +2726,29 @@
 > **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**維持 `PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md` 既有判讀**（本批無新證據）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-LIC`、`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-PIT`、DPE-1／2／4／5、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue）、D6 偵測器程式修復、DPE-7（維持 A 觀察）、`DEC178-QB3-*` P3 候選、Old UI、正式 UI 切換、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist、NAS／Proxy／Secrets、`app.py`／`app_ui2.py` 均**未動**。
+
+## 2026-11-13｜DEC-181／DEC-182 最新交易日資料更新程序規劃、客戶 Cloud 實測與恢復 CI 續工（只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-181、DEC-182）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC181-`（落盤前 `git grep -n "DEC181-" docs/` 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記；本 PR 號以 GitHub 為準）。事實基準：`origin/main`＝`138e081bbec24f5b20f1301c1da634d4ab8d9551`（`git rev-parse` 實查；時點快照，會漂移）；main push CI run `43437741216`（head_sha＝138e081）completed／success（總管 2026-11-13 查，本組未連網重取）——CI success ≠ 資料已更新 ≠ Production 有效。**證據與細節以 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md` 為準，本段只摘要並指向它，不重抄。**
+>
+> **以下新列全部是 Candidate／未授權，不是施工指派。**
+
+**追加註記（對既有列；原列不改）**
+
+- `DEC180-UI2-NO-DATA-ROOT-CAUSE` — 客戶 2026-11-13 Cloud 實測（**口述；repo 內不可驗**）在**畫面層**印證假說 A（預設畫面＝FAKE）、B（切 Real-data Preview 後只見台股 41,661.70／資料日 2026-11-09、其他指標多數尚未接線）、D（資料日與 `origin/main` 的 `twii_ohlcv.parquet` 最後一列 11-09 吻合）。假說 C（NAS 配置）、E（Cloud 版本落後）仍 NOT VERIFIED。**口述不升級為 FACT；程式碼推論另欄**（見 DEC-181 (二)）。
+- **DPE-6 現況列**（`DEC179-DPE6-CLOUD-CONFIG-INPUT`；承 DEC-180）— 本批客戶口述再補（Cloud 啟動日誌顯示 main／app_ui2.py；需手動 Reboot），**仍無 Cloud 設定頁證據、owner、部署 commit**；status 維持 `Input Gate`（部分補件）。**仍不得宣稱部署追蹤 main 最新提交，亦不得宣稱 Cloud 自動部署或不自動部署。**
+- **唯一 NEXT 過期提醒**：`DEC180-*` 段與更早各段的「唯一 NEXT」自本段起過期，以檔尾最新未被取代者為準。
+- **唯一 NEXT（自本段起）**：**停在 Decision／Input Gate，等待客戶回覆**（證據文件 §10 範本）。**AI 唯一可做＝S0 唯讀檢核**（下一輪 schedule 後重查 `auto/data-macro-history`，不連外抓資料）、文件與交接同步、非作者唯讀審閱 #1124 diff。**不得觸發任何抓取／bootstrap／回補，不得自行推進 DPE-4／DPE-5，不得 merge／close／rebase #1124～#1126。** `grep`「唯一 NEXT」會先命中 BACKLOG 舊列與較早追加段，以本段（檔尾）為準。
+
+**新列（Candidate；未授權）**
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC181-LATEST-TRADING-DAY-REFRESH** | 台股資料由 2026-11-09 更新到最新有效交易日的最小程序（S0–S6）。main 11-09；repo 內最新價格完整日 11-11 僅在 #1124 分支；理論上限 11-12 但無列；11-17 起 UI2 台股卡 `age_days`＝8 轉過期警示。**RECOMMENDATION＝路徑 B：等下一輪 schedule 後在同一 head 走既有路徑**；不手動 dispatch、不 bootstrap | P2 | **Candidate／未授權（Decision／Input Gate）**；視為已授權（AI 解讀，依據見證據文件 §8 註；客戶未逐項點名）僅 S0 唯讀檢核、文件與交接同步、非作者唯讀審閱 #1124 diff | DEC-181、DEC-182；證據文件 §3、§6、§8 | 等客戶裁示：DPE-4＝B（僅 #1124）、DPE-3／DG-LIC 與 DG-PIT 取捨、DPE-5（客戶於同 head 觸發 CI）、merge 明示、是否整包接受 inst 可疑值、是否授權客戶端手動 dispatch；AI 下一步只有 S0 |
+| **DEC181-TWII-PIT-VOLUME-BACKFILL-OBS** | `twii_ohlcv` 11-10 的 volume 先空後補寫（`d0f14437` NaN→`fc447def` 4,766,000，close 與 `fetched_at` 不變）；`fetched_at`＝首次寫入時間，不保證列內各欄已定稿（provenance 缺口）；UI2 不讀 volume。被動觀察 | P3 | **Candidate／P3、open；被動觀察；非授權** | 證據文件 §2.2；GAPS G-04 | 無（`CLAUDE.md` §-1：無實際 bug 觸發不主動動工）；S0 時順帶記錄 |
+| **DEC181-INST-1111-1112-ANOMALY** | `finmind_inst` 外資 11-11 −7.66 億、11-12 −6.85 億，比最近 60 列 \|值\| 中位數（約 417 億）小約兩個數量級；2025-01-01 起計歷史另有 22 列 \|值\|<10（加 11-11、11-12 共 24 列；2026-09-24 批次回補）；同批 #1124 另含 `data_cache/macro_last_good/tw_pmi.json` 時間戳刷新（`data_cache/tw_pmi.parquet` 本輪無變更）。**可疑，NOT VERIFIED**；轉換過程亦 NOT VERIFIED。查證需外部真值＝受 DPE-3／DG-LIC 約束 | P3 | **Candidate／P3、open；未授權（外部對帳受 DPE-3＝D BLOCKED 約束）** | 證據文件 §2.3、§10 第 3 項 | 客戶表態是否整包接受；不得連外對帳 |
+| **DEC181-ACTIONS-AVAILABILITY** | GitHub Actions 可用性。**客戶已澄清（DEC-182；客戶陳述）：公開 Repository、Actions 可正常執行；不阻擋**；repo 內近期 run 皆正常完成（INFERENCE 支持）；帳單頁／repo 設定頁 AI 仍讀不到。**不得因「帳務」停工**。保留原則：若 CI 因任何平台原因無法啟動，保留證據、勿反覆重跑。#1124 的 `action_required`／jobs 0 是核准機制，另屬 DPE-5 | P3 | **結論列（非 Candidate、非授權）**：客戶已澄清可執行；不阻擋 | DEC-182 (四)；證據文件 §4.2 | 無 |
+
+> **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**維持 `PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md` 既有判讀**（本批無新證據）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
+>
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-LIC`、`DG-PIT`、`DG-COV`、`DG-SCOPE`、`I1144-WIRING-GATE`、DPE-1／2／4／5、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue）、DPE-7（維持 A 觀察）、`DEC178-QB3-*`／`DEC180-*` P3 候選、Old UI、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist、NAS／Proxy／Secrets、Branch Protection、`app.py`／`app_ui2.py` 均**未動**。

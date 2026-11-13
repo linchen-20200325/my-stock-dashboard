@@ -9489,3 +9489,199 @@ E. Cloud 未重新部署造成畫面版本落後。
 
 - **範圍外**：本條不修改 NAS／Proxy／Secrets、`app.py`／`app_ui2.py`、`src/`、`tests/`、`shared/`、`scripts/`、`.github/`、`data_cache`、`.claude/`；不授權外部 API 探測、資料回補、對帳；不授權合併／關閉／rebase #1124～#1126；不授權 UI 施工；舊 UI 觀察到的資料問題 P1～P9 僅登記為 backlog 候選觀察（P3），**不修、不登為授權工作**。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Cloud 啟動日誌原文、日期、commit、owner；客戶畫面實際版本與頂部標示；Cloud 是否自動部署；Cloud Secrets 內容（含 NAS 配置）；GitHub 端 secret 是否有值；舊 app 現況；parquet 最後一列日期（沙箱無 pyarrow，資料日為 metadata 自陳值）；相關測試是否通過（未執行任何測試／程式）；UI2 卡片實際走哪套新鮮度門檻；GitHub Issue #1107／#1108 與 Deployments／Environments 未檢視；本地為淺層複製。四組稽核皆單組，總管另親驗 3 點（見證據文件 §0）。本條 AI 整理與本批證據為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-181｜客戶 2026-11-13「資料更新到最新交易日的安全處理」授權轉錄：客戶 Cloud 實測（口述）登錄、最新有效交易日與更新程序規劃（2026-11-13；只追加；非 QA PASS；非施工授權）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-181" docs/DECISIONS.md` 0 命中，DEC-180 為上一號）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～180 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行、段落間空行），未改一字；fence 內不含首尾 fence 行與結尾換行。fence 內**沒有**任何 Cloud 網址全文。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～180 同一算法**（本組先以同法重算 DEC-180 的 fence，得 `3e0ee8f1…c19f`，與其登記值 `3e0ee8f12e2ba53bb0d2fcafe562aac84f74ba607b43109dfc867a01c34dc19f` 相符；DEC-179 得 `beb57044…e6951e6`，亦相符，後才套用於本條）。
+> **同批關係**：本條與下一條 DEC-182（同日客戶訊息「恢復正常 CI 工作流程與資料優先續工」）在同一個尚未推送的 commit；**Actions 可用性（含任何「帳務」相關敘述）一律以 DEC-182 為準**，本條不留與之矛盾的說法。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`57ad41cf13b93c39e55cc46333d3151e9cad584990b7c0adda47109671d66040`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜資料更新到最新交易日的安全處理
+Model：沿用目前專案模型
+Mode：GitHub-first／靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard
+客戶已提供 Cloud 實測：
+
+* 預設畫面：FAKE。
+* 切換 Real-data Preview：成功。
+* 台股加權指數：41,661.70。
+* 畫面資料日：2026-11-09。
+* 日 K 正常顯示，其他指標多數尚未接線。
+* Cloud 啟動日誌顯示 main／app_ui2.py。
+* Cloud 部署更新方式：客戶表示需手動 Reboot。
+* Cloud 實際部署 commit、舊 App 現況及 NAS Secrets 配置仍 NOT VERIFIED。
+
+客戶採納資料優先架構方案 A，希望知道能否安全強制更新至最新完整交易日。
+請執行：
+
+1. GitHub-first 核實最新 main、#1188 合併後狀態、CI，以及 #1124～#1126 最新 head。
+2. 唯讀核對 main 和 #1124 的台股資料日期、欄位完整性、來源及 PIT 缺口。
+3. 確認既有 update_macro_history.yml 手動觸發與 dry-run 的實際行為，釐清它會寫哪些資料、更新哪個分支，以及 GitHub Actions 帳務是否影響執行。
+4. 提出最小的一次性資料更新與發布程序，清楚列出哪些 Gate 必須先通過。
+5. 優先考慮既有資料來源、既有 NAS、既有 L1／L3；不得改為 New UI2 直接連網。
+6. 將客戶 Cloud 畫面實測列入既有交接紀錄，與程式碼推論分開。
+
+限制：
+
+* 目前只授權唯讀稽核與更新程序規劃。
+* 不實際觸發抓取、bootstrap 或資料回補。
+* 不合併、不關閉、不 rebase #1124～#1126。
+* 不修改 NAS、Secrets、資料契約或正式 UI。
+* 不繞過 DG-LIC、DG-PIT、DG-COV、DPE-4／5 或 CI Gate。
+* 若 CI 因 Billing 無法啟動，保留證據，勿反覆重跑。
+* 不重做 DEC-180 已完成稽核，不為進度重複開文件 PR。
+
+最終只需回報：
+① 目前可取得的最新有效交易日。
+② 最快安全更新台股卡的做法。
+③ 更新前必須解除哪些 Gate。
+④ 是否需要客戶進一步裁示。
+完成後停在安全點。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 本次授權範圍與禁止清單（逐條對照，原樣不增不減）**
+
+| 客戶原文 | 本組整理 |
+|---|---|
+| 1. GitHub-first 核實最新 main、#1188 合併後狀態、CI，以及 #1124～#1126 最新 head | 授權（前置核實）。本組基準：`origin/main`＝`138e081bbec24f5b20f1301c1da634d4ab8d9551`（`git rev-parse` 實查）；#1124 head `3cd3f525…`、#1125 head `cf4739c5…`、#1126 head `1654ae60…`（本地 `origin/auto/*` ref 實查，與總管 2026-11-13 22:20 台北的 GitHub 查詢相同；時點快照，cron 每日推進）。main push CI run `43437741216`（head_sha＝138e081）completed／success＝**總管 2026-11-13 查，本組未連網重取**；CI success ≠ 資料已更新 ≠ Production 有效 |
+| 2. 唯讀核對 main 和 #1124 的台股資料日期、欄位完整性、來源及 PIT 缺口 | 授權（**唯讀**：`git show` 讀本地 ref，scratchpad 內 pyarrow 讀 parquet）。結果見 (三) 與證據文件 §2 |
+| 3. 確認既有 `update_macro_history.yml` 手動觸發與 dry-run 的實際行為，釐清寫哪些資料、更新哪個分支，以及 GitHub Actions 帳務是否影響執行 | 授權（讀碼，未執行）。結果見 (三) 與證據文件 §4、§5；Actions 可用性以 DEC-182 為準 |
+| 4. 提出最小的一次性資料更新與發布程序，清楚列出哪些 Gate 必須先通過 | 授權（規劃）。結果見 (四) 與證據文件 §6、§8；**RECOMMENDATION，未獲授權執行** |
+| 5. 優先考慮既有資料來源、既有 NAS、既有 L1／L3；不得改為 New UI2 直接連網 | 遵守：程序中 NAS／Proxy 只留在 cron producer 端，UI2 維持只讀 `data_cache`（承 DEC-180 G2F 守衛） |
+| 6. 將客戶 Cloud 畫面實測列入既有交接紀錄，與程式碼推論分開 | 見 (二)；HANDOFF、PROJECT_STATE §70.23、BACKLOG 同步 |
+
+禁止清單（客戶原文「限制」段，逐項原樣對照；**本組全部遵守，無一項被放寬**）：目前只授權唯讀稽核與更新程序規劃；不實際觸發抓取、bootstrap 或資料回補；不合併、不關閉、不 rebase #1124～#1126；不修改 NAS、Secrets、資料契約或正式 UI；不繞過 `DG-LIC`、`DG-PIT`、`DG-COV`、DPE-4／5 或 CI Gate；若 CI 因 Billing 無法啟動，保留證據、勿反覆重跑（**此原則保留**，其「帳務」前提的現況讀法見 DEC-182）；不重做 DEC-180 已完成稽核，不為進度重複開文件 PR。另依客戶「完成後停在安全點」。
+
+**(二) 客戶 Cloud 實測（口述）與程式碼推論——分欄，不得混成同一級證據**
+
+| 客戶陳述／實測（性質＝客戶口述；repo 內不可驗） | 程式碼／資料推論（寫入組；不升級） |
+|---|---|
+| 預設畫面＝FAKE | FACT（程式碼層）：預設 `FEED_FAKE`（DEC-180 假說 A）；與口述一致 |
+| 切換 Real-data Preview 成功 | 與 DEC-180 假說 B 一致（INFERENCE：口述未述切換方式） |
+| 台股加權指數 41,661.70；畫面資料日 2026-11-09 | **FACT（資料）**：`origin/main` 的 `twii_ohlcv.parquet` 最後一列＝2026-11-09、close＝41661.699219。與口述**吻合**；INFERENCE：弱旁證「部署的檔案至少含 main 的 11-09 資料」，**不能證明**部署 commit＝最新 main，也**不能證明**自動部署 |
+| 日 K 正常顯示；其他指標多數尚未接線 | 與 DEC-180 §4 一致（FACT，程式碼層）；日 K 通過契約為 INFERENCE（未實機驗） |
+| Cloud 啟動日誌顯示 main／app_ui2.py | 客戶口述的日誌觀測，日誌原文不在 repo；日期、commit、owner NOT VERIFIED |
+| 部署更新需手動 Reboot | 客戶陳述；非 Cloud 設定頁證據；**不證明**自動部署或不自動部署 |
+| （NOT VERIFIED） | Cloud 實際部署 commit、舊 App 現況、NAS Secrets 配置 |
+
+**客戶「採納資料優先架構方案 A」的含義**：對應 DEC-180 (五) 建議架構方案 A（維持 UI2 無網路架構，先解資料發布，再逐欄位走 WIRING-GATE 接線；亦與 DEC-179 整體策略「方案 A，資料優先」同名）。客戶訊息未逐字指明是哪一份，**對應關係為本組解讀（INFERENCE）**。其效力＝客戶對**方向**的採納；**不是**任何 Gate 的授權、不授權施工、不授權觸發抓取／bootstrap／回補、不解除任何 HOLD。
+
+**(三) 稽核結論摘要（單組、唯讀、未連網、未執行任何程式；細節見證據文件 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md`）**
+
+- **最新有效交易日**：main（Cloud 所見）**2026-11-09**（FACT）；repo 內已存在的最新價格完整日 **2026-11-11**，但**只在 #1124 分支**（FACT；11-10、11-11 OHLC 全有值且自洽，價格真實性未對外部核對）；理論可信上限 11-12（INFERENCE），但**任何已知 ref 上都沒有 11-12 的台股列**（原因 NOT VERIFIED）；11-10～11-12 是否為交易日 NOT VERIFIED（G-07）。三資料集最新日不齊：twii 11-11、inst／margin 11-12（分支）。
+- **資料品質觀察**：11-10 volume 先空後補寫（`d0f14437`→`fc447def`，`fetched_at` 不變）；inst 外資 11-11 −7.66 億、11-12 −6.85 億，比最近 60 列 |值| 中位數（約 417 億）小約兩個數量級，標為**可疑，NOT VERIFIED**；`finmind_m1m2`＝NO_NEW_DATA、`tw_pmi`＝UNDETERMINED（皆非 PR HOLD 造成）。
+- **workflow 行為（FACT，讀碼）**：預設手動 dispatch＝真實發布；`dry_run=true` 仍連外抓取、只跳過發布；`bootstrap=true` 整檔覆寫，**本批與日後都不得用於更新到最新日**；發布分支固定 `auto/data-macro-history`、PR 對 main、不直推；#1124 的 head 只在有實質新資料（新資料列、新 `last_error` 或 `fetch_outcome` 變化）時前進——僅揮發欄位變動時發布腳本還原工作樹、不開 PR（`scripts/publish_data_pr.py` L125-141、L833-851；沒有新交易日的執行預期不 commit，INFERENCE，未實測）；cron 與手動都不會讓 main 前進。
+- **Actions 可用性**：以 **DEC-182** 為準（客戶陳述公開 Repository、Actions 可正常執行；repo 內近期 run 皆正常完成為 INFERENCE 支持；不再列為阻擋事項）。
+- **Gate 對照（INFERENCE，依 docs 適用範圍）**：阻擋＝客戶 HOLD（#1124）、DPE-4、DPE-5；部分＝DPE-3／DG-LIC、DG-PIT、DPE-1；不阻擋＝DG-SCOPE／DG-COV／WIRING-GATE、DPE-2、DPE-7。完整表見證據文件 §6。
+
+**(四) 更新程序（RECOMMENDATION，非裁示；未獲授權執行；AI 不觸發任何抓取）**
+
+總管推薦：**不手動 dispatch、不 bootstrap；等下一輪 schedule（預期台北 11-13 約 23:30～11-14 約 03:45）把 11-12 寫進 `auto/data-macro-history` 後，在「同一個 head」上走既有路徑**：S0 AI 唯讀檢核→S1 客戶裁示→S2 客戶於同 head 觸發 CI（DPE-5）→S3 非作者唯讀審閱→S4 客戶明示 merge→S5 客戶手動 Reboot Cloud→S6 依客戶回報核對資料日。替代路徑 A（合併現 head）／C（客戶端手動 dispatch）／D（不處理）與禁止路徑的比較，以及每步的授權狀態（已授權／待核准／禁止），見證據文件 §8。**11-17 起 UI2 台股卡 `age_days`＝8 轉過期警示**（若合併 as_of 11-11 的資料則推遲到 11-19）。
+
+**(五) 尚待客戶裁示項與需客戶提供資訊（沉默＝維持現狀）**
+
+DPE-4＝B（**僅 #1124** 進放行評估；注意 GAPS 文件原 B 範本是 #1124＋#1125，本程序要的是變體，須客戶明示）；DPE-3／DG-LIC 與 DG-PIT 取捨（等條款確認，或明示承擔風險——效力以客戶原文與後續 DEC 為準，AI 不自行認定已解除）；DPE-5（客戶於同 head 觸發 CI）；merge 明示；是否整包接受 inst 11-11／11-12 可疑值；是否授權客戶端手動 `workflow_dispatch`（路徑 C，不建議）；Cloud 手動 Reboot 後回報畫面資料日。**請勿貼 Secrets／API Key／Token／密碼；截圖遮蔽 NAS 網址與主機名。** 可複製回覆範本見證據文件 §10。
+
+**(六) 與既有決策的關係**
+
+- **DEC-176(a)／DEC-179／DEC-180**：#1124～#1126 維持 HOLD；DPE-3＝D（BLOCKED）、DPE-6＝B（部分補件）不受影響。DPE-6 現況：本批客戶口述再補（預設 FAKE、Real 切換、41,661.70／11-09、需手動 Reboot），**仍無 Cloud 設定頁證據**；仍不得宣稱部署追蹤 main 最新提交，也不得宣稱 Cloud 自動部署或不自動部署。
+- **DEC-180**：假說 A（預設 FAKE）、B（Real 只讀已發布資料）、D（main 停 11-09、PR 分支較新）在客戶**畫面層**得到口述印證；E（Cloud 版本落後）與 C（NAS 配置）仍 NOT VERIFIED。DEC-180 原文不改。
+- **DEC-156 A**：不核准新 live API、cron、publisher 或第二個 writer——本程序只走既有 producer 路徑。
+- **`CLAUDE.md` §-2、§-1、§-1.5**：不受影響；本條與證據文件為單組撰寫＋待非作者獨立 QA（QA 結果由總管於 PR 補記；**本條不得被引用為「已 QA PASS」**）。
+
+#### DEC-181 範圍外與 NOT VERIFIED
+
+- **本條不解除任何 Gate／HOLD**，不授權：觸發任何抓取／bootstrap／回補／手動 workflow、合併／關閉／rebase #1124～#1126、處置 #1164、修改 NAS／Secrets／Branch Protection／資料契約／`app.py`／`app_ui2.py`／UI、新增 API／cron／Secrets、施工 `DEC178-QB3-*`／`DEC180-*`／`DEC181-*` Candidate 列。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶 Cloud 實測的任何一項（口述）；Cloud 實際部署 commit、日誌日期、repo owner；Cloud 是否自動部署；Cloud Secrets 內容；GitHub 端 secret 是否有值；CI run id 與結論（總管轉述）；11-10～11-12 是否為交易日；11-12 台股缺列原因；inst 11-11／11-12 的真值；Yahoo／FinMind 原始回應；相關測試是否通過（未執行任何測試／程式）。三組稽核皆單組，本條 AI 整理與證據文件**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-182｜客戶 2026-11-13「恢復正常 CI 工作流程與資料優先續工」授權轉錄：Actions 可用性澄清、已授權步驟與待核准事項分界（2026-11-13；只追加；非 QA PASS；非施工授權）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-182" docs/DECISIONS.md` 0 命中，DEC-181 為上一號，與本條同一個尚未推送的 commit）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～181）。下方 fence 收錄客戶訊息檔**全文**，未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **sha256 算法**：與 DEC-173～181 同一算法（fence 內文以換行連接各行，不含首尾 fence 行與結尾換行，UTF-8）。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`c1111a7d792847ffbd3976530db0227a45ee7a5a0f7559e341b846c8085f03c1`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜恢復正常 CI 工作流程與資料優先續工
+Model：沿用目前專案模型
+Mode：GitHub-first／靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard（Public）
+客戶已澄清：本專案是公開 Repository，GitHub Actions 可以正常執行。其他私有專案的帳務限制不得套用於本專案。
+ChatGPT 最新獨立核實：
+
+* main：138e081bbec24f5b20f1301c1da634d4ab8d9551
+* #1188 已合併。
+* #1188 head a18b481 的原生 CI run 43434257213：五項 success。
+* #1124、#1125、#1126、#1164 仍開啟，維持原有 HOLD。
+
+請從上一批「安全更新台股資料」三組稽核的既有進度繼續，不要重新派工或重做已完成的稽核。
+本批最多三項：
+
+1. 整合已完成的資料日期稽核、workflow 行為稽核、Gate 與有效交易日判準。缺少結果時，繼續既有任務，不另建重複工作。
+2. 提出讓台股資料從 2026-11-09 安全更新到最新有效交易日的最小方案，包括資料抓取、PIT、來源授權、驗證、發布到 main、Cloud 重新部署與資料日期確認。清楚區分可以立即執行的已授權步驟和仍待核准的事項。
+3. 在既有授權範圍內完成必要的證據及交接同步，沿用現行獨立 QA、同 head CI 與 Merge Gate。無須因其他專案帳務問題停工。
+
+禁止：
+
+* 未經裁示合併、關閉或 rebase #1124～#1126。
+* 繞過 DG-LIC／DG-PIT／DG-COV／DG-SCOPE／WIRING-GATE。
+* 直接讓 New UI2 呼叫 NAS 或 L1 抓取程式。
+* 更改 Secrets、GitHub Actions 預算、Branch Protection 或正式資料契約。
+* 自行啟動新的資料回補或 Production 接線工作。
+
+如果發現某個已確認的工程缺陷且只有一個安全修法，可依專案既有常設授權與 Gate 處理；不明確的資料發布或架構決策仍須客戶裁示。
+僅在整批驗收完成或真正遇到 Decision Gate 時回報。
+正式恢復股票儀表板專案續工。
+```
+
+#### AI 整理（非客戶原文；**不得據以擴大授權**）
+
+**(一) 客戶澄清（客戶陳述；repo 內無法驗證）與核對結果**
+
+| 客戶陳述／轉述 | 本組核對 |
+|---|---|
+| 本專案是公開 Repository，GitHub Actions 可正常執行；其他私有專案的帳務限制不得套用於本專案 | **客戶陳述**。repo 內無可驗證的可見性或帳單資料（AI 讀不到 repo 設定頁與帳單頁）。支持性 INFERENCE：`update_macro_history` schedule 最近 6 次（run #193～#198）皆 success、pr-check 2026-11-13 多次正常啟動並完成（總管查，本組未連網重取） |
+| ChatGPT 最新獨立核實（客戶轉述）：main `138e081bbec24f5b20f1301c1da634d4ab8d9551` | **FACT**：`git rev-parse origin/main` 實查相同 |
+| #1188 已合併 | 與 main 138e081 的提交標題「…(#1188)」一致（`git log` 實查）；合併狀態以 GitHub 為準 |
+| #1188 head `a18b481` 的原生 CI run 43434257213：五項 success | 本地可核對：提交 `a18b4815`（「docs: #1188 Delta QA 最小修正…」）存在。**run id 與五項 success＝總管轉述（總管 2026-11-13 查：run 43434257213 為 #1188 head a18b4815 的 pull_request run，五項 check 皆 success），本組未連網重取** |
+| main push CI | 總管 2026-11-13 查：run 43437741216（head_sha＝138e081）completed／success；本組未重取。CI success ≠ 資料已更新 ≠ Production 有效 |
+| #1124、#1125、#1126、#1164 仍開啟，維持原有 HOLD | 本地 ref 核對 #1124／#1125／#1126 head 與總管查詢相同；開啟狀態與 #1164 draft 以 GitHub 為準（總管查） |
+
+**(二) 本批授權（逐條轉錄，不擴張）**
+
+| # | 客戶原文要點 | 登錄結果 | 這不是 |
+|---|---|---|---|
+| 1 | 從上一批三組稽核既有進度繼續，整合資料日期稽核、workflow 行為稽核、Gate 與有效交易日判準；缺少結果時繼續既有任務，不另建重複工作 | 已整合於 DEC-181 與證據文件 `LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md`；**未重新派工、未重做 DEC-180 稽核** | 不是新的稽核授權 |
+| 2 | 提出讓台股資料從 2026-11-09 安全更新到最新有效交易日的最小方案（抓取、PIT、來源授權、驗證、發布到 main、Cloud 重新部署、資料日期確認），**清楚區分可以立即執行的已授權步驟和仍待核准事項** | 見證據文件 §8（S0–S6 逐步標註「授權狀態：已授權／待核准／禁止」）；RECOMMENDATION | 不是執行授權 |
+| 3 | 在既有授權範圍內完成必要的證據及交接同步，沿用現行獨立 QA、同 head CI 與 Merge Gate；無須因其他專案帳務問題停工 | 文件與交接同步已列為**已授權**；QA／CI／Merge Gate 流程不變 | 不是放寬任何 Gate |
+
+**(三) 禁止清單（原樣對照；本組全部遵守）**：未經裁示不得合併、關閉或 rebase #1124～#1126；不得繞過 `DG-LIC`／`DG-PIT`／`DG-COV`／`DG-SCOPE`／`WIRING-GATE`；不得讓 New UI2 直接呼叫 NAS 或 L1 抓取程式；不得更改 Secrets、GitHub Actions 預算、Branch Protection 或正式資料契約；不得自行啟動新的資料回補或 Production 接線工作。**「已確認工程缺陷且只有一個安全修法」** 可依專案既有常設授權與 Gate 處理；**不明確的資料發布或架構決策仍須客戶裁示**。客戶要求僅在整批驗收完成或真正遇到 Decision Gate 時回報。
+
+**(四) 對先前敘述的更新讀法（不改既有 DEC 原文；本條與 DEC-181 同一未推送 commit，故 DEC-181／證據文件／BACKLOG／HANDOFF／PROJECT_STATE 已直接以本條為準撰寫，不留兩套說法）**
+
+- **Actions 可用性**：客戶已澄清公開 Repository、Actions 可正常執行（客戶陳述）；repo 內近期 run 皆正常完成（INFERENCE 支持）；帳單頁與 repo 設定頁 AI 仍讀不到（NOT VERIFIED），但**不再列為阻擋事項，也不得因「帳務」停工**。保留原則：**若 CI 因任何平台原因無法啟動，保留證據、勿反覆重跑**。BACKLOG 列由 `DEC181-ACTIONS-BILLING-NOT-VERIFIED` 改寫為 `DEC181-ACTIONS-AVAILABILITY`（同一未推送 commit，故直接用新名，不留舊名）。
+- **#1124 的 `action_required`／jobs 0**：仍是 Actions 核准機制（NOT VERIFIED 其設定），不是啟動失敗，也不因本條改變；DPE-5 仍需客戶動作。
+
+**(五) 本條不是新的施工授權；「已授權步驟」與「仍待核准」的分界**
+
+| 類別 | 項目 |
+|---|---|
+| **可立即執行的步驟（視為已授權〔AI 解讀〕；僅此）** | (a) **S0 唯讀檢核**：下一輪 schedule 後重查 `auto/data-macro-history` 的資料與 PR 狀態，**不連外抓資料**；(b) 文件與交接同步（沿用獨立 QA、同 head CI、Merge Gate）；(c) **非作者唯讀審閱 #1124 diff**（head 漂移時重做） |
+| **仍待核准（客戶）** | DPE-4＝B（僅 #1124）；DPE-3／DG-LIC 與 DG-PIT 取捨；DPE-5（客戶於同 head 觸發 CI）；merge 明示；Cloud 手動 Reboot 後回報資料日；是否整包接受 inst 11-11／11-12 可疑值；是否授權客戶端手動 `workflow_dispatch`（路徑 C） |
+| **禁止** | 觸發任何抓取／bootstrap／回補；合併、關閉、rebase #1124～#1126；直推 main；關 PR＋刪分支重建；只含 twii 的新發布流程；讓 UI2 呼叫 NAS／L1 |
+
+**授權依據（解讀，非客戶逐項點名）**：AI 解讀為落在客戶「唯讀稽核與更新程序規劃」授權內（DEC-181 限制段；DEC-182 第 3 項「證據及交接同步」）；客戶未逐項點名 S0／diff 審閱；不含任何抓取或 Gate 動作；(b) 文件與交接同步則有客戶原文第 3 項為據。**本條不解除任何 Gate／HOLD**，不授權觸發抓取／bootstrap／回補、不授權合併 #1124。
+
+#### DEC-182 範圍外與 NOT VERIFIED
+
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Repository 的公開／私有狀態與 Actions 設定（客戶陳述）；GitHub 帳單頁；CI run id 與結論（總管轉述）；#1124～#1126、#1164 的開啟狀態（以 GitHub 為準）。
+- 本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**；QA 結果由總管於 PR 補記。
