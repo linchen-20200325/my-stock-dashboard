@@ -816,7 +816,7 @@ Model／Mode／Effort：Sonnet 5.5／Mode：靜默自主巡航／Effort：High�
 
 ### 待客戶裁示（附推薦者為 AI 推薦＝RECOMMENDATION，非客戶裁示；沒答的項目視為維持 HOLD／現狀）
 
-**A. 新增：🗂 資料新鮮度總覽實作裁示單（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）Q1～Q7**（可一行回覆「全部照總管推薦」；範本見裁示單 §0.1）：Q1 是否允許 🗂 頁出現帶真值的欄位（推薦 A 允許，僅白名單新增＋突變測試）；Q2 「尚未接線」字樣（推薦 B 改用既有「尚未提供」）；Q3 第一屏三問與舊區塊文字自相矛盾（推薦 A 有意識改寫，裁示單附擬議文案）；Q4 狀態符號（線框 ✅◷◇⛔ vs 現行全站字樣；**推薦 B 沿用現行全站字樣**——2026-11-13 修訂，原推薦 A：作者重現確認這組符號放進狀態欄位會被 `FieldVM`／`ALLOWED_STATUS_PREFIXES` 拒絕，A 的明細列需改共用契約）；Q5 規格缺口（推薦 A）；Q6 收合明細（推薦 C 分兩階段，先做 A 首屏）；Q7 線框文案候選 C-2／C-4 照線框原文，C-7／C-8 階段 2 才定，C-9 不顯示。
+**A. 新增：🗂 資料新鮮度總覽實作裁示單（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）Q1～Q7**（可一行回覆「全部照總管推薦」；範本見裁示單 §0.1）：Q1 是否允許 🗂 頁出現帶真值的欄位（推薦 A 允許：在自動檢查的允許清單新增計數欄位〔階段 2 再加台股／位階兩列〕，並附反向驗證）；Q2 「尚未接線」字樣（推薦 B 改用既有「尚未提供」）；Q3 第一屏三問與舊區塊文字自相矛盾（推薦 A 有意識改寫，裁示單附擬議文案）；Q4 狀態符號（線框 ✅◷◇⛔ vs 現行全站字樣；**推薦 B 沿用現行全站字樣**——2026-11-13 修訂，原推薦 A：作者重現確認這組符號放進狀態欄位會被 `FieldVM`／`ALLOWED_STATUS_PREFIXES` 拒絕，A 的明細列需改共用契約）；Q5 規格缺口（推薦 A）；Q6 收合明細（推薦 C 分兩階段，先做 A 首屏）；Q7 線框文案候選 C-2／C-4 照線框原文（Q4＝B 時 C-4 的「正常」改為「資料日在規則內」，總管草擬待核可），C-7／C-8 階段 2 才定，C-9 不顯示。
 **B. 仍待（前段清單扣除已裁示項目；單組核對，非窮舉宣稱）**：(1) **VG1／VG2**（`DEC174-VG1-FAKE-REAL-LOOK`／`DEC174-VG2-FAKE-ACCOUNT-CONFLICT`，Visual Gate 候選，先文字線框＋推薦理由）；(2) **DPE-3／DPE-6**（若日後考慮放行 #1124～#1126；`DEC176-DATA-PR-EVIDENCE-DECISIONS`；處置本身仍須另行裁示）；(3) 接線前決策單 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`／`I1144-WIRING-GATE`（`DEC176-GATE-SHEET-CUSTOMER`）；(4) `DEC174-B1-INDEP-QA` 判定與 #1165 兩份文件勘誤附註回寫、複驗 E-10／E-13 的處置；(5) `I1144-DATA-STORAGE-DECISION`／`I1144-LIC-THREE-QUESTIONS`（DEC-171）；Q5（DEC-173，`REORG3C-Q5-GATE`）是否及何時重議。
 **C. 已有客戶定論、不列為待裁示**：DPE-7 **維持 A（觀察）**，保留 **11 月 19 日檢查點**（`DEC176-DPE7-1119-CHECKPOINT`；僅在客戶想讓 11-21 `update_fundamentals` 財報進 main 時才需另答）；D6 偵測器程式修復＝**另批提案**（`DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`，客戶未授權修測試前不動）。
 
