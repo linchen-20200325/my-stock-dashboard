@@ -8514,3 +8514,1174 @@ DEC-175 是已生效的工作優先序、資料架構與交接治理決策，不
 
 - **未授權／仍 HOLD**：本條**不是** UI 施工、資料接線、#1124～#1126 合併／關閉／rebase、外部對帳、儲存／授權決策、清理（Actions Runs／Artifacts／死碼／Old UI）、CI 設定變更的授權；各 Gate 原狀。
 - **NOT VERIFIED**：(a)(b)(c) 與客戶原訊息的逐字一致性（本組只見派工訊息；(a) 連逐字都沒有）；(b) 中 ① ③ 的細節（客戶原文僅標題）；「#1171 修正有效」；#1168／#1169／#1170／#1171／#1172／#1173 的非作者 QA 與同 head CI 結果本組僅轉述各 PR 合併提交訊息與派工訊息，未逐 PR 重讀 review／check runs；#1171 最後一次僅註解字句補修由總管看 diff 確認（**未經第二組**）。本條 AI 整理單組撰寫，未經第二組獨立複驗（§-2 規則 6）。
+
+
+#### DEC-174／DEC-176 後續註記：#1169 獨立複驗結論的有效讀法（2026-11-12；只追加；DEC-174／DEC-176 上文一字未改；**非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> **為何有本小節**：DEC-174 結果指標（上文）寫於 #1165 合併後、#1169 複驗之前；#1169（`aa98de4c`）新增 `docs/vnext/NEWUI2_INDEPENDENT_REVERIFICATION_2026-11-12.md`（219 行，下稱「複驗文件」），對 #1165 兩份文件提出 13 條勘誤（E-1～E-13）並修正 B1 結論措辭。上文數處敘述因此過期或過強。**依既有慣例，上文不改字（只追加）**；讀者遇到下表「舊位置」所列敘述時，一律以本小節的「有效讀法」為準。本小節不新增任何客戶裁示，不解除任何 Gate／HOLD，不授權 UI 施工、資料接線或任何處置。
+> **行號說明**：下表「舊位置」的 `DECISIONS.md:N` 與複驗文件的行號，皆為**撰寫時 main `85c65dfc` 的行號，僅供定位**（本檔只追加時舊行號不會移動，但仍以符號／章節為準；複驗文件 §4 為表格，E-1～E-13 在其 110～122 行、R-A／R-B／R-C 在 128～130 行、§5 在 134～156 行）。
+> **單組聲明**：複驗文件本身是**單組**產出（逐項事實組、紅隊組、文件組各自單組；紅隊盤點並非盲測，見其 §1「重要揭露」）。本小節對它的轉述同為單組；複驗內的事實（含紅隊以渲染輸出重現 R1～R5）**未被再次重驗**。
+
+**(a) 逐點對照：舊位置 → 有效讀法**
+
+| 舊位置（撰寫時 main `85c65dfc`） | 舊說法（摘要） | 有效讀法 | 複驗文件出處 |
+|---|---|---|---|
+| `DECISIONS.md:8405`（DEC-174 結果指標「B1 結論」） | 「未發現契約內、可重現、不涉及新設計決策的缺陷」 | 見下 (c)：**未證明違反已核准契約，但不能說「無」；R1～R5 為候選**（候選、只分類，不修） | §5、§7 第 3 點 |
+| `DECISIONS.md:8409`（主要發現 3） | 「板塊 stale 4 日 vs 融資／外資 7 日」 | 外資 `finmind_inst` 現行唯一 consumer 走 **10 日曆日**（複驗文件自述，單組）（極端風險兩腿），7 日對它只被校準腳本使用；過期門檻實為**三種**（4／7／10），且 repo 另有以交易日計的 `shared/freshness_policy.py` SSOT（見 (b) E-1、E-7） | §4 E-1、E-7 |
+| `DECISIONS.md:8411`（主要發現 5） | 「新候選 N-1～N-4……皆已登記」 | N-2／N-3／N-4 紅隊自報成立；**N-1 部分推翻**（漏引 `shared/freshness_policy.py`，見 (d)）。「已登記」屬實，但 N-1 的論述需補註 | §2.2 第 8 列；§4 E-7 |
+| `DECISIONS.md:8414`（NOT VERIFIED） | 「第二組獨立複驗（五頁稽核 §11 推薦項 1）尚未執行」 | **已過期**：#1169 已產出一份單組複驗文件。但這**不等於** `DEC174-B1-INDEP-QA` 結案（見 (f)） | 複驗文件 §0、§7、§9 |
+| `DECISIONS.md:8460`（DEC-176(a) 對應結果） | 只列 A／B／C 三份文件檔名 | 補：A（複驗文件）的結論＝核心事實獨立重現、**0 個被整體推翻**（複驗文件自述，單組），但有 13 條措辭／查法勘誤與 B1 結論修正；細節見本小節 (b)(c)(d)(e) | 複驗文件 §0、§2.2 |
+| 同 `DECISIONS.md:8405`／五頁稽核 §0-9、市場文件 §0-7 | 「所有 Gate 維持 HOLD／未授權」 | 正確說法是「**未解除任何 Gate**」（見 (g)） | §4 E-8 |
+
+**(b) E-1～E-13 與 R-A／R-B／R-C 精簡結果表**（狀態詞：修正＝措辭／事實需更正；補註＝事實不變、需補一句；部分推翻＝複驗者自己的論點僅部分成立；待判定＝需總管／客戶判定，本小節不代判）
+
+| 編號 | 一句話有效讀法 | 狀態 |
+|---|---|---|
+| E-1 | 外資門檻**不是只有 4 vs 7**：現行 consumer 走 10 日曆日（複驗文件自述，單組）（`macro_cache_reader.load_extreme_risk_legs`／`EXTREME_STALE_MAX_CALENDAR_DAYS`），7 日僅校準腳本使用；「若日後接 L3 外資會落在 7 日」屬假想 | 修正 |
+| E-2 | 「無交易日曆」過度絕對：repo 有交易日曆服務與休市表抓取、也有以交易日計的新鮮度 SSOT，但**這幾條 stale 判定未接到它們** | 修正 |
+| E-3 | `15761` 在 `metadata.json` 的 `coverage.n_dropped_missing_price`，**不在** `per_day`（五頁稽核 X-03、§10 尾段位置不準；算術正確） | 修正 |
+| E-4 | 五頁稽核 §8 Q5 的 FAKE 字串 grep 關鍵字未含「無異常」；`scenarios.py` 另有 FAKE 值「無異常（FAKE）」（帶 FAKE 標示，無實質危害） | 補註 |
+| E-5 | CAPMAP「真資料＝是」其實 5 列（MK-02、MK-03、MK-04、TG-30、SY-03）；SY-03 備註「位階有真 as_of／source」與程式不符（位階畫面明寫「市場位階未提供資料日」，`source` 是規則分支識別、非資料來源）；該備註在 CAPMAP 檔，不在 #1165 兩份文件 | 修正＋補註 |
+| E-6 | 五頁稽核 M-10 測試欄 `::test_twii_*` 實際在 `tests/test_ui2_real_feed.py`，與 M-09 的 `tests/test_ui2_twii_kbar.py` 不同檔 | 補註 |
+| E-7 | N-1「未登記於 BACKLOG」可成立，但兩份文件都漏引 `shared/freshness_policy.py`（客戶 2026-10-14 核准的新鮮度 SSOT，已登記 `STALE_DAYS_DAILY`＝7、板塊 4、極端風險 10、領先報價 5 為顯示用日曆日規則） | 部分推翻（N-1） |
+| E-8 | 「所有 Gate 維持 HOLD」與文件自己的 §6.2 矛盾（G-F1 已裁示方案 A〔DEC-161〕、融資／板塊 L3 與 A2 已授權並完成〔DEC-164、DEC-165〕）；正確說法＝**未解除任何 Gate** | 修正 |
+| E-9 | 「停更＝每日資料 PR 未合併」**方向成立、力度過強**：每日資料自 11-06 起改為「資料分支＋人工合併」，不合併就不前進是設計狀態而非故障；TWII 在分支上缺 11-11 另有未解原因（NOT VERIFIED）；cron 排程與實際提交落差約 7～11 小時（原因 NOT VERIFIED）；分支上台股 11-10 那列成交量「先空後補」1 格（樣本僅 1 例）。建議把因果分 FACT／INFERENCE／NOT VERIFIED 三層寫 | 部分推翻（紅隊論證力度）＋補註 |
+| E-10 | 版面／字樣列標 `READY` 易被數成「4 個 READY」誤讀為資料可用；建議改標「版面完成」或獨立欄，`READY` 只留給有真值來源的欄位 | 待判定（是否回寫由總管決定） |
+| E-11 | 位階恆未載入：五頁稽核標 FACT（沙箱）、市場文件標 NOT VERIFIED；建議統一為「FACT（沙箱、讀碼）＋部署端 NOT VERIFIED」 | 補註 |
+| E-12 | 兩文件檔頭自述「非作者獨立 QA 待做」、DEC-174 結果指標引 PR 描述「兩組 QA PASS」：PR 內 QA ≠ `DEC174-B1-INDEP-QA`，兩文件本身未說明這點 | 補註 |
+| E-13 | 市場文件「`decision_digest` 非測試 `.py` 只被自家三檔提到」查法偏窄（實際提到者 10 個，且 `shared/strategy_class_schema.py` import 其型別）；「builder 無 production caller」是否仍成立，紅隊自報成立、文件組**未重驗** | 待判定（事實未重驗） |
+| R-A | 紅隊原句「`assess_daily(11-09, today=11-12, calendar=None)` 會是 UNDETERMINED」**錯**：實測為 FRESH（落後 3 個交易日，以上界判定）；N-1「漏引 SSOT」論點不受影響 | 修正（複驗者自身） |
+| R-B | 紅隊原句「main 上 `twii_ohlcv.parquet` 歷史只有 3 個提交」是**淺層複製**（71 個提交）的產物，不成立；「11-06 起改資料 PR」另有獨立證據 | 修正（複驗者自身） |
+| R-C | 逐項事實組自報「不符／不精確 5 項」，清單實列 6 條 | 修正（複驗者自身） |
+
+**(c) B1 有效讀法**：**未證明任何「違反已核准契約」的缺陷，但不能說「無」**——紅隊以渲染輸出找到 5 個可重現候選 R1～R5（紅隊自報，文件組未重做渲染）。DEC-174 結果指標「未發現契約內、可重現……缺陷」一句，讀作此義。
+
+**(d) N-1 部分推翻（E-7）**：N-1（市場契約 §5）所指「板塊 4 日 vs 融資／外資 7 日」的**不一致本身仍成立**，但論述漏了 (1) 外資現行 consumer 走 10 日（E-1）（複驗文件自述，單組）、(2) 客戶核准的交易日 SSOT `shared/freshness_policy.py` 與顯示用日曆日規則並存（E-7）。是否統一屬客戶 Gate，**未裁示**；`DEC174-N1-STALE-THRESHOLD` 仍 open。
+
+**(e) R1～R5 一覽（皆為**候選、只分類、不修、不授權 UI 施工**；涉及畫面結構須先文字線框＋客戶拍板；**R4 併入 VG1**；**R5 為環境依賴非缺陷**）**
+
+| 編號 | 現象（複驗文件 §5.1 摘要） | 分類（RECOMMENDATION，非裁示） |
+|---|---|---|
+| R1 | 🎯「即時查一檔」未查詢時，「查詢摘要 ⬜ 尚未提供」在同一畫面出現兩次；是否違反已核准契約**不明**，去掉哪一處屬畫面結構取捨 | 視覺驗收候選；若要改須先出文字線框 |
+| R2 | 真資料軸橫幅「僅台股與市場位階為真資料」宣稱位階為真資料，但位階在 UI2 恆未載入（僅開發面可見）；文案與事實矛盾，不涉新設計決策 | 文案更正候選；是否需線框由總管判定（先確認屬開發面文案或產品畫面，見 BACKLOG `DEC174-COPY-DRIFT-2ITEMS`） |
+| R3 | 🗂 資料頁「是否需要行動」原因句沿用 🎯 頁文案，語意不通 | 文案更正候選 |
+| R4 | 示意軸「已載入」場景的「市場目前狀態 震盪」等沒有行內示意標記（僅開發面可達） | **併入 VG1**（`DEC174-VG1-FAKE-REAL-LOOK`）處理 |
+| R5 | 真資料軸讀快取用相對路徑 `Path("data_cache")`，從專案根以外目錄啟動會讀不到 | **環境依賴，不是缺陷**；兩文件的「沙箱實測」應註明可重現條件為「從專案根啟動」 |
+
+**(f) 單組聲明（必讀）**：#1169 複驗是**單組產出**，**不等於** `DEC174-B1-INDEP-QA` 結案，也不等於 `DEC175-UI2-DATA-DUAL` 子項已結案（複驗文件檔頭第 7 行自述「是否把它們視為『非作者獨立 QA』，由總管裁定，本文不宣稱」）；複驗內事實（含紅隊渲染重現、逐項事實組統計、文件組 22 項）**未被再次重驗**。其 §8 仍列 10 項 NOT VERIFIED（部署端、真瀏覽器、上游授權、缺日是否休市、TWII 缺 11-11 原因、cron 延遲原因、全量測試未重跑、壞 JSON 旁路、資料 PR check runs 等）。
+
+**(g) E-8 的正確說法**：**未解除任何 Gate**（不是「所有 Gate 維持 HOLD」）。已裁示／已授權項目＝G-F1 方案 A（DEC-161）、融資／板塊唯讀 L3（DEC-164）、A2 Digest builder（DEC-165）；其餘 Gate 原狀。
+
+**(h) #1165 兩份文件仍含被修正措辭，本批不改**：撰寫時 main `85c65dfc`，至少 `NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md` 的第 23 行（§0-7 新鮮度「日曆天>7、無交易日曆」）與第 25 行（§0-9「所有 Gate 維持 HOLD／未授權」）、`NEWUI2_MARKET_DATA_CONTRACT_VALIDATION_2026-11-12.md` 的第 23 行（§0-7「所有接線相關 Gate 維持 HOLD／未授權」）含上述被修正的措辭；**這是抽查到的行，不是窮舉**（該兩檔其他章節如 X-08、X-09、§4、§9 亦有相關敘述，未逐行盤點，NOT VERIFIED）。本批範圍僅 `DECISIONS`／`BACKLOG`／`HANDOFF`／`PROJECT_STATE` 四檔，**不改 `docs/vnext/` 既有檔**；以本小節為有效讀法。**是否以附註方式回寫勘誤，另待總管／客戶決定**（複驗文件 §7 第 3 點的建議是「勘誤附註、不要重寫」，屬 RECOMMENDATION，非裁示）。
+
+**NOT VERIFIED（本小節）**：複驗文件內事實的再驗；R1～R5 的渲染重現；E-10／E-13 的處置；本小節為單組撰寫，**未經非作者獨立 QA**（§-2 規則 6），不得被引用為「已 QA PASS」。
+
+
+#### 後續註記：76ed4b7b push CI 紅燈證據（FACT／INFERENCE／NOT VERIFIED）（2026-11-12；只追加；**只記錄，不修**；**非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> **為何有本小節**：main push `76ed4b7b`（#1173 squash）的 PR Check 為 failure，與同 head 的 PR CI 全綠不一致。本小節把兩組獨立調查（互相驗證、皆唯讀）的證據落盤，避免下一位接手者重複調查或把它誤讀為「#1173 內容有問題」。**不修測試、不重構、不放寬 CI Gate、不重跑任何 workflow**；未經客戶新授權不得改測試。
+> **標籤**：FACT＝本組以 GitHub MCP 重讀（僅 run 層級欄位）或讀碼直接確認；其餘「調查組」欄位＝兩組調查員回報、**本組未重做**（見末段「本組自己驗過／沒驗過」）。**單組撰寫，未經非作者獨立 QA**（§-2 規則 6）。
+> **安全聲明**：測試檔內的 secret 皆為**合成假秘密**；日誌不含任何真實 secret 值。本小節只引用片段 `5678`，**不抄出假秘密完整字串**。
+
+**1. 事實（FACT）**
+
+- main push `76ed4b7b`（#1173 squash）PR Check run **43253404141**：`conclusion=failure`（本組 MCP 重讀 run 層級：event=push、head_branch=main、created 2026-11-12T15:57:34Z）。只有 `Fast checks` job 失敗；日誌結尾 `9 failed, 39449 passed, 36 skipped, 226 deselected, 3 xfailed … in 1021.62s`（調查組讀日誌）。
+- 9 個失敗**全在** `tests/test_d6_diagnostic_no_secret_display.py`，斷言皆為 `assert ["LONG:'5678'"] == []`（`LONG` 為測試檔內合成假秘密的常數名，片段 `5678`）：`test_baseline_page_contains_none_of_the_forbidden_strings`、`test_page_shows_only_names_state_source_never_values`、`test_env_fallback_reports_source_without_value`、`test_no_secrets_file_at_all_unset_keys_say_unset_not_parse_failure`、`test_secrets_parse_failure_shows_state_only`、`test_probe_results_are_status_and_category_only`、`test_page_probe_without_proxy_shows_direct_only`、`test_unmutated_page_passes_the_same_check`、`test_page_when_proxy_config_raises_shows_fixed_text_only`（本組 `grep` 確認 9 個測試名皆存在於該檔）。
+- 同 head `8140a952` 的 `pull_request` CI run **43250372531** `success`（本組 MCP 重讀 run 層級）；更早 head `df4cc872` 的 run 43245091926 success（調查組）。**僅看 run 層級結論，未逐一展開該測試檔個別結果。**
+- main push PR Check 近期結論（調查組列出；**其中標 ◆ 者本組 MCP 重讀 run 層級確認**）：`85c65dfc` success（43265246088 ◆；涵蓋同一測試檔，以 fast job 綠為據）、`76ed4b7b` failure（43253404141 ◆）、`57885e6e` cancelled（43252166395 ◆）、`40d21c7f` success（43242041455）、`169b74ed` cancelled（43241999040）、`2a1623e8` success（43235433151）、`aa98de4c` failure（43229484406 ◆）、`6241ad3b` success（43214840927）、`68e56ff0`（#1165）failure（43208678198）。
+- **`aa98de4c` 與 `68e56ff0` 的失敗不是同一測試檔**：兩者 `Fast checks` 都 success，失敗的是容器 job `ui2-browser` 的 `Install dependencies`；`aa98de4c` 日誌為 `pip: cannot execute: required file not found`／exit code 127（#1171 要修的症狀）；`68e56ff0` 只確認同一步驟失敗，**退出碼 NOT VERIFIED**。（既有追蹤列：BACKLOG `DEC174-CI-UI2BROWSER-EXIT127`、`DEC175-CI-UI2BROWSER-EXIT127-RECUR`、`DEC176-CI-1171-VALIDITY`；本組先 `git grep` 確認，故**不另建重複列**。）
+- **兩個 cancelled**（`57885e6e`、`169b74ed`）：`.github/workflows/pr-check.yml` 第 10～12 行設 `concurrency: group: pr-check-${{ github.ref }}` ＋ `cancel-in-progress: true`（本組讀檔確認）。**INFERENCE**：被後續 push 取消——例如 43252166395 於 15:50:40Z 建立、15:57:51Z 更新，而下一個 push run 43253404141 於 15:57:34Z 建立，時間吻合；**沒抓到取消明文**。副作用：#1172、#1168 的 push 沒有完整的 push CI。
+
+**2. 調查組回報（機制與本機實測；本組未重做；不得當 FACT 引用——僅括號內標「本組讀碼／讀檔確認」者為本組自己驗過）**
+
+- 該測試把測試檔內假秘密的每個 4 字元片段列為禁字（`_frags`），`screen_text` 把每個 Streamlit 元素的 `str(proto)` 納入掃描（本組讀碼確認 `screen_text` 確實納入 `str(proto)`）。元素 ID 形如 `$$ID-<32 位小寫 hex>-api_diag_run`；`streamlit.testing.v1.app_test` 模組層 `TMP_DIR=tempfile.TemporaryDirectory()` 使暫存腳本路徑每個 pytest 行程不同 → **ID 每行程隨機、行程內固定**，故同一行程內**這 9 個**測試同紅同綠（調查組讀碼推論；該檔共 33 個測試函式〔本組 `grep` 計數〕，其餘只掃部分群組或不掃整頁〔協調者複驗，本組未逐一驗〕）。
+- CI fast lane 為單一 `pytest -v`：無 xdist／randomly／PYTHONHASHSEED；`pytest.ini` addopts 只有 `--strict-markers -m "not slow and not ui2_browser"`（本組讀檔確認）。
+- 純 hex 4-gram：純 hex 的 4 字元片段（本組**不逐一列出**，以免還原假秘密）可能命中；另有其他禁字來源的 hex 片段也可能命中。精確機率（自動機 DP）LONG 單項約 **0.542%**；加其他禁字的 Monte Carlo（200,000 次）任一命中約 **0.63%**。
+- **反事實實測**：本機整檔 3 次皆 56 passed；在**不改 repo** 的 pytest plugin 把 ID 換成含 `5678` 後，同檔 **9 failed／47 passed，且失敗的 9 個與 CI 同名**；把 ID 換成中性字元則無洩漏命中；本機 118 次 baseline 單測重跑有 1 次自然失敗，該次 ID 含 `5678`。→ 頁面輸出本身沒有輸出真正的秘密，命中位置在元素 ID。
+
+**3. 推論與口徑（INFERENCE）**
+
+- **INFERENCE**：`76ed4b7b` 那次 CI 行程的 ID 碰巧含 `5678`（約 0.54～0.63% 的偶發事件），故為**測試偵測器缺陷（誤報）**而非真洩漏；與 #1173 docs-only 內容無關。
+- **結論口徑（必須這樣寫）**：「**高度可能為測試偵測器的非決定性缺陷（兩組獨立調查一致），但 CI 當次實例未被直接驗證 → 不記為『已證實的偶發誤報』**」。#1171 與此無關（只動 `ui2-browser` 的 pip 步驟；調查組僅看 stat 與訊息，未讀 diff 全文）。
+
+**4. NOT VERIFIED**
+
+CI 失敗行程實際的 ID 字串（日誌只印斷言，未印 blob，且無權限重跑）；本機為 py3.13＋streamlit 1.59.2，CI 為 py3.11，**未於同版重現**（`TMP_DIR` 機制與版本無關為讀碼推論）；repo 其他測試是否有同類「禁字 vs 隨機 ID」缺陷（**未掃**）；`68e56ff0` 的退出碼；取消明文；本節數字（機率、118 次重跑）本組未重算。
+
+**5. RECOMMENDATION（非裁示）**
+
+- 若客戶**另行授權**，修法方向是**掃描前正規化 `$$ID-<32hex>` 或排除 proto 的 id 欄位，且不得放寬禁字集覆蓋**；**未經新授權不改測試、不重構、不放寬 CI Gate**。
+- 之後遇到類似 D6 紅燈：先看失敗片段是否出現在元素 ID 內；**rerun 通過不等於已修**。
+- 追蹤：BACKLOG `DEC176-CI-D6-NOSECRET-ID-NONDETERMINISM`（P2、open、待客戶另案授權才可修測試）。
+
+**6. 本組自己驗過／沒驗過**
+
+- 驗過（FACT）：run 43253404141／43250372531／43265246088／43229484406／43252166395 的 run 層級 conclusion 與建立時間（GitHub MCP）；`pr-check.yml` 第 10～12 行 concurrency；`pytest.ini` addopts；9 個測試名存在；`screen_text` 納入 `str(proto)`。
+- 沒驗過：日誌內容、機率計算、反事實實測、本機重跑次數、其餘 run 的結論（調查組回報）。**本小節不是 QA PASS，不得被引用為「已證實的偶發誤報」。**
+
+
+
+### DEC-177｜客戶 2026-11-12「UI 主線恢復與預防性交接制度」裁示轉錄：🗂 資料新鮮度總覽採 A 首屏＋B 展開明細、允許最小 UI 第一版實作（不解除任何 Gate）、預防性交接制度（2026-11-12；只追加；非 QA PASS）
+
+> 2026-11-12 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-177" docs/DECISIONS.md` 0 命中，DEC-176 為上一號）。**來源類別 D：客戶 2026-11-12 裁示，經派工訊息轉錄；repo 內無原始對話紀錄——依 DEC-172 D3 精神標示「經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED」，逐字一致性 NOT VERIFIED。** 下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173／174／175／176 同一算法**（本組先以同法重算既有 fence，與其登記值逐一相符：DEC-173 `e99433da…`、DEC-174 `e6e356f9…`、DEC-175 `af650bbb…`、DEC-176(b) `d394ca08…`、DEC-176(c) `f200ddfc…`，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-12）。｜**效力日期**：2026-11-12 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`8b059bb54d562877164ae6455c526e54097897437d13a569e1d2182ab4eae053`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜UI 主線恢復與預防性交接制度
+
+Model：Claude Sonnet 5.5
+Mode：靜默自主巡航
+Effort：High
+
+Repository："linchen-20200325/my-stock-dashboard"
+
+先重新確認 GitHub 最新 main、Open PR、CI／QA、DECISIONS、BACKLOG、PROJECT_STATE、HANDOFF、PROJECT_RULES、CLAUDE.md 與 PROCESS.md。
+
+歷史基準 main："880bc17c"；#1175 已合併，合併後 push CI 五項成功。
+
+一、本次正式 UI 方向裁示
+
+🗂 資料新鮮度總覽採 A 首屏＋B 展開明細。
+
+- 沿用 #1173 定義的八項固定清單及既有順序。
+- 首屏同時顯示已接入、尚未接線與五態狀態計數，包含 0。
+- 明細預設收合，沿用 B 的列格式。
+- 第一版只使用已存在的資料日及距今天數；不新增 fetched_at／published_at 欄位。
+- 保留授權、發布時點的未知／未評估說明。
+- 不將未接線、未載入或未評估視為正常。
+- 保留手機首屏四問與主 CTA。
+- 完整資料健康度仍保留在 👤 我的既有契約位置；🗂 本批只處理新鮮度摘要，不搬移入口。
+- C-16 採既有固定順序，C-17 因未選 C 不適用。
+- §10 ⑥ 採 (a)，§10 ⑦ 確認為本次明確派工；不把歷史文字線框自動視為施工授權。
+
+本次允許依核准線框進行最小 UI 第一版實作，但不解除資料接線、來源授權、PIT、Coverage、Old UI Removal 或正式切換 Gate。
+
+若需要突破既有 "SHOWN_FOLDS" 白名單、改動 UI 契約、測試 allowlist 等尚未核准的政策，先提出精確範圍及最小修改方案，等待另行裁示，不得自行放寬。
+
+二、本批最多三項
+
+1. 以獨立 docs PR 記錄本次 UI 方向、授權邊界，以及已核准的預防性交接制度：每批檢查、約三批優先交接、風險提前觸發、先存檔驗證再結束舊對話。
+2. 對已核准且不需突破現有 Gate 的 UI 範圍，進行最小實作；遇未授權的政策／接線需求則停在安全點，提出具體裁示單，不以 placeholder 冒充真資料。
+3. 完成非作者 QA、同 head 五項原生 CI、手機首屏與缺值語意驗收，並同步所有未完成事項及安全接手點。
+
+上述各項依序進行；不得讓多組同時寫入同一治理文件。
+
+三、仍 HOLD
+
+- #1124～#1126、#1164、#1119。
+- DG-SCOPE／COV／PIT／LIC、I1144-WIRING-GATE。
+- D6 偵測器程式修復，另批提案。
+- DPE-7 維持 A（觀察），保留 11 月 19 日檢查點。
+- Old UI、正式 UI 切換、資料庫重建、新 API／來源及 Actions 清理。
+
+四、交接要求
+
+不要每個 Agent 完成就輸出長篇進度，僅在真正阻塞、需要客戶裁示或重大里程碑時報告。
+
+每批結束檢查交接風險；累積約三批或出現長篇 QA／CI、重大決策變動時，優先安排安全交接。
+
+必須先把已完成、未完成、HOLD、NOT VERIFIED、待裁示問題寫入 GitHub，驗證 main／PR／CI／QA 後結束舊對話，再依最後狀態產生新對話提示語。
+
+不承諾能準確讀取剩餘上下文 Token。
+
+每批最多三項，未授權的新工作不得自行啟動。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文與 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_TEXT_WIREFRAME_2026-11-12.md`〔#1173，以下簡稱「線框文件」〕逐項對應；**不得據以擴大授權**）
+
+**(一) UI 方向裁示 ↔ 線框文件對應（本組已讀線框文件 §1.2、§2、§3、§7.2、§8、§9、§10 原文核對，FACT）**
+
+| 客戶原文要點 | 線框文件對應項（實際內容） | 本組整理 |
+|---|---|---|
+| 採 A 首屏＋B 展開明細 | §7.1 推薦「A，展開層格式沿用 B」；§7.2 一鍵回覆第 1 項選項含「A首屏＋B展開層」 | 客戶選的是 §7.2 第 1 項的「A首屏＋B展開層」（AI 推薦於此**經客戶採納**；採納前它只是 RECOMMENDATION） |
+| 沿用 #1173 八項固定清單及既有順序 | §1.2 候選「固定清單」8 項：台股加權指數、外資買賣超、融資餘額、M1B／M2、台灣 PMI、板塊資金流、市場位階、基本面季報（C-1）；§7.2 第 2 項 | 客戶同意 §1.2 的 8 項與其順序；線框文件自述盤點「已接入 UI2」為 2／8（台股指數、市場位階；**單組盤點，量測日 2026-11-12，會漂移**） |
+| 首屏同時顯示已接入、尚未接線與五態狀態計數，包含 0 | §2.3 計數行分母規則；§3.1-6「首屏計數行狀態軸固定列出五態（含 0 項也顯示 0）」；§7.1 風險段「計數行必須永遠同時顯示接線軸與五態」；C-3 | 對應 §8.2「採 A」要求：計數行規則寫入守衛、新增「五態計數含 0 都顯示」測試 |
+| 明細預設收合，沿用 B 的列格式 | §3.3 手機展開層、§4（B 的列格式）、§7.1 理由 3 | 「預設收合」的明細區＝**新增一個預設收合區**；線框文件 §1.1／§8.1-3 自述 `SHOWN_FOLDS` 現僅 3 個預設收合區、🗂 無（FACT：線框文件自述；`src/ui2/views/_page.py` 確有 `SHOWN_FOLDS` frozenset，本組未逐項核對其內容）→ **是否需要新增條目見下方 (二)，不預判** |
+| 第一版只用已存在的資料日及距今天數；不新增 fetched_at／published_at | §7.2 第 3 項「只顯示資料日」；C-5（距今 n 天，用既有 `age_days`）；C-6（抓取時間欄，需 DG-PIT，**不採**）；§8.1-5 `NUI2-DATA-HEALTH-FIELD-GAPS` | 客戶選「只顯示資料日」；**C-6 不採、不新增欄位** |
+| 保留授權、發布時點的未知／未評估說明 | §7.2 第 4 項「授權／發布時點說明〈要／不要〉」；C-7（發布時間「⬜ 來源未提供」）、C-8（「資料使用條件」收合區）；§3.1-5「不使用『已確認／已解除』字樣」 | 對應「要」；C-8 若為**另一個**收合區，其 `SHOWN_FOLDS` 影響併入 (二) |
+| 不將未接線、未載入或未評估視為正常 | §2.1 三態對照；§2.2；§1.8-3 | 沿既有語意規則；不得以綠色／「正常」呈現未評估（§2.2 另有「不顯示『全部正常』總結句」，撰寫組補充對映） |
+| 保留手機首屏四問與主 CTA | C-15（第一屏四問是否保留），其備註引「客戶 (5)-9 規定每頁有第一屏四問」；§1.1 第一屏四問現況 | 對應 C-15＝**保留**（撰寫組對映） |
+| 完整資料健康度仍在 👤 我的既有契約位置；🗂 只處理新鮮度摘要，不搬移入口 | §10 ①（落點衝突）；§8.1-11（👤 入口去留）；BACKLOG `DEC176-HEALTH-ESCALATION-1` | 客戶表態＝本批不搬移、維持 Active Contract §5 的 👤 落點；**本組僅記為本批取向，`DEC176-HEALTH-ESCALATION-1` 是否結案由總管判定（本 PR 不改既有列）** |
+| C-16 採既有固定順序 | §9 C-16「B 案列順序：依 §1.2 固定清單順序，或改依 `data_categories` 分類 SSOT」 | 採「依 §1.2 固定清單順序」（非 `data_categories` 順序） |
+| C-17 因未選 C 不適用 | §9 C-17「C 案『未載入』放進『需要注意』或另設『尚未檢查』區」 | 不適用（未選 C），不再待裁示 |
+| §10 ⑥ 採 (a) | §10 ⑥：(a) 接受 A（計數即 Level 1 摘要，逐項為第二層）／(b) 明細預設展開／(c) 改採 B | 採 (a)（撰寫組對映）：首屏計數即 Level 1 摘要，逐項狀態在預設收合明細（第二層）；客戶要求的「首屏同時顯示已接入／尚未接線／五態計數含 0」即該表所述的 (a) 前提 |
+| §10 ⑦ 確認為本次明確派工 | §10 ⑦：「本草案與 HANDOFF／五頁稽核 §11『需客戶先裁示』的張力」，內容指向檔頭三點：(1) 是否占用 DEC-174「每批最多三項」名額、(2) 是否構成 DEC-175 開工指派、(3) 僅授權文字線框、不含施工 | 客戶確認這是**本次明確派工**（即本批 UI 工作屬客戶明確指派，不是 AI 自行啟動）。**本組不替客戶展開 (1)(2)(3) 各自的結論**，只記：本批的授權邊界以本 DEC 下方 (二) 為準；DEC-176(c) 對 DEC-175「不是無條件施工授權」的釐清不被本條改寫 |
+| 不把歷史文字線框自動視為施工授權 | 線框文件檔頭「本文件不授權任何實作、不解除任何 Gate」 | 線框文件本身**仍不是**授權；授權來自本 DEC 的明確裁示，且僅限 (二) 範圍 |
+
+**(二) 授權邊界（客戶原文的忠實整理）**
+
+- **允許**：依**已核准的線框**（A 首屏＋B 展開明細，範圍如上表）進行**最小 UI 第一版實作**。
+- **不解除**：資料接線（`I1144-WIRING-GATE`）、來源授權、PIT、Coverage、Old UI Removal、正式切換 Gate。第一版**不得以 placeholder 冒充真資料**（客戶「二、2」）；未接線項目以「尚未接線」如實呈現。
+- **須先停手、提精確範圍與最小修改方案、等另行裁示**（不得自行放寬）：突破既有 `SHOWN_FOLDS` 白名單、改動 UI 契約、測試 allowlist（例如線框文件 §8.1-4 所述 `ENGINEERING_VOCAB` 與「接線」字樣的範圍性 allowlist，BACKLOG `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT`）等**尚未核准的政策**。**是否需要新增 `SHOWN_FOLDS` 條目、是否需要 allowlist，本 DEC 不預判**（追蹤見 BACKLOG `DEC177-SHOWN-FOLDS-QUESTION`）。
+- **本批最多三項**（客戶「二」）：1＝獨立 docs PR 記錄本次 UI 方向、授權邊界與預防性交接制度（本 PR）；2＝對已核准且不需突破現有 Gate 的 UI 範圍做最小實作，遇未授權的政策／接線需求則停在安全點並提具體裁示單；3＝非作者 QA、同 head 五項原生 CI、手機首屏與缺值語意驗收，並同步未完成事項與安全接手點。**依序進行；不得讓多組同時寫入同一治理文件**。
+
+**(三) 預防性交接制度（客戶「四、交接要求」；永久規則落點＝`PROJECT_RULES.md` 檔尾新節）**
+
+客戶要求：Agent 進度回報最小化（僅真正阻塞、需客戶裁示或重大里程碑時報告）；每批結束檢查交接風險；累積約三批或出現長篇 QA／CI、重大決策變動時優先安排安全交接；**先**把已完成、未完成、HOLD、NOT VERIFIED、待裁示問題寫入 GitHub，**驗證** main／PR／CI／QA 後才結束舊對話，再依最後狀態產生新對話提示語；不承諾能準確讀取剩餘上下文 Token；每批最多三項、未授權的新工作不得自行啟動。**「已核准」的來源**：客戶本次訊息稱其為「已核准的預防性交接制度」；本組 `git grep -n "預防性交接\|三批\|主動換對話"` 與 `git grep -n "預防性\|風險提前\|累積約"`（範圍含 PROJECT_RULES／DECISIONS／BACKLOG／CLAUDE／PROCESS／HANDOFF）**未找到更早的客戶核准紀錄**，故以**本次客戶訊息（本 DEC）為登錄依據；更早核准紀錄 NOT FOUND**（可能存在於 repo 外的對話，NOT VERIFIED，本組不編造）。與既有規則的關係見 `PROJECT_RULES.md` 新節及下方「與既有決策的關係」。
+
+**(四) 仍 HOLD（客戶「三」原樣整理）**：#1124～#1126、#1164、#1119；`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-WIRING-GATE`；D6 偵測器程式修復（另批提案）；DPE-7 維持 A（觀察），保留 11 月 19 日檢查點；Old UI、正式 UI 切換、資料庫重建、新 API／來源及 Actions 清理。
+
+#### 與既有決策的關係
+
+- **DEC-174**（UI 與資料契約雙軌、每批最多三項、新 layout／欄位／導航／卡片／section 須先文字線框）：本條在其框架內——線框已由客戶拍板（A＋B），每批三項沿用。**DEC-174 的新 layout 須先線框、不突破資料 Gate 之約束不變**。
+- **DEC-175**（工作優先序、資料架構與交接治理）：**不被本條擴權或改寫**；DEC-175 的「每批最多三項／跨對話持續落盤」精神由本條 (三) 具體化為永久規則。
+- **DEC-176**：(c) 對 DEC-175「不是無條件施工授權」的釐清**維持有效**；本條是**新的、範圍明確的**客戶裁示（最小 UI 第一版），**不是**把 DEC-175／176 讀成開工指派。DEC-176 之 HANDOFF 待客戶裁示清單第 1 項（A／B／C）、第 2 項（C-16／C-17）、第 3 項中 §10 ⑥／⑦ 因本條而**已有裁示**（第 3 項 §10 ① 見上表，僅本批取向）；其餘項目（VG1／VG2、DPE-3／DPE-6、接線前決策單、`DEC174-B1-INDEP-QA`、D6、Q5 等）**不受影響、仍待裁示**。DPE-7：客戶已定維持 A（觀察）；11-19 為保留之檢查點，僅在客戶想讓 11-21 財報進 main 時才需另答，不屬「仍待裁示」。
+- **#1173 線框文件**：維持「草案」身分；其中 A＋B 的選定範圍因本條成為已核准線框，其餘方案（C 及未選的 B 單獨呈現）不採。**線框文件原文不修改**（本批不動 `docs/vnext/` 既有檔）。
+- **`PROJECT_RULES.md` 第 32 節**：本條 (三) 是第 32 節的**補充與觸發條件前移**，不是取代（詳新節）。
+- **`CLAUDE.md` §-1.5.D §03-2 ①（草稿先行）、§-1、§-2**：不受影響；本條以已核准線框作為施工依據，額外的版面／欄位變更仍須先出線框。
+
+#### DEC-177 範圍外與 NOT VERIFIED
+
+- **PROJECT_RULES 落點說明**：本 PR 修改 `PROJECT_RULES.md` 的落點為撰寫組依該檔為永久規則 SSOT 的角色所選，客戶訊息二.1 只要求「以獨立 docs PR 記錄…預防性交接制度」，未逐字點名檔案；#1175 時期 HANDOFF 的「不改 `PROJECT_RULES.md`」為該批範圍限制，不適用本批。
+- **範圍外／未授權**：本條**不是**資料接線、新欄位（`fetched_at`／`published_at`）、新 API／來源／cron／Secrets、`SHOWN_FOLDS`／UI 契約／測試 allowlist 的授權；不解除任何 Gate；不處置 #1124～#1126／#1164／#1119；不是 Actions／Old UI／死碼清理授權；不是 D6 偵測器程式修復授權。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性（本組只見派工訊息附檔）；預防性交接制度「更早核准紀錄」是否存在於 repo 外；線框文件 §1.2 的 8 項盤點內容（單組、會漂移）；`SHOWN_FOLDS` 實際內容與是否必須新增條目；本條 AI 整理單組撰寫，**未經第二組獨立複驗（§-2 規則 6），不得被引用為「已 QA PASS」**。
+
+
+#### DEC-177 後續註記：實作前調查結果（事實更新；2026-11-13；只追加；DEC-177 上文一字未改；**非新裁示**、非新 DEC 編號、非授權；決策者 AI 總管〔事實更新〕；非 QA PASS）
+
+> **為何有本小節**：DEC-177 要求「需突破 `SHOWN_FOLDS`／UI 契約／測試 allowlist 時，先提精確範圍與最小修改方案、等另行裁示」。本批第 2 項因此**停在安全點**：作者完成實作前調查（三組單組調查彙整＋作者自行重核檔案行號並重跑複本實驗），**未改任何 `src/`、`tests/`**，並提交裁示單 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`（Q1～Q7，含「總管推薦」與一鍵回覆範本）。**所有推薦皆 RECOMMENDATION，不是客戶裁示；沉默＝維持現狀、不寫 UI code。**
+
+**調查結論要點（FACT＝作者讀碼／複本實測；詳見決策單 §5、§6）**
+
+1. **完整「A 首屏＋B 收合明細」在不放寬任何既有守衛下做不出來。** 🗂 頁目前被測試規定為「無資料」頁：未列入 `tests/test_ui2_real_feed.py` `WIRED_PATHS` 的欄位不得帶 value／source／as_of。複本實驗（`origin/main` `093b323d`、17 個 `tests/test_ui2_*.py`、基準 1705 passed／3 xfailed／41 deselected）：**方案 X**（只追加 capability 骨架區塊）全綠，但畫面沒有任何新鮮度資訊；**方案 Y**（多一列帶台股資料日）19 個測試紅，皆為同一道「只有白名單欄位可帶資料」守衛。
+2. **`SHOWN_FOLDS` 問題＝已確認需要（若走 B 收合明細）**：`src/ui2/views/_page.py` 的 `SHOWN_FOLDS` 現 3 項、🗂 無；線框要 3 個預設收合區。複本加 1 條＋1 個 L2 區塊：21 個測試紅（16 個為收合白名單／expander 渲染、5 個為 viewport 證據過期）。若先做 A 首屏（不含收合明細），階段 1 **預期**不需要新增（推測；實作時確認）。追蹤列 `DEC177-SHOWN-FOLDS-QUESTION` 因而由「尚未確認是否需要」更新為「**B 明細需要；A 首屏預期不需要**」（BACKLOG 以追加列註記，原列不改）。
+3. **改 `src/ui2/**` 任一檔會使 4 份 viewport 證據過期**（`source_hash` 涵蓋 `src/ui2/**/*.py`＋`app_ui2.py`＋量測腳本），須在真瀏覽器重生；只改 `src/services/ui2/*` 不觸發（複本實測）。本沙箱無 Python Playwright，**能否重生 NOT VERIFIED**。
+4. **其他需要裁示的政策點（決策單 Q1～Q7）**：Q1 是否允許 🗂 帶真值欄位（`WIRED_PATHS` 新增）；Q2 「尚未接線」字樣 vs 詞彙守衛 `ENGINEERING_VOCAB`（若也用在逐項明細列的 capability 欄，還需擴充 `CAPABILITY_STATUS_PREFIXES`，其只允許 `⬜ 尚未提供`；DEC-130 (a) 客戶曾列 `⬜ 尚未接線` 為資料健康度字樣；BACKLOG `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT` 觸發條件是否成立待裁示）；Q3 第一屏三問與舊區塊「資料健康度尚未開放／這裡不顯示任何來源狀態與資料日」與新區塊自相矛盾（線框 C-15），且文案被 P3 證據基準釘住；Q4 狀態符號（線框 ✅◷◇⛔ vs 現行全站字樣；**總管推薦 B**，見第 5 點）；Q5 規格缺口（位階「無法判定」不在五態內、位階已載入卻無資料日）；Q6 收合明細三種做法與分階段；Q7 線框文案候選 C-2／C-4／C-7／C-8／C-9。
+5. **DEC-128 (a) 旁註（不改原文）與 Q4 前提更正**：DEC-128 (a)（本檔第 6941 行）寫五態符號「僅用於 👤 我的·資料健康度面…不外溢」且「不改全站 DEC-124／Freeze §5.1 既有字樣、`text.py` 與其 guard；全站替換需客戶另裁示」，已由 DEC-130 升為正式 Active；DEC-130 (a) 客戶原文寫「資料健康度可使用」該組符號，未重述「僅 👤」。**兩者在 🗂 的適用範圍是否一致，本註記不判定**。**更正（2026-11-13，非作者 QA 後，作者以 Python 重現確認）**：本註記初稿與決策單初稿曾寫「這組符號用在 🗂 不會使測試紅、程式內無守衛」——**不正確**：`FieldVM`（`shared/ui2_contract/models.py` `__post_init__`）搭配 `shared/ui2_contract/text.py` `ALLOWED_STATUS_PREFIXES`，OK 態帶 `✅ 正常` 會 raise「OK 態不外露狀態字樣」，STALE／MISSING／UNAVAILABLE 帶 `◷ 可能過期`／`◇ 資料未備`／`⛔ 來源不可用` 全 raise「不屬於允許字樣」；符號只在純文字（如計數行的 `value_text`）才可建立並渲染（複本實測，現有自動檢查全綠）。故 Q4 選 A 的真實成本＝計數行純文字可行，但**逐項明細列的狀態欄**須新增允許字樣並放寬 OK 態規則（改共用契約與其自動檢查，與 DEC-128 (a) 限制直接衝突）；**Q4 總管推薦由 A 改為 B**（沿用現行全站字樣：`⚠ 過期 n 天`／`⬜ 資料未備`／`🔴 來源目前不可用`／`⬜ 尚未評估`，正常態無字樣；計數行純文字「資料日在規則內 n 項」；實測可行且不碰共用契約；RECOMMENDATION，非裁示）。決策單 Q4 已改寫。
+6. **內部拍板項（`CLAUDE.md` §-1.5.D §03-1，不需客戶回覆，揭露於決策單 §3）**：距今天數基準沿用現行主機日 `age_days`（N-1／`I1140-TODAY-TZ` 維持 open）；FAKE 軸維持靜態、真值只走 Real 軸；新 builder 放 `data_page.py`／`real_canonical.py`；TOP_FIVE Gate 文件註記被 DEC-177 取代（docs 同步；**INFERENCE，位階解讀〔`PROJECT_RULES.md` §25：最新有效客戶 DEC 高於 `docs/vnext/` 規格文件〕；客戶若不同意請推翻**）；新增 AST 守衛禁 `published_at`／`fetched_at`；每項放寬附突變測試且不得全域放寬。
+
+**本註記不改變任何授權**：DEC-177 的「允許最小 UI 第一版實作、不解除任何 Gate」原樣有效；在客戶回覆決策單前，作者**不寫 UI code**。**NOT VERIFIED**：部署端位階是否恆 unloaded；viewport 證據重生可行性；真瀏覽器 390／1440 實際畫面；三組調查皆單組、決策單 §6.1 為作者單組核對、未經非作者獨立 QA（§-2 規則 6），不得被引用為「已 QA PASS」。
+
+
+### DEC-178｜客戶 2026-11-13「專業 AI Agent＋六項品質補強」正式執行指令轉錄：三個按需專業 Agent 入庫、六項品質補強分三批（2026-11-13；只追加；非 QA PASS）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-178" docs/DECISIONS.md` 0 命中，DEC-177 為上一號）。**來源類別 D：客戶 2026-11-13 裁示，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～177 同一算法**（本組先以同法重算 DEC-177 的 fence，得 `8b059bb5…eae053`，與其登記值相符，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-13）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`3479c09d9d6f924a2098ba9b11c63d2623e2205ca7b7f66333317c8aa924b473`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜專業 AI Agent＋六項品質補強｜整合正式執行指令
+
+Model：Claude Sonnet 5.5（不可用則選擇目前高可靠程式模型）
+Mode：靜默自主巡航
+Effort：High
+
+Repository："linchen-20200325/my-stock-dashboard"
+
+你是本專案既有的 Claude Code 專案總管。本任務是正式續工，不是重新建立架構或治理制度。
+
+客戶已核准以下兩項工作：
+
+1. 導入三個按需啟動的專業 AI Agent。
+2. 完成六項品質補強，降低返工、資料錯誤、測試缺口及 Token 成本。
+
+本提示語是正式執行授權，不是單純研究任務；但不能解除任何既有 Gate。
+
+---
+
+一、第一步：GitHub-first
+
+先獨立核實：
+
+- main 完整 SHA、最近 commit／diff。
+- Open／Draft PR、head／base SHA、CI、QA、reviews、review threads。
+- branches、worktree 與現有文件修改狀態。
+- "CLAUDE.md"、"PROCESS.md"、"PROJECT_RULES.md"。
+- "docs/DECISIONS.md"、"docs/BACKLOG.md"、"docs/HANDOFF.md"、"docs/PROJECT_STATE.md"。
+- 相關 vNext／New UI2 規格、資料契約、既有測試及文件治理進度。
+
+歷史參考：main "093b323d"；#1177 為 Draft，先前 head "79814147"。以上只是歷史快照，必須重新查核。
+
+不得用 HANDOFF 的過期 SHA 取代 GitHub 即時證據。
+
+二、先處理 #1177
+
+若 #1177 尚未完成：
+
+1. 優先依原授權完成其獨立 QA、最新 head 五項原生 CI、review threads 及 Merge Gate。
+2. 符合原有合併規則才可合併。
+3. 完成後同步 GitHub 安全接手狀態。
+4. 若遇到 Q1～Q7 或未授權的 UI／契約變更，不得擅自替客戶裁示；停在安全點，明確記錄阻塞。
+
+不得因本次新任務干擾、重做或繞過 #1177。
+
+#1164 與 #1124～#1126 仍依既有 HOLD 管理。
+
+#1177 合併完成且無其他真正阻塞時，直接進入以下已核准工作，不需要再次請示客戶。
+
+---
+
+三、第一階段：建立三個專業 Agent
+
+採用「ChatGPT 協作總管 → Claude Code 專案總管 → 按需專業 Agent → 非作者獨立 QA」架構。
+
+建議存放：
+
+".claude/agents/"
+
+Agent 1：stock-data-integrity
+
+檔案："stock-data-integrity.md"
+
+- Role：股票資料完整性專家。
+- Trigger：資料來源、品質、PIT、as-of、freshness、缺值、Canonical／Shadow、Consumer 追溯。
+- Inputs：既有資料契約、來源證據、schema、metadata、資料讀取路徑及相關測試。
+- Tools：預設唯讀、最小權限。
+- Forbidden：自行新增資料來源、填 0、改歷史資料、投資公式、Risk Cap、突破資料 Gate。
+- Output：FACT／INFERENCE／NOT VERIFIED、資料問題、影響範圍、測試證據、修正建議。
+- Escalation：來源授權、PIT、資料語意、接線 Gate 不明時回報總管。
+
+此 Agent 只負責資料真實性，不負責股票買賣決策。
+
+Agent 2：stock-ui-ux
+
+檔案："stock-ui-ux.md"
+
+- Role：New UI2 五頁與 Mobile-first 介面專家。
+- Trigger：UI 設計、五頁契約、手機首屏、互動一致性、Old UI First。
+- Inputs：已核准線框、五頁規格、舊 UI 功能對照、視覺證據與元件。
+- Tools：預設唯讀；實作依正式授權。
+- Forbidden：擅改布局、資料接線、金融語意、投資公式、OneBrain runtime、Risk Cap。
+- Output：UI 差異、改善範圍、390／1440 驗收、回歸測試及風險。
+- Escalation：Visual Gate、SHOWN_FOLDS、UI 契約及測試 allowlist 需要突破時停手。
+
+此 Agent 可以改善介面，但不能把未接線或未評估顯示成正常。
+
+Agent 3：stock-independent-qa
+
+檔案："stock-independent-qa.md"
+
+- Role：非作者獨立 QA。
+- Trigger：PR diff、資料完整性、金融語意、CI、回歸風險、Merge Gate。
+- Inputs：最新 head／base、完整 diff、驗收契約、測試及 CI 證據。
+- Tools：最小唯讀／驗證權限，必要測試工具按規則使用。
+- Forbidden：驗收自己修改的檔案、以舊 head CI 取代最新 head、自行放寬測試、擅自 merge。
+- Output：PASS／FAIL／BLOCKED、證據、剩餘風險、未驗證事項。
+- Escalation：發現契約違反、證據不足、CI 失敗、獨立性衝突時停止放行。
+
+注意：一個 QA Agent 定義不等於只派一組 QA。仍須遵守 CLAUDE.md §-2 的多組獨立稽核與非作者驗收要求。
+
+Agent 共通要求
+
+每份 Markdown 定義包含 Role、Trigger、Inputs、Tools、Forbidden、Output、Escalation。
+
+先確認 Claude Code 當前支援的 Agent frontmatter 格式及工具名稱。
+
+- 預設按需啟動，不讓三個 Agent 每次全數載入。
+- 不複製整份治理憲法。
+- 不建立新的最高權威或第二份 SSOT。
+- Agent 本身不取得擴權資格。
+- 導入範圍只限三個角色，Investment Logic、OneBrain、GitHub Auditor 留待第二批候選，不建立。
+- 設計最小任務路由規則，避免 Data／UI／QA 職責重疊。
+
+三份 Agent 作為第一個獨立批次，遵守最多三項、寫入序列化、獨立 QA 與同 head CI。
+
+---
+
+四、第二階段：六項品質補強
+
+已完成的能力直接 REUSE，不要重建。以現有 GitHub 文件、測試及程式為 SSOT。
+
+Batch 1：需求與資料契約（最多三項）
+
+① 現有覆蓋與真正缺口稽核
+
+逐項盤點六項補強是否已有對應機制。輸出 REUSE／GAP／BLOCKED／NOT VERIFIED 及證據。
+
+② Definition of Ready／Definition of Done
+
+在既有機制最小補強：
+
+- 已核准需求／規格 ID。
+- 影響範圍與資料依賴。
+- 不可變更事項及必要 Gate。
+- 可驗證的驗收案例。
+- Preview 完成與 Production 完成的差別。
+
+沿用 Old UI First，不建立第二套 UI 規格。
+
+③ New UI2 五頁資料／功能／驗收矩陣
+
+對關鍵 Dataset 查核：
+
+source、schema、unit、currency、as_of、fetched_at、PIT、freshness、missing reason、Canonical／Shadow、Consumer、授權狀態。
+
+缺少的欄位標明 NOT VERIFIED 或 NOT AVAILABLE，不虛構。
+
+已有資料契約時連結既有 SSOT。
+
+Batch 2：測試、返工與 Production（最多三項）
+
+④ E2E／Golden／Mutation Tests
+
+先盤點現有測試，只補真正缺少的高風險路徑：
+
+資料來源 → 正規化 → 選股／決策 → Digest → UI／LINE。
+
+使用固定 fixture、Golden Tests、Mutation Tests。
+
+不得放寬 PIT、Risk Cap、資料完整性或決策門檻。未正式接線的路徑只驗證允許的契約或離線 fixture，不假稱正式 E2E 通過。
+
+⑤ 最小 PR Impact Check
+
+沿用既有 PR／QA 流程，確認：
+
+- 改了什麼？
+- 影響哪些 Producer／Consumer？
+- 哪些測試應重跑？
+- 哪些契約不可變更？
+- 哪些正式文件引用需同步？
+
+不建立冗長重複報告。
+
+⑥ Production 健康度
+
+五軸分開驗證：
+
+1. CI 是否通過。
+2. 資料是否更新。
+3. 資料是否有效。
+4. 正式 UI 是否真正接線。
+5. 投資決策與通知是否可用。
+
+缺少正式部署證據即標 NOT VERIFIED。
+
+Batch 3：Agent 效率與交接（最多三項）
+
+⑦ Agent 路由整合
+
+使用已建立的三個 Agent，驗證任務能自動選擇適合專家，且 QA 保持非作者獨立。
+
+不另建第二套 Agent 架構。
+
+⑧ Token 與返工基準
+
+建立可重現的量測：
+
+- 單件正式驗收完成工作的 Token。
+- Agent 啟動與文件讀取成本。
+- PR 返工次數。
+- QA 修正輪次。
+- 重複讀取及無效探索次數。
+
+必須區分真實量測、估算與 NOT VERIFIED。
+
+禁止用 bytes 冒充 Token。
+
+⑨ 零記憶接手測試
+
+以不依賴舊對話的 Agent 測試：
+
+- 是否找到最新 main 與有效治理。
+- 是否正確辨識唯一 NEXT。
+- 是否知道 HOLD 與資料 Gate。
+- 是否正確選用專業 Agent。
+- 是否避免重做已完成工作。
+
+完成後按既有 GitHub 交接制度同步。
+
+---
+
+五、正式治理與停手邊界
+
+以下一律維持：
+
+- 不修改投資公式、Risk Cap、System Action。
+- 不新增未授權 API、資料來源、cron 或 Secrets。
+- 不突破 OneBrain 或 New UI2 資料接線 Gate。
+- 不擅改 UI 布局、SHOWN_FOLDS、UI 契約與測試 allowlist。
+- 不把 missing 填 0。
+- unavailable ≠ neutral。
+- not evaluated ≠ safe。
+- FAKE Preview ≠ 正式接線。
+- 不擅自合併、關閉或 rebase #1124～#1126。
+- 不處置 HOLD 中的 #1164、#1119。
+- 不清理不明 worktree。
+- 不重建資料庫或修改歷史投資資料。
+- 不降低 CI／QA／Merge Gate。
+
+若出現真正需客戶裁示的問題，提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手。
+
+其餘已授權技術事項自行依序執行，不反覆請示。
+
+六、PR、QA、CI 與永久交接
+
+每批遵守：
+
+1. GitHub-first、確認基準與分支。
+2. 每批最多三項。
+3. 一次只寫一個模組／文件，避免競爭寫入。
+4. 非作者多組獨立 QA。
+5. 同最新 head 五項原生 CI success。
+6. Review threads 與 Merge Gate 核實。
+7. 合格才 merge。
+8. 同步 GitHub 留證後才進下一批。
+
+使用既有權威文件：
+
+- BACKLOG：工作狀態與下一步。
+- DECISIONS：只登記真正正式裁示。
+- HANDOFF：最新接手點、唯一 NEXT、HOLD／NOT VERIFIED。
+- PROJECT_STATE：依現行制度同步專案狀態。
+- 既有治理與測試證據文件：記錄驗收，不建立第二套 SSOT。
+
+不得把全部歷史日誌複製到 HANDOFF。
+
+七、執行模式
+
+維持靜默自主巡航。
+
+不逐步輸出：
+
+- Agent 啟動。
+- 等待 QA。
+- 等待 CI。
+- commit／push 中。
+- 準備下一批。
+- 無需客戶決策的進度訊息。
+
+只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報。
+
+每批完成先檢查對話風險及 GitHub 存檔。累積約三批或發生重大決策、長篇 CI／QA 時，依 PROJECT_RULES 第 33 節主動安排安全交接。
+
+如需更換對話，先完成 GitHub 存檔、QA／CI 核實，再提供結束對話與新對話接手提示語；不得憑記憶宣稱完成。
+
+八、最終完成標準
+
+三個專業 Agent 已正式入庫，且路由、權限與非作者 QA 符合治理。
+
+六項品質補強各有：
+
+- 實際交付與驗收證據；或
+- 既有能力可重用的證據；或
+- 明確 BLOCKED／NOT VERIFIED／未授權邊界。
+
+最後提供：
+
+- 最新 main SHA。
+- 已合併 PR 與同 head CI／QA。
+- 三個 Agent 驗證結果。
+- 六項補強狀態。
+- Token／返工基準。
+- 剩餘 HOLD 與風險。
+- 唯一 NEXT。
+- 是否需要客戶回覆。
+
+現在開始 GitHub-first。先完成 #1177；符合條件後，自動接續上述已核准工作。不重複規劃、不另求同一授權、不突破任何 Gate。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 授權範圍**
+
+| 客戶原文要點 | 本組整理 |
+|---|---|
+| 一、GitHub-first；二、先處理 #1177 | 前置工作。#1177 已於 `63da9515` 合併（派工訊息自述；本組 `git fetch origin main` 實查 main＝`63da9515c2f35549aa943a2728e287168632cdb0`，FACT）。#1164、#1124～#1126、#1119 仍 HOLD |
+| 三、第一階段：建立三個專業 Agent | **本批（`DEC178-AGENTS-BATCH-A`）**：`.claude/agents/stock-data-integrity.md`、`stock-ui-ux.md`、`stock-independent-qa.md` 入庫；最小任務路由規則落 `PROJECT_RULES.md` 第 34 節；結構守衛 `tests/test_agent_definitions_guard.py`。Investment Logic、OneBrain、GitHub Auditor 僅為第二批候選，**不建立**（`DEC178-AGENT-SECOND-CANDIDATES`）。「一個 QA Agent 定義不等於只派一組 QA」＝仍遵守 `CLAUDE.md` §-2 規則 4。**UI Agent 定義做成硬性無寫入工具＝撰寫組對客戶「預設唯讀；實作依正式授權」的解讀，比客戶字面更保守；客戶若要 UI Agent 可在授權下直接實作，另行裁示**（DEC-177 Q1～Q7 回覆前不寫 UI code） |
+| 四、第二階段：六項品質補強，分三批、每批最多三項 | Batch 1（`DEC178-QUALITY-BATCH-1`）＝①現有覆蓋與真正缺口稽核、②Definition of Ready／Definition of Done、③New UI2 五頁資料／功能／驗收矩陣；Batch 2（`DEC178-QUALITY-BATCH-2`）＝④E2E／Golden／Mutation Tests、⑤最小 PR Impact Check、⑥Production 健康度五軸；Batch 3（`DEC178-QUALITY-BATCH-3`）＝⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試。已完成的能力 REUSE，不重建；以現有 GitHub 文件、測試及程式為 SSOT |
+| 五、正式治理與停手邊界 | 全部維持（見下方 (三)）。出現真正需客戶裁示的問題：提出 A／B／C 三方案比較（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手 |
+| 六、PR、QA、CI 與永久交接 | 每批：GitHub-first、最多三項、一次只寫一個模組／文件、非作者多組獨立 QA、同最新 head 五項原生 CI success、review threads 與 Merge Gate 核實、合格才 merge、同步 GitHub 後才進下一批。權威文件分工沿第 15 節（BACKLOG／DECISIONS／HANDOFF／PROJECT_STATE），不另立 SSOT |
+| 七、執行模式 | 靜默自主巡航；每批結束檢查交接風險（第 33 節） |
+
+**(二) 順序（客戶原文的忠實整理）**：#1177 → 三個 Agent（第一階段，獨立批次）→ Quality Batch 1 → Batch 2 → Batch 3；每批合併並於 GitHub 留證後才進下一批。
+
+**(三) 本條不是授權突破任何 Gate**：不修改投資公式、Risk Cap、System Action；不新增未授權 API、資料來源、cron 或 Secrets；不突破 OneBrain 或 New UI2 資料接線 Gate；不擅改 UI 布局、`SHOWN_FOLDS`、UI 契約與測試 allowlist；不把 missing 填 0（unavailable ≠ neutral、not evaluated ≠ safe、FAKE Preview ≠ 正式接線）；不擅自合併、關閉或 rebase #1124～#1126；不處置 HOLD 中的 #1164、#1119；不清理不明 worktree；不重建資料庫或修改歷史投資資料；不降低 CI／QA／Merge Gate。DEC-177 的 🗂 資料新鮮度總覽 Q1～Q7 裁示單**不受影響、仍待客戶回覆**（本條未回答其中任何一題）。
+
+#### 與既有決策的關係
+
+- **DEC-174**（UI 與資料契約雙軌、每批最多三項）、**DEC-175**（工作優先序與交接治理）、**DEC-176**、**DEC-177**（含預防性交接制度、🗂 實作停在安全點）：全部維持，本條不改寫、不擴權。
+- **DEC-173 Q5 / `REORG3C-Q5-GATE`**：Q5＝暫不執行，前置為「先實測 Token 成效與 Agent 遵循能力」。本條⑧（Token 與返工基準）是該前置證據的候選來源，但**不構成 Q5 重議**；不可用單次樣本或 bytes 冒充 Token。
+- **`PROJECT_RULES.md` 第 31 節（ChatGPT×Claude 分工）／第 31.2 節／第 33 節／新增第 34 節**：第 34 節為路由索引，與上列並存，互不取代。
+- **`CLAUDE.md` §-2（每次任務都派工、多組獨立稽核、不得自己驗收自己）、§-1、§-1.5**：不受影響；「按需」只決定挑哪個 Agent，**不改變每次任務都派工**。
+
+#### DEC-178 範圍外與 NOT VERIFIED
+
+- **範圍外**：本條不是 Quality Batch 1～3 的內容授權以外的任何施工授權；不修改 `.claude/settings*`、`CLAUDE.md`、`PROCESS.md`、`src/`、`scripts/`、`.github/`、資料；不授權建立第二批候選 Agent。
+- **更早核准紀錄**：本組 `git grep -n -i "專業 AI Agent\|專業 Agent\|GitHub Auditor\|\.claude/agents"` 於本批前未命中任何更早紀錄（僅限 repo 內搜尋）→ 更早客戶紀錄 **NOT FOUND（repo 外是否存在 NOT VERIFIED）**，不編造。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；三個 Agent 在 Claude Code 的實際載入與路由效果（新對話 `/agents`、`/doctor` 實測，BACKLOG `DEC178-AGENT-LOAD-VERIFY`）；Bash 唯讀為指示性約束、settings 層是否強制（`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`，是否需要由客戶另裁示）；Agent frontmatter 格式：撰寫組依派工訊息轉述的官方文件，其後 2026-11-13 QA-A 已以官方 sub-agents 文件核對（frontmatter 欄位、tools／disallowedTools 語法、MCP 命名、未知欄位被靜默忽略；單組；回傳被截斷尾段 NOT VERIFIED）；本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-179｜客戶 2026-11-13「資料優先正式裁示與安全執行」轉錄：整體策略方案 A（資料優先）、DPE-3＝D（先確認來源條款）、DPE-6＝B（客戶貼 Cloud 設定）、#1124～#1126 維持 HOLD、UI Q1～Q7 與 P3 候選暫不施工（2026-11-13；只追加；非 QA PASS）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-179" docs/` 0 命中，DEC-178 為上一號）。**來源類別 D：客戶 2026-11-13 裁示，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177、DEC-178 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **特別注意（來源鏈）**：客戶訊息內的「客戶已明確回覆『聽你的建議』」是**訊息對客戶回覆的轉述**——客戶那句原始回覆**不在 repo 內**，本條無從逐字收錄；fence 收錄的是訊息本身（含該轉述），**不是**客戶原話。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～178 同一算法**（本組先以同法重算 DEC-178 的 fence，得 `3479c09d…a924b473`，與其登記值相符；DEC-177 得 `8b059bb5…eae053`，亦相符，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉述）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力；但見上方來源鏈提醒）**：fence 內容 sha256＝`beb5704422011826e97464b6c761a2158cc0ab89b21adbcec9be36e02e6951e6`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜資料優先正式裁示與安全執行
+Model：Claude Sonnet 5.5
+Mode：靜默自主巡航（Silent Autonomous Cruise）
+Effort：High
+Repository：`linchen-20200325/my-stock-dashboard`
+你是既有股票儀表板專案總管。
+一、客戶正式裁示
+客戶已明確回覆「聽你的建議」，正式接受股票儀表板總管提出的資料優先方案 A。
+本次正式裁示如下：
+
+1. 整體策略：方案 A，資料優先。
+2. DPE-3＝D：先確認外部對帳涉及的資料來源使用條款，確認後才重新考慮是否授權小範圍唯讀對帳。
+3. DPE-6＝B：確認 Streamlit Cloud 實際追蹤的 Repository、Branch、Main file path 與部署觸發方式。
+4. #1124～#1126 維持 HOLD。
+5. DPE-7 維持先前已核准的 A（觀察），保留 2026-11-19 檢查點。
+6. 🗂 資料新鮮度總覽 Q1～Q7 暫不裁示，不執行 UI 施工。
+7. DEC178-QB3-* 六項 P3 改善候選暫不施工。
+
+注意：本次核准的是 DPE-3 的 D 與 DPE-6 的 B，不是 DPE-3 的 B，也不是 UI 裁示單的 Q1＝A。不得混淆方案代號。
+二、GitHub-first
+在任何修改前，獨立核實：
+
+* main 完整 SHA。
+* Open／Draft PR、head／base。
+* 最新 CI／QA／review threads。
+* 既有正式決策及取代鏈。
+* 工作樹與未推送 commit。
+
+歷史基準：
+
+* main：`df844b900520533f2e69d6edffe117478dc57547`
+* #1186 main push CI run `43413653601`：五項 success（總管已獨立核實）。
+* Open PR：#1164、#1124～#1126，全部 HOLD。
+
+以最新 GitHub 實況為準，不以聊天摘要代替驗證。
+三、讀取正式文件
+依序讀取：
+
+1. `CLAUDE.md`
+2. `PROCESS.md`
+3. `PROJECT_RULES.md`
+4. `docs/DECISIONS.md`（DEC-176、DEC-177、DEC-178）
+5. `docs/BACKLOG.md`
+6. `docs/HANDOFF.md` 檔尾「Quality Batch 3 完成後最新接手點」
+7. `docs/PROJECT_STATE.md` 最新段落
+8. `docs/vnext/DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`
+9. `docs/vnext/PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`
+
+不得重新研究已完成的 Quality Batch 1～3。
+四、本次核准工作
+工作 1：正式登錄客戶裁示
+沿用現行正式決策與交接制度。
+在 `docs/DECISIONS.md` 登錄：
+
+* 客戶核准資料優先方向 A。
+* DPE-3＝D。
+* DPE-6＝B。
+* DPE-7 維持 A。
+* 資料 PR 仍 HOLD。
+* UI Q1～Q7 與 P3 候選仍未授權。
+
+同步既有 BACKLOG、HANDOFF、PROJECT_STATE。
+不得建立第二份 SSOT。
+工作 2：DPE-3 條款確認準備
+僅允許既有 GitHub／repo 文件的唯讀檢查。
+整理：
+
+* 需要外部對帳的資料來源。
+* 現有授權證據。
+* 使用條款是否已被正式核實。
+* 哪些資料來源尚需客戶或法務確認。
+* 若後續只查兩個最大疑點，需要什麼授權。
+
+禁止：
+
+* 執行外部資料對帳。
+* 新增外部 API／MCP。
+* 自行登入第三方服務。
+* 抓取或儲存外部數據。
+* 變更原始資料或 `data_cache`。
+* 宣稱 `DG-LIC` 已解除。
+
+DPE-3＝D 只是條款確認前置決定，不授權後續 B／C 的對帳施工。
+如尚缺客戶或法務確認，標 BLOCKED／NOT VERIFIED。
+工作 3：DPE-6 Cloud 設定確認
+客戶選擇 B。
+需要確認：
+
+* Repository。
+* Branch。
+* Main file path。
+* 部署觸發方式。
+
+先核對現有 GitHub 是否已有可信、未過期的證據。
+若資料不完整，只向客戶提出最小必要資訊需求。
+禁止要求或顯示：
+
+* Secrets。
+* API Keys。
+* Access Tokens。
+* 密碼。
+* 私密憑證。
+
+不得自行修改 Streamlit Cloud 設定、部署分支、正式入口或環境變數。
+沒有實際 Cloud 設定證據，不得宣稱部署正在追蹤 main。
+五、仍然禁止
+
+* Merge／Close／Rebase #1124～#1126。
+* 處置 #1164。
+* 清理 #1119 Actions。
+* 修改 PIT、Canonical／Shadow 或資料來源契約。
+* 修改投資公式、Risk Cap、System Action。
+* 修改 OneBrain 正式接線。
+* 修改 Old UI、正式 UI 切換。
+* 改動 SHOWN_FOLDS 或測試 allowlist。
+* 新增 API、cron、Secrets。
+* 修改 `.claude/settings*`。
+* 修改或刪除不明 worktree。
+* 施工六項 DEC178-QB3-* P3 候選。
+
+資料層與 AI 分析層維持分離。
+missing 不填 0；unavailable ≠ neutral；not evaluated ≠ safe。
+CI success 不代表資料已更新，更不代表 Production 已有效。
+六、QA／CI／Merge Gate
+本次預期僅需要最小文件決策同步。
+如需修改 GitHub：
+
+1. 使用獨立 branch／PR。
+2. 寫入序列化。
+3. 最多三項工作。
+4. 非作者多組獨立 QA。
+5. 同最新 head 五項原生 CI success。
+6. Review threads 與 Merge Gate 核實。
+7. 符合既有合併授權才 merge。
+8. GitHub 留證後重新驗證 main。
+
+不得直接推 main。
+不得為了本次裁示順手修其他缺口。
+七、最終回報
+只回報：
+
+1. 最新 main SHA。
+2. 本次裁示是否正式入庫。
+3. PR／QA／CI 結果。
+4. DPE-3 條款確認缺口。
+5. DPE-6 尚缺哪些客戶設定資訊。
+6. #1124～#1126 是否仍 HOLD。
+7. Production 五軸是否有新證據；沒有就維持既有判讀。
+8. 唯一 NEXT。
+9. 是否需要客戶回覆。
+
+八、靜默自主巡航
+本次僅授權以上安全範圍。
+不逐步回報 Agent 派工、CI 或 commit 過程。
+完成正式文件同步後，若 DPE-3 的條款與 DPE-6 的 Cloud 設定仍缺客戶證據，停在 Decision／Input Gate。
+不得自行推進 DPE-4／DPE-5 或直接合併資料 PR。
+現在依客戶正式裁示開始執行。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 七項裁示的登錄結果**
+
+| # | 客戶原文要點 | 登錄結果 | 這不是 |
+|---|---|---|---|
+| 1 | 整體策略：方案 A，資料優先 | **接受**。「方案 A」的提案全文（總管先前向客戶提出者）**repo 內無紀錄，NOT VERIFIED**；本條只以客戶訊息列舉的第 1～7 項為準，不補寫、不外推其餘內容 | 不是對任何未列項目的授權 |
+| 2 | DPE-3＝D：先確認外部對帳涉及的資料來源使用條款；確認後才重新考慮是否授權小範圍唯讀對帳 | **已裁示：DPE-3＝D**（DPE-3 方案 D，見下方代號對照表）。狀態＝**BLOCKED／NOT VERIFIED**，等客戶或法務提供條款確認 | **不是 DPE-3 的 B**；不授權任何外部對帳施工；不是 UI 決策單的 Q1＝A；不解除 `DG-LIC` |
+| 3 | DPE-6＝B：確認 Streamlit Cloud 實際追蹤的 Repository、Branch、Main file path 與部署觸發方式 | **已裁示：DPE-6＝B**（客戶提供上列四項設定值，**不含 Secrets**）。狀態＝**Input Gate（等客戶貼設定）** | **不含** DPE-6 的 C（日後比對 Cloud 畫面資料日）與 D；不授權 AI 修改 Cloud 設定、部署分支、入口或環境變數 |
+| 4 | #1124～#1126 維持 HOLD | **維持**。訊息並重申 #1164（Draft）HOLD、不處置，#1119 Actions 不清理 | 不是合併／關閉／rebase 授權（承 DEC-176(a)） |
+| 5 | DPE-7 維持先前已核准的 A（觀察），保留 2026-11-19 檢查點 | **維持 A（觀察）**。2026-11-19 是**保留檢查點，不是自動合併授權** | 不是放行 |
+| 6 | 🗂 資料新鮮度總覽 Q1～Q7 暫不裁示，不執行 UI 施工 | **仍待客戶裁示**（DEC-177 裁示單 Q1～Q7 一題都未回答）；不寫 UI code | 不是 Q1＝A，也不是 Q1＝B |
+| 7 | DEC178-QB3-* 六項 P3 改善候選暫不施工 | **暫不施工**：`DEC178-QB3-ROUTING-GAPS`、`-HANDOFF-HYGIENE`、`-TOKEN-AB-PROTOCOL`、`-ZEROMEM-V2`、`-1124-TWII-1111`、`-LAST-EDIT-NO-QA`（六項為 BACKLOG 檔尾「Quality Batch 3 完成同步」段 P3 列，本組 `grep` 數得 6 列）；維持「需客戶或總管另行指派、非授權」 | 不是取消，也不是授權 |
+
+**(二) 方案代號對照表（客戶訊息明示「不得混淆方案代號」；本表各列的字母只在所屬決策內有效）**
+
+| 所屬決策 | 代號 | 意義（出處） | 本條是否選中 |
+|---|---|---|---|
+| 整體策略 | 方案 A | 資料優先（客戶訊息第一點；提案全文 repo 內無，NOT VERIFIED） | **接受** |
+| DPE-3（是否授權唯讀外部對帳，以及範圍與來源條款） | A | 不授權，維持 HOLD（`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md` DPE-3 表） | 未選 |
+| | B | 小範圍唯讀對帳：只對 #1124 兩個最大疑點（同上） | **未選、不授權** |
+| | C | 全範圍唯讀對帳：三個 PR、板塊業別數、交易日曆（同上） | 未選 |
+| | **D** | **先請客戶（或法務）確認外部對帳是否牽涉來源條款（`DG-LIC` 範圍），確認後再回頭選 B 或 C**（同上） | **選中** |
+| DPE-6（Streamlit Cloud 追蹤分支與重新部署時機） | A | 不確認（同上 DPE-6 表） | 未選 |
+| | **B** | **客戶貼出 App 設定頁的 Repository、Branch、Main file path 與部署觸發方式（不貼 Secrets）**（同上） | **選中** |
+| | C | 授權 AI 日後任一資料 PR 合併後，比對 Cloud 畫面資料日與 main 上 `twii_ohlcv.parquet` 末日（同上） | **未選** |
+| | D | B 加 C（同上） | **未選** |
+| UI 決策單（`NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`）Q1 | A | 🗂 資料頁允許出現「帶真值的欄位」（該決策單 Q1；總管推薦＝A，為 RECOMMENDATION） | **未裁示**（暫不裁示） |
+| | B | 不允許 | 未裁示 |
+| `DG-LIC`（`DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 決策 4）方案 A／B／C | A／B／C | A＝先取得官方條款原文或法務意見再決定；B＝A 加另案「停止新增」；C＝風險自負先行 | **未選**（見下方有效讀法） |
+
+**(三) DPE-3＝D 的有效讀法**
+
+- **授權的只有一件事**：確認外部對帳所涉資料來源的使用條款（哪些來源、條款原文為何、是否允許以程式唯讀存取以做對帳）。確認方式由客戶決定（貼條款原文／交法務意見／放行網域或提供合法配置環境供唯讀 GET 條款頁——後兩者為 AI 提出的選項，不是客戶裁示）；選項與缺口見證據文件 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §1。
+- **「確認後才重新考慮」**：條款確認後，是否授權小範圍唯讀對帳（DPE-3 的 B）**仍須客戶另行明示裁示**，不會自動轉換、不會因條款確認而自動生效。
+- **不碰任何資料**：本條不授權連網、登入第三方、抓取或儲存外部資料、新增 API／MCP、動 `data_cache`。
+- **與 `DG-LIC` 的關係**：`DG-LIC`（來源授權與再散布）**維持 HOLD、未解除**。DPE-3＝D 與 `DG-LIC` 方案 A 的取證方式相近，但**不是同一個裁示**——客戶沒有答 `DG-LIC` 選 A／B／C，也沒有回答 `I1144-LIC-THREE-QUESTIONS`（商業／公開／個股級來源列）。即使唯讀對帳的條款日後被確認，`DG-LIC` 的其餘部分（呈現／再散布）也不因此解除。
+
+**(四) DPE-6＝B 的有效讀法**
+
+- 客戶選的是 B：**提供**四項設定值（Repository、Branch、Main file path、部署觸發方式）。**不含 C**（日後比對 Cloud 畫面資料日）與 **D**。
+- **未收到客戶提供的設定值前，不得宣稱部署正在追蹤 main**；repo 內目前**沒有**任何實際 Cloud 設定紀錄（見證據文件 §2）。
+- AI **不得**要求或顯示 Secrets／API Key／Token／密碼；**不得**自行修改 Streamlit Cloud 設定、部署分支、正式入口或環境變數。
+- 客戶貼出設定值後，AI 的工作僅限登錄為證據並標明日期與來源類別；是否據以處置資料 PR 仍需 DPE-4／DPE-5 另行裁示。
+
+**(五)「聽你的建議」的含義（不外推）**
+
+客戶訊息以「聽你的建議」作為裁示依據。**其含義僅限客戶訊息所列舉的第 1～7 項**，**不外推**到任何未列項目。下列項目**仍待客戶裁示**，沉默＝維持現狀（承 DEC-176、DEC-177、DEC-178）：DPE-1／DPE-2／DPE-4／DPE-5、VG1／VG2、D6 偵測器程式修復、Q5（`REORG3C-Q5-GATE`）、🗂 Q1～Q7，以及 `DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC` 等接線前決策單項目。
+
+#### 與既有決策的關係
+
+- **DEC-176(a)**（#1124～#1126 方案 A＝維持 HOLD）：維持有效，本條重申；**DEC-176(c)**（DEC-175 不是無條件施工授權）：不受影響。
+- **DEC-177**：其末段列舉的其餘項目（含 VG1／VG2、DPE-3／DPE-6 等）原寫為不受影響、仍待裁示；其中 **DPE-3／DPE-6 自本條起更新為「DPE-3＝D、DPE-6＝B 已裁示，尚待客戶補件」**；DEC-177 原文**不改**（以本條說明為準）。DEC-177 的「🗂 實作停在安全點」與 Q1～Q7 待裁示狀態不受影響。
+- **DEC-178**：不受影響（三 Agent、Quality Batch 1～3 結果、P3 候選）；BACKLOG 舊列 `DEC178-NEXT-AFTER-QB3` 的「唯一 NEXT」自本批同步起以新追加段為準（舊列原文不改）。**提醒**：`grep` 「唯一 NEXT」會先命中 BACKLOG 舊列 `DEC178-NEXT-AFTER-QB3`（`BACKLOG.md` 約 L2664），其「等待客戶對 DPE-3／DPE-6 裁示」已過期（兩者已有裁示，見上），以本條與 BACKLOG 檔尾 DEC-179 段為準。
+- **`CLAUDE.md` §-2、§-1、§-1.5**：不受影響；本條與其同批證據均為單組撰寫＋待非作者獨立 QA（QA 結果由總管於 PR 補記；本條**不得被引用為「已 QA PASS」**）。
+
+#### DEC-179 範圍外與 NOT VERIFIED
+
+- **本條不解除任何 Gate／HOLD**：`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-*`（含 `I1144-WIRING-GATE`、`I1144-LIC-THREE-QUESTIONS`）、`G-F2`～`G-F6`、外資 L3、`REORG3C-Q5-GATE`、D6 偵測器、Old UI 移除、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist，均未動。
+- **本條不授權**：任何外部對帳、連網、登入第三方、抓取或儲存外部資料、修改 `data_cache`、合併／關閉／rebase #1124～#1126、處置 #1164、清理 #1119、修改或刪除不明 worktree、UI 施工、施工六項 P3 候選。
+- **更早紀錄**：DPE-3／DPE-6 的選項與 AI 推薦（先 D、再 B；DPE-6 選 B）出自 `DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（RECOMMENDATION，非裁示）；客戶（經訊息轉述）**採納其中 DPE-3 的 D 與 DPE-6 的 B**；推薦中「**D 之後的 B**」（條款確認後選 DPE-3 的 B 做小範圍唯讀對帳）**未被採納**，仍待客戶在條款確認後另行明示。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶「聽你的建議」原始回覆（repo 內無）；「資料優先方案 A」提案全文（repo 內無）；DPE-3 所涉各來源的條款原文（僅 FinMind 有 PARTIALLY VERIFIED 原文，見證據文件 §1）；Streamlit Cloud 的實際 Repository／Branch／Main file path／部署觸發方式（見證據文件 §2）。本條 AI 整理與本批證據文件為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-180｜客戶 2026-11-13「DPE-6 Cloud 證據補登與 NAS／舊 UI 取數路徑稽核」授權轉錄：Cloud 啟動日誌資訊補登（分級）、唯讀稽核五假說 A–E（2026-11-13；只追加；非 QA PASS）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-180" docs/DECISIONS.md` 0 命中，DEC-179 為上一號）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～179 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行與各段之間的空行），未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **特別注意（來源鏈）**：訊息所述「客戶提供的 Cloud 啟動日誌」——**日誌原文不在 repo**，本條只收錄客戶訊息對日誌內容的轉述（Repository／Branch／Main file／Python／Streamlit 五項），日誌的日期、commit SHA、repo owner 訊息均未給。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～179 同一算法**（本組先以同法重算 DEC-179 的 fence，得 `beb57044…e6951e6`，與其登記值相符；DEC-178 得 `3479c09d…a924b473`，亦相符，後才套用於本條）。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力；但見上方來源鏈提醒）**：fence 內容 sha256＝`3e0ee8f12e2ba53bb0d2fcafe562aac84f74ba607b43109dfc867a01c34dc19f`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜DPE-6 Cloud 證據補登與 NAS／舊 UI 取數路徑稽核
+Model：Claude Sonnet 5.5
+Mode：靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard
+客戶新增正式資訊：
+Cloud App：
+https://my-stock-dashboard-fh2pfdgs2amdtlgvkxvest.streamlit.app/
+客戶提供的 Cloud 啟動日誌顯示：
+
+* Repository：my-stock-dashboard
+* Branch：main
+* Main file：app_ui2.py
+* Python：3.14.10
+* Streamlit：1.59.2
+
+客戶確認：
+
+* 部署更新需要手動 Reboot／重新部署。
+
+請標明客戶陳述、日誌觀測與尚未驗證的事項，不要將其混成同一級證據。
+新增調查要求：
+「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？請參考舊 UI 的方式。」
+本次授權：
+① GitHub-first，核實最新 main、PR、CI、DEC-179 與相關 Gate。
+② 將 DPE-6 新證據按既有 SSOT 規範補登。不得把客戶對部署方式的說明冒充 Cloud 自動部署機制的實測。
+③ 進行唯讀技術稽核，直接比對：
+
+* app.py 舊 UI 的實際資料取得流程。
+* app_ui2.py New UI2 的 Preview／Real Feed。
+* proxy_helper.fetch_url。
+* NAS Squid 與 nas_relay_fetch。
+* 既有 L1 fetcher／L3 canonical services。
+* New UI2 已接線及未接線的資料欄位。
+* GitHub 資料發布 PR 與本地 parquet 的關係。
+
+特別確認以下假說：
+A. New UI2 預設為 FAKE Preview。
+B. New UI2 Real Feed 不連網，只讀已發布資料。
+C. NAS 未配置或不通造成舊 UI 的部分資料失敗。
+D. 資料 PR HOLD 使 main 快取過期。
+E. Cloud 未重新部署造成畫面版本落後。
+逐項標 FACT／INFERENCE／NOT VERIFIED。
+交付一份最小資料流對照：
+來源 → NAS／Proxy → L1 → L3 → 快取／資料契約 → New UI2 → 畫面
+區分「資料未抓到」「資料尚未發布」「尚未接線」「部署版本未更新」，不得混為同一原因。
+禁止：
+
+* 修改 NAS／Proxy／Secrets。
+* 顯示任何憑證值或含密碼 URL。
+* 修改 app.py 或 app_ui2.py。
+* 修改正式資料接線、UI、資料契約或 allowlist。
+* 外部 API 探測、資料回補。
+* Merge／Close／Rebase #1124～#1126。
+* 自行解除 DG-LIC、WIRING-GATE 或其他 HOLD。
+
+若需要文件留證，沿用既有 QA／CI／Merge Gate 流程；不要建立第二套 SSOT。
+最終回報：
+
+1. New UI2 缺資料的已確認原因。
+2. NAS 在舊 UI 與 New UI2 的實際位置。
+3. 哪些問題只需資料發布，哪些需要正式接線。
+4. 最小、安全、可重用的建議架構。
+5. 尚待客戶裁示的 Gate。
+6. 是否需要客戶再提供資訊。
+
+不施工正式接線，完成後停在安全點。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 本次授權範圍與禁止清單（逐條對照，原樣不增不減）**
+
+| 客戶原文 | 本組整理 |
+|---|---|
+| ① GitHub-first，核實最新 main、PR、CI、DEC-179 與相關 Gate | 授權（前置核實）。本組基準：`origin/main`＝`587e1944f546df142fb134578b3f64887b451026`（`git rev-parse` 實查；時點快照，以最新 GitHub 為準）。main push CI run `43425164513`（head_sha＝587e194）：completed／success（**總管 2026-11-13 查，本組未連網重取**）；CI success ≠ 資料已更新 ≠ Production 有效 |
+| ② 將 DPE-6 新證據按既有 SSOT 規範補登；不得把客戶對部署方式的說明冒充 Cloud 自動部署機制的實測 | 授權（登錄）。分級見 (二)。客戶「部署更新需要手動 Reboot／重新部署」**登錄為客戶陳述**，**不是** Cloud 設定頁實測，**不證明** Cloud 自動部署或不自動部署 |
+| ③ 唯讀技術稽核，直接比對：`app.py` 舊 UI 實際取得流程；`app_ui2.py` New UI2 Preview／Real Feed；`proxy_helper.fetch_url`；NAS Squid 與 `nas_relay_fetch`；既有 L1 fetcher／L3 canonical services；New UI2 已接線及未接線欄位；GitHub 資料發布 PR 與本地 parquet 的關係 | 授權（**唯讀**：讀碼、讀 repo 內文件、讀 git 物件）。結論見 (四)，細節見證據文件 `docs/vnext/UI2_NO_DATA_ROOT_CAUSE_NAS_AND_DPE6_CLOUD_EVIDENCE_2026-11-13.md` |
+| 特別確認假說 A～E，逐項標 FACT／INFERENCE／NOT VERIFIED | 見 (四) 判定表 |
+| 交付最小資料流對照（來源→NAS／Proxy→L1→L3→快取／資料契約→New UI2→畫面），區分「資料未抓到」「資料尚未發布」「尚未接線」「部署版本未更新」，不得混為同一原因 | 見證據文件 §6、§8 |
+| 若需要文件留證，沿用既有 QA／CI／Merge Gate；不要建立第二套 SSOT | 遵守：決策只在本條；證據文件是證據不是決策來源 |
+
+禁止清單（客戶原文「禁止」段，逐項原樣對照；**本組全部遵守，無一項被放寬**）：修改 NAS／Proxy／Secrets；顯示任何憑證值或含密碼 URL；修改 `app.py` 或 `app_ui2.py`；修改正式資料接線、UI、資料契約或 allowlist；外部 API 探測、資料回補；Merge／Close／Rebase #1124～#1126；自行解除 `DG-LIC`、`WIRING-GATE` 或其他 HOLD。另依客戶「不施工正式接線，完成後停在安全點」。
+
+**(二) 客戶新資訊分級（客戶明示「不要混成同一級證據」）與 DPE-6 四欄位更新讀法**
+
+| 級別 | 內容 | 說明 |
+|---|---|---|
+| **客戶陳述** | Cloud App 網址（完整網址見 fence；子網域前綴 `fh2pfdgs2am…`）；「部署更新需要手動 Reboot／重新部署」 | 客戶說的話；**不是** Cloud 設定頁實測、不是機制證明 |
+| **日誌觀測**（客戶提供的 Cloud 啟動日誌；**原文不在 repo、經客戶訊息轉述；觀測日期未給；未含 commit SHA、repo owner**） | Repository＝`my-stock-dashboard`；Branch＝`main`；Main file＝`app_ui2.py`；Python 3.14.10；Streamlit 1.59.2 | 仍屬客戶轉述：**日誌本身不在 repo，無法複驗**；不是設定頁（其證據力是否高於「客戶陳述」＝INFERENCE，不據以升級） |
+| **NOT VERIFIED** | repo owner（可能是 fork）；實際部署 commit；日誌日期；該 app 是否即客戶畫面所見的 app；Cloud Secrets 是否配置 NAS；Cloud 是否自動部署；畫面實際版本 | 全部待客戶補件，見 (六) |
+
+一致性（FACT，本組核對）：Streamlit 1.59.2 落在 `requirements.txt:60` 的 `streamlit>=1.56.0,<1.60.0` 範圍內（只證明在範圍內）；Python 3.14.10 與 `ARCHITECTURE.md:613`、`STATE.md:3398` 的「Cloud 3.14」記載一致，但 `.python-version` 內容為 `3.12`、所有 workflow 為 3.11（CI 綠不證明 Cloud 3.14 行為；Cloud 是否採用 `.python-version` 無文件，NOT VERIFIED）。**INFERENCE**：新網址前綴 `fh2pfdgs2am…`（repo 內此前 0 命中）與 repo 內舊記載前綴 `namd8rh9b8s…`（`STATE.md:663` 等）不同，很可能是兩個不同的 app（舊 `app.py` 站 vs 新建 `app_ui2.py` Preview 站；無平台證據）。
+
+**DPE-6 四欄位更新讀法**（針對「產生該日誌的那個 app」；**取代** `DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §2.3 的「全部 NOT VERIFIED」讀法，該文件原文不改）：
+
+| 欄位 | 更新後讀法 |
+|---|---|
+| Repository | 客戶轉述日誌：`my-stock-dashboard`；**owner NOT VERIFIED**（不能排除 fork） |
+| Branch | 客戶轉述日誌：`main`；**日誌日期與部署 commit NOT VERIFIED** |
+| Main file path | 客戶轉述日誌：`app_ui2.py`；**至少存在一個此入口的 app**；是否另有 `app.py` 的 app NOT VERIFIED |
+| 部署觸發方式 | **客戶陳述**「需手動 Reboot」；非實測、非設定頁證據 |
+
+**仍不得宣稱部署追蹤 main 最新提交；仍不得宣稱 Cloud 自動部署，也不得宣稱不自動部署。**
+
+**(三) 本條不是新的施工授權；對 DEC-179 的關係**
+
+- 本條授權範圍僅限 (一) ③ 的**唯讀稽核**與文件登錄。**不解除任何 Gate／HOLD**（`DG-LIC`、`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-PIT`、DPE-1／2／4／5、DEC-177 Q1～Q7、`REORG3C-Q5-GATE`、D6、Old UI 移除、OneBrain 接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist 均未動）。
+- **DEC-179**：DPE-6＝B 的裁示維持。客戶本次提供的是**部分補件**（三級分類見 (二)），**仍未達性質 iv（Cloud 設定頁證據）**。DEC-179 原文不改；其「DPE-6 尚待客戶補件」自本條起讀作「已有部分補件（日誌轉述＋客戶陳述），設定頁證據與 owner／commit 仍缺」。DPE-3＝D 不受影響，仍 BLOCKED。DEC-179 對「聽你的建議」不外推的限制不受影響。
+- 本條單組撰寫，**待非作者獨立 QA**（QA 結果由總管於 PR 補記；本條**不得被引用為「已 QA PASS」**）。
+
+**(四) 稽核結論摘要（假說 A～E；單組、唯讀、未連網、未執行任何程式）**
+
+| 假說 | 判定 | 要點 |
+|---|---|---|
+| A. New UI2 預設為 FAKE Preview | **FACT（程式碼層）** | `src/ui2/shell/app.py:86-87` 預設 `FEED_FAKE`；預設場景 cold；切換只在 `?ui2_dev=1`；Cloud 實際畫面是否為 FAKE＝NOT VERIFIED（需客戶看頂部標示） |
+| B. Real Feed 不連網，只讀已發布資料 | **FACT（UI2 呼叫路徑）** | `real_feed.read_real_snapshot` 只呼叫三個唯讀 reader；UI2 目錄 grep 網路／proxy／secrets 關鍵字 0 命中；有守衛 G2F。**UI2 不用 NAS 是設計並有守衛強制，不是漏接**。測試是否 PASS＝NOT VERIFIED（未執行） |
+| C. NAS 未配置或不通造成舊 UI 部分資料失敗 | **NOT VERIFIED** | repo 內「NAS 變數皆未設定」的 2026-11 紀錄描述的是 AI 沙箱，不是客戶 Cloud，不可外推；最後一筆 Cloud 側「NAS 狀態」紀錄在 2026-07-13（`STATE.md:2953-2955`），其後 2026-08 的 Cloud 紀錄（`STATE.md:663` 實機驗收、`HANDOFF_2026-08-15.md`）未涉及 NAS 配置；即使 NAS 正常 UI2 也不呼叫它 |
+| D. 資料 PR HOLD 使 main 快取過期 | **分層**：main 資料停在 2026-11-09＝FACT；較新資料在 PR 分支＝FACT；「PR 未併入是原因」＝INFERENCE；「因此畫面完全沒資料」**不成立**（INFERENCE） | 台股卡讀 main 的 11-09，距今 4 天 ≤ 日頻門檻 7 天，顯示資料日但不出現過期警示（時點註記：僅 2026-11-13 成立；2026-11-17 起 age_days＝8 將轉為過期；UI2 實際 as_of 來自 parquet 最後一列〔未直接讀，沙箱無 pyarrow〕，此處用 metadata 自陳值）；`finmind_m1m2`＝NO_NEW_DATA（請求窗口內無新月份，非連線／抓取失敗）、`tw_pmi`＝UNDETERMINED（最近一次抓取結果無法判定：無新資料或 parser 略過，metadata `fetch_evidence` 寫「parser 略過列數無從核對」；定義見 `shared/upstream_state.py:37`）；故 tw_pmi 不歸入「資料未抓到」，也不確認為「資料已是最新」；二者皆非 PR HOLD 造成 |
+| E. Cloud 未重新部署造成畫面版本落後 | **NOT VERIFIED** | repo 無 deploy／webhook workflow；UI2 畫面無 commit／版本字串，無從分辨「舊部署」與「新部署但資料舊」；客戶陳述需手動 Reboot 僅為陳述 |
+
+**一句話答覆客戶問題「New UI2 抓不到資料，是否沒有使用 NAS 中繼站？」**：**New UI2 沒有用 NAS，這是設計（並有守衛強制），不是漏接**；Cloud 上的 UI2 即使配好 NAS 也不會用。要讓 UI2 顯示更多真資料，路徑不是「讓 UI2 走 NAS」，而是 (1) 資料發布（cron 用 NAS 抓→PR 併入 main），(2) 正式接線（L3 唯讀 adapter＋白名單），**兩者皆是 Gate 項**。畫面「沒資料」最可能的直接原因（INFERENCE，未實機驗）：預設 FAKE cold 的「尚未載入」＋Real 模式下絕大多數欄位尚未接線＋位階狀態檔在 Cloud 不存在；資料落後（11-09）是次要，且不會顯示成空白（11-17 起轉過期，屆時需重評）。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）**不得混為一談**，對照見證據文件 §8。
+
+**(五) 建議架構方案 A／B／C（RECOMMENDATION，非裁示；全部未獲授權）**
+
+| 方案 | 做法 | 結論 |
+|---|---|---|
+| A（總管推薦） | 維持 UI2 無網路架構：先解資料發布（DPE-1／2／4／5 另案）→逐欄位走 WIRING-GATE 接線（重用既有 `*_fact_service`）→位階狀態檔改由 cron 發布到 `data_cache`→UI2 加「版本＋資料日」小標（需線框草稿 Gate）。**前置 Gate**：②外資／融資／板塊接線除 `I1144-WIRING-GATE` 外，另受 `DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE` 阻塞（見 BACKLOG「Quality Batch 1 完成同步」段）；③位階狀態檔改由 cron 發布涉及新增發布流程＝「新增 API／cron／Secrets」類 HOLD，需另行裁示，且單獨**不保證**位階顯示——位階還需 session `warroom_summary` 來源（`real_feed.py:11`、ISSUE1110）且 `BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds.py:277`；`real_canonical.py:303-305`），即使狀態檔發布，位階仍可能是灰「尚缺市場廣度」，需另案裁示 | 推薦；多個客戶裁示、速度慢 |
+| B | 讓 UI2 Real Feed 在 Cloud 直接呼叫 L1 fetcher（走 proxy_helper／NAS） | **不建議**：違反 G2F 守衛與「UI 不抓資料」，牽涉 `DG-LIC`，NAS 配置未驗。A 與 B 呈現的 TWSE／FinMind／Yahoo 資料同樣受 `DG-LIC` 約束（呈現與再散布面）；B 的額外問題是 Cloud 執行期自動化存取（Cloud 側可能被來源擋〔`STATE.md:2859-2873` 記載 2026-07-14 雲端 proxy 對 FRED 回 403〕、timeout 64 秒〔`ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md` 的 `fetch_url` 順序段〕、200 錯誤頁被快取 300 秒）與需放寬 G2F 守衛（放寬 allowlist 屬禁區） |
+| C | 只改文案／標示（FAKE cold 理由句與 CTA、部署版本標），不接新資料 | 可併入 A 的草稿；屬 UI 文案／版面 Gate，需草稿 |
+
+比較（正確性、風險、速度、Token／成本）見證據文件 §11。**A／B／C 皆為 RECOMMENDATION，皆未獲授權**；客戶本次明示「不施工正式接線」。
+
+**(六) 尚待客戶裁示的 Gate 與需客戶再提供的資訊**
+
+- **Gate（本條不授權、不施工）**：`DG-LIC`（DPE-3＝D 進行中，BLOCKED）；`I1144-WIRING-GATE`（逐欄位正式接線）；DPE-1／2／4／5（**不得自行推進、不得 merge #1124～#1126**）；UI 草稿 Gate（FAKE cold 理由句與 disabled CTA 文案／互動語意；UI2 版本＋資料日標示；🗂 資料新鮮度總覽 Q1～Q7）；位階狀態檔發布方式；`DEC178-QB3-*` P3 候選仍未授權。
+- **需客戶再提供（最小；全部排除 Secrets／API Key／Token／密碼）**：(1) 打開該 Cloud 網址（不加 `?ui2_dev=1`），頂部第一列是「示意資料（FAKE）」還是「Real-data Preview」（或截圖頂部＋台股卡）；(2) 啟動日誌日期，以及 Manage app 內可見的 repo owner（owner/repo）與部署 commit 前 7 碼（看得到才填）；(3) 舊 app（前綴 `namd8rh9b8s…`）是否仍存在、Main file 是否 `app.py`；(4) （選填）Cloud Secrets 內 `PROXY_URL`、`NAS_PROXY_URL`、`PROXY_HOST`、`NAS_BASE_URL`、`NAS_API_KEY` 是否非空——只要「是／否」，**不要貼任何值**。可複製回覆範本見證據文件 §13。
+
+#### DEC-180 範圍外與 NOT VERIFIED
+
+- **範圍外**：本條不修改 NAS／Proxy／Secrets、`app.py`／`app_ui2.py`、`src/`、`tests/`、`shared/`、`scripts/`、`.github/`、`data_cache`、`.claude/`；不授權外部 API 探測、資料回補、對帳；不授權合併／關閉／rebase #1124～#1126；不授權 UI 施工；舊 UI 觀察到的資料問題 P1～P9 僅登記為 backlog 候選觀察（P3），**不修、不登為授權工作**。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Cloud 啟動日誌原文、日期、commit、owner；客戶畫面實際版本與頂部標示；Cloud 是否自動部署；Cloud Secrets 內容（含 NAS 配置）；GitHub 端 secret 是否有值；舊 app 現況；parquet 最後一列日期（沙箱無 pyarrow，資料日為 metadata 自陳值）；相關測試是否通過（未執行任何測試／程式）；UI2 卡片實際走哪套新鮮度門檻；GitHub Issue #1107／#1108 與 Deployments／Environments 未檢視；本地為淺層複製。四組稽核皆單組，總管另親驗 3 點（見證據文件 §0）。本條 AI 整理與本批證據為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-181｜客戶 2026-11-13「資料更新到最新交易日的安全處理」授權轉錄：客戶 Cloud 實測（口述）登錄、最新有效交易日與更新程序規劃（2026-11-13；只追加；非 QA PASS；非施工授權）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-181" docs/DECISIONS.md` 0 命中，DEC-180 為上一號）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～180 的標示方式）。下方 fence 收錄派工訊息所附客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行、段落間空行），未改一字；fence 內不含首尾 fence 行與結尾換行。fence 內**沒有**任何 Cloud 網址全文。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～180 同一算法**（本組先以同法重算 DEC-180 的 fence，得 `3e0ee8f1…c19f`，與其登記值 `3e0ee8f12e2ba53bb0d2fcafe562aac84f74ba607b43109dfc867a01c34dc19f` 相符；DEC-179 得 `beb57044…e6951e6`，亦相符，後才套用於本條）。
+> **同批關係**：本條與下一條 DEC-182（同日客戶訊息「恢復正常 CI 工作流程與資料優先續工」）在同一個尚未推送的 commit；**Actions 可用性（含任何「帳務」相關敘述）一律以 DEC-182 為準**，本條不留與之矛盾的說法。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`57ad41cf13b93c39e55cc46333d3151e9cad584990b7c0adda47109671d66040`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜資料更新到最新交易日的安全處理
+Model：沿用目前專案模型
+Mode：GitHub-first／靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard
+客戶已提供 Cloud 實測：
+
+* 預設畫面：FAKE。
+* 切換 Real-data Preview：成功。
+* 台股加權指數：41,661.70。
+* 畫面資料日：2026-11-09。
+* 日 K 正常顯示，其他指標多數尚未接線。
+* Cloud 啟動日誌顯示 main／app_ui2.py。
+* Cloud 部署更新方式：客戶表示需手動 Reboot。
+* Cloud 實際部署 commit、舊 App 現況及 NAS Secrets 配置仍 NOT VERIFIED。
+
+客戶採納資料優先架構方案 A，希望知道能否安全強制更新至最新完整交易日。
+請執行：
+
+1. GitHub-first 核實最新 main、#1188 合併後狀態、CI，以及 #1124～#1126 最新 head。
+2. 唯讀核對 main 和 #1124 的台股資料日期、欄位完整性、來源及 PIT 缺口。
+3. 確認既有 update_macro_history.yml 手動觸發與 dry-run 的實際行為，釐清它會寫哪些資料、更新哪個分支，以及 GitHub Actions 帳務是否影響執行。
+4. 提出最小的一次性資料更新與發布程序，清楚列出哪些 Gate 必須先通過。
+5. 優先考慮既有資料來源、既有 NAS、既有 L1／L3；不得改為 New UI2 直接連網。
+6. 將客戶 Cloud 畫面實測列入既有交接紀錄，與程式碼推論分開。
+
+限制：
+
+* 目前只授權唯讀稽核與更新程序規劃。
+* 不實際觸發抓取、bootstrap 或資料回補。
+* 不合併、不關閉、不 rebase #1124～#1126。
+* 不修改 NAS、Secrets、資料契約或正式 UI。
+* 不繞過 DG-LIC、DG-PIT、DG-COV、DPE-4／5 或 CI Gate。
+* 若 CI 因 Billing 無法啟動，保留證據，勿反覆重跑。
+* 不重做 DEC-180 已完成稽核，不為進度重複開文件 PR。
+
+最終只需回報：
+① 目前可取得的最新有效交易日。
+② 最快安全更新台股卡的做法。
+③ 更新前必須解除哪些 Gate。
+④ 是否需要客戶進一步裁示。
+完成後停在安全點。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 本次授權範圍與禁止清單（逐條對照，原樣不增不減）**
+
+| 客戶原文 | 本組整理 |
+|---|---|
+| 1. GitHub-first 核實最新 main、#1188 合併後狀態、CI，以及 #1124～#1126 最新 head | 授權（前置核實）。本組基準：`origin/main`＝`138e081bbec24f5b20f1301c1da634d4ab8d9551`（`git rev-parse` 實查）；#1124 head `3cd3f525…`、#1125 head `cf4739c5…`、#1126 head `1654ae60…`（本地 `origin/auto/*` ref 實查，與總管 2026-11-13 22:20 台北的 GitHub 查詢相同；時點快照，cron 每日推進）。main push CI run `43437741216`（head_sha＝138e081）completed／success＝**總管 2026-11-13 查，本組未連網重取**；CI success ≠ 資料已更新 ≠ Production 有效 |
+| 2. 唯讀核對 main 和 #1124 的台股資料日期、欄位完整性、來源及 PIT 缺口 | 授權（**唯讀**：`git show` 讀本地 ref，scratchpad 內 pyarrow 讀 parquet）。結果見 (三) 與證據文件 §2 |
+| 3. 確認既有 `update_macro_history.yml` 手動觸發與 dry-run 的實際行為，釐清寫哪些資料、更新哪個分支，以及 GitHub Actions 帳務是否影響執行 | 授權（讀碼，未執行）。結果見 (三) 與證據文件 §4、§5；Actions 可用性以 DEC-182 為準 |
+| 4. 提出最小的一次性資料更新與發布程序，清楚列出哪些 Gate 必須先通過 | 授權（規劃）。結果見 (四) 與證據文件 §6、§8；**RECOMMENDATION，未獲授權執行** |
+| 5. 優先考慮既有資料來源、既有 NAS、既有 L1／L3；不得改為 New UI2 直接連網 | 遵守：程序中 NAS／Proxy 只留在 cron producer 端，UI2 維持只讀 `data_cache`（承 DEC-180 G2F 守衛） |
+| 6. 將客戶 Cloud 畫面實測列入既有交接紀錄，與程式碼推論分開 | 見 (二)；HANDOFF、PROJECT_STATE §70.23、BACKLOG 同步 |
+
+禁止清單（客戶原文「限制」段，逐項原樣對照；**本組全部遵守，無一項被放寬**）：目前只授權唯讀稽核與更新程序規劃；不實際觸發抓取、bootstrap 或資料回補；不合併、不關閉、不 rebase #1124～#1126；不修改 NAS、Secrets、資料契約或正式 UI；不繞過 `DG-LIC`、`DG-PIT`、`DG-COV`、DPE-4／5 或 CI Gate；若 CI 因 Billing 無法啟動，保留證據、勿反覆重跑（**此原則保留**，其「帳務」前提的現況讀法見 DEC-182）；不重做 DEC-180 已完成稽核，不為進度重複開文件 PR。另依客戶「完成後停在安全點」。
+
+**(二) 客戶 Cloud 實測（口述）與程式碼推論——分欄，不得混成同一級證據**
+
+| 客戶陳述／實測（性質＝客戶口述；repo 內不可驗） | 程式碼／資料推論（寫入組；不升級） |
+|---|---|
+| 預設畫面＝FAKE | FACT（程式碼層）：預設 `FEED_FAKE`（DEC-180 假說 A）；與口述一致 |
+| 切換 Real-data Preview 成功 | 與 DEC-180 假說 B 一致（INFERENCE：口述未述切換方式） |
+| 台股加權指數 41,661.70；畫面資料日 2026-11-09 | **FACT（資料）**：`origin/main` 的 `twii_ohlcv.parquet` 最後一列＝2026-11-09、close＝41661.699219。與口述**吻合**；INFERENCE：弱旁證「部署的檔案至少含 main 的 11-09 資料」，**不能證明**部署 commit＝最新 main，也**不能證明**自動部署 |
+| 日 K 正常顯示；其他指標多數尚未接線 | 與 DEC-180 §4 一致（FACT，程式碼層）；日 K 通過契約為 INFERENCE（未實機驗） |
+| Cloud 啟動日誌顯示 main／app_ui2.py | 客戶口述的日誌觀測，日誌原文不在 repo；日期、commit、owner NOT VERIFIED |
+| 部署更新需手動 Reboot | 客戶陳述；非 Cloud 設定頁證據；**不證明**自動部署或不自動部署 |
+| （NOT VERIFIED） | Cloud 實際部署 commit、舊 App 現況、NAS Secrets 配置 |
+
+**客戶「採納資料優先架構方案 A」的含義**：對應 DEC-180 (五) 建議架構方案 A（維持 UI2 無網路架構，先解資料發布，再逐欄位走 WIRING-GATE 接線；亦與 DEC-179 整體策略「方案 A，資料優先」同名）。客戶訊息未逐字指明是哪一份，**對應關係為本組解讀（INFERENCE）**。其效力＝客戶對**方向**的採納；**不是**任何 Gate 的授權、不授權施工、不授權觸發抓取／bootstrap／回補、不解除任何 HOLD。
+
+**(三) 稽核結論摘要（單組、唯讀、未連網、未執行任何程式；細節見證據文件 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md`）**
+
+- **最新有效交易日**：main（Cloud 所見）**2026-11-09**（FACT）；repo 內已存在的最新價格完整日 **2026-11-11**，但**只在 #1124 分支**（FACT；11-10、11-11 OHLC 全有值且自洽，價格真實性未對外部核對）；理論可信上限 11-12（INFERENCE），但**任何已知 ref 上都沒有 11-12 的台股列**（原因 NOT VERIFIED）；11-10～11-12 是否為交易日 NOT VERIFIED（G-07）。三資料集最新日不齊：twii 11-11、inst／margin 11-12（分支）。
+- **資料品質觀察**：11-10 volume 先空後補寫（`d0f14437`→`fc447def`，`fetched_at` 不變）；inst 外資 11-11 −7.66 億、11-12 −6.85 億，比最近 60 列 |值| 中位數（約 417 億）小約兩個數量級，標為**可疑，NOT VERIFIED**；`finmind_m1m2`＝NO_NEW_DATA、`tw_pmi`＝UNDETERMINED（皆非 PR HOLD 造成）。
+- **workflow 行為（FACT，讀碼）**：預設手動 dispatch＝真實發布；`dry_run=true` 仍連外抓取、只跳過發布；`bootstrap=true` 整檔覆寫，**本批與日後都不得用於更新到最新日**；發布分支固定 `auto/data-macro-history`、PR 對 main、不直推；#1124 的 head 只在有實質新資料（新資料列、新 `last_error` 或 `fetch_outcome` 變化）時前進——僅揮發欄位變動時發布腳本還原工作樹、不開 PR（`scripts/publish_data_pr.py` L125-141、L833-851；沒有新交易日的執行預期不 commit，INFERENCE，未實測）；cron 與手動都不會讓 main 前進。
+- **Actions 可用性**：以 **DEC-182** 為準（客戶陳述公開 Repository、Actions 可正常執行；repo 內近期 run 皆正常完成為 INFERENCE 支持；不再列為阻擋事項）。
+- **Gate 對照（INFERENCE，依 docs 適用範圍）**：阻擋＝客戶 HOLD（#1124）、DPE-4、DPE-5；部分＝DPE-3／DG-LIC、DG-PIT、DPE-1；不阻擋＝DG-SCOPE／DG-COV／WIRING-GATE、DPE-2、DPE-7。完整表見證據文件 §6。
+
+**(四) 更新程序（RECOMMENDATION，非裁示；未獲授權執行；AI 不觸發任何抓取）**
+
+總管推薦：**不手動 dispatch、不 bootstrap；等下一輪 schedule（預期台北 11-13 約 23:30～11-14 約 03:45）把 11-12 寫進 `auto/data-macro-history` 後，在「同一個 head」上走既有路徑**：S0 AI 唯讀檢核→S1 客戶裁示→S2 客戶於同 head 觸發 CI（DPE-5）→S3 非作者唯讀審閱→S4 客戶明示 merge→S5 客戶手動 Reboot Cloud→S6 依客戶回報核對資料日。替代路徑 A（合併現 head）／C（客戶端手動 dispatch）／D（不處理）與禁止路徑的比較，以及每步的授權狀態（已授權／待核准／禁止），見證據文件 §8。**11-17 起 UI2 台股卡 `age_days`＝8 轉過期警示**（若合併 as_of 11-11 的資料則推遲到 11-19）。
+
+**(五) 尚待客戶裁示項與需客戶提供資訊（沉默＝維持現狀）**
+
+DPE-4＝B（**僅 #1124** 進放行評估；注意 GAPS 文件原 B 範本是 #1124＋#1125，本程序要的是變體，須客戶明示）；DPE-3／DG-LIC 與 DG-PIT 取捨（等條款確認，或明示承擔風險——效力以客戶原文與後續 DEC 為準，AI 不自行認定已解除）；DPE-5（客戶於同 head 觸發 CI）；merge 明示；是否整包接受 inst 11-11／11-12 可疑值；是否授權客戶端手動 `workflow_dispatch`（路徑 C，不建議）；Cloud 手動 Reboot 後回報畫面資料日。**請勿貼 Secrets／API Key／Token／密碼；截圖遮蔽 NAS 網址與主機名。** 可複製回覆範本見證據文件 §10。
+
+**(六) 與既有決策的關係**
+
+- **DEC-176(a)／DEC-179／DEC-180**：#1124～#1126 維持 HOLD；DPE-3＝D（BLOCKED）、DPE-6＝B（部分補件）不受影響。DPE-6 現況：本批客戶口述再補（預設 FAKE、Real 切換、41,661.70／11-09、需手動 Reboot），**仍無 Cloud 設定頁證據**；仍不得宣稱部署追蹤 main 最新提交，也不得宣稱 Cloud 自動部署或不自動部署。
+- **DEC-180**：假說 A（預設 FAKE）、B（Real 只讀已發布資料）、D（main 停 11-09、PR 分支較新）在客戶**畫面層**得到口述印證；E（Cloud 版本落後）與 C（NAS 配置）仍 NOT VERIFIED。DEC-180 原文不改。
+- **DEC-156 A**：不核准新 live API、cron、publisher 或第二個 writer——本程序只走既有 producer 路徑。
+- **`CLAUDE.md` §-2、§-1、§-1.5**：不受影響；本條與證據文件為單組撰寫＋待非作者獨立 QA（QA 結果由總管於 PR 補記；**本條不得被引用為「已 QA PASS」**）。
+
+#### DEC-181 範圍外與 NOT VERIFIED
+
+- **本條不解除任何 Gate／HOLD**，不授權：觸發任何抓取／bootstrap／回補／手動 workflow、合併／關閉／rebase #1124～#1126、處置 #1164、修改 NAS／Secrets／Branch Protection／資料契約／`app.py`／`app_ui2.py`／UI、新增 API／cron／Secrets、施工 `DEC178-QB3-*`／`DEC180-*`／`DEC181-*` Candidate 列。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶 Cloud 實測的任何一項（口述）；Cloud 實際部署 commit、日誌日期、repo owner；Cloud 是否自動部署；Cloud Secrets 內容；GitHub 端 secret 是否有值；CI run id 與結論（總管轉述）；11-10～11-12 是否為交易日；11-12 台股缺列原因；inst 11-11／11-12 的真值；Yahoo／FinMind 原始回應；相關測試是否通過（未執行任何測試／程式）。三組稽核皆單組，本條 AI 整理與證據文件**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
+
+### DEC-182｜客戶 2026-11-13「恢復正常 CI 工作流程與資料優先續工」授權轉錄：Actions 可用性澄清、已授權步驟與待核准事項分界（2026-11-13；只追加；非 QA PASS；非施工授權）
+
+> 2026-11-13 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-182" docs/DECISIONS.md` 0 命中，DEC-181 為上一號，與本條同一個尚未推送的 commit）。**來源類別 D：客戶 2026-11-13 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～181）。下方 fence 收錄客戶訊息檔**全文**，未改一字；fence 內不含首尾 fence 行與結尾換行。
+> **sha256 算法**：與 DEC-173～181 同一算法（fence 內文以換行連接各行，不含首尾 fence 行與結尾換行，UTF-8）。
+
+- **決策者**：**客戶**（2026-11-13，經上述轉錄）。｜**效力日期**：2026-11-13 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`c1111a7d792847ffbd3976530db0227a45ee7a5a0f7559e341b846c8085f03c1`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜恢復正常 CI 工作流程與資料優先續工
+Model：沿用目前專案模型
+Mode：GitHub-first／靜默自主巡航
+Effort：High
+Repository：linchen-20200325/my-stock-dashboard（Public）
+客戶已澄清：本專案是公開 Repository，GitHub Actions 可以正常執行。其他私有專案的帳務限制不得套用於本專案。
+ChatGPT 最新獨立核實：
+
+* main：138e081bbec24f5b20f1301c1da634d4ab8d9551
+* #1188 已合併。
+* #1188 head a18b481 的原生 CI run 43434257213：五項 success。
+* #1124、#1125、#1126、#1164 仍開啟，維持原有 HOLD。
+
+請從上一批「安全更新台股資料」三組稽核的既有進度繼續，不要重新派工或重做已完成的稽核。
+本批最多三項：
+
+1. 整合已完成的資料日期稽核、workflow 行為稽核、Gate 與有效交易日判準。缺少結果時，繼續既有任務，不另建重複工作。
+2. 提出讓台股資料從 2026-11-09 安全更新到最新有效交易日的最小方案，包括資料抓取、PIT、來源授權、驗證、發布到 main、Cloud 重新部署與資料日期確認。清楚區分可以立即執行的已授權步驟和仍待核准的事項。
+3. 在既有授權範圍內完成必要的證據及交接同步，沿用現行獨立 QA、同 head CI 與 Merge Gate。無須因其他專案帳務問題停工。
+
+禁止：
+
+* 未經裁示合併、關閉或 rebase #1124～#1126。
+* 繞過 DG-LIC／DG-PIT／DG-COV／DG-SCOPE／WIRING-GATE。
+* 直接讓 New UI2 呼叫 NAS 或 L1 抓取程式。
+* 更改 Secrets、GitHub Actions 預算、Branch Protection 或正式資料契約。
+* 自行啟動新的資料回補或 Production 接線工作。
+
+如果發現某個已確認的工程缺陷且只有一個安全修法，可依專案既有常設授權與 Gate 處理；不明確的資料發布或架構決策仍須客戶裁示。
+僅在整批驗收完成或真正遇到 Decision Gate 時回報。
+正式恢復股票儀表板專案續工。
+```
+
+#### AI 整理（非客戶原文；**不得據以擴大授權**）
+
+**(一) 客戶澄清（客戶陳述；repo 內無法驗證）與核對結果**
+
+| 客戶陳述／轉述 | 本組核對 |
+|---|---|
+| 本專案是公開 Repository，GitHub Actions 可正常執行；其他私有專案的帳務限制不得套用於本專案 | **客戶陳述**。repo 內無可驗證的可見性或帳單資料（AI 讀不到 repo 設定頁與帳單頁）。支持性 INFERENCE：`update_macro_history` schedule 最近 6 次（run #193～#198）皆 success、pr-check 2026-11-13 多次正常啟動並完成（總管查，本組未連網重取） |
+| ChatGPT 最新獨立核實（客戶轉述）：main `138e081bbec24f5b20f1301c1da634d4ab8d9551` | **FACT**：`git rev-parse origin/main` 實查相同 |
+| #1188 已合併 | 與 main 138e081 的提交標題「…(#1188)」一致（`git log` 實查）；合併狀態以 GitHub 為準 |
+| #1188 head `a18b481` 的原生 CI run 43434257213：五項 success | 本地可核對：提交 `a18b4815`（「docs: #1188 Delta QA 最小修正…」）存在。**run id 與五項 success＝總管轉述（總管 2026-11-13 查：run 43434257213 為 #1188 head a18b4815 的 pull_request run，五項 check 皆 success），本組未連網重取** |
+| main push CI | 總管 2026-11-13 查：run 43437741216（head_sha＝138e081）completed／success；本組未重取。CI success ≠ 資料已更新 ≠ Production 有效 |
+| #1124、#1125、#1126、#1164 仍開啟，維持原有 HOLD | 本地 ref 核對 #1124／#1125／#1126 head 與總管查詢相同；開啟狀態與 #1164 draft 以 GitHub 為準（總管查） |
+
+**(二) 本批授權（逐條轉錄，不擴張）**
+
+| # | 客戶原文要點 | 登錄結果 | 這不是 |
+|---|---|---|---|
+| 1 | 從上一批三組稽核既有進度繼續，整合資料日期稽核、workflow 行為稽核、Gate 與有效交易日判準；缺少結果時繼續既有任務，不另建重複工作 | 已整合於 DEC-181 與證據文件 `LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md`；**未重新派工、未重做 DEC-180 稽核** | 不是新的稽核授權 |
+| 2 | 提出讓台股資料從 2026-11-09 安全更新到最新有效交易日的最小方案（抓取、PIT、來源授權、驗證、發布到 main、Cloud 重新部署、資料日期確認），**清楚區分可以立即執行的已授權步驟和仍待核准事項** | 見證據文件 §8（S0–S6 逐步標註「授權狀態：已授權／待核准／禁止」）；RECOMMENDATION | 不是執行授權 |
+| 3 | 在既有授權範圍內完成必要的證據及交接同步，沿用現行獨立 QA、同 head CI 與 Merge Gate；無須因其他專案帳務問題停工 | 文件與交接同步已列為**已授權**；QA／CI／Merge Gate 流程不變 | 不是放寬任何 Gate |
+
+**(三) 禁止清單（原樣對照；本組全部遵守）**：未經裁示不得合併、關閉或 rebase #1124～#1126；不得繞過 `DG-LIC`／`DG-PIT`／`DG-COV`／`DG-SCOPE`／`WIRING-GATE`；不得讓 New UI2 直接呼叫 NAS 或 L1 抓取程式；不得更改 Secrets、GitHub Actions 預算、Branch Protection 或正式資料契約；不得自行啟動新的資料回補或 Production 接線工作。**「已確認工程缺陷且只有一個安全修法」** 可依專案既有常設授權與 Gate 處理；**不明確的資料發布或架構決策仍須客戶裁示**。客戶要求僅在整批驗收完成或真正遇到 Decision Gate 時回報。
+
+**(四) 對先前敘述的更新讀法（不改既有 DEC 原文；本條與 DEC-181 同一未推送 commit，故 DEC-181／證據文件／BACKLOG／HANDOFF／PROJECT_STATE 已直接以本條為準撰寫，不留兩套說法）**
+
+- **Actions 可用性**：客戶已澄清公開 Repository、Actions 可正常執行（客戶陳述）；repo 內近期 run 皆正常完成（INFERENCE 支持）；帳單頁與 repo 設定頁 AI 仍讀不到（NOT VERIFIED），但**不再列為阻擋事項，也不得因「帳務」停工**。保留原則：**若 CI 因任何平台原因無法啟動，保留證據、勿反覆重跑**。BACKLOG 列由 `DEC181-ACTIONS-BILLING-NOT-VERIFIED` 改寫為 `DEC181-ACTIONS-AVAILABILITY`（同一未推送 commit，故直接用新名，不留舊名）。
+- **#1124 的 `action_required`／jobs 0**：仍是 Actions 核准機制（NOT VERIFIED 其設定），不是啟動失敗，也不因本條改變；DPE-5 仍需客戶動作。
+
+**(五) 本條不是新的施工授權；「已授權步驟」與「仍待核准」的分界**
+
+| 類別 | 項目 |
+|---|---|
+| **可立即執行的步驟（視為已授權〔AI 解讀〕；僅此）** | (a) **S0 唯讀檢核**：下一輪 schedule 後重查 `auto/data-macro-history` 的資料與 PR 狀態，**不連外抓資料**；(b) 文件與交接同步（沿用獨立 QA、同 head CI、Merge Gate）；(c) **非作者唯讀審閱 #1124 diff**（head 漂移時重做） |
+| **仍待核准（客戶）** | DPE-4＝B（僅 #1124）；DPE-3／DG-LIC 與 DG-PIT 取捨；DPE-5（客戶於同 head 觸發 CI）；merge 明示；Cloud 手動 Reboot 後回報資料日；是否整包接受 inst 11-11／11-12 可疑值；是否授權客戶端手動 `workflow_dispatch`（路徑 C） |
+| **禁止** | 觸發任何抓取／bootstrap／回補；合併、關閉、rebase #1124～#1126；直推 main；關 PR＋刪分支重建；只含 twii 的新發布流程；讓 UI2 呼叫 NAS／L1 |
+
+**授權依據（解讀，非客戶逐項點名）**：AI 解讀為落在客戶「唯讀稽核與更新程序規劃」授權內（DEC-181 限制段；DEC-182 第 3 項「證據及交接同步」）；客戶未逐項點名 S0／diff 審閱；不含任何抓取或 Gate 動作；(b) 文件與交接同步則有客戶原文第 3 項為據。**本條不解除任何 Gate／HOLD**，不授權觸發抓取／bootstrap／回補、不授權合併 #1124。
+
+#### DEC-182 範圍外與 NOT VERIFIED
+
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Repository 的公開／私有狀態與 Actions 設定（客戶陳述）；GitHub 帳單頁；CI run id 與結論（總管轉述）；#1124～#1126、#1164 的開啟狀態（以 GitHub 為準）。
+- 本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**；QA 結果由總管於 PR 補記。

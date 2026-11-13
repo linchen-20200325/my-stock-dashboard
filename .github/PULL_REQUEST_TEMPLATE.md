@@ -10,6 +10,21 @@
 -->
 
 
+## 需求 ID／核准／Gate／Impact（DEC-178 Quality Batch 1 ② 的最小入口；非 UI PR 也填，不適用寫「無」）
+
+> Producer→Consumer／不可變更事項為 ② 開發前契約項（客戶訊息明列）；**⑤ 最小版即本小節**：五問＝Summary（改了什麼）／Producer→Consumer／測試應重跑／不可變更事項／正式文件需同步（DEC-178 Quality Batch 2 ⑤；不另建冗長報告）。
+
+- 需求／規格 ID（DEC-NNN／BACKLOG ID）：______
+- 核准狀態（已核准／Candidate／不適用；⛔ Candidate 不得當 Approved）：______
+- 影響範圍＋資料依賴：______
+- Producer→Consumer（一行；可寫「無」）：______
+- 不可變更事項＋適用 Gate（引用 `PROJECT_RULES.md` 第 4 節／`DG-*`／`I1144-WIRING-GATE` 名稱，不在此重新定義）：______
+- 驗收案例（測試名或步驟）：______
+- 測試應重跑（本機／QA 最低集；CI 仍全跑，不縮減；對照表見 `PROJECT_RULES.md` 第 7 節 2026-11-13 ⑤ 補註）：______
+- 正式文件引用需同步（DECISIONS／BACKLOG／PROJECT_RULES／HANDOFF／PROJECT_STATE／vnext spec；不需則寫「無」＋理由；PR 描述不算落盤）：______
+- 完成層級：[ ] Preview（FAKE／REAL shadow）　[ ] Production（正式接線，附證據；無證據標 NOT VERIFIED）
+- UI2 主線 PR 另答 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §1 六問（不另設第二套問卷）
+
 ## §-1 工作準則對齊
 
 <!-- 勾選或留空 -->
