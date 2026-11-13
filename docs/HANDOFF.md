@@ -1148,7 +1148,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 **五、仍 NOT VERIFIED**：run `43381887332` 結論；#1183 三組非作者 QA、合併前 mergeable（轉述）；mutation 驗證結果（未重跑）；五軸快照逐軸數字（未重取）；Streamlit Cloud 部署、Secrets、LINE 實送、branch protection；DEC-178 fence 逐字一致性；Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測。本段單組撰寫，未經第二組驗證。
 
 
-### 📌 Quality Batch 3 完成後最新接手點（2026-11-13，#1185 合併後；取代上方「📌 Quality Batch 2 完成後最新接手點」成為現況段；只追加；非 QA PASS；非授權）
+### ~~📌 Quality Batch 3 完成後最新接手點（2026-11-13，#1185 合併後；取代上方「📌 Quality Batch 2 完成後最新接手點」成為現況段；只追加；非 QA PASS；非授權）~~〔已被檔尾「📌 資料優先裁示後最新接手點」段取代為現況；本段正文一字未動，其「無工程類 NEXT／#1186 若仍開啟」「run 43407464215 in_progress」「等客戶對 DPE-3／DPE-6 的裁示」等時點描述自新段起以新段為準（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕
 
 > **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「Quality Batch 2 完成後最新接手點」段除**標題行就地加刪除線**外，內文**一字未動**；「存檔完整性補註」段仍為補充（不自稱現行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為總管提供之 GitHub 實查結果（2026-11-13，時點快照，會漂移，一律重查）；本組未另行重取者標 NOT VERIFIED。**精簡原則**：不重抄歷史與證據表格；Batch 3 細節以 `docs/vnext/QUALITY_BATCH3_AGENT_TOKEN_ZEROMEMORY_EVIDENCE_2026-11-13.md` 為準；HOLD／待客戶裁示指向既有段落。
 >
@@ -1207,3 +1207,52 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 **四、已知風險（精簡）**：(1) 軸2 資料停滯為已知事實，持續到客戶裁示；(2) ⑦ 自動路由／`/agents`／`/doctor`／呼叫被拒／Bash 強制皆 NOT VERIFIED，⑧ 基準 NOT VERIFIED（n 小、非受控），⑨ 為同 session 子 agent、出題者即判定者、n=1，三者皆不可讀成完全驗證；(3) HANDOFF 檔頭過期快照仍易誤導冷啟動接手者（`DEC178-QB3-HANDOFF-HYGIENE`，P3 未處置）；(4) Batch 3 最終文字更正未另派 QA（`DEC178-QB3-LAST-EDIT-NO-QA`）；(5) 沿用 Batch 2 的 P3 備忘（`DEC178-QB2-*` 三列）。
 
 **五、仍 NOT VERIFIED**：run `43407464215` 結論；本組未重讀的非作者 QA 原文與各輪結論（轉述）；`/agents`／`/doctor`／自動路由／呼叫被拒／Bash 唯讀強制；有／無 Agent 的 Token 基準；真正冷啟動 CLI／換模型；#1124 分支 `twii_ohlcv` 與調查文件不一致是否僅為時點差異；五軸快照逐軸數字（未重取）；Streamlit Cloud 部署、Secrets、LINE 實送、branch protection；DEC-178 fence 逐字一致性。本段單組撰寫，未經第二組驗證。
+
+### 📌 資料優先裁示後最新接手點（2026-11-13，DEC-179；取代上方「📌 Quality Batch 3 完成後最新接手點」成為現況段；只追加；非 QA PASS；非授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「Quality Batch 3 完成後最新接手點」段除**標題行就地加刪除線**外，內文**一字未動**；「存檔完整性補註」段仍為補充（不自稱現行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為 `git` 本地實查與總管提供之 GitHub 結果（2026-11-13，時點快照，會漂移，一律重查）。**精簡原則**：不重抄歷史；HOLD／待客戶裁示指向既有段落；細節以 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` 為準。
+>
+> **找到本段的方法**：本段為 `###` 層級，`grep '^## '` 找不到；請用 `grep -n '^###' docs/HANDOFF.md` 或搜尋『最新接手點』，現行段＝檔尾最後一個標題含『最新接手點』且**未被刪除線**者。HANDOFF 檔頭的「2026-11-09 快照」已過期，勿據以行事（BACKLOG `DEC178-QB3-HANDOFF-HYGIENE`，P3，客戶已明示暫不施工）。
+
+**一、本批在做什麼（一句話）**：客戶 2026-11-13 的「資料優先」正式裁示（經派工訊息轉錄，逐字一致性 NOT VERIFIED）已登錄為 DEC-179：整體策略方案 A；**DPE-3＝D**（先確認外部對帳涉及的來源使用條款）；**DPE-6＝B**（客戶貼 Streamlit Cloud 設定，不含 Secrets）；#1124～#1126 維持 HOLD；DPE-7 維持 A（觀察）；🗂 Q1～Q7 與六項 `DEC178-QB3-*` P3 候選暫不施工。**方案代號不得混淆**：DPE-3＝D 不是 DPE-3 的 B，不授權任何對帳施工，也不是 UI 決策單的 Q1＝A；DPE-6＝B 不含 C、D。
+
+**二、Resume Checkpoint 15 欄逐欄現況（欄位名稱沿用 `PROJECT_RULES.md` §20.2）**
+
+| # | 欄位 | 現況或指向 |
+|---|---|---|
+| 1 | latest verified main SHA | `df844b900520533f2e69d6edffe117478dc57547`（#1186 squash；`git log` 實查，**2026-11-13 快照**）。**以最新 GitHub 為準**；本批 docs PR 合併後 main 會前進；cron 與其他 PR 也會推進，一律重查 |
+| 2 | current working branch | 本批 docs PR 分支 `ccr-5c18058f-e9dj06`（**時點值，不可據以操作**：合併後分支可能被刪除或重用；一律以 GitHub 上本批 PR 的 head 為準） |
+| 3 | current PR | 本批 docs-only PR（號碼以 GitHub 為準）。Open PR 仍為 #1164（Draft）、#1124、#1125、#1126，皆 HOLD、未動；#1119 為 Issue（各 head 不在此重列，cron 會推進，一律重查） |
+| 4 | current task／batch | DEC-179 裁示登錄＋DPE-3 條款確認準備＋DPE-6 Cloud 設定證據（三項，docs-only，只追加） |
+| 5 | completed in this batch | DECISIONS DEC-179；BACKLOG 檔尾「DEC-179 資料優先裁示登錄」段；HANDOFF 本段；PROJECT_STATE §70.21；證據文件 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md`。**已完成不得重做**：Quality Batch 1～3（#1175～#1186） |
+| 6 | exact current stopping point | 本批 PR 待非作者 QA→同 head 五項原生 CI→Merge Gate。合併後：**停在 Decision／Input Gate**，等客戶補件 |
+| 7 | next single action | **唯一 NEXT＝等待客戶提供**：(i) **DPE-6** 的 Streamlit Cloud 設定值（Repository／Branch／Main file path／部署觸發方式；**不含 Secrets**；範本見證據文件 §2.5）；(ii) **DPE-3** 的條款原文、法務意見，或可連外環境／網域放行的授權（僅條款頁唯讀 GET；範本見證據文件 §1.7）。**不得自行推進 DPE-4／DPE-5，不得合併資料 PR** |
+| 8 | tests／CI 已完成 | #1186 main push CI run `43413653601`：五項 `success`（**總管提供的 GitHub 實查結果，2026-11-13；本組未連網重取**）。**CI success ≠ 資料已更新 ≠ Production 有效** |
+| 9 | tests／CI 尚未完成 | 本批 PR 的非作者 QA 與同 head CI 尚未做（結果由總管於 PR 補記） |
+| 10 | unresolved true Stop Gates | **全部未解除**；以「存檔完整性補註」第 7 項＋BACKLOG「DEC-178 Quality Batch 1 完成同步」段末 blockquote＋「狀態更新（#1178 合併後）」段「五之一」三處取聯集為準，不在此重抄；另併讀 PROJECT_RULES 第 4 節 |
+| 11 | uncommitted／unpushed work | 無（以本批 PR 的 head 為準） |
+| 12 | relevant evidence location | `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md`；`docs/vnext/DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（DPE-3／DPE-6／G-13）；`docs/vnext/DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md`（DG-LIC）；`docs/vnext/PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`；DECISIONS DEC-179；BACKLOG 檔尾 DEC-179 段；PROJECT_STATE §70.21 |
+| 13 | recommended Model | Sonnet 5.5（不可用則選目前高可靠程式模型）；現行值只以本表為準 |
+| 14 | recommended Effort | High（含靜默自主巡航 Mode）；建議值 |
+| 15 | last checkpoint timestamp | 2026-11-13（精確時刻 NOT VERIFIED，以 GitHub 為準） |
+
+**三、新對話接手提示語（完整、可直接貼入新對話）**：取代 Quality Batch 3 段及更早各段提示語；後者已過期，不得照舊提示語行事。
+
+```
+你接手 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）。先做 GitHub-first 重核，不信聊天摘要：
+1. 取回 main 最新 SHA（時點快照：#1186 squash 為 df844b9，之後必已推進；本批 docs PR 合併後也會前進）、Open／Draft PR（head／base／CI／review）、本批 docs PR 是否已合併、main push CI 結論。以最新 GitHub 為準。
+2. 閱讀順序：CLAUDE.md（§-2、§-1、§-1.5）→ PROCESS.md → PROJECT_RULES.md（第 4／7／15／20／32／33／34 節）→ docs/DECISIONS.md DEC-176／DEC-177／DEC-178／DEC-179（DEC-179 為客戶 2026-11-13 資料優先裁示，fence 逐字一致性 NOT VERIFIED）→ docs/BACKLOG.md 檔尾 DEC-179 段（含 DEC179-DPE3-TERMS-CONFIRM、DEC179-DPE6-CLOUD-CONFIG-INPUT）→ docs/PROJECT_STATE.md §70.21 → docs/HANDOFF.md 檔尾「📌 資料優先裁示後最新接手點」段 → docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md。注意：HANDOFF 現況段是 ### 層級，用 grep -n '^###' docs/HANDOFF.md 或搜尋『最新接手點』，取檔尾最後一個未被刪除線者；HANDOFF 檔頭「2026-11-09 快照」已過期，不要據以行事。
+3. 唯一 NEXT＝等待客戶提供：(i) DPE-6 的 Streamlit Cloud 設定值（每個 app 的 App 網址、Repository、Branch、Main file path、部署觸發、查看日期、目前狀態；不含 Secrets）；(ii) DPE-3 的資料來源條款原文／法務意見／可連外環境或網域放行授權。本批 docs PR 若仍開啟，其 QA→CI→Merge Gate 是既有任務的延續；合併後停手與被動觀察，不主動找事做（CLAUDE.md §-1）。
+4. 方案代號不得混淆：DPE-3＝D（先確認來源條款）不是 DPE-3 的 B（唯讀對帳），不授權任何對帳施工，也不是 UI 決策單的 Q1＝A；DPE-6＝B（客戶貼設定）不含 C（日後比對 Cloud 畫面資料日）與 D。「聽你的建議」只涵蓋客戶訊息列舉的 7 項，不外推到 DPE-1／2／4／5、VG1／VG2、D6、Q5 等任何未列項目（它們仍待客戶裁示）。
+5. 禁止清單：不得執行任何外部對帳、連網抓取、登入第三方、儲存外部資料、動 data_cache；不得宣稱 DG-LIC 已解除；不得宣稱部署正在追蹤 main（無實際 Cloud 設定證據）；不得要求或顯示 Secrets／API Key／Token／密碼；不得修改 Streamlit Cloud 設定、部署分支、正式入口或環境變數；不得合併／關閉／rebase #1124～#1126、不處置 #1164、不清理 #1119、不修改或刪除不明 worktree；不得自行推進 DPE-4／DPE-5；不得施工 🗂 Q1～Q7 的 UI 或六項 DEC178-QB3-* P3 候選；不得動 PIT／Canonical／Shadow／資料來源契約、投資公式／Risk Cap／System Action、OneBrain 正式接線、Old UI、SHOWN_FOLDS／UI 契約／測試 allowlist、.claude/settings*；不得新增 API／cron／Secrets。
+6. HOLD／待客戶裁示（全部未解除，不重抄；取聯集）：HANDOFF「存檔完整性補註」第 7 項＋BACKLOG「Quality Batch 1 完成同步」段末 blockquote＋HANDOFF「狀態更新（#1178 合併後）」段「五之一」（該段標題雖有刪除線，其「五之一」待客戶裁示清單與 HOLD 指標仍有效）。DPE-7 維持 A（觀察），2026-11-19 是保留檢查點，不是自動放行。
+7. 已知事實：資料停在 2026-11-09（承 Quality Batch 3 段，本批無新證據）；Production 五軸維持 PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md 既有判讀；repo 內沒有任何實際 Streamlit Cloud 設定紀錄（證據文件 §2）；條款原文僅 FinMind 有 PARTIALLY VERIFIED，其餘來源零頁（證據文件 §1）。
+8. 原則：missing 不填 0（unavailable ≠ neutral、not evaluated ≠ safe）；Preview（FAKE／REAL shadow）≠ Production；CI 綠 ≠ 資料已更新 ≠ Production 有效；FACT／INFERENCE／NOT VERIFIED 分開寫，單組結論不寫成已驗證；資料層與 AI 分析層分離。
+9. 三 Agent（.claude/agents/ 下 stock-data-integrity、stock-ui-ux、stock-independent-qa；路由見 PROJECT_RULES 第 34 節）：按需挑選專家，不免除 CLAUDE.md §-2 每次任務派工與多組獨立稽核；輸出不是授權、不能取代客戶裁示。
+10. 需客戶裁示時：A／B／C 方案（正確性、風險、速度、Token）、推薦方案、最小變更範圍後停手。靜默自主巡航：只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報。Model／Effort 建議：Sonnet 5.5／High。
+11. 時點警語：所有 SHA／run id／PR head 皆 2026-11-13 時點快照，一律以最新 GitHub 為準；未合併 HOLD PR 的 head 會被 cron 推進，全部不碰。
+```
+
+**四、已知風險（精簡）**：(1) 軸2 資料停滯為已知事實，持續到客戶裁示與補件；(2) DPE-3＝D 的條款確認完全依賴客戶或法務，AI 無法自行取得原文（沙箱對官方站台被拒、NAS 未配置）；(3) DPE-6 無客戶設定值前，「部署是否追蹤 main」無從判定，且有 2026-08 建議手動改 Branch 且未見改回記錄的旁證；(4) 證據文件的行號為時點快照，會漂移；(5) 本批 AI 整理與證據為單組撰寫，QA 結果以 PR 為準；(6) 沿用 Quality Batch 3 段的殘留 NOT VERIFIED 與 `DEC178-QB3-*` P3 備忘。
+
+**五、仍 NOT VERIFIED**：DEC-179 fence 與客戶原訊息的逐字一致性；客戶「聽你的建議」原始回覆（repo 內無）；「資料優先方案 A」提案全文（repo 內無）；各來源（TWSE／TPEX／Yahoo／MOPS／央行／FRED／TAIFEX）條款原文；FinMind 官網即時版與方案等級；Streamlit Cloud 的 Repository／Branch／Main file path／部署觸發方式；Cloud 是一個還是兩個 app；#1186 main push CI run `43413653601` 結論（總管轉述，本組未重取）；GitHub Issue #1107 原文與 Deployments／Environments；NAS 中繼實際配置。本段單組撰寫，未經第二組驗證。

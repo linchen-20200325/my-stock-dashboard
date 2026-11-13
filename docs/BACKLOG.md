@@ -2666,3 +2666,35 @@
 > **本批沒有新客戶裁示，沒有解除任何 Gate／HOLD。** 軸2 資料仍停在 2026-11-09（`data_cache/metadata.json` 的 `twii_ohlcv`／`finmind_inst`／`finmind_margin` `last_updated` 皆 `2026-11-09`；本批兩名 QA 與總管獨立核對屬實）；DPE-3／DPE-6 待客戶裁示。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復、DPE-7（維持 A 觀察，11-19 為保留檢查點）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換均**未動**。
+
+## 2026-11-13｜DEC-179 資料優先裁示登錄：DPE-3＝D、DPE-6＝B（只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-179）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC179-`（落盤前 `grep -n "DEC179-" docs/*.md` 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：本分支基底 main `df844b900520533f2e69d6edffe117478dc57547`（`git log` 實查；時點快照，會漂移，一律重查）。**證據與缺口細節以 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` 為準，本段只摘要並指向它，不重抄。**
+>
+> **方案代號不得混淆**：DPE-3＝**D**（先確認來源條款）**不是** DPE-3 的 B（小範圍唯讀對帳），也不是 🗂 UI 決策單的 Q1＝A（允許帶真值欄位）；DPE-6＝**B**（客戶貼設定）**不含** C（日後比對 Cloud 畫面資料日）與 D。對照表見 DEC-179。
+
+**追加註記（對既有列；原列不改）**
+
+- `DEC176-DATA-PR-EVIDENCE-DECISIONS` — 該列「AI 推薦（RECOMMENDATION）最少答 DPE-3 與 DPE-6」之建議，**客戶已接受並裁示：DPE-3＝D、DPE-6＝B**（DEC-179）。DPE-1／DPE-2／DPE-4／DPE-5 與 G-01～G-17 其餘項目**仍待客戶裁示**，status `blocked-on-customer` 維持；「**不是**合併／關閉／外部對帳授權」維持。
+- `DEC176-DPE7-1119-CHECKPOINT` — DPE-7 **維持先前已核准的 A（觀察）**（客戶重申，DEC-179）；2026-11-19 是**保留檢查點，不是自動合併授權**。
+- `DEC177-FRESHNESS-IMPL-DECISION-SHEET` — Q1～Q7 **仍待客戶裁示**（客戶 2026-11-13 明示「暫不裁示，不執行 UI 施工」）；不寫 UI code。
+- `DEC178-NEXT-AFTER-QB3` — **現況唯一 NEXT 以本段為準，不以該列為準**（該列原文不改）。該列所述「#1186（本同步 PR）若仍開啟」之前提已過期：#1186 已合併為 main `df844b9`（`git log -1` 提交標題含 `(#1186)`，本組實查）。`DEC178-QB3-*` 六項 P3 候選（`-ROUTING-GAPS`／`-HANDOFF-HYGIENE`／`-TOKEN-AB-PROTOCOL`／`-ZEROMEM-V2`／`-1124-TWII-1111`／`-LAST-EDIT-NO-QA`）客戶明示**暫不施工**，維持「需客戶或總管另行指派、非授權」。
+- **唯一 NEXT（自本段起）**：**無工程類 NEXT。** 停在 Decision／Input Gate，**等待客戶提供**：(i) **DPE-6** 的 Streamlit Cloud 設定值（Repository／Branch／Main file path／部署觸發方式，**不含 Secrets**）；(ii) **DPE-3** 的資料來源條款原文，或法務意見，或可連外環境／網域放行的授權（僅條款頁唯讀 GET）。**不得自行推進 DPE-4／DPE-5，不得合併資料 PR。**
+
+**DPE-3／DPE-6 現況列**（節點出處：`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md` DPE-3／DPE-6 與 G-13）
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DPE-3**（`DEC176-DATA-PR-EVIDENCE-DECISIONS` 節點） | 是否授權唯讀外部對帳，以及範圍與來源條款：**客戶已裁示 D**（先請客戶或法務確認外部對帳是否牽涉來源條款〔`DG-LIC` 範圍〕；確認後才**重新考慮**是否授權小範圍唯讀對帳）。**不是 B，不授權任何對帳施工**；條款確認後選 B 須客戶另行明示 | P1 | **已裁示／BLOCKED**（待客戶或法務提供條款確認）；對帳本身**未授權** | DEC-179；GAPS DPE-3；`docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §1 | 等客戶或法務（見 `DEC179-DPE3-TERMS-CONFIRM`）；AI 不連網、不抓取、不對帳 |
+| **DPE-6**（G-13） | 確認 Streamlit Cloud 追蹤分支與重新部署時機：**客戶已裁示 B**（客戶貼 App 設定頁的 Repository／Branch／Main file path／部署觸發方式，**不含 Secrets**）。**不含 C、D**。repo 內**無**性質 iv 的 Cloud 設定證據 | P1 | **已裁示／Input Gate**（等客戶貼設定值） | DEC-179；GAPS G-13、DPE-6；證據文件 §2 | 等客戶（見 `DEC179-DPE6-CLOUD-CONFIG-INPUT`）；**未收到前不得宣稱部署追蹤 main** |
+
+**新列**
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC179-DPE3-TERMS-CONFIRM** | DPE-3＝D 的條款確認缺口：外部對帳涉及的來源（Yahoo `^TWII`、FinMind 外資／融資、TWSE rwd／openapi、TPEX、交易日曆）中，**僅 FinMind 條款文字有 PARTIALLY VERIFIED 原文**（2026-10-31 版；官網即時頁、方案等級、是否商業、是否另有契約 NOT VERIFIED）；TWSE（含『交易資訊使用管理辦法』）、TPEX、Yahoo、MOPS、央行 EF15M01、FRED、TAIFEX **皆零官方原文**。最大兩個疑點（INFERENCE）：Yahoo `^TWII` 與外資 11-11 −7.66 億（另一端獨立真值最可能是 TWSE）。`DG-LIC` **維持 HOLD、未解除**；`I1144-LIC-THREE-QUESTIONS` repo 內查無客戶回答 | P1 | **BLOCKED**（客戶／法務）；NOT VERIFIED | 證據文件 §1；DEC-179；`DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 決策 4 | 等客戶擇一：貼條款原文／交法務意見／放行唯讀條款頁網域（最小回覆範本見證據文件 §1.7；Yahoo 條款頁網域 repo 內未列需客戶補）。**條款確認不等於 DPE-3 的 B 被授權，亦不解除 `DG-LIC`（呈現／再散布部分另計）** |
+| **DEC179-DPE6-CLOUD-CONFIG-INPUT** | DPE-6＝B 的客戶輸入需求：repo 內相關線索（證據文件 §2.2 #1～#12）**無一屬性質 iv（實際 Cloud 設定紀錄）**；Repository／Branch／Main file path／部署觸發方式四欄**全部 NOT VERIFIED**（最強線索皆為間接，且有 2026-08-15 建議手動改 Branch 且未見改回記錄的旁證）。稽核盲點：GitHub Issue #1107 原文、GitHub Deployments／Environments 未檢視；本地淺層複製 50 commit | P1 | **Input Gate**（客戶） | 證據文件 §2；GAPS G-13 | 等客戶貼：每個 Cloud app 的 App 網址（子網域）、Repository、Branch、Main file path、部署觸發、查看日期、目前狀態、是否另有 New UI2 Preview 第二個 app（範本見證據文件 §2.5；**請勿貼 Secrets 分頁／API Key／Token／密碼**）。AI 收到後僅登錄為證據，**不改任何 Cloud 設定** |
+
+> **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** 資料仍停在 2026-11-09（承 Quality Batch 3 同步段，本批無新證據，未重取）；Production 五軸**維持 `PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md` 既有判讀**。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
+>
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復、DPE-7（維持 A 觀察，11-19 為保留檢查點，非自動放行）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist 均**未動**。
