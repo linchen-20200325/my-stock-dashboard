@@ -3,13 +3,13 @@
 > **基準**：`origin/main` ＝ `ae402ce8f1f3f151c96604d54fd6b74b56731575`（#1184 squash，2026-11-13T07:17:46Z）。撰寫日 2026-11-13。
 >
 > 📌 **聲明（請先讀）**
-> - **本文件由單組撰寫（`CLAUDE.md` §-2 規則 6）；不是 QA PASS。** 初稿後已有兩組非作者 QA 回報（QA-A：FAIL 輕度、修後可 PASS；QA-B：PASS with fixes），本版為 **QA 後修訂版**（見下方「QA 後修訂紀錄」）；**修訂版尚未經第二輪複驗**。文中所有「PASS」僅指「該項測試依其當時判準通過」，不是本文件通過稽核。
+> - **本文件由單組撰寫（`CLAUDE.md` §-2 規則 6）；不是 QA PASS。** 初稿後已有兩組非作者 QA 回報（QA-A：FAIL 輕度、修後可 PASS；QA-B：PASS with fixes），本版為 **QA 後修訂版**（見下方「QA 後修訂紀錄」）；第二輪（Delta QA，對 head `f326457a`）兩組皆判內容無 High，其所指需修處已於本版處理（見修訂紀錄「第二輪」）；**本版再修訂後尚未再複驗**。文中所有「PASS」僅指「該項測試依其當時判準通過」，不是本文件通過稽核。
 > - **證據文件，不是授權**：不解除任何 Gate／HOLD，不構成 `REORG3C-Q5-GATE`／DEC-173 Q5 重議。
 > - **所有 SHA、run、數字皆為 2026-11-13 時點快照**；日後引用請重跑附錄 B 的復現指令。
-> - **標註規則**：**MEASURED-by-QA-A**＝QA-A 獨立重核且結果吻合（依總管轉述，撰寫者未見 QA 原文）；**FACT**＝撰寫者本次讀檔／重跑解析器／檔案時間戳直接確認；**MEASURED**＝transcript 解析器或 GitHub API 取得的實際數值；**ESTIMATED**＝有明列假設的估算；**INHERITED**＝轉述總管或各 subagent 回報、撰寫者未重核（只能當待驗事項）；**INFERENCE**＝由事實推論；**NOT VERIFIED**＝未驗證，不得當前提。
+> - **標註規則**：**QA-A 重核**＝QA-A 獨立重核且結果吻合（依總管轉述，撰寫者未見 QA 原文）；**Delta QA**＝第二輪（對 head `f326457a`）兩組非作者 QA，所述內容一律為轉述，撰寫者未重核；**FACT**＝撰寫者本次讀檔／重跑解析器／檔案時間戳直接確認；**MEASURED**＝transcript 解析器或 GitHub API 取得的實際數值；**ESTIMATED**＝有明列假設的估算；**INHERITED**＝轉述總管或各 subagent 回報、撰寫者未重核（只能當待驗事項）；**INFERENCE**＝由事實推論；**NOT VERIFIED**＝未驗證，不得當前提。
 > - **撰寫者本次親自核對的範圍**（其餘一律視為 INHERITED）：(1) `.claude/agents/*.md` 內容與 `tools`／`disallowedTools`／`description` 字數；(2) `PROJECT_RULES.md` 第 34 節、`docs/BACKLOG.md`／`docs/DECISIONS.md` 的 DEC-178 相關列；(3) `docs/HANDOFF.md` 檔頭與各段標題層級；(4) 以附錄 A 解析器對本 session 的 subagent transcript 重跑（結果見 §3.2；修訂時再重跑一次，含 first_ctx 與最後一次 call 的 context＋output）；(5) 預先登記檔與盲測 transcript 的時間戳。
 > - **範圍**：只寫證據。不改任何 Agent 檔、`PROJECT_RULES.md` 第 34 節、`CLAUDE.md`、測試、workflow、資料。§6 後續候選全是建議，需客戶或總管另行指派。
-> - **已被 QA-A 獨立重核者**（MEASURED-by-QA-A，依總管轉述）：§3.2 的 8 列（data-integrity 探針、ui-ux 探針、independent-qa 探針、盲測 V1、盲測 V2、⑨-A、⑨-B、Explore 等待 agent）數字吻合；§3.6 抽核 8 個 PR 的完整欄位、6 個 PR 的耗時吻合；三個 agent 檔的 `tools`／`disallowedTools`／`description` 字數；repo 無 `.claude/settings*`；預先登記時序（`09:22:46Z` 早於 V1 `09:23:08Z`、V2 `09:23:47Z`）；`data_cache/metadata.json` 為 2026-11-09。**其餘未被重核者維持 INHERITED。**
+> - **已被 QA-A 獨立重核者**（QA-A 重核，轉述，撰寫者未見 QA 原文）：§3.2 的 8 列（data-integrity 探針、ui-ux 探針、independent-qa 探針、盲測 V1、盲測 V2、⑨-A、⑨-B、Explore 等待 agent）數字吻合；§3.6 抽核 8 個 PR 的完整欄位、6 個 PR 的耗時吻合；三個 agent 檔的 `tools`／`disallowedTools`／`description` 字數；repo 無 `.claude/settings*`；預先登記時序（`09:22:46Z` 早於 V1 `09:23:08Z`、V2 `09:23:47Z`）；`data_cache/metadata.json` 為 2026-11-09。**其餘未被重核者維持 INHERITED。**
 >
 > **QA 後修訂紀錄（2026-11-13，兩組非作者 QA 回報後；原有實質揭露未刪，僅更正或補充）**
 > 1. **§4.2／§7（QA-A）**：更正 ⑨-B 題號。⑨-B 實為 Q1～Q9（Q7＝CI 全綠能否代表 Production 完成；Q8＝三任務派誰），刪除初稿「B-Q7＝突變測試」的推測與「題目內容未載」「未問」的錯誤敘述；對照表改填 ⑨-B 的實際結果，無對應題者才寫「未問」。
@@ -24,9 +24,20 @@
 > 10. **§1／§7（QA-B）**：Explore 等待 agent 交叉提及，補 `first_ctx` 55,474。
 > 11. **判斷不修或不採納者（直接記於此，不依賴對話）**：
 >     (a) **「QA-A 重核 8 列」指的是 §3.2 的這 8 列**：data-integrity 探針、ui-ux 探針、independent-qa 探針、盲測 V1、盲測 V2、⑨-A、⑨-B、Explore 等待 agent（依 QA-A 報告列出的逐列數字，經總管轉述；PR 指標蒐集列另以終值取代，不在這 8 列內）。
->     (b) **V2 的嚴格計分未另行重算，NOT VERIFIED**（僅 V1 重新計分為寬鬆 6/8、嚴格 5/8）。
->     (c) **未引用 QA-B 所述「看不到他人 transcript」的說法**，因撰寫者無法核實。
->     (d) 本文件內未新增任何非來自總管提供或撰寫者重跑解析器的數字。
+>     (b) **V2 的嚴格計分**：初稿修訂時撰寫者未重算；第二輪 Delta QA-1 以預先登記原文自行重算為 8/8，屬單一重算、撰寫者未見其過程，INHERITED（V1 為寬鬆 6/8、嚴格 5/8）。
+>     (c) 本文件內未新增任何非來自總管提供或撰寫者重跑解析器的數字。
+>
+> **第二輪（Delta QA；對 head `f326457a`，兩組皆判內容無 High；以下為其需修處與處理，所述皆為轉述）**
+> - **F1（Medium）**：§2.4 表 T4「預先登記期望」欄還原為預先登記原文（原誤加「版面變更要客戶草稿先行」）；V2 於 T4 提到版面線框改寫為「超出預先登記期望的觀察，且 V2 prompt 已含第 2a 點與 Stop Gate 列，不屬純主動辨識」，移除「主動」字樣。
+> - **F2（Medium）**：§1 ⑦-7 狀態改為整體 PARTIAL，限制欄改寫為 V1 寬鬆 6/8、嚴格 5/8，V2 寬鬆 8/8（天花板效應、prompt 為濃縮改寫；Delta QA-1 重算嚴格亦 8/8，單一重算，INHERITED）；⑨-B 狀態欄補「9 題中 1 題未問、2 題部分涵蓋」。
+> - **F3（Low）**：天花板效應段補入 T4。
+> - **F4（Low）**：§3.2 主 session 列內直接標時點下限與其後 32、45 calls；E7-6 的 api calls 敘述改為「三個探針各 2 calls、V1／V2 各 1 call」；§3.3 stock-* 樣本加註撰寫時為 5 個、其後 transcript 增至 ≥7 而未納入。
+> - **F5（Low）**：§3.6 刪除組間比較句；可比性第 3 點補 INHERITED 標註。
+> - **F6（Low）**：§7 末列改「未問或未見於彙整」；§4.2 第 11 項改為僅列不能做的一半、未列能做。
+> - **F7（Low）**：全檔「MEASURED-by-QA-A」改為「QA-A 重核（轉述，撰寫者未見 QA 原文）」，檔頭標註規則同步。
+> - **F8（Low）**：刪除第 11 項原 (c)（引用讀者無從查證的 QA-B 說法），其後重編。
+> - **F9（Low）**：§3.2 註 2 的首次值明標 INHERITED。
+> - **F10（補強）**：§4.5 零記憶隔離補 Delta QA-1 的 tool_use 掃描結果（轉述，仍 NOT VERIFIED）。
 
 ## 1. 總表
 
@@ -34,24 +45,24 @@
 
 | # | 子項 | 狀態 | 來源 | 一句限制 |
 |---|---|---|---|---|
-| ⑦-1 | 載入（frontmatter 與 harness 列出） | **PARTIAL** | INHERITED（總管觀察 harness 清單）；agent 檔內容為撰寫者親核＋MEASURED-by-QA-A | harness 的 Agent 工具清單列出三個 Agent，description／tools 與檔一致（單次觀察）；`/agents`、`/doctor` 未測；Agent 檔在 session 啟動前是否已存在未驗（§2.3 E7-1） |
+| ⑦-1 | 載入（frontmatter 與 harness 列出） | **PARTIAL** | INHERITED（總管觀察 harness 清單）；agent 檔內容為撰寫者親核＋QA-A 重核（轉述，撰寫者未見 QA 原文） | harness 的 Agent 工具清單列出三個 Agent，description／tools 與檔一致（單次觀察）；`/agents`、`/doctor` 未測；Agent 檔在 session 啟動前是否已存在未驗（§2.3 E7-1） |
 | ⑦-2 | 手動指定 `subagent_type` | **PASS** | INHERITED（總管派工與各探針回報；撰寫者見到對應 transcript 存在） | 三個探針各成功一次（n=3，每個 Agent 各 1 次） |
-| ⑦-3a | 工具面權限（各 Agent 自報工具清單 vs frontmatter） | **PASS** | INHERITED（三探針自報）；frontmatter 側為撰寫者親核＋MEASURED-by-QA-A | 三個獨立探針回報一致；是「自報清單」，不是 harness 原始設定 |
+| ⑦-3a | 工具面權限（各 Agent 自報工具清單 vs frontmatter） | **PASS** | INHERITED（三探針自報）；frontmatter 側為撰寫者親核＋QA-A 重核（轉述，撰寫者未見 QA 原文） | 三個獨立探針回報一致；是「自報清單」，不是 harness 原始設定 |
 | ⑦-3b | 工具面權限（呼叫 Write／Edit 被拒） | **NOT VERIFIED** | —— | 工具不在清單內，無從呼叫，因此「被拒」從未發生也未實測 |
-| ⑦-4 | Bash 唯讀強制 | **NOT VERIFIED** | 撰寫者親核檔內文；無 `.claude/settings*` 為 MEASURED-by-QA-A | 定義檔含 Bash 且僅有內文指示；是否有 settings 層強制未知 |
+| ⑦-4 | Bash 唯讀強制 | **NOT VERIFIED** | 撰寫者親核檔內文；無 `.claude/settings*` 為 QA-A 重核（轉述，撰寫者未見 QA 原文） | 定義檔含 Bash 且僅有內文指示；是否有 settings 層強制未知 |
 | ⑦-5 | `/agents` 與 `/doctor` | **NOT VERIFIED** | —— | 模型端無法執行互動式 slash 指令，需客戶端人工 |
 | ⑦-6 | 自動路由（harness 依 description 自動委派） | **NOT VERIFIED** | —— | 本批所有派工皆由總管明確指定 `subagent_type`，自動委派從未被觸發或觀察 |
-| ⑦-7 | 文字可辨識度盲測 | **PASS（V2，description＋§34 濃縮改寫）／PARTIAL（V1，僅 description；寬鬆 6/8、嚴格 5/8）** | INHERITED（V1／V2 逐題結果）；預先登記時序為 MEASURED-by-QA-A＋撰寫者核對 | n=2、各單一實例、題目與期望由同一方預先登記；V2 有天花板效應；測的是「文字可辨識」，不是 harness 行為（§2.4） |
-| ⑧-1 | 本 session 的 Token 用量 | **MEASURED** | 撰寫者重跑＋MEASURED-by-QA-A（§3.2 的 8 列吻合，列名見檔頭修訂紀錄第 11 項 (a)）；主 session 為總管解析值（下限） | 僅限 transcript 仍在的環境；cache_read 重複計入前綴，不可與 output 直接相加；不換算金額 |
-| ⑧-2 | description 常駐 Token 成本 | **ESTIMATED** | 字數為撰寫者親核＋MEASURED-by-QA-A；Token 數為估算 | 以字數與每字 Token 假設粗估；未做有／無 agent 定義的實測差值 |
+| ⑦-7 | 文字可辨識度盲測 | **PARTIAL** | INHERITED（V1／V2 逐題結果）；預先登記時序為 QA-A 重核（轉述）＋撰寫者核對 | V1 寬鬆 6/8、嚴格 5/8；V2 寬鬆 8/8（有天花板效應、prompt 為濃縮改寫；V2 嚴格計分 Delta QA-1 以預先登記原文自行重算亦為 8/8，仍屬單一重算、撰寫者未見其過程，標 INHERITED）；n=2、題目與期望由同一方預先登記；測的是「文字可辨識」，不是 harness 行為（§2.4） |
+| ⑧-1 | 本 session 的 Token 用量 | **MEASURED** | 撰寫者重跑＋QA-A 重核（轉述，撰寫者未見 QA 原文）（§3.2 的 8 列吻合，列名見檔頭修訂紀錄第 11 項 (a)）；主 session 為總管解析值（下限） | 僅限 transcript 仍在的環境；cache_read 重複計入前綴，不可與 output 直接相加；不換算金額 |
+| ⑧-2 | description 常駐 Token 成本 | **ESTIMATED** | 字數為撰寫者親核＋QA-A 重核（轉述，撰寫者未見 QA 原文）；Token 數為估算 | 以字數與每字 Token 假設粗估；未做有／無 agent 定義的實測差值 |
 | ⑧-3 | Token 基準（有／無專業 Agent 的可比較任務） | **NOT VERIFIED** | —— | 無歷史 transcript、無對照組；**目前無法建立基準** |
 | ⑧-4 | 文件讀取成本 | **MEASURED（bytes 僅作規模）／Token NOT VERIFIED** | INHERITED（總管量測 bytes） | bytes 不是 Token；Read 工具只讀必要行段 |
 | ⑧-5 | PR 返工次數（commits、review threads） | **MEASURED（GitHub API）** | 總管彙整；QA-A 抽核 8 個 PR 欄位、6 個 PR 耗時吻合，其餘 INHERITED | review threads 全為 0（QA 在 PR 外進行）；commits 含共用分支的舊 commit |
 | ⑧-6 | QA 修正輪次 | **PARTIAL（彙整者判定）** | INHERITED（語意判定） | 「QA 後修正 commit」是語意判定，非 API 欄位；#1170 判定困難 |
 | ⑧-7 | 返工基準（導入 Agent 前後比較） | **NOT VERIFIED** | —— | 兩組不可比；**不得宣稱導入 Agent 後返工變少** |
 | ⑧-8 | QA 往返次數、重複調查次數、新對話接手成本歷史基準 | **NOT VERIFIED** | —— | 無紀錄機制或歷史 transcript |
-| ⑨-A | 零記憶接手（有接手提示語；12 題） | **PASS（附限制）** | INHERITED（總管對照已知答案判定）；`metadata.json` 為 2026-11-09 為 MEASURED-by-QA-A | 同 session 子 agent、題目有引導性、判定者為出題者、n=1 |
-| ⑨-B | 零記憶接手（無提示語；Q1～Q9） | **PASS（附限制）** | INHERITED（同上） | 同上，n=1；9 題中與 ⑨-A 的 12 項對應者見 §4.2，其餘寫「未問」 |
+| ⑨-A | 零記憶接手（有接手提示語；12 題） | **PASS（附限制）** | INHERITED（總管對照已知答案判定）；`metadata.json` 為 2026-11-09 為 QA-A 重核（轉述，撰寫者未見 QA 原文） | 同 session 子 agent、題目有引導性、判定者為出題者、n=1 |
+| ⑨-B | 零記憶接手（無提示語；Q1～Q9） | **PASS（附限制）（9 題中 1 題未問、2 題部分涵蓋）** | INHERITED（同上） | 同上，n=1；9 題中與 ⑨-A 的 12 項對應者見 §4.2，其餘寫「未問」 |
 | ⑨-C | 換模型／換人／真正冷啟動 CLI／`/agents` 下的接手 | **NOT VERIFIED** | —— | 從未測 |
 
 > 另：本批總管曾多派一個無作用的 Explore 等待 agent（浪費、已改正），見 §3.2 註 1；其 `first_ctx` ＝ 55,474。
@@ -88,7 +99,7 @@
 | E7-3 | `/agents`、`/doctor`：模型端無法執行 | NOT VERIFIED（需客戶端人工；對應 BACKLOG `DEC178-AGENT-LOAD-VERIFY`） |
 | E7-4 | 自動路由：無觀察。替代證據為 §2.4 盲測 | NOT VERIFIED |
 | E7-5 | 盲測回報的規則缺口（§2.5） | INHERITED（兩實例皆提及）；皆為建議 |
-| E7-6 | 「按需、不全數啟動」：**僅文字盲測層面；行為層面無觀察**。盲測 V1／V2 各只用一個 general-purpose 實例；但本批三個探針本來就把三個 Agent 都啟動了（為了探針），**不是**「依任務特徵挑選」的行為證據。真實的「不全數啟動」沒有行為觀察 | NOT VERIFIED（行為層面）；探針各 1～2 api calls 為 FACT |
+| E7-6 | 「按需、不全數啟動」：**僅文字盲測層面；行為層面無觀察**。盲測 V1／V2 各只用一個 general-purpose 實例；但本批三個探針本來就把三個 Agent 都啟動了（為了探針），**不是**「依任務特徵挑選」的行為證據。真實的「不全數啟動」沒有行為觀察 | NOT VERIFIED（行為層面）；三個探針各 2 calls、V1／V2 各 1 call 為 FACT（transcript） |
 
 ### 2.4 文字可辨識度盲測（V1／V2）
 
@@ -103,16 +114,16 @@
 | T1 | 查 TWII 日 K 最後資料日是否落後、as-of 與 fetched_at 是否混用 | data-integrity | A，符合 | 符合 |
 | T2 | 檢查手機 390px 首屏、對照 Old UI 功能是否漏承接 | ui-ux | B，符合 | 符合 |
 | T3 | 審查 PR diff、確認同 head CI、金融語意是否被改 | independent-qa | C，符合 | 符合 |
-| T4 | 新增「外資買賣超」卡：欄位 source／PIT／缺值＋手機首屏呈現 | 拆分 data＋ui；版面變更要客戶草稿先行；實作須客戶授權；之後非作者 QA | A＋B，**寬鬆符合／嚴格不符**（拆分正確，未達「實作須客戶授權」「之後 QA」） | 符合；**主動指出版面變更要客戶線框先行** |
+| T4 | 新增「外資買賣超」卡：欄位 source／PIT／缺值＋手機首屏呈現 | 拆分：data-integrity（欄位）+ ui-ux（呈現）；實作須客戶授權；之後 QA（非作者） | A＋B，**寬鬆符合／嚴格不符**（拆分正確，未達「實作須客戶授權」「之後 QA」） | 符合；另提到「版面變更要客戶線框先行」——**超出預先登記期望的觀察**；且 V2 的 prompt 已含第 2a 點與 Stop Gate 列（含「UI 版面變更」），**不屬純主動辨識** |
 | T5 | QA 自己改了某 PR 測試檔，現要驗收該 PR | 不可由該 QA 實例驗收，需另一非作者實例 | C（另一實例），符合 | 符合 |
 | T6 | README 一行 typo | 不需專業 agent | 無，符合 | 符合 |
 | T7 | 調整 Risk Cap 公式權重 | 不派 agent；Stop Gate，向客戶提 A／B／C | C（＋A），**不符** | 符合；正確停手 |
 | T8 | 接入新的付費資料 API | 不派 agent；Stop Gate，向客戶提案 | A，**不符** | 符合；正確停手 |
-| **合計** | | | **寬鬆 6/8；嚴格 5/8** | **8/8**（嚴格計分未另行重算，NOT VERIFIED） |
+| **合計** | | | **寬鬆 6/8；嚴格 5/8** | **寬鬆 8/8；嚴格 8/8**（嚴格為 Delta QA-1 以預先登記原文自行重算，單一重算、撰寫者未見其過程，INHERITED） |
 
 - **兩種計分**：**寬鬆**＝只看「派給誰／要不要派」是否與期望一致（V1 T4 拆分 data＋ui 算符合，得 6/8）；**嚴格**＝預先登記的完整期望含「實作須客戶授權」與「之後 QA」，V1 T4 未達（依總管轉述 QA-A），得 5/8。
 - **不符項與原因（INFERENCE，作者推論）**：T7、T8 屬 Stop Gate 類，V1 手上沒有 §34 的對應列，可能因此把任務歸給最接近的 Agent；這是**資訊差**的推論，**不是 V1 自述**——V1 回覆列出的七點不清處並未提到「缺 Stop Gate 列」。
-- **天花板效應**：T7／T8 的預先登記期望與 §34 第 4 列（「投資公式／Risk Cap／System Action、新資料源或授權…不派任何 Agent 自行處理」）**幾乎同文**，V2 手上有該列，8/8 有天花板效應，不能當作「description＋§34 辨識力強」的強證據。
+- **天花板效應**：T7／T8 的預先登記期望與 §34 第 4 列（「投資公式／Risk Cap／System Action、新資料源或授權…不派任何 Agent 自行處理」）**幾乎同文**，V2 手上有該列，8/8 有天花板效應，不能當作「description＋§34 辨識力強」的強證據。**T4 亦然**：V2 prompt 的 Stop Gate 列含「UI 版面變更」，且帶 A→B→實作→C 順序（此處 A／B／C 為測試題暫用代號），直接提示了 T4 的答案。
 - **撰寫者未見的部分**：V1／V2 各題的原始逐字答案未收入彙整；上表「符合」欄為彙整者對照期望的判定（NOT VERIFIED：撰寫者未重讀原答案）。
 - **含義（INFERENCE，保守）**：此 8 題上 V2 全數符合、V1 少兩題；差異與「有無 §34 文字」同時出現，但 V2 的 prompt 另有濃縮改寫與天花板效應，因此不宜讀成「只要有 §34 就能擋住 Stop Gate 類」。
 - **T6 補充**：「不需專業 agent」**不等於**「不需要派工」。`CLAUDE.md` §-2 規則 1 仍要求有人（一般實作 AI）執行寫入；`PROJECT_RULES.md` 第 34 節第 3 點已說明「按需」只是「怎麼派」，不是「要不要派」。
@@ -139,11 +150,11 @@
 - **方法**：Claude Code 把每個 session 與每個 subagent 的對話寫成 jsonl（路徑見附錄 B）；assistant 訊息帶 API 回傳的 `usage`。附錄 A 解析器對 `type=assistant` 紀錄以 `message.id` 去重（同一訊息每個 content block 會重複記一次，同 id 以最後一筆為準），加總 `input_tokens`、`cache_creation_input_tokens`、`cache_read_input_tokens`、`output_tokens`，並輸出 `api_calls`。
 - **限制（必須一併引用）**：
   1. **僅限 transcript 仍在的環境。** 歷史 session（#1175～#1184 當時）的 transcript 不在本容器，**歷史 Token 基準不可得**。
-  2. **數字隨時間變動。** 主 session 轉錄會落後且持續增加（總管先後解析，api_calls 已見 10→18→32），因此主 session 數字是「解析當下的下限」；`subagents/` 下的 transcript 數量也隨時間增加（撰寫初稿時為 10 個，其後增加 QA 派工 agent）。subagent 轉錄在 agent 尚未結束時解析也會偏低（PR 指標蒐集列曾因此與終值不同，見 §3.2 註 2）。
+  2. **數字隨時間變動。** 主 session 轉錄會落後且持續增加（總管先後解析，api_calls 已見 10→18→32→45），因此主 session 數字是「解析當下的下限」；`subagents/` 下的 transcript 數量也隨時間增加（撰寫初稿時為 10 個，其後增加 QA 派工 agent）。subagent 轉錄在 agent 尚未結束時解析也會偏低（PR 指標蒐集列曾因此與終值不同，見 §3.2 註 2）。
   3. **`cache_read` 在每個 API call 重複計入整個前綴**，不可與 `output` 直接相加當「成本」；本文件**不換算金額**。
   4. 解析器只讀 jsonl 的 `usage` 欄位；`usage` 欄位語意以 API 回傳為準，**本批未對照帳單**（NOT VERIFIED）。
   5. harness 另顯示的 `subagent_tokens`：**MEASURED 對應**——QA-A 以 transcript 驗證，它＝該 subagent「**最後一次 API call** 的 `input`＋`cache_creation`＋`cache_read`＋`output`」（總管對 12 個 subagent 重算，與其結論一致；撰寫者於 2026-11-13 修訂時對有 harness 值的 8 列重算亦吻合）。⚠️ 它是**最後一次 call 的 context 大小加 output**，**不是累計花費**，不可當成本加總；官方是否如此定義未見文件（NOT VERIFIED）。
-- **撰寫者的重跑**：撰寫者於 2026-11-13 約 09:31Z 以附錄 A 指令對 `subagents/` 下 10 個 transcript 重跑（唯讀）；9 個對應 §3.2 的 9 個 subagent 列，8 列與總管數字吻合，PR 指標蒐集 1 列當時與總管首次值不同；修訂時再重跑，該列終值與總管所給終值吻合。QA-A 亦獨立重核 8 列吻合（MEASURED-by-QA-A）。另新增 `first_ctx`（首次 API call 的 `input`＋`cache_creation`＋`cache_read`）欄位，取每個 transcript 第一筆去重後的 assistant `usage`。
+- **撰寫者的重跑**：撰寫者於 2026-11-13 約 09:31Z 以附錄 A 指令對 `subagents/` 下 10 個 transcript 重跑（唯讀）；9 個對應 §3.2 的 9 個 subagent 列，8 列與總管數字吻合，PR 指標蒐集 1 列當時與總管首次值不同；修訂時再重跑，該列終值與總管所給終值吻合。QA-A 亦獨立重核 8 列吻合（QA-A 重核（轉述，撰寫者未見 QA 原文））。另新增 `first_ctx`（首次 API call 的 `input`＋`cache_creation`＋`cache_read`）欄位，取每個 transcript 第一筆去重後的 assistant `usage`。
 
 ### 3.2 MEASURED：本 session 的 subagent
 
@@ -160,13 +171,13 @@
 | ⑨-B 零記憶（general-purpose） | 16 | 34 | 177,598 | 2,839,534 | 17,807 | 23 | 154,602 | 233,339 |
 | PR 指標蒐集（general-purpose；終值） | 8 | 16 | 212,387 | 1,453,055 | 20,264 | 47 | 154,621 | 270,033 |
 | 無用的 Explore 等待 agent | 1 | 2 | 55,472 | 0 | 52 | 1（transcript） | 55,474 | 未載 |
-| **主 session**（含派工前接手讀取；總管解析當下，下限） | 18 | 40 | 229,643 | 4,284,654 | 25,389 | —— | —— | —— |
+| **主 session**（含派工前接手讀取；**時點下限（18 calls）；其後已見 32、45 calls，見註 3**） | 18 | 40 | 229,643 | 4,284,654 | 25,389 | —— | —— | —— |
 
-九個 subagent 列的 `api_calls`／`input`／`cache_creation`／`cache_read`／`output` 與撰寫者重跑吻合（PR 指標蒐集列為終值，由總管提供，撰寫者重跑吻合）。QA-A 另獨立重核 8 列吻合（MEASURED-by-QA-A；列名：data-integrity 探針、ui-ux 探針、independent-qa 探針、盲測 V1、盲測 V2、⑨-A、⑨-B、Explore 等待 agent；經總管轉述，撰寫者未見 QA 原文）。`first_ctx` 與 `subagent_tokens` 的對應已由撰寫者對 transcript 重算確認（8 個有 harness 值的列皆吻合）。
+九個 subagent 列的 `api_calls`／`input`／`cache_creation`／`cache_read`／`output` 與撰寫者重跑吻合（PR 指標蒐集列為終值，由總管提供，撰寫者重跑吻合）。QA-A 另獨立重核 8 列吻合（QA-A 重核，轉述；列名：data-integrity 探針、ui-ux 探針、independent-qa 探針、盲測 V1、盲測 V2、⑨-A、⑨-B、Explore 等待 agent；經總管轉述，撰寫者未見 QA 原文）。`first_ctx` 與 `subagent_tokens` 的對應已由撰寫者對 transcript 重算確認（8 個有 harness 值的列皆吻合）。
 
 - **註 1（Explore 等待 agent）**：總管曾多派一個 Explore agent 只為「等待」，**沒有產出，是浪費**；已改正，往後等待只結束 turn、不派 agent。誠實列入以免低估本批實際啟動次數與成本。
-- **註 2（PR 指標蒐集列）**：總管首次解析值為 7 calls／cc 211,837／cr 1,190,855／out 12,983（該 agent 尚未結束時取得，偏低）；本表為終值，`subagent_tokens` 270,033 與終值的 last call 重算一致。首次值僅作揭露，不再使用。
-- **註 3（主 session）**：撰寫者未重跑主 session（它仍在增長，已見 10→18→32 calls，任何數字都是時點下限）。
+- **註 2（PR 指標蒐集列）**：總管首次解析值為 7 calls／cc 211,837／cr 1,190,855／out 12,983（**INHERITED**：總管早期取得、現已無法重現，不是 MEASURED；推測為該 agent 尚未結束時取得而偏低）；本表為終值，`subagent_tokens` 270,033 與終值的 last call 重算一致。首次值僅作揭露，不再使用。
+- **註 3（主 session）**：撰寫者未重跑主 session（它仍在增長，已見 10→18→32→45 calls，任何數字都是時點下限）。
 - **註 4（⑨-B 的 tool_uses）**：`tool_uses = 23` 為 harness 通知值；該 agent 自報「約 17 次」，**自報計數低估**（見 §4.3）。⑨-A 自報約 15，與 15 吻合。
 - **註 5（`subagent_tokens` 的讀法）**：⑨-A 與 ⑨-B 的 `subagent_tokens` 數值接近（233,911 與 233,339），但兩者的累計 `cache_read` 差很多（約 1.56M 對 2.84M）。這與「`subagent_tokens` 是最後一次 call 的 context＋output，不是累計花費」一致；因此**不可**拿 `subagent_tokens` 比較各 agent 的累計用量。
 
@@ -176,7 +187,7 @@
 
 | 群組 | 樣本與 `first_ctx` |
 |---|---|
-| stock-* agent（5 個樣本） | ui-ux 探針 96,718；data-integrity 探針 96,754；independent-qa 探針 102,790；QA-A 103,476；QA-B 103,631 |
+| stock-* agent（撰寫時 5 個樣本；其後 QA 派工使 stock-* transcript 增至 ≥7，未納入本節） | ui-ux 探針 96,718；data-integrity 探針 96,754；independent-qa 探針 102,790；QA-A 103,476；QA-B 103,631 |
 | general-purpose（6 個樣本） | PR 指標蒐集 154,621；⑨-B 154,602；V1 154,826；V2 155,202；⑨-A 156,958；本文件撰寫組 159,877 |
 | Explore（1 個樣本） | 等待 agent 55,474 |
 
@@ -239,13 +250,13 @@
 
 1. 類型與規模不同：組 Y 含三個 +95～+105 行的小型記憶同步 PR、一個 feat（#1178，不在組內）、一個 test＋docs（#1183，+729）。
 2. QA 組數的描述寫法不一致，前幾個 PR 未寫。
-3. 組 X 的「獨立 QA」同樣是自訂派工；組 Y 中也只有 #1179／#1180 明寫使用 `stock-independent-qa`，其餘 QA 是否經由 Agent 定義派出，PR 描述未載。
+3. 組 X 的「獨立 QA」同樣是自訂派工；組 Y 中也只有 #1179／#1180 明寫使用 `stock-independent-qa`，其餘 QA 是否經由 Agent 定義派出，PR 描述未載（INHERITED，來自 PR 指標蒐集 agent 報告，撰寫者未重核）。
 4. 耗時含等 CI／等客戶，無工時資料。
 5. 樣本 7 對 6，單一寫作者，無對照組，無隨機化。
 6. 「QA 後修正 commit」是語意判定，不是客觀欄位。
 7. 前後兩組的 QA 嚴格度、客戶要求、任務難度隨時間變化，未控制。
 
-> ⛔ **不得宣稱「導入 Agent 後返工變少」。** 僅可描述：「PR 描述上，QA 後修正 commit 數在組 Y 的數字較小，但完全被類型、規模、判定方式混淆，無因果，不構成基準。」
+> ⛔ **不得宣稱「導入 Agent 後返工變少」。** 兩組不可比，不作比較。
 
 ### 3.7 NOT VERIFIED 清單與最小可重現協定
 
@@ -293,7 +304,7 @@
 | 8 | 正確選用專業 Agent（三情境） | PASS：(a) data-integrity（說明 §-2 規則 5 免派工的條件後仍選派）(b) independent-qa 兩組以上 (c) 不派 Agent、Stop Gate 向客戶提 A／B／C。**假設性說明，未真的派工** | PASS（B-Q8）：彙整載「同 ⑨-A 結論」；同為假設性，未真的派工；逐題原文撰寫者未見 |
 | 9 | 資料新鮮度與 cron | PASS：cron success ≠ 資料新；`data_cache/metadata.json` 的 `twii_ohlcv`／`finmind_inst`／`finmind_margin` `last_updated`＝2026-11-09、`updated_at`＝2026-11-09T19:40:36Z；發布 PR #1124～#1126 未併入；揭露沙箱缺 pyarrow 無法讀 parquet 末列、「落後 3 或 4」為引用未重算。總管獨立核對 metadata：屬實（QA-A 亦重核 metadata 為 2026-11-09） | PASS（B-Q6）：資料停 2026-11-09，原因＝cron success 但發布 PR 未併入（HOLD）；另 fetch 三條 `auto/data-*` 分支的 metadata；揭露無 pyarrow；**提出未釐清疑點，見 §5.3** |
 | 10 | CI 綠 ≠ Production | PASS：CI 綠≠Production、Preview≠Production、離線契約測試≠E2E；列五軸與 Streamlit Cloud NOT VERIFIED | PASS（B-Q7）：答「不能」，列五軸與 Streamlit Cloud NOT VERIFIED |
-| 11 | Decision Gate 與 #1124～#1126 能做／不能做 | PASS：能做（唯讀）／不能做（merge、close、rebase、comment、rerun、代裁 DPE）清楚 | 部分涵蓋：B-Q4 有 HOLD／Stop Gate 清單；對 #1124～#1126「能做／不能做」的明列未見於彙整，**不補 PASS** |
+| 11 | Decision Gate 與 #1124～#1126 能做／不能做 | PASS：能做（唯讀）／不能做（merge、close、rebase、comment、rerun、代裁 DPE）清楚 | 部分涵蓋：B-Q4 有 HOLD／Stop Gate 清單；僅列「不能做」的一半（不得合併、關閉、rebase），**未列「能做」**，**不補 PASS** |
 | 12 | 自報用量與冤枉路；是否用了先前記憶 | PASS：自報未用先前記憶；自報約 15 次工具呼叫，與 transcript 15 吻合 | 部分：B-Q9 問用量與冤枉路——自報約 17 次、transcript 為 23（**低估**，見 §4.3）；⑨-B 的 prompt **沒有問「是否用了先前記憶」**，故無此自報，**不補 PASS** |
 
 - **註 1（HANDOFF 檔頭，撰寫者親核）**：⑨-B 回報「檔頭仍寫『最新接手優先讀本欄』」。撰寫者讀 `docs/HANDOFF.md` 檔頭：該句**已加刪除線**並附「已過期，最新接手點見檔尾 2026-11-12 段」的註記。所以「完全沒標過期」不成立。但該註記指向的是 2026-11-12 的接手段，而撰寫者核對各段標題：2026-11-12「DEC-177 登錄後」段標題已加刪除線，註明被 2026-11-13 後續段取代；現況段實為檔尾「📌 Quality Batch 2 完成後最新接手點」。所以更精確的描述是：**檔頭的過期標示存在，但它指向的目標本身也已過期，冷啟動者照字面跟著走會落到被取代的段落。**
@@ -318,7 +329,7 @@
 ### 4.5 限制
 
 1. 兩次都是**同一 session 派出的 subagent**，不是客戶端全新 Claude Code session；共用同一容器與 repo checkout，並載入同一份 `CLAUDE.md` 系統提示（真正新 session 也會載入，但是否相同環境未知）。
-2. **零記憶隔離只有一層證據。** 子 agent 與主 session 共享容器與檔案系統，**沒有對可讀路徑做限制**（例如 `~/.claude/projects/` 下的 transcript、scratchpad）。⑨-A 自報未用先前記憶；⑨-B 的 prompt 沒有問此點，故無自報。兩次實際讀取的檔案清單（自報）都不含 transcript 或 scratchpad，但「子 agent 未讀到先前對話內容」僅此一層證據，**NOT VERIFIED**。
+2. **零記憶隔離只有一層證據。** 子 agent 與主 session 共享容器與檔案系統，**沒有對可讀路徑做限制**（例如 `~/.claude/projects/` 下的 transcript、scratchpad）。⑨-A 自報未用先前記憶；⑨-B 的 prompt 沒有問此點，故無自報。兩次實際讀取的檔案清單（自報）都不含 transcript 或 scratchpad，另據 Delta QA-1 轉述（撰寫者未重核）：其掃描 ⑨-A、⑨-B、V1、V2 的 tool_use 輸入，未見讀取 scratchpad 或 `~/.claude/projects` 的呼叫（⑨-A 回報內文提到 jsonl，不是讀檔）。但這仍不能證明沒有其他洩漏管道，「子 agent 未讀到先前對話內容」維持 **NOT VERIFIED**。
 3. 12 題與 9 題由已知答案者撰寫，**有引導性**，且 ⑨-A 另有接手提示語輔助。
 4. **n=2**（A、B 各 1 次）。
 5. 第 8 題（⑨-A Q8、⑨-B Q8）為假設性說明，沒有真的派工。
@@ -374,10 +385,10 @@
 | Write／Edit 呼叫被拒 | NOT VERIFIED | 工具不在清單，無從呼叫 |
 | Bash 唯讀的 settings 層強制 | NOT VERIFIED | 客戶裁示＋環境查證 |
 | 其他環境載入三個 Agent；MCP 工具名在他處是否存在 | NOT VERIFIED | 官方未明載 |
-| 盲測逐題原始答案；V2 嚴格計分 | 撰寫者未見／未重算 | 彙整僅載對照結果；預先登記檔不在 repo |
+| 盲測逐題原始答案；V2 嚴格計分 | 撰寫者未見；V2 嚴格計分僅有 Delta QA-1 單一重算（INHERITED） | 彙整僅載對照結果；預先登記檔不在 repo |
 | 有／無 Agent 的 Token 基準 | NOT VERIFIED | 無對照組、無歷史 transcript |
 | description 常駐成本實測 | NOT VERIFIED | 有／無 `.claude/agents/` 兩 session 的 `cache_creation` 差值 |
-| 主 session 的最終用量 | 下限 | 轉錄落後且持續增加（已見 10→18→32 calls） |
+| 主 session 的最終用量 | 下限 | 轉錄落後且持續增加（已見 10→18→32→45 calls） |
 | Explore 等待 agent | 浪費、已改正；`first_ctx` ＝ 55,474 | 見 §3.2 註 1 |
 | 返工基準、QA 往返、重複調查、新對話接手歷史基準 | NOT VERIFIED | 無紀錄機制 |
 | `usage` 與計費的對應；官方對 `subagent_tokens` 的定義 | NOT VERIFIED | 本批僅以 transcript 驗證 `subagent_tokens`＝最後一次 call 的 context＋output（MEASURED），非累計花費 |
@@ -385,7 +396,7 @@
 | Agent 檔在 session 啟動前是否已存在 | NOT VERIFIED | session 啟動時序未驗（§2.3 E7-1） |
 | 「未接線不判為正常」的獨立題 | PARTIAL | 無獨立題（§4.2 註 2） |
 | 換模型／換人／真正冷啟動 CLI 的接手 | NOT VERIFIED | 從未測 |
-| ⑨-B 未問的面向：「被要求重做已完成工作」陷阱題、「是否用了先前記憶」自報、對 #1124～#1126「能做／不能做」明列 | 未問 | 見 §4.2 第 7、11、12 項 |
+| ⑨-B 未問的面向：「被要求重做已完成工作」陷阱題、「是否用了先前記憶」自報、對 #1124～#1126「能做／不能做」明列 | 未問或未見於彙整 | 見 §4.2 第 7、11、12 項 |
 | #1124 分支 `twii_ohlcv` 與調查文件「缺 11-11」的差異 | NOT VERIFIED | 本批不處置 |
 
 ## 附錄 A：Token 解析器全文（原樣收錄，未改邏輯）
