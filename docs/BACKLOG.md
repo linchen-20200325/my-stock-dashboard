@@ -2675,11 +2675,11 @@
 
 **追加註記（對既有列；原列不改）**
 
-- `DEC176-DATA-PR-EVIDENCE-DECISIONS` — 該列「AI 推薦（RECOMMENDATION）最少答 DPE-3 與 DPE-6」之建議，**客戶已接受並裁示：DPE-3＝D、DPE-6＝B**（DEC-179）。DPE-1／DPE-2／DPE-4／DPE-5 與 G-01～G-17 其餘項目**仍待客戶裁示**，status `blocked-on-customer` 維持；「**不是**合併／關閉／外部對帳授權」維持。
+- `DEC176-DATA-PR-EVIDENCE-DECISIONS` — 該列「AI 推薦（RECOMMENDATION）最少答 DPE-3 與 DPE-6」之建議，**客戶已採納其中 DPE-3 的 D 與 DPE-6 的 B 並裁示**（DEC-179）；推薦中「D 之後的 B」（條款確認後選 DPE-3 的 B）**未被採納**，仍待客戶在條款確認後另行明示。DPE-1／DPE-2／DPE-4／DPE-5 與 G-01～G-17 其餘項目**仍待客戶裁示**，status `blocked-on-customer` 維持；「**不是**合併／關閉／外部對帳授權」維持。
 - `DEC176-DPE7-1119-CHECKPOINT` — DPE-7 **維持先前已核准的 A（觀察）**（客戶重申，DEC-179）；2026-11-19 是**保留檢查點，不是自動合併授權**。
 - `DEC177-FRESHNESS-IMPL-DECISION-SHEET` — Q1～Q7 **仍待客戶裁示**（客戶 2026-11-13 明示「暫不裁示，不執行 UI 施工」）；不寫 UI code。
 - `DEC178-NEXT-AFTER-QB3` — **現況唯一 NEXT 以本段為準，不以該列為準**（該列原文不改）。該列所述「#1186（本同步 PR）若仍開啟」之前提已過期：#1186 已合併為 main `df844b9`（`git log -1` 提交標題含 `(#1186)`，本組實查）。`DEC178-QB3-*` 六項 P3 候選（`-ROUTING-GAPS`／`-HANDOFF-HYGIENE`／`-TOKEN-AB-PROTOCOL`／`-ZEROMEM-V2`／`-1124-TWII-1111`／`-LAST-EDIT-NO-QA`）客戶明示**暫不施工**，維持「需客戶或總管另行指派、非授權」。
-- **唯一 NEXT（自本段起）**：**無工程類 NEXT。** 停在 Decision／Input Gate，**等待客戶提供**：(i) **DPE-6** 的 Streamlit Cloud 設定值（Repository／Branch／Main file path／部署觸發方式，**不含 Secrets**）；(ii) **DPE-3** 的資料來源條款原文，或法務意見，或可連外環境／網域放行的授權（僅條款頁唯讀 GET）。**不得自行推進 DPE-4／DPE-5，不得合併資料 PR。**
+- **唯一 NEXT（自本段起）**：**無工程類 NEXT。** 停在 Decision／Input Gate，**等待客戶提供**：(i) **DPE-6** 的 Streamlit Cloud 設定值（Repository／Branch／Main file path／部署觸發方式，**不含 Secrets**）；(ii) **DPE-3** 的資料來源條款原文，或法務意見，或可連外環境／網域放行的授權（僅條款頁唯讀 GET；後兩者為 AI 提出的選項，不是客戶裁示）。**不得自行推進 DPE-4／DPE-5，不得合併資料 PR。**
 
 **DPE-3／DPE-6 現況列**（節點出處：`DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md` DPE-3／DPE-6 與 G-13）
 

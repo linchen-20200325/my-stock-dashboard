@@ -88,7 +88,7 @@
 | 階段 | 對應 | 最低成本做法 | 需要的授權 | 本批是否授權 |
 |---|---|---|---|---|
 | **階段一：條款確認**（不碰任何資料） | DPE-3＝**D** | 客戶**貼條款原文**，或**交法務書面意見**——**不需任何網路授權、登入或 API key** | 無 | 這是 DEC-179 已裁示的方向，但**實際取證仍待客戶／法務** |
-| 階段一替代 | 同上 | 客戶放行沙箱**唯讀 GET 公開條款頁**的網域：`www.twse.com.tw`、`openapi.twse.com.tw`、`www.tpex.org.tw`、`data.gov.tw`、FinMind 條款頁網域（`finmindtrade.com`、`finmind.github.io`，SUPP:447）；**Yahoo 條款頁網域 repo 內未列，需另補** | 網域放行（客戶側環境設定；僅條款頁、僅 GET） | **否**（需客戶另行明示） |
+| 階段一替代 | 同上 | 客戶放行沙箱**唯讀 GET 公開條款頁**的網域（**此為 AI 提出的選項，不是客戶裁示**）：`www.twse.com.tw`、`openapi.twse.com.tw`、`www.tpex.org.tw`、`data.gov.tw`、FinMind 條款頁網域（`finmindtrade.com`、`finmind.github.io`，SUPP:447）；**Yahoo 條款頁網域 repo 內未列，需另補** | 網域放行（客戶側環境設定；僅條款頁、僅 GET） | **否**（需客戶另行明示） |
 | 階段一替代 | 同上 | 客戶提供**已合法配置 NAS 中繼**的環境並授權唯讀 GET（DEC-168）。**NAS Key 與實際配置 NOT VERIFIED**：SUPP §9.3（`:264-277`）記錄當時沙箱的 NAS 相關變數皆為 False，現況未重測 | 環境與授權 | **否** |
 | **階段二：唯讀對帳**（**條款確認後才可能**） | DPE-3 的 **B**（小範圍） | 客戶提供**可連外環境**並**書面授權**「只讀、不存檔、不寫 repo、不新增排程」（GAPS:262） | 書面授權＋可連外環境。是否需 `FINMIND_TOKEN`／NAS 取決於客戶提供的環境；登入需求 NOT VERIFIED | **否——DEC-179 明文不授權；條款確認後是否選 B 須客戶另行裁示** |
 
@@ -125,7 +125,7 @@
 | 3 | 2026-09-08 雲端日誌片段：`/mount/src/my-stock-dashboard/packages.txt` | `tests/test_deploy_no_apt_packages.py:1-14`（docstring 稱「使用者取得的雲端日誌」） | 2026-09-08 | i（客戶取得的日誌片段，經 docstring 轉述） | 只佐證**曾存在名為 `my-stock-dashboard` 的 mount 目錄**；**無分支、無入口檔、無 owner** |
 | 4 | 2026-10-27 D2 事故：Cloud 啟動 `ImportError`；候選假說「**部署 commit 非 main**」**未證實**，根因未確認 | BACKLOG:833；DECISIONS:942；PROJECT_STATE:723 | 2026-10-27 | ii | 假說，**不是**設定紀錄；反而顯示「部署版本是否為 main」當時就是未決問題 |
 | 5 | 2026-11-10 客戶 Cloud **手機截圖**回饋（「這圖放在 OneBrain 這邊滿奇怪的」） | DECISIONS:7969（該條自陳 repo 內無客戶逐字裁示、NOT VERIFIED by repo） | 2026-11-10 | i（客戶說；經轉述） | 截圖**不在 repo**，且是畫面不是設定頁；只佐證客戶曾在 Cloud 看到某版畫面 |
-| 6 | 2026-11-02 New UI2 Preview app **計畫**：「同 repo、main、Main file＝`app_ui2.py`」；`NUI2-PREVIEW-APP-MANUAL` 為 blocked，待 `app_ui2.py` 實際可部署才以 Manual Action Gate 通知客戶 | BACKLOG:1187；DECISIONS:5980 | 2026-11-02 | ii（計畫） | **僅為計畫**，未見客戶已建立第二個 Cloud app 的紀錄；Gate 未發 |
+| 6 | 2026-11-02 New UI2 Preview app **計畫**：「同 repo、main、Main file＝`app_ui2.py`」；`NUI2-PREVIEW-APP-MANUAL` 為 blocked，待 `app_ui2.py` 實際可部署才以 Manual Action Gate 通知客戶 | BACKLOG:1187（「同 repo、main、Main file＝`app_ui2.py`」出自此處）；DECISIONS:5980（僅支撐「獨立預覽 app＋入口 `app_ui2.py`」，G1＝A 的描述，**不含**「同 repo、main」） | 2026-11-02 | ii（計畫） | **僅為計畫**，未見客戶已建立第二個 Cloud app 的紀錄；Gate 未發 |
 | 7a | 2026-08-14 實機驗證報告：驗證對象為 `my-stock-dashboard-…streamlit.app`，頁面標題 `台股AI戰情室 v3.0` | `docs/audit-2026-08/LIVE_VERIFY_AND_DECLUTTER.md:3-4`；現行 `app.py:127` 的 `page_title` 亦為同字串 | 2026-08-14 | iii／ii | 佐證**當時**有一個在線 Cloud app 且畫面標題與 `app.py` 吻合（Main file 為 `app.py`＝**INFERENCE**）；**三個月前，無分支資訊** |
 | 7b | 2026-08-15 交接：「要在 Streamlit Cloud 看：Settings → Branch **暫時指向該分支**」「看不到新東西先 Reboot app」；寫入組 `grep` `改回\|指回\|Branch` 於該檔、`STATE.md`、`docs/audit-2026-08/` **未見將 Branch 改回 main 的記錄**（單組 grep） | `HANDOFF_2026-08-15.md:32-33` | 2026-08-15 | ii（舊文件教學） | **旁證 Branch 曾被建議手動改過**；是否改回、現在是什麼＝**未知** |
 | 8 | **App 網址（寫入組補充，非派工訊息所列）**：repo 內多處記錄子網域前綴 `my-stock-dashboard-…streamlit.app` | `STATE.md:663`（2026-08-11 實機驗收）、`tests/test_t3_watchlist_message.py:28`、`docs/push_watchlist_signals.md:73`、`HANDOFF_2026-08-15.md:51`、`LIVE_VERIFY_AND_DECLUTTER.md:3` | 2026-08 | iii | 佐證**至少曾有**一個 Cloud app；**不含** owner、Branch、Main file；網址為公開位址，非憑證。**單組補充**，現在是否仍有效＝NOT VERIFIED |
@@ -169,6 +169,8 @@ Repository（owner/repo）：
 Branch：
 Main file path：
 部署觸發：〈自動追 push／手動 Reboot／不確定〉
+目前部署的 commit 或畫面版本字串（看得到才填，看不到免填）：
+App 擁有者所屬 GitHub 帳號／workspace（用來排除 fork）：
 查看日期：
 目前狀態：〈Running／Sleeping／Error〉
 New UI2 Preview 第二個 app：〈有，另填一份／沒有〉

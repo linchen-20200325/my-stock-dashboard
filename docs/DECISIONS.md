@@ -9307,7 +9307,7 @@ CI success 不代表資料已更新，更不代表 Production 已有效。
 
 **(三) DPE-3＝D 的有效讀法**
 
-- **授權的只有一件事**：確認外部對帳所涉資料來源的使用條款（哪些來源、條款原文為何、是否允許以程式唯讀存取以做對帳）。確認方式由客戶決定（貼條款原文／交法務意見／放行網域或提供合法配置環境供唯讀 GET 條款頁）；選項與缺口見證據文件 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §1。
+- **授權的只有一件事**：確認外部對帳所涉資料來源的使用條款（哪些來源、條款原文為何、是否允許以程式唯讀存取以做對帳）。確認方式由客戶決定（貼條款原文／交法務意見／放行網域或提供合法配置環境供唯讀 GET 條款頁——後兩者為 AI 提出的選項，不是客戶裁示）；選項與缺口見證據文件 `docs/vnext/DPE3_TERMS_AND_DPE6_CLOUD_CONFIG_EVIDENCE_2026-11-13.md` §1。
 - **「確認後才重新考慮」**：條款確認後，是否授權小範圍唯讀對帳（DPE-3 的 B）**仍須客戶另行明示裁示**，不會自動轉換、不會因條款確認而自動生效。
 - **不碰任何資料**：本條不授權連網、登入第三方、抓取或儲存外部資料、新增 API／MCP、動 `data_cache`。
 - **與 `DG-LIC` 的關係**：`DG-LIC`（來源授權與再散布）**維持 HOLD、未解除**。DPE-3＝D 與 `DG-LIC` 方案 A 的取證方式相近，但**不是同一個裁示**——客戶沒有答 `DG-LIC` 選 A／B／C，也沒有回答 `I1144-LIC-THREE-QUESTIONS`（商業／公開／個股級來源列）。即使唯讀對帳的條款日後被確認，`DG-LIC` 的其餘部分（呈現／再散布）也不因此解除。
@@ -9326,13 +9326,13 @@ CI success 不代表資料已更新，更不代表 Production 已有效。
 #### 與既有決策的關係
 
 - **DEC-176(a)**（#1124～#1126 方案 A＝維持 HOLD）：維持有效，本條重申；**DEC-176(c)**（DEC-175 不是無條件施工授權）：不受影響。
-- **DEC-177**：其「其餘項目（VG1／VG2、DPE-3／DPE-6、…）仍待客戶裁示」之敘述中，**DPE-3／DPE-6 自本條起更新為「DPE-3＝D、DPE-6＝B 已裁示，尚待客戶補件」**；DEC-177 原文**不改**（以本條說明為準）。DEC-177 的「🗂 實作停在安全點」與 Q1～Q7 待裁示狀態不受影響。
-- **DEC-178**：不受影響（三 Agent、Quality Batch 1～3 結果、P3 候選）；BACKLOG 舊列 `DEC178-NEXT-AFTER-QB3` 的「唯一 NEXT」自本批同步起以新追加段為準（舊列原文不改）。
+- **DEC-177**：其末段列舉的其餘項目（含 VG1／VG2、DPE-3／DPE-6 等）原寫為不受影響、仍待裁示；其中 **DPE-3／DPE-6 自本條起更新為「DPE-3＝D、DPE-6＝B 已裁示，尚待客戶補件」**；DEC-177 原文**不改**（以本條說明為準）。DEC-177 的「🗂 實作停在安全點」與 Q1～Q7 待裁示狀態不受影響。
+- **DEC-178**：不受影響（三 Agent、Quality Batch 1～3 結果、P3 候選）；BACKLOG 舊列 `DEC178-NEXT-AFTER-QB3` 的「唯一 NEXT」自本批同步起以新追加段為準（舊列原文不改）。**提醒**：`grep` 「唯一 NEXT」會先命中 BACKLOG 舊列 `DEC178-NEXT-AFTER-QB3`（`BACKLOG.md` 約 L2664），其「等待客戶對 DPE-3／DPE-6 裁示」已過期（兩者已有裁示，見上），以本條與 BACKLOG 檔尾 DEC-179 段為準。
 - **`CLAUDE.md` §-2、§-1、§-1.5**：不受影響；本條與其同批證據均為單組撰寫＋待非作者獨立 QA（QA 結果由總管於 PR 補記；本條**不得被引用為「已 QA PASS」**）。
 
 #### DEC-179 範圍外與 NOT VERIFIED
 
 - **本條不解除任何 Gate／HOLD**：`DG-SCOPE`／`DG-COV`／`DG-PIT`／`DG-LIC`、`I1144-*`（含 `I1144-WIRING-GATE`、`I1144-LIC-THREE-QUESTIONS`）、`G-F2`～`G-F6`、外資 L3、`REORG3C-Q5-GATE`、D6 偵測器、Old UI 移除、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist，均未動。
 - **本條不授權**：任何外部對帳、連網、登入第三方、抓取或儲存外部資料、修改 `data_cache`、合併／關閉／rebase #1124～#1126、處置 #1164、清理 #1119、修改或刪除不明 worktree、UI 施工、施工六項 P3 候選。
-- **更早紀錄**：DPE-3／DPE-6 的選項與 AI 推薦（先 D、再 B；DPE-6 選 B）出自 `DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（RECOMMENDATION，非裁示）；本條是客戶接受該推薦的登錄（經訊息轉述）。
+- **更早紀錄**：DPE-3／DPE-6 的選項與 AI 推薦（先 D、再 B；DPE-6 選 B）出自 `DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（RECOMMENDATION，非裁示）；客戶（經訊息轉述）**採納其中 DPE-3 的 D 與 DPE-6 的 B**；推薦中「**D 之後的 B**」（條款確認後選 DPE-3 的 B 做小範圍唯讀對帳）**未被採納**，仍待客戶在條款確認後另行明示。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶「聽你的建議」原始回覆（repo 內無）；「資料優先方案 A」提案全文（repo 內無）；DPE-3 所涉各來源的條款原文（僅 FinMind 有 PARTIALLY VERIFIED 原文，見證據文件 §1）；Streamlit Cloud 的實際 Repository／Branch／Main file path／部署觸發方式（見證據文件 §2）。本條 AI 整理與本批證據文件為單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**。
