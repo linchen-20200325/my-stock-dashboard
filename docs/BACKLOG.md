@@ -2701,13 +2701,14 @@
 
 ## 2026-11-13｜DEC-180 DPE-6 Cloud 證據補登與 UI2／NAS 取數路徑稽核（只追加；不改既有列；登記不等於施工授權）
 
-> **有意識的更新，不是漏刪；2026-11-13；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-180）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC180-`（落盤前 `git grep -n "DEC180-" docs/` 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：`origin/main`＝`587e1944f546df142fb134578b3f64887b451026`（`git rev-parse` 實查；時點快照，會漂移）；main push CI run `43425164513` completed／success（總管 2026-11-13 查，本組未連網重取）——CI success ≠ 資料已更新 ≠ Production 有效。**證據與細節以 `docs/vnext/UI2_NO_DATA_ROOT_CAUSE_NAS_AND_DPE6_CLOUD_EVIDENCE_2026-11-13.md` 為準，本段只摘要並指向它，不重抄。**
+> **有意識的更新，不是漏刪；2026-11-13；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-180）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC180-`（落盤前 `git grep -n "DEC180-" docs/` 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：`origin/main`＝`587e1944f546df142fb134578b3f64887b451026`（`git rev-parse` 實查；時點快照，會漂移）；main push CI run `43425164513`（head_sha＝587e194） completed／success（總管 2026-11-13 查，本組未連網重取）——CI success ≠ 資料已更新 ≠ Production 有效。**證據與細節以 `docs/vnext/UI2_NO_DATA_ROOT_CAUSE_NAS_AND_DPE6_CLOUD_EVIDENCE_2026-11-13.md` 為準，本段只摘要並指向它，不重抄。**
 >
 > **以下新列全部是 Candidate／未授權，不是施工指派。** 客戶本次明示「不施工正式接線，完成後停在安全點」。
 
 **追加註記（對既有列；原列不改）**
 
 - `DEC179-DPE6-CLOUD-CONFIG-INPUT` — 客戶本次提供**部分補件**（分級：客戶陳述／日誌觀測〔原文不在 repo、經轉述、日期未給〕／NOT VERIFIED）。四欄位更新讀法：Repository＝`my-stock-dashboard`（owner NOT VERIFIED）；Branch＝`main`（日誌日期與部署 commit NOT VERIFIED）；Main file path＝`app_ui2.py`（是否另有 `app.py` 的 app NOT VERIFIED）；部署觸發＝**客戶陳述**「需手動 Reboot」（非實測）。**仍缺 Cloud 設定頁證據（性質 iv）、owner、commit**；status 維持 `Input Gate`（部分補件）。**仍不得宣稱部署追蹤 main 最新提交，亦不得宣稱 Cloud 自動部署或不自動部署。**
+- **唯一 NEXT 過期提醒**：`DEC179-*` 段與 `DEC178-NEXT-AFTER-QB3` 的「唯一 NEXT」自本段起過期，以檔尾最新未被取代者為準。
 - `DEC179-DPE3-TERMS-CONFIRM` — **不受影響，仍 BLOCKED**（待客戶或法務的條款原文／法務意見／網域放行授權）；`DG-LIC` 維持 HOLD。
 - **DPE-6 現況列**（`DEC176-DATA-PR-EVIDENCE-DECISIONS` 節點；承 DEC-179）：**已裁示 B，部分補件（DEC-180）；仍缺 Cloud 設定頁證據。** 見上。
 - **唯一 NEXT（自本段起）**：**無工程類 NEXT。** 停在 Decision／Input Gate，**等待客戶**：(i) 回答證據文件 §13 的最小資訊（Cloud 頂部標示、repo owner／部署 commit、舊 app 現況、選填 Secrets 名稱「是／否」表，**全部排除 Secrets**）；(ii) DPE-3 條款資料；(iii) 各 Gate 裁示。**不得自行推進 DPE-4／DPE-5，不得 merge #1124～#1126，不得改 `app.py`／`app_ui2.py`／NAS／Proxy／Secrets。** `grep` 「唯一 NEXT」會先命中 BACKLOG 舊列（如 `DEC178-NEXT-AFTER-QB3`）與本檔較早的追加段，以本段（檔尾）為準。
@@ -2716,11 +2717,11 @@
 
 | ID | 標題 | P | status | 來源 | next action |
 |---|---|---|---|---|---|
-| **DEC180-UI2-NO-DATA-ROOT-CAUSE** | New UI2「缺資料」根因稽核（唯讀）**已完成**：假說 A（預設 FAKE）＝FACT（程式碼層）；B（Real Feed 不連網）＝FACT（UI2 呼叫路徑，守衛 G2F）——**UI2 不用 NAS 是設計，不是漏接**；C（NAS 未配置致舊 UI 部分失敗）＝NOT VERIFIED；D（資料 PR HOLD 致 main 過期）＝分層（main 停 11-09＝FACT；原因＝INFERENCE；「畫面完全沒資料」不成立）；E（Cloud 未重新部署致版本落後）＝NOT VERIFIED。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）不得混為一談；絕大多數欄位屬「尚未接線」，與 PR 無關。單組，待非作者 QA | P2 | **done（稽核完成；非 QA PASS）** | DEC-180；證據文件 §2、§6、§8、§9 | 無（結論列）。後續任一接線／發布動作皆需 Gate，見下列各列 |
-| **DEC180-UI2-FAKE-COLD-COPY-GATE** | FAKE cold 的理由句「按 🚀 更新後載入（FAKE 示意）」與永遠 disabled 的主 CTA（`vm_common.py:181`，disabled 理由預設「此功能尚未開放」）語意衝突，容易被讀成「資料抓不到」。屬 UI 文案／互動語意 | P2 | **Candidate／未授權（UI 文案 Gate，待草稿）** | 證據文件 §4；`CLAUDE.md` §-1.5.D §03-2 ① | 客戶要求前不動；若要動，先出文字線框草稿＋推薦理由（可併入 `DEC180-UI2-VERSION-STAMP-GATE` 的草稿） |
+| **DEC180-UI2-NO-DATA-ROOT-CAUSE** | New UI2「缺資料」根因稽核（唯讀）**已完成**：假說 A（預設 FAKE）＝FACT（程式碼層）；B（Real Feed 不連網）＝FACT（UI2 呼叫路徑，守衛 G2F）——**UI2 不用 NAS 是設計，不是漏接**；C（NAS 未配置致舊 UI 部分失敗）＝NOT VERIFIED；D（資料 PR HOLD 致 main 過期）＝分層（main 停 11-09＝FACT；原因＝INFERENCE；「畫面完全沒資料」不成立）；E（Cloud 未重新部署致版本落後）＝NOT VERIFIED。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）不得混為一談；絕大多數欄位屬「尚未接線」，與 PR 無關。單組，待非作者 QA | P2 | **稽核完成，待非作者 QA（結論列，非工作項）** | DEC-180；證據文件 §2、§6、§8、§9 | 無（結論列）。後續任一接線／發布動作皆需 Gate，見下列各列 |
+| **DEC180-UI2-FAKE-COLD-COPY-GATE** | FAKE cold 的理由句「按 🚀 更新後載入（FAKE 示意）」與永遠 disabled 的主 CTA（`vm_common.py:181`，disabled 理由預設「此功能尚未開放」）語意衝突，容易被讀成「資料抓不到」。屬 UI 文案／互動語意。**註**：純文字理由句不一定落在 `CLAUDE.md` §-1.5.D §03-2 ①；但「CTA enabled／disabled」互動語意變更涉及版面行為，保守起見走線框草稿 | P2 | **Candidate／未授權（UI 文案 Gate，待草稿）** | 證據文件 §4；`CLAUDE.md` §-1.5.D §03-2 ① | 客戶要求前不動；若要動，先出文字線框草稿＋推薦理由（可併入 `DEC180-UI2-VERSION-STAMP-GATE` 的草稿） |
 | **DEC180-UI2-VERSION-STAMP-GATE** | UI2 畫面無 commit／build／版本字串，使用者與稽核者無法從畫面分辨「舊部署」與「新部署但資料舊」；建議加「版本＋資料日」小標（RECOMMENDATION，屬 UI 版面變更） | P2 | **Candidate／未授權（待線框草稿）** | 證據文件 §2 E、§10；與 `DEC177-FRESHNESS-IMPL-DECISION-SHEET` Q1～Q7 有交集 | 客戶要求前不動；先出線框草稿再拍板 |
 | **DEC180-UI2-REGIME-STATE-FILES-PUBLISH** | 市場位階狀態檔（`macro_state.json`／`risk_cap_state.json`）被 `.gitignore:22`、`:25` 排除、未被 git 追蹤，全新 Cloud 部署不存在 → Cloud 上位階預期恆「⬜ 尚未載入」（INFERENCE，未實機驗）。建議改由 cron 發布到 `data_cache`（RECOMMENDATION）。關聯既有 `NUI2-PREVIEW-CLOUD-STATE-FILES`（BACKLOG:1410，open 未驗）與 `ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md` §2／§8 | P2 | **Candidate／未授權（待裁示）**；涉及資料發布與 WIRING-GATE | 證據文件 §4、§11 A③、§14.2 | 客戶裁示前不動；不新增 cron／Secrets |
-| **DEC180-LEGACY-PROXY-OBSERVATIONS-P1-P9** | 舊 UI 資料問題觀察 P1～P9（三套 proxy 解析器不一致；多條取數鏈繞過 `proxy_helper`；`leading_indicators.py:53` 於 import 時綁定；`_proxy_env` 無鎖；失敗結果可能被 `st.cache_data` 快取；`fetch_url` 成功 log 誤導；`etf_calc.py:419` 註解過期；`health_inspector` 印出 NAS host；CI／cron 3.11 vs Cloud 3.14.10）。**僅登記觀察，不修** | P3 | **Candidate／P3、open；需客戶或總管另行指派；非授權** | 證據文件 §15（P2 編號為寫入組補，見 §14.2） | `CLAUDE.md` §-1：無實際 bug 觸發不主動動工 |
+| **DEC180-LEGACY-PROXY-OBSERVATIONS-P1-P9** | 舊 UI 資料問題觀察 P1～P9（三套 proxy 解析器不一致；多條取數鏈繞過 `proxy_helper`；`leading_indicators.py:53` 於 import 時綁定；`_proxy_env` 無鎖；失敗結果可能被 `st.cache_data` 快取；`fetch_url` 成功 log 誤導；`src/compute/etf/etf_calc.py:419` 註解過期；`health_inspector` 印出 NAS host；CI／cron 3.11 vs Cloud 3.14.10）。**僅登記觀察，不修** | P3 | **Candidate／P3、open；需客戶或總管另行指派；非授權** | 證據文件 §15（P2 編號為寫入組補，見 §14.2） | `CLAUDE.md` §-1：無實際 bug 觸發不主動動工 |
 
 > **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**維持 `PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md` 既有判讀**（本批無新證據）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
 >
