@@ -1034,3 +1034,18 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ```
 
 - **仍 NOT VERIFIED**：run `43350471209` 的結論；#1178 同 head 五項原生 CI 與兩組 Delta QA 的細節（轉述自 PR 描述，本組未重讀）；三 Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測；新對話零記憶載入；DEC-178 fence 與客戶原訊息逐字一致性。本段單組撰寫，未經第二組驗證。
+
+
+### 📌 存檔完整性補註（交接最後驗收，2026-11-13；補充「#1178 合併後狀態更新」現況段，不是新的現況段，不自稱現行）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方各段**一字未動**。本補註依「交接最後驗收」獨立 QA（回報 PASS with fixes）所指缺漏追加；**作者單組撰寫，未經非作者獨立 QA；不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為作者 2026-11-13 約 02:49Z 以 `git`／`gh api` REST 實查，會漂移，一律重查。
+
+1. **一律以「#1178 合併後狀態更新」現況段＋本補註為準**：上方「Agents 批次後最新接手點」段正文仍含「current PR ＝ #1178（Draft）」「待非作者 QA」等已過期描述，不改；補點名：現況段〇表未列 **PROJECT_STATE §70.16**（內含「本 PR 合併後才算進 main」等 #1178 合併前措辭）同為已過期，現況以 PROJECT_STATE 檔尾 §70.17 與本補註為準。
+2. **Agents 批次已完成（FACT，`gh api …/pulls/{n}` 實查）**：#1177 `63da9515`、#1178 `c56afd45`（merged_at 2026-11-13T02:12:15Z）、#1179 `c00ed542`（merged_at 2026-11-13T02:36:05Z，main 現為此 SHA）。兩組非作者 QA＋Delta、同 head 五項原生 CI success 為 PR 描述轉述（本組未重讀，NOT VERIFIED）。
+3. **CI 更新**：#1178 push CI run `43350471209` 已 `completed／success`（head `c56afd45`；上方現況段寫的 `in_progress`／待重查已過期）。#1179 push CI run `43353310836`（head `c00ed542`）：撰寫時（2026-11-13 約 02:50Z）`status ＝ in_progress`、`conclusion ＝ null`（`gh api …/actions/runs/43353310836`，FACT）；**尚無結論，NOT VERIFIED，接手者重查**；不得假稱全綠。
+4. **「先驗證三個 Agent 被載入才開工 Quality Batch 1」是總管自加的謹慎前置，不在客戶原文**：客戶把載入驗證放在工作項 ⑦⑨（Batch 3）；DEC-178 fence 寫「#1177 合併完成且無其他真正阻塞時，直接進入以下已核准工作，不需要再次請示客戶」（`docs/DECISIONS.md` DEC-178 fence，FACT）。因此：新對話若發現 Agent **未載入**，處置是**停手並回報**，**不是**「需客戶授權才能開工」；**Quality Batch 1 的啟動不需客戶再次指派**（DEC-178 已授權），但仍受所有 Gate／HOLD、單批最多三項、寫入序列化、非作者獨立 QA 與 Merge Gate 約束。此措施與 BACKLOG `DEC178-AGENT-LOAD-VERIFY`「併入 ⑨」不完全同調，以本條說明為準。
+5. **仍 NOT VERIFIED 補列（現況段清單缺漏）**：(a) Bash 唯讀在 settings 層是否機械強制（`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`；本批未動 `.claude/settings*`）；(b) 官方 sub-agents 文件尾段被截斷（QA-A 讀了前 100000／116972 字元），格式核對為單組、尾段未讀；(c) viewport 證據重生可行性（本沙箱無 Python Playwright）；(d) 部署端位階是否恆 `unloaded`（FACT 僅限 UI2 獨立 session 沙箱）。
+6. **`#1119` 性質**：`gh api repos/…/issues/1119`（REST）回 Issue（`pull_request` 欄位無），標題「[唯讀盤點] GitHub Actions 19 個 workflow 精簡與安全移除候選」，state ＝ open，建立 2026-11-10；**不是 PR**。提示語 HOLD 清單中的「#1124～#1126、#1164、#1119」是 PR 與 Issue 混列，#1119 為 Issue（BACKLOG `WORKFLOW-SLIM-AUDIT-1` 維持 HOLD）。
+7. **新對話提示語的 HOLD／Gate 清單少列（現況段第七節提示語）**：除其所列外，尚有 `I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3（另案）、`G-F2`～`G-F6`、`REORG3C-Q5-GATE`（以上 ID 作者以 `git grep` 確認存在於 BACKLOG／DECISIONS）仍待裁示或 HOLD，**皆未因任何批次解除**。完整 HOLD／Gate 清單見 BACKLOG 檔尾「DEC-178 後續」段末「以上皆不暗示任何 Gate 已解除…」blockquote（B:2537 一帶，行號會漂移）。
+8. **`DEC174-B1-INDEP-QA` 補字眼**：現況段五之一第 5 項該列屬「**需客戶指派（非裁示）**」——BACKLOG 該列：內部 QA（`CLAUDE.md` §-2 規則 4）、不需客戶裁示、無前置 Gate，但啟動仍須客戶指派（§-1 無指派不主動動工）；指派前維持不動工。
+9. **本補註的 NOT VERIFIED**：#1179 的 QA／CI 細節（轉述）；第 3 項 run `43353310836` 的最終結論（見該項）；上述 REST 結果撰寫時點快照。作者單組撰寫，**未經第二組驗證**。
