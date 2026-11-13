@@ -2622,3 +2622,47 @@
 > **HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。**軸2 為 FAIL／邊界**（讀法 A 落後 4＝FAIL，讀法 B 落後 3＝邊界；見 ⑥ 列與快照文件 §3）；**共同事實＝發布 PR #1124～#1126 未併入 main**。其處置：DPE-3／DPE-6 待客戶裁示，AI 不處置；DPE-7 已定維持 A（觀察），11-19 為保留檢查點（見 `DEC176-DPE7-1119-CHECKPOINT`）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 為保留檢查點）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換均**未動**。
+
+## 2026-11-13｜DEC-178 Quality Batch 3 完成同步（#1185 合併後；只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方 `DEC178-*` 各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC178-QB3-`／`DEC178-NEXT-`（落盤前 `grep -n "DEC178-QB3-\|DEC178-NEXT-AFTER" docs/*.md` 僅命中既有 `DEC178-QB3-PREREQ`，新列 ID 不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**。事實為總管提供之 GitHub 實查結果（2026-11-13），會漂移，一律重查。**細節與表格以 `docs/vnext/QUALITY_BATCH3_AGENT_TOKEN_ZEROMEMORY_EVIDENCE_2026-11-13.md` 為準，本段只摘要並指向它，不重抄。**
+>
+> **追加註記（對既有列；原列不改）**：
+> - `DEC178-QUALITY-BATCH-3` — 原列 status「open（前置：`DEC178-QUALITY-BATCH-2` 合併）」**自此視為 merged-with-residuals（⑦ PARTIAL、⑧ 基準 NOT VERIFIED、⑨ PASS 附限制）**（已合併；殘留 NOT VERIFIED 已登記）：#1185 已 squash 合併為 `37bfa5d72c67cff6e5d5581d6d22d63c92061f12`（2026-11-13；PR head `1960423a9dbd51f979a127089ecfd7e0756e4380`；GitHub 實查 `merged ＝ true`）。範圍＝1 檔 `docs/vnext/QUALITY_BATCH3_AGENT_TOKEN_ZEROMEMORY_EVIDENCE_2026-11-13.md`、+451 行（docs-only，無生產碼、無 Agent 檔或 `.claude/settings*` 變更）。
+> - `DEC178-QB3-PREREQ` — 原列前置 (a)(b)(c) 已成立並**結案**：Batch 3 已完成；上一個 main push CI run `43384735241`（head `ae402ce8`）`success`。該列「open（未開始）」自此過期，原文不改。(c)「建議在新對話開始」原本就只是建議（RECOMMENDATION），**非硬性前置**；其成立依據＝本批在新對話（與 Batch 1／2 不同 session）開始（**INFERENCE**，由總管提供之情況推得，本組未獨立驗證）。
+> - `DEC178-AGENT-LOAD-VERIFY` — 狀態改為 **部分**：harness 列出三 Agent，且工具集與 frontmatter 一致（載入＝清單一致；單次觀察）。**`/agents`、`/doctor`、自動路由、工具呼叫被拒、Bash 唯讀強制仍 NOT VERIFIED，需客戶端人工執行**（證據文件 §6 候選 7）；載入失敗則停手回報，不自行改權限。
+
+**證據（FACT 除另註）**
+
+| 項 | 內容 |
+|---|---|
+| 合併前 PR head CI | #1185 head `1960423a` 同 head 五項原生 CI 皆 `success`（run `43404903462`：ui2-browser 1.56.0／1.59.2、Fast checks、Slow tests、ui2-browser-gate；總管提供之 GitHub 實查結果，本組未另重取）；review threads 0 |
+| 非作者獨立 QA（轉述，本組未重讀 QA 原文，NOT VERIFIED） | 初稿 2 組（事實準確性 FAIL 輕度／治理越權 PASS with fixes）→ 修訂 → Delta 2 組（缺陷複驗 PASS／全新閱讀 內容 PASS）→ 第二輪修訂 → Delta 3（PASS with fixes，2 項 Low）→ **最終文字更正（head `1960423a`）僅由總管核對 diff，未再另派 QA**（如實登記，見下方 `DEC178-QB3-LAST-EDIT-NO-QA`） |
+| 合併後 main push CI（`37bfa5d7`） | run `43407464215`：撰寫時 `in_progress`，**NOT VERIFIED**；不得假稱全綠。重查 main push CI（run `43407464215` 及 #1186 合併後新 SHA 的 push run，兩個都要查）後只回報；若要寫回文件，須開 docs-only PR 並經非作者 QA；不另立 NEXT。若非 success，先判斷是否 D6 已知非決定性紅燈（`tests/test_d6_diagnostic_no_secret_display.py`），rerun 通過不等於已修 |
+| main／Open PR | main ＝ `37bfa5d7`（時點快照）；Open PR 仍只有 #1164（Draft）、#1124、#1125、#1126（不含本同步 PR #1186），皆 HOLD、未動；#1119 為 Issue |
+
+**三項狀態（摘要；細節與限制見證據文件 §2～§4）**
+
+| 項 | 狀態 | 備註 |
+|---|---|---|
+| ⑦ Agent 路由整合 | **PARTIAL** | 載入 PARTIAL（harness 列出三 Agent，工具集與 frontmatter 一致；`/agents`、`/doctor` NOT VERIFIED）；手動指定 PASS（×3）；工具面權限 PASS（自報清單）／呼叫被拒 NOT VERIFIED；Bash 唯讀強制 NOT VERIFIED（repo 無 `.claude/settings*`）；自動路由 NOT VERIFIED；文字盲測整體 PARTIAL（V1 寬鬆 6/8、嚴格 5/8；V2 寬鬆 8/8，有天花板效應）。**本批未修改任何 Agent 檔或 §34** |
+| ⑧ Token 與返工基準 | **部分 MEASURED；基準 NOT VERIFIED** | 以 transcript 解析器取得 MEASURED（subagent 用量；首次 call context：`stock-*` 約 9.7～10.4 萬、`general-purpose` 約 15.5～16.0 萬；**n 小、非受控**）；description 常駐成本 ESTIMATED；返工 14 PR 表**不可比**，不宣稱改善；有／無 Agent 定義的 Token 基準 **NOT VERIFIED**（無歷史 transcript、無對照組）。**不構成 `REORG3C-Q5-GATE` 重議** |
+| ⑨ 零記憶接手測試 | **PASS（附限制）** | ⑨-A（有提示語，12 項）與 ⑨-B（無提示語，Q1～Q9）皆 PASS 附限制：同 session 子 agent、題目有引導性、判定者為出題者、n=1；**真正冷啟動 CLI／換模型／`/agents` NOT VERIFIED** |
+
+**六項品質補強總狀態**：①～⑥ DONE（#1181、#1183）；⑦ PARTIAL；⑧ 部分 MEASURED／基準 NOT VERIFIED；⑨ PASS（附限制）。**Batch 3 視為 merged-with-residuals（⑦ PARTIAL、⑧ 基準 NOT VERIFIED、⑨ PASS 附限制）**；殘留 NOT VERIFIED 已登記，不得讀成「六項全部完全驗證」。
+
+**本批發現／浪費（登記）**：(1) 總管曾多派一個無作用的 Explore 等待 agent（證據文件 §3.2）；(2) 3 次 Delta QA 之外，最終一版僅文字更正、未另派 QA；(3) HANDOFF 檔頭「2026-11-09 快照」仍易誤導冷啟動接手者，現況段為 `###` 層級，`grep '^## '` 找不到；(4) #1124 分支 `twii_ohlcv`＝11-11 與調查文件寫「缺 11-11」不一致，**NOT VERIFIED、未處置**，待 DPE-3／DPE-6 客戶裁示。
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC178-QB3-ROUTING-GAPS** | 路由規則缺口（建議候選，**非缺陷、非授權**）：(a) `PROJECT_RULES.md` §34 無「一般實作 AI」列（T6／T7／T8 核准後誰實作未寫）；(b)「非作者」是角色層還是實例層未界定；(c) A（data-integrity）與 C（independent-qa）在「資料完整性」的重疊判準需靠「有無 PR／diff」；(d) 測試題暫用的 A／B／C 代號與 Stop Gate 的方案 A／B／C 同名（僅 V2 提及，正式文件是否真有混用 NOT VERIFIED）。上述 (a)(b)(d) 為 §34 文字補充空間，(c) 為判準寫法；改 §34 須走 PR 與非作者獨立 QA | P3 | P3、open；需客戶或總管另行指派；非授權 | 證據文件 §2.5、§6 候選 1～3 | 無主動動工（`CLAUDE.md` §-1）；有任務碰到 §34 時再評估。不得讓實作者自己驗收自己 |
+| **DEC178-QB3-HANDOFF-HYGIENE** | HANDOFF 檔頭「2026-11-09 快照」已標過期，但其指標本身已落後，易誤導冷啟動接手者；現況段為 `###` 層級，`grep '^## '` 找不到。建議候選：更新檔頭過期指標，並於 HANDOFF 檔頭或 `PROJECT_RULES.md` 加一行固定錨點「現行接手段＝檔尾最後一個標題含『最新接手點』者」。本同步 PR #1186 的新段已在提示語註明 `grep '^###'` 與搜『最新接手點』，**但未改檔頭** | P3 | P3、open；需客戶或總管另行指派；非授權 | 證據文件 §4.4 (1)(2)、§6 候選 4 | 治理文件改動須走 PR 與獨立 QA（`PROCESS.md` §4）；無主動動工 |
+| **DEC178-QB3-TOKEN-AB-PROTOCOL** | 有／無 Agent 定義的 A／B Token 比較協定（目前基準 NOT VERIFIED）。建議條件：**n≥3、固定 prompt**，結論只寫區間與 n；**不得縮小驗收範圍或取消獨立 QA** 來換取較低 Token；不構成 `REORG3C-Q5-GATE` 重議。**需客戶才擴大**（若涉及擴大範圍） | P3 | P3、open；需客戶或總管另行指派；非授權 | 證據文件 §3.7、§6 候選 5 | 無主動動工；經客戶或總管另行指派後才設計 |
+| **DEC178-QB3-ZEROMEM-V2** | 零記憶接手測試補題（建議候選）：(i)「未接線不判為正常」的獨立題（UI2 FAKE／接線 Gate）；(ii)「被要求重做已完成工作」的陷阱題與「是否用了先前記憶」的統一自報題，使 ⑨-A／⑨-B 可逐項對照；**不重做已完成的題目**。另需**真正冷啟動 CLI**（客戶端人工；換模型／`/agents`），並建議限制子 agent 可讀路徑或另行記錄其實際讀取清單 | P3 | P3、open；需客戶或總管另行指派；非授權 | 證據文件 §4.2、§4.5、§6 候選 8 | 無主動動工；冷啟動 CLI 需客戶端人工 |
+| **DEC178-QB3-1124-TWII-1111** | #1124 分支 `twii_ohlcv`＝2026-11-11 與調查文件寫「缺 11-11」不一致；兩者讀取時點不同（`auto/data-*` 分支由 cron 推進），是否只是時點差異**未釐清，NOT VERIFIED**。**未處置**；不碰 #1124～#1126 | P3 | P3、open；需客戶或總管另行指派；非授權 | 證據文件 §5.3 | 觀察項：**待 DPE-3／DPE-6 客戶裁示後才查**；不動 #1124～#1126；裁示前不重核 |
+| **DEC178-QB3-LAST-EDIT-NO-QA** | 流程備忘：Batch 3 最終一版（head `1960423a`）僅文字更正，僅由總管核對 diff，**未再另派非作者 QA**（Delta 3 PASS with fixes 之後的最終修訂）。**建議往後即使只是文字更正，也至少由非作者核對 diff**（不新增 Gate，供下次判斷） | P3 | P3、open；需客戶或總管另行指派；非授權 | 本批 QA 過程（總管提供） | 流程備忘：往後沿用；不另立 Gate |
+| **DEC178-NEXT-AFTER-QB3** | **唯一 NEXT：無工程類 NEXT（指標列，非待辦工作；取代舊列 `DEC178-QB3-PREREQ`）。** #1186（本同步 PR）若仍開啟，其 QA→CI→Merge Gate 是既有任務的延續，不是新工作，不屬提示語第 11 點的「停手」；是否合併依 `PROCESS.md` §4／`PROJECT_RULES.md` §31.2 的條件（同最新 head 原生 CI 綠含 ui2-browser-gate、無未解 thread、非作者 QA 無必修、前後查 main SHA）；#1186 已合併後，才適用「無工程類 NEXT／停手被動觀察」。grep「唯一 NEXT」時，舊列 `DEC178-QB3-PREREQ` 已被取代，以 `DEC178-NEXT-AFTER-QB3` 為準。#1186 合併後：停手與被動觀察。等待：(1) 客戶對「🗂 資料新鮮度總覽」Q1～Q7（`DEC177-FRESHNESS-IMPL-DECISION-SHEET`）的裁示；(2) 客戶對 DPE-3／DPE-6 的裁示；(3) 2026-11-19 DPE-7 保留檢查點（DPE-7 已定維持 A〔觀察〕，11-19 是檢查點，**不是自動放行**）。上列 `DEC178-QB3-*` 候選皆為 P3，需客戶或總管另行指派，**不是授權**；無新指派時只做被動觀察並回報狀態 | P3（指標列，非待辦工作） | open（等待客戶裁示） | `CLAUDE.md` §-1；DEC-178 | 重查 main push CI（run `43407464215` 及 #1186 合併後新 SHA 的 push run，兩個都要查）後只回報；若要寫回文件，須開 docs-only PR 並經非作者 QA；不另立 NEXT。不主動找事做 |
+
+> **本批沒有新客戶裁示，沒有解除任何 Gate／HOLD。** 軸2 資料仍停在 2026-11-09（`data_cache/metadata.json` 的 `twii_ohlcv`／`finmind_inst`／`finmind_margin` `last_updated` 皆 `2026-11-09`；本批兩名 QA 與總管獨立核對屬實）；DPE-3／DPE-6 待客戶裁示。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
+>
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復、DPE-7（維持 A 觀察，11-19 為保留檢查點）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換均**未動**。
