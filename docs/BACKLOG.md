@@ -2586,3 +2586,39 @@
 > **HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「本 blockquote」取聯集為準**（HANDOFF 現況段「五之一」待客戶裁示清單另併讀）；下段已補列第 7 項所載而原先缺漏的 ID：`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3（另案）、`G-F2`～`G-F6`（以上 ID 本組以 `grep` 確認存在於 BACKLOG／DECISIONS，FACT）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 為保留檢查點）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換均**未動**。
+
+
+## 2026-11-13｜DEC-178 Quality Batch 2 完成同步（#1183 合併後；只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方 `DEC178-*` 各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 前綴 `DEC178-QB2-`／`DEC178-QB3-`（落盤前 `git grep -n "DEC178-QB2-\|DEC178-QB3-" -- docs` 僅命中既有 `DEC178-QB2-PREREQ-MET`，新列 ID 不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**。事實為作者 2026-11-13 約 06:55Z 以 `git`／`gh api` REST 實查，會漂移，一律重查。
+>
+> **追加註記（對既有列；原列不改）**：`DEC178-QUALITY-BATCH-2` — 原列 status（open，前置：Batch 1 合併）**自此視為 done（已合併）**：#1183 於 2026-11-13T06:53:55Z squash 合併為 `ee1973f3496b3a173c8c5a37d5fcb814bd33f00c`（`gh api repos/…/pulls/1183` 實查：`merged ＝ true`，`head ＝ e2cccc5bf0befe1c7ff6c99c42b9303ed9c82714`，FACT）。範圍＝④⑤⑥ 三項（FACT：`git show --stat ee1973f` ＝ 6 檔、+729／−1，無生產碼變更）。`DEC178-QB2-PREREQ-MET` — 其前置 (a)(b)(c) 於本批啟動前已成立：#1182 於 2026-11-13T05:31:14Z 合併為 `25e1930d`；#1181 push CI run `43368890041`（head `8170876b`）與 #1182 push CI run `43372553225`（head `25e1930d`）皆 `completed／success`（`gh api …/actions/runs/{id}` 本組實查，FACT）；該列「撰寫時無結論」自此過期，原文不改。`DEC178-QUALITY-BATCH-3`（⑦⑧⑨）前置之一（Batch 2 合併）**已成立**，其餘前置見下。
+
+**證據（FACT 除另註）**
+
+| 項 | 內容 |
+|---|---|
+| 合併前 PR head CI | `e2cccc5b` 同 head 五項原生 check runs 皆 `completed／success`：`Fast checks (pytest unit, ~30s)`、`Slow tests (AppTest, informational)`、`ui2-browser (streamlit 1.56.0)`、`ui2-browser (streamlit 1.59.2)`、`ui2-browser-gate`（同屬 run `43379220541`，`event ＝ pull_request`、`head_sha ＝ e2cccc5b…`；`gh api …/commits/e2cccc5b…/check-runs` 與 `…/actions/runs/43379220541` 2026-11-13 重取，**FACT**）。「Slow tests」名稱自帶 informational，其 success 意義以 `pr-check.yml` 為準 |
+| review threads／mergeable | `GET …/pulls/1183/ccr/review_threads` 回 `[]`（2026-11-13 兩次實查，合併後時點，**FACT**）；合併前 `mergeable ＝ clean` 為總管轉述（NOT VERIFIED，合併後 `mergeable_state` 回 `unknown`，無從重現） |
+| 非作者 QA | 三組（測試品質／文件證據與五軸判讀／Delta）首輪 PASS with fixes → 已修（commit `e2cccc5b` 訊息所載：補「綜合分只平均有資料因子」與涵蓋門檻邊界的 mutation 守衛；FACT 為該訊息文字）。**QA 原文本組未重讀，NOT VERIFIED** |
+| 合併後 main push CI（`ee1973f3`） | `PR Check（pytest fast + AppTest slow）` run **43381887332**（event ＝ push）：撰寫時（2026-11-13 約 06:55Z）`status ＝ in_progress`、`conclusion ＝ null`；同 commit 四個 check runs 亦 `in_progress`（`gh api …/actions/runs/43381887332`、`…/commits/ee1973f3…/check-runs`，FACT）。**尚無結論，NOT VERIFIED，接手者重查並寫回本段**；不得假稱全綠。若非 success，先判斷是否 D6 已知非決定性紅燈（`tests/test_d6_diagnostic_no_secret_display.py`），rerun 通過不等於已修 |
+| 測試數量 | `pytest --collect-only`：`tests/test_push_weekly_report_main.py` 15 筆、`tests/test_pick_chain_to_line_contract.py` 14 筆，共 **29** 筆（本組實查，FACT）；PR #1183 描述的「15＋10」為補測試前數字，無需更正 |
+
+**三項狀態**
+
+| 項 | 狀態 | 備註 |
+|---|---|---|
+| ④ E2E／Golden／Mutation Tests | **DONE（離線契約）** | 新增 `tests/test_push_weekly_report_main.py`（週報 `main()` 離線契約）與 `tests/test_pick_chain_to_line_contract.py`（選股→換股池→LINE 訊息接縫，合成資料）；含 mutation 反向驗證（作者轉述〔commit 訊息＋總管轉述〕，本組未重跑 mutation，NOT VERIFIED）。**離線契約，不是 Production E2E**，不證明 LINE 實送、Secrets 有效或排程實跑。Digest 段與 UI2 REAL 契約**刻意不新增**：Decision Digest 無非 digest 家族的 production caller、UI2 已有 `WIRED_PATHS` 守衛（總管轉述，NOT VERIFIED） |
+| ⑤ 最小 PR Impact Check | **DONE（最小入口）** | `.github/PULL_REQUEST_TEMPLATE.md` 新增「測試應重跑」「正式文件引用需同步」兩項；`PROJECT_RULES.md` 第 7 節 2026-11-13 ⑤ 補註（變更類型→至少重跑測試對照表；CI 仍全跑不縮減）。**無機械強制**：範本未被任何測試釘住（補註 (d) 自陳），純文件慣例 |
+| ⑥ Production 健康度五軸 | **DONE（定義＋時點快照）** | `docs/vnext/PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`：五軸分開證據來源與判讀規則＋時點快照（快照時點 origin/main ＝ `25e1930d`，會漂移）。軸1 CI **OK（僅限 CI）**；軸2 資料是否更新 **main 層面 FAIL／邊界**（`data_cache` 停在 2026-11-09；原因 FACT＝cron 皆 success，但發布 PR #1124～#1126 未併入；處置：DPE-3／DPE-6 待客戶裁示、DPE-7 已定維持 A〔觀察，11-19 保留檢查點〕，**AI 不處置**）；軸3 資料是否有效 **警示**；軸4 正式 UI 接線 **「未接線」屬實，部署端 NOT VERIFIED**；軸5 決策與通知 **警示，送達／Secrets NOT VERIFIED**。以上摘自該文件，本組僅核對其存在與標題，**逐軸數字未重取，NOT VERIFIED** |
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC178-QB2-MUTATION-SURVIVOR-DENOM** | 備忘（P3）：mutation 驗證中倖存一例——把 `src/services/fundamental_screener_service.py` 綜合分計算的分母 `len(_present)` 改成 `max(len(_present), 2)`，**無測試擊殺**（作者轉述自總管，本組未重跑該 mutation，NOT VERIFIED）。本組 `grep` 僅確認被分母的原式存在：`_composite[i] = round(sum(_present) / len(_present), 1)`（FACT）。**原碼註解顯示單因子情境可達（`_effective_n=1` 時 `len(_present)=1` 可過涵蓋門檻，FACT：原碼閱讀），疑為測試缺口，待判定；未重跑，NOT VERIFIED** | P3 | open（觀察；不阻塞） | #1183 mutation 驗證（轉述）；`fundamental_screener_service.py` | 無主動動工（`CLAUDE.md` §-1）；下次有任務碰到該函式時，評估是否補一個單因子邊界測試（疑為測試缺口，待判定） |
+| **DEC178-QB2-DAILY-WATCHLIST-MAIN-UNTESTED** | 備忘（P3，備選）：`scripts/push_daily_signals.py` 與 `scripts/push_watchlist_signals.py` 的 `main()` 無離線契約測試（`def main(argv=None) -> int` 本組 `grep` 確認存在，FACT；「無測試」為 #1183 範圍結論，本組未另行窮舉 `tests/`，NOT VERIFIED）。兩者僅手動觸發（總管轉述），風險低於週報 | P3 | open（備選；不阻塞） | #1183 範圍；`PROJECT_RULES.md` 第 7 節 ⑤ 補註對照表（表中僅列 `push_weekly_report.py`） | 無主動動工；有實際 bug 或任務碰到再補，補時沿用 `test_push_weekly_report_main.py` 離線契約寫法 |
+| **DEC178-QB2-MUTATION-SCRATCH-ONLY** | 流程提醒（P3）：本批 mutation 驗證曾一度**直接寫進正式 `src`** 後還原，已驗證工作樹乾淨（作者轉述自總管，本組未重現該事件）。**規則：mutation 一律在 scratchpad／臨時副本上做，不得改動版本控制下的正式檔，即使事後會還原**；還原後必以 `git status`／`git diff` 驗證乾淨 | P3 | open（流程提醒） | #1183 QA 過程（轉述） | 往後所有 mutation 驗證沿用；不另立 Gate |
+| **DEC178-QB3-PREREQ** | `DEC178-QUALITY-BATCH-3`（⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試）**唯一 NEXT**。啟動不需客戶再次指派（沿用 DEC-178 fence）。**前置**：(a) 本同步 PR 已合併進 main；(b) 合併後 main push CI 有結論且為 `success`（含 #1183 合併點 `ee1973f3` 的 run `43381887332`，撰寫時 `in_progress`，NOT VERIFIED；`success` 要求是作者自加謹慎措施，非客戶原文）；(c) **建議（RECOMMENDATION，非客戶裁示）在【新對話】開始 Batch 3**：⑨ 零記憶接手測試需要沒有本對話記憶的情境才有意義，且本對話已累積兩批長篇 QA／CI（`PROJECT_RULES.md` 第 33 節預防性交接）。**⑧ 要求**：區分 MEASURED／ESTIMATED／NOT VERIFIED；禁止 bytes 冒充 Token；單次樣本不得冒充基準；**不構成 `REORG3C-Q5-GATE` 重議**。**⑦ 前置觀察（FACT＝單次 session 觀察，總管轉述）**：本對話 Agent 工具清單列出三個專業 Agent，並曾以多角度派工；`/agents`、`/doctor`、自動路由仍 NOT VERIFIED，`DEC178-AGENT-LOAD-VERIFY` 仍併入 ⑦⑨，不得據此結案 | P1 | open（未開始） | DEC-178「四、Batch 3」；`DEC178-QUALITY-BATCH-3` 原列 | 一次最多三項；寫入序列化；非作者多組獨立 QA；Gate／HOLD 全未解除 |
+
+> **HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。**軸2 為 FAIL／邊界**（讀法 A 落後 4＝FAIL，讀法 B 落後 3＝邊界；見 ⑥ 列與快照文件 §3）；**共同事實＝發布 PR #1124～#1126 未併入 main**。其處置：DPE-3／DPE-6 待客戶裁示，AI 不處置；DPE-7 已定維持 A（觀察），11-19 為保留檢查點（見 `DEC176-DPE7-1119-CHECKPOINT`）。
+>
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、`G-F2`～`G-F6`、`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7 仍待客戶回覆）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue，非 PR）、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 為保留檢查點）、`DEC178-AGENT-BASH-READONLY-ENFORCEMENT`、Old UI、正式 UI 切換均**未動**。

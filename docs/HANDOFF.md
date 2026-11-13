@@ -1051,7 +1051,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 9. **本補註的 NOT VERIFIED**：#1179 的 QA／CI 細節（轉述）；第 3 項 run `43353310836` 的最終結論（見該項）；上述 REST 結果撰寫時點快照。作者單組撰寫，**未經第二組驗證**。
 
 
-### 📌 Quality Batch 1 完成後最新接手點（2026-11-13，#1181 合併後；取代上方「📌 狀態更新（2026-11-13，#1178 合併後…）」成為現況段；只追加；非 QA PASS；非授權）
+### ~~📌 Quality Batch 1 完成後最新接手點（2026-11-13，#1181 合併後；取代上方「📌 狀態更新（2026-11-13，#1178 合併後…）」成為現況段；只追加；非 QA PASS；非授權）~~〔已被檔尾「📌 Quality Batch 2 完成後最新接手點」段取代為現況；本段正文一字未動，其「唯一 NEXT＝Quality Batch 2」「#1182 未合併」等時點描述自新段起以新段為準（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕
 
 > **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「狀態更新（#1178 合併後）」段除**標題行就地加刪除線**外，內文**一字未動**；「存檔完整性補註」段仍為其補充（不自稱現行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為作者 2026-11-13 約 05:00Z 以 `git`／`gh api` REST 實查（時點快照，會漂移，一律重查）。**精簡原則**：HOLD／Stop Gate 與待客戶裁示不在此重抄，指向既有段落。
 
@@ -1091,3 +1091,58 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ```
 
 **四、仍 NOT VERIFIED**：run `43368890041` 結論；#1181 兩組非作者 QA 與合併前 mergeable 狀態（轉述）；稽核／矩陣文件中的所有「測試 PASS」；Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測；Bash 唯讀 settings 層是否強制；新對話零記憶載入。本段單組撰寫，未經第二組驗證。
+
+
+### 📌 Quality Batch 2 完成後最新接手點（2026-11-13，#1183 合併後；取代上方「📌 Quality Batch 1 完成後最新接手點」成為現況段；只追加；非 QA PASS；非授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「Quality Batch 1 完成後最新接手點」段除**標題行就地加刪除線**外，內文**一字未動**；「存檔完整性補註」段仍為補充（不自稱現行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為作者 2026-11-13 約 06:55Z 以 `git`／`gh api` REST 實查（時點快照，會漂移，一律重查）。**精簡原則**：不重抄歷史；HOLD／待客戶裁示指向既有段落。
+
+**一、Resume Checkpoint 15 欄逐欄現況（欄位名稱沿用 `PROJECT_RULES.md` §20.2）**
+
+| # | 欄位 | 現況或指向 |
+|---|---|---|
+| 1 | latest verified main SHA | `ee1973f3496b3a173c8c5a37d5fcb814bd33f00c`（#1183 squash，2026-11-13T06:53:55Z；PR head `e2cccc5bf0befe1c7ff6c99c42b9303ed9c82714`）。取代上段 `8170876b`／`25e1930d`；cron 會推進，一律重查 |
+| 2 | current working branch | 本同步 PR #1184 的分支 `ccr-6ca9d77e-90ji2g`（以 GitHub 為準；撰寫時分支內容與 main 相同再追加本批三檔） |
+| 3 | current PR | #1183 已合併；本批無開啟中的功能 PR，本同步 PR 另計（號碼以 GitHub 為準）。Open PR 仍為 #1164（Draft，`6fddc582`）、#1124（`3cd3f525`）、#1125（`cf4739c5`）、#1126（`1654ae60`），皆 HOLD、不碰（head 為時點快照） |
+| 4 | current task／batch | DEC-178 Quality Batch 2（④⑤⑥）**已完成**；下一批＝Batch 3（⑦⑧⑨），尚未開始 |
+| 5 | completed in this batch | ④⑤⑥ 全 DONE 並入 main（見二）；已合併序列 #1175～#1183（`880bc17c`、`093b323d`、`63da9515`、`c56afd45`、`c00ed542`、`5b180ea`、`8170876`、`25e1930d`、`ee1973f3`；`git log origin/main` 實查），**不得重做** |
+| 6 | exact current stopping point | Batch 2 已合併；本同步 PR（BACKLOG＋PROJECT_STATE §70.19＋HANDOFF）待 QA→CI→Merge Gate；合併後 main push CI 無結論 |
+| 7 | next single action | **唯一 NEXT＝Quality Batch 3**，啟動前置見下方第三節提示語第 3 點與 BACKLOG `DEC178-QB3-PREREQ`；前置未成立時只做被動觀察與回報 |
+| 8 | tests／CI 已完成 | #1183 PR head `e2cccc5b` 同 head 五項原生 check runs 皆 success（run `43379220541`，`gh api` 2026-11-13 重取，FACT）；review threads `[]`（實查，FACT）；#1181 push CI run `43368890041`、#1182 push CI run `43372553225` 皆 success（本組實查，FACT） |
+| 9 | tests／CI 尚未完成 | 合併後 main push CI：run `43381887332`（head `ee1973f3`）撰寫時 `in_progress`、無結論，**NOT VERIFIED，接手者重查**，不得假稱全綠（若非 success，先判斷是否 D6 已知非決定性紅燈，rerun 通過不等於已修）；本同步 PR 的 QA 與 CI 未做 |
+| 10 | unresolved true Stop Gates | **全部未解除**；以「存檔完整性補註」第 7 項＋BACKLOG「DEC-178 Quality Batch 1 完成同步」段末 blockquote＋「狀態更新（#1178 合併後）」段「五之一」三處取聯集為準，不在此重抄；另併讀 PROJECT_RULES 第 4 節 |
+| 11 | uncommitted／unpushed work | 本組不 commit；以 PR #1184 為準（見 GitHub） |
+| 12 | relevant evidence location | `docs/vnext/PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`；`tests/test_push_weekly_report_main.py`、`tests/test_pick_chain_to_line_contract.py`；`PROJECT_RULES.md` 第 7 節 ⑤ 補註；`docs/vnext/QUALITY_BATCH1_COVERAGE_GAP_AUDIT_2026-11-13.md`；BACKLOG 檔尾「Quality Batch 2 完成同步」；PROJECT_STATE §70.19；DECISIONS DEC-178 |
+| 13 | recommended Model | Sonnet 5.5（不可用則選目前高可靠程式模型）；現行值只以本表為準 |
+| 14 | recommended Effort | High（含靜默自主巡航 Mode）；建議值 |
+| 15 | last checkpoint timestamp | 2026-11-13 約 06:55Z（作者實查時點） |
+
+**二、Batch 2 結果（FACT 除另註；`git show --stat ee1973f` ＝ 6 檔 +729／−1，無生產碼變更）**
+
+| 項 | 狀態 | 要點與限制 |
+|---|---|---|
+| ④ E2E／Golden／Mutation | DONE（**離線契約，非 Production E2E**） | 新增 `test_push_weekly_report_main.py`（週報 `main()`）15 筆＋`test_pick_chain_to_line_contract.py`（選股→換股池→LINE 訊息接縫，合成資料）14 筆，共 29（`pytest --collect-only` 實查）；mutation 反向驗證為轉述，本組未重跑。不證明 LINE 實送／Secrets／排程實跑。Digest 段與 UI2 REAL 刻意不新增（Digest 0 production caller；UI2 已有 `WIRED_PATHS` 守衛；總管轉述） |
+| ⑤ 最小 PR Impact Check | DONE（最小入口，**無機械強制**） | PR 範本新增「測試應重跑」「正式文件引用需同步」；`PROJECT_RULES.md` 第 7 節 ⑤ 補註對照表（CI 仍全跑，不縮減） |
+| ⑥ Production 健康度五軸 | DONE（定義＋時點快照） | 軸1 CI OK（僅限 CI）；**軸2 資料是否更新＝main 層面 FAIL／邊界**（讀法 A 落後 4＝FAIL，讀法 B 落後 3＝邊界）：資料停在 2026-11-09，**共同事實＝cron 皆 success 但發布 PR #1124～#1126 未併入**；**DPE-3／DPE-6 待客戶裁示、DPE-7 已定維持 A（觀察），11-19 為保留檢查點；AI 不處置**；軸3 警示；軸4 未接線屬實、部署端 NOT VERIFIED；軸5 警示、送達／Secrets NOT VERIFIED。逐軸數字本組未重取 |
+| QA／CI | 轉述 | 非作者三組（測試品質／文件證據與五軸判讀／Delta）首輪 PASS with fixes 已修；合併前 mergeable clean 為總管轉述，本組未重讀，NOT VERIFIED（同 head 五項 CI success 已實查，FACT） |
+
+**三、新對話接手提示語（完整、可直接貼入新對話）**：取代上段及更早各段提示語；後者已過期，不得照舊提示語行事。
+
+```
+你接手 my-stock-dashboard（GitHub: linchen-20200325/my-stock-dashboard）。先做 GitHub-first 重核，不信聊天摘要：
+1. 取回 main 最新 SHA（時點快照：#1183 squash 為 ee1973f3，之後必已推進）、Open／Draft PR（head／base／CI／review）、本記憶同步 docs PR 是否已合併、main push CI 結論（#1183 合併點的 run 43381887332 撰寫時 in_progress；查核是作者自加謹慎措施，非客戶指示）。
+2. 閱讀順序：CLAUDE.md（§-2、§-1、§-1.5）→ PROCESS.md → PROJECT_RULES.md（第 4／7／15／20／32／33／34 節）→ docs/PROJECT_STATE.md（§70.19）→ docs/DECISIONS.md DEC-178（客戶原文 fence，逐字一致性 NOT VERIFIED）→ docs/BACKLOG.md 檔尾 DEC178-* 各列（含 DEC178-QB3-PREREQ）→ docs/HANDOFF.md 檔尾「📌 Quality Batch 2 完成後最新接手點」段，與其上「📌 存檔完整性補註」段。
+3. 唯一 NEXT＝Quality Batch 3（⑦Agent 路由整合、⑧Token 與返工基準、⑨零記憶接手測試）；授權沿用 DEC-178，不需客戶再次指派。前置：(a) 本同步 PR 已合併進 main；(b) 合併後 main push CI 有結論且 success（含 run 43381887332）；(c) 建議（RECOMMENDATION，非客戶裁示）在新對話開始——⑨ 需零記憶情境才有意義。⑧ 須區分 MEASURED／ESTIMATED／NOT VERIFIED，禁止 bytes 冒充 Token，單次樣本不得冒充基準，不構成 REORG3C-Q5-GATE 重議。每批最多三項、寫入序列化、非作者多組獨立 QA、同最新 head 五項原生 CI success、review threads 與 Merge Gate 核實後才 merge。
+4. 已完成不得重做：#1175～#1183（880bc17c、093b323d、63da9515、c56afd45、c00ed542、5b180ea、8170876、25e1930d、ee1973f3）；Quality Batch 1（①②③）與 Batch 2（④⑤⑥）皆已完成；本同步 PR 以 GitHub 為準。
+5. HOLD／待客戶裁示（全部未解除，不重抄；取聯集）：HANDOFF「存檔完整性補註」第 7 項＋BACKLOG「Quality Batch 1 完成同步」段末 blockquote＋HANDOFF「狀態更新（#1178 合併後）」段「五之一」（該段標題雖有刪除線，其「五之一」待客戶裁示清單與 HOLD 指標仍有效）。含 #1124～#1126、#1164、#1119（Issue）、DG-*／I1144-*、G-F2～G-F6、REORG3C-Q5-GATE、Q1～Q7、VG1／VG2、DPE-*、DEC178-AGENT-BASH-READONLY-ENFORCEMENT、D6 偵測器程式修復。沒答＝維持 HOLD／現狀。
+6. 已知事實：五軸快照軸2 為 FAIL／邊界（讀法 A 落後 4＝FAIL、讀法 B 落後 3＝邊界；共同事實＝資料停在 2026-11-09、發布 PR #1124～#1126 未併入）；DPE-3／DPE-6 待客戶裁示，DPE-7 已定維持 A（觀察），11-19 為保留檢查點；AI 不處置、不碰這三個 PR。
+7. 原則：missing 不填 0（unavailable ≠ neutral；PROJECT_RULES 第 13 節 D5／D6）；Preview（FAKE／REAL shadow）≠ Production；CI 綠 ≠ Production 有效；離線契約測試 ≠ Production E2E；FACT／INFERENCE／NOT VERIFIED 分開寫，單組結論不寫成已驗證。mutation 一律在 scratchpad 副本做，不改正式檔。
+8. 三 Agent（.claude/agents/ 下 stock-data-integrity、stock-ui-ux、stock-independent-qa；路由見 PROJECT_RULES 第 34 節）：按需挑選專家，不免除 CLAUDE.md §-2 每次任務派工與多組獨立稽核；無 Write／Edit／NotebookEdit／Agent 工具；Bash 唯讀僅指示性約束；輸出不是授權、不能取代客戶裁示。/agents、/doctor、自動路由仍 NOT VERIFIED。
+9. 靜默回報：只在真正阻塞、客戶 Decision Gate、重大里程碑或整批完成時回報；長篇 QA／CI 累積時依 PROJECT_RULES 第 33 節安排安全交接。需客戶裁示時：A／B／C 方案、推薦方案、最小變更範圍後停手。
+10. Model／Effort 建議：Sonnet 5.5／High／靜默自主巡航。
+11. 停手：同步 PR 未合併或 push CI 無結論／非 success；Agent 載入失敗（不自行改權限）；需動 HOLD／Gate 項、投資公式／Risk Cap、未授權 API／cron／Secrets、Old UI／正式 UI 切換、.claude/settings*；關鍵前置證據 NOT VERIFIED 而無法確認。無新指派時只做被動觀察並回報狀態。時點警語：所有 SHA／run id／PR head 皆時點快照，一律以最新 GitHub 為準。
+```
+
+**四、已知風險（精簡）**：(1) 軸2 資料停滯為已知事實，持續到客戶裁示；(2) ④⑤ 皆無機械強制／非 Production 證據，不可讀成 Production 有效；(3) 倖存 mutation、`push_daily/watchlist_signals.main()` 無離線測試、mutation 須用 scratchpad 副本（BACKLOG `DEC178-QB2-*` 三列，P3）；(4) Agent 載入／路由仍 NOT VERIFIED，留給 Batch 3 ⑦⑨。
+
+**五、仍 NOT VERIFIED**：run `43381887332` 結論；#1183 三組非作者 QA、合併前 mergeable（轉述）；mutation 驗證結果（未重跑）；五軸快照逐軸數字（未重取）；Streamlit Cloud 部署、Secrets、LINE 實送、branch protection；DEC-178 fence 逐字一致性；Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測。本段單組撰寫，未經第二組驗證。
