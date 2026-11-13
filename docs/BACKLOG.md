@@ -2481,3 +2481,26 @@
 | **DEC177-SHOWN-FOLDS-QUESTION** | **候選**：若 B 的「預設收合明細」（及 C-8「資料使用條件」收合區，若採為獨立收合區）需要在 `src/ui2/views/_page.py::SHOWN_FOLDS` 新增 🗂 條目，須客戶另裁示（render policy 例外；線框文件 §8.1-3 自述現僅 3 個預設收合區、🗂 無）。**尚未確認是否需要新增，不預判** | P1 | blocked-on-customer（**條件式**：僅在 `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` 的調查確認需要時才成立；尚未確認） | DEC-177「二」末段；線框文件 §8.1-3、§8.2、C-12 | 由 `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` 的調查先回答「是否需要」；需要則提**精確範圍（哪個 page_id／section_id）＋最小修改方案**請客戶裁示；未裁示前不改 `SHOWN_FOLDS`、不改守衛測試 |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、#1124～#1126、#1164、#1119、D6 偵測器程式修復、DPE-7（維持 A 觀察，11-19 檢查點）、Old UI、正式 UI 切換仍 HOLD。
+
+
+## 2026-11-13｜DEC-177 實作前調查與裁示單提交（只追加；不改既有列；依據 `docs/DECISIONS.md`「DEC-177 後續註記：實作前調查結果」與 `docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`；登記不等於施工授權）
+
+> ID 前綴 `DEC177-`（落盤前 `git grep -c "DEC177-FRESHNESS-IMPL\|DEC177-VIEWPORT\|DEC177-TOPFIVE" docs/BACKLOG.md` ＝ 0，無重複）。本段單組撰寫，未經非作者獨立 QA；調查事實來自三組單組調查，作者另重核檔案行號並重跑複本實驗。
+
+### A. 既有列狀態註記（**以追加列註記，原列不改**；既有列的 status 欄是否改為結案由總管判定）
+
+| 既有 ID | 註記（2026-11-13） |
+|---|---|
+| `DEC177-UI-DATA-FRESHNESS-OVERVIEW-V1` | 實作前調查已完成；**本批第 2 項停在安全點，未改 `src/`、`tests/`**；完整 A＋B 在不放寬守衛下做不出來（複本實驗：方案 X 全綠但無新鮮度資訊；方案 Y 19 個測試紅）。需客戶裁示 Q1～Q7（見 `DEC177-FRESHNESS-IMPL-DECISION-SHEET`）後才可動工。本列 status 維持 open；next action 改由決策單 §4 切分（階段 1＝A 首屏、階段 2＝B 收合明細，皆 RECOMMENDATION） |
+| `DEC177-SHOWN-FOLDS-QUESTION` | 「是否需要」已有答案：**B 收合明細需要**新增 `SHOWN_FOLDS` 條目（線框 3 個收合區→3 條，或合併為 1 條＝改線框，複本實測 21 個測試紅，其中 5 個為 viewport 證據過期）；**A 首屏預期不需要**（推測，實作時確認）。裁示題併入決策單 Q6（含各自所需授權）。仍 blocked-on-customer；**客戶回覆前不改 `SHOWN_FOLDS`** |
+| `DEC177-HANDOFF-PREVENTIVE-RULE` | 追蹤中；本批已套用第 33 節：多批與長篇 QA／CI 累積，建議本 PR 合併後安全交接（見 HANDOFF 檔尾新段「交接風險檢查」）。本註記不是施工授權 |
+
+### B. 新增列
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC177-FRESHNESS-IMPL-DECISION-SHEET** | 🗂 資料新鮮度總覽實作前裁示單（Q1 允許 🗂 帶真值欄位；Q2 「尚未接線」字樣 vs 詞彙守衛；Q3 第一屏與舊區塊文字矛盾〔含擬議文案〕；Q4 狀態符號〔線框 ✅◷◇⛔ vs 現行全站字樣；總管推薦 B〕；Q5 規格缺口〔位階「無法判定」、位階無資料日〕；Q6 收合明細 A／B／C 與分階段；Q7 線框文案候選 C-2／C-4／C-7／C-8／C-9）。決策單附「總管推薦」（全部 RECOMMENDATION）與一鍵回覆範本 | P1 | blocked-on-customer | DEC-177；`docs/vnext/NEWUI2_DATA_FRESHNESS_OVERVIEW_IMPLEMENTATION_DECISION_SHEET_2026-11-13.md`；線框 §8～§10 | 等客戶回覆 Q1～Q7（可「全部照總管推薦」一行回覆）。**回覆前不寫 UI code**；回覆後第一步＝依回覆範圍以獨立 PR 做階段 1（寫入序列化、一次一模組、突變測試、非作者 QA、同 head 五項原生 CI）。沉默＝維持現狀 |
+| **DEC177-VIEWPORT-EVIDENCE-REGEN** | 觀察項：改 `src/ui2/**`、`app_ui2.py` 或 `tests/ui2_viewport/measure_viewport.py` 會使 4 份 viewport 證據（`docs/vnext/newui2_realfeed/`、`newui2_batch3b/` 各 2 份）過期（`tests/test_ui2_real_feed.py::test_dec137_evidence_meta_is_fresh`×4＋`..._has_teeth`），須在真瀏覽器（Playwright＋Chromium，Streamlit 1.56 與 1.59.2）重跑 `measure_viewport`；本沙箱無 Python Playwright，**可否重生 NOT VERIFIED** | P2 | open（觀察；階段 2 前置） | 決策單 §4、§6.1；`tests/ui2_viewport/measure_viewport.py` `source_files`／`source_hash` | 階段 2（B 收合明細）開工前先確認可重生的環境；階段 1 若發現需動 `src/ui2/**` 即停手回報。不是施工授權 |
+| **DEC177-TOPFIVE-GATE-DOC-SUPERSEDE-NOTE** | docs 同步（內部）：`docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md` 寫 🗂 第一批「不新增真實來源健康度欄位、分母…」且正式清單／分母走獨立 Gate；DEC-177（客戶、較新）授權固定清單＋計數。依 `PROJECT_RULES.md` §25 位階，最新有效客戶 DEC 高於 vnext 規格文件（**INFERENCE，位階解讀；客戶若不同意請推翻**）。該 Gate 文件尚無註記被取代（無測試釘住） | P3 | open（內部；docs 同步） | DEC-177；決策單 §3-4；TOP_FIVE Gate 文件 `:48,:70` | 實作批合併時以 docs 追加註記同步（不改該檔既有文字、不改 `docs/vnext` 既有檔原文則改以 BACKLOG／DECISIONS 註記）。屬 `CLAUDE.md` §-1.5.D §03-1 內部自決，不需客戶回覆 |
+
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F2～G-F6、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3、#1124～#1126、#1164、#1119、D6 偵測器程式修復（另批提案）、DPE-7（維持 A 觀察，11-19 檢查點）、Old UI、正式 UI 切換仍 HOLD。
