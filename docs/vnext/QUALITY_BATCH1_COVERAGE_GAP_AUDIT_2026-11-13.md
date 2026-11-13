@@ -178,3 +178,12 @@
 | 10 | #1124～#1126 分支上的實際資料日與 PIT | 本文件僅讀 PR 狀態，未讀分支內容 |
 | 11 | HANDOFF 內「Q5 相關 Token 量測」單次樣本的正確性 | repo 內有一份總管轉述的單次樣本（HANDOFF「量測結果」小節；方法與數值可見），但未獨立複驗、無原始 harness 輸出，不得當基準 |
 | 12 | 客戶 2026-11-13 原始訊息與 DEC-178 fence 的逐字一致性 | 原始對話不在 repo |
+
+## 6. Batch 2 更正（2026-11-13 追加；原文 §0～§5 不改，以本節為準）
+
+> 兩點更正均為單組（執行 AI）重取後的結論，尚未經非作者 QA；不解除任何 Gate／HOLD。證據：`tests/test_push_holdings_daily.py`（`grep -n "P.main(" ` 命中 10 處）、`tests/test_push_weekly_report_main.py`、`origin/main:.github/workflows/push_*.yml` 的 `on:` 區塊、`docs/vnext/PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`。
+
+| # | 原文位置 | 原說法 | 更正 |
+|---|---|---|---|
+| 1 | §2.1 LINE push 列 | 「`scripts/push_*` orchestrator 無端到端離線測試」 | **不精確**：`tests/test_push_holdings_daily.py` 已有多支 `P.main([...])` 離線測試。**缺口之一（weekly 已補）**：`push_weekly_report.main`（當時 `tests/test_push_weekly_report.py` 無 `main(` 呼叫），已由 `tests/test_push_weekly_report_main.py` 補上（Batch 2 ④；為離線契約測試，非 Production E2E，不證明 LINE 送達）。該檔位於 Batch 2 分支，是否已併入 main 以該 PR 為準。**另：`push_daily_signals`／`push_watchlist_signals` 的 `main()` 亦無離線測試**（`git grep` 親驗：`tests/` 內僅 `tests/test_daily_signal_push.py` 測 `push_daily_signals` 的 `_maybe_ai_judgment` 等輔助函式、無任何 `main(` 呼叫；`push_watchlist_signals` 在 `tests/` 僅出現於 workflow 檔名檢查與分層守衛）；目前僅 workflow_dispatch 手動觸發，風險較低，登記為備選，不在本批。 |
+| 2 | §2.3 軸 5 列 | 「`push_watchlist_signals.yml`（`--health-check`）為存活心跳」 | **與 workflow 現況不符**：`push_watchlist_signals.yml`、`push_daily_signals.yml` 的 `on:` 只剩 `workflow_dispatch`（排程已停，註解 user 2026-08-23）；**仍排程者為 `push_weekly_report`（`0 21 * * 0`）與 `push_holdings_daily`（`30 22 * * 0-4`）**。`--health-check` 參數仍在腳本中，但目前無排程中的心跳。 |
