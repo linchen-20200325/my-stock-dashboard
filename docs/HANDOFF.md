@@ -950,7 +950,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **仍 NOT VERIFIED**：DEC-178 fence 與客戶原訊息逐字一致性；三個 Agent 的實際載入與路由效果；Bash 唯讀 settings 層是否強制；#1177 的非作者 QA／CI 細節與 #1177 合併後 main push CI；Agent frontmatter 格式官方文件（單組轉述）。本段單組撰寫，未經第二組驗證。
 
 
-### 📌 狀態更新（2026-11-13，#1178 合併後；更新上一段 15 欄中已過期的欄位，其餘欄位仍有效）
+### ~~📌 狀態更新（2026-11-13，#1178 合併後；更新上一段 15 欄中已過期的欄位，其餘欄位仍有效）~~〔已被檔尾「📌 Quality Batch 1 完成後最新接手點」段取代為現況；本段正文一字未動，其「本段是檔尾唯一現況段」「Quality Batch 1～3 尚未開始」等描述自新段起以新段為準（有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕）〕
 
 > **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「Agents 批次後最新接手點」段除**標題行就地加刪除線**（「現行有效接手點」→ 已被本段取代為現況）外，內文**一字未動**；其中「current PR ＝ #1178（Draft）」「本 PR 未合併」「待非作者 QA」等描述，自本段起以本段為準（時點快照，一律以 GitHub 重查）。**本段是檔尾唯一現況段**；上一段 15 欄僅作欄位模板，逐欄現況見下表。**單組聲明**：本段為作者單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。
 
@@ -1049,3 +1049,28 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 7. **新對話提示語的 HOLD／Gate 清單少列（現況段第七節提示語）**：除其所列外，尚有 `I1144-DATA-STORAGE-DECISION`、`I1144-DG-A3`、`I1144-DG-HEALTH`、外資 L3（另案）、`G-F2`～`G-F6`、`REORG3C-Q5-GATE`（以上 ID 作者以 `git grep` 確認存在於 BACKLOG／DECISIONS）仍待裁示或 HOLD，**皆未因任何批次解除**。完整 HOLD／Gate 清單見 BACKLOG 檔尾「DEC-178 後續」段末「以上皆不暗示任何 Gate 已解除…」blockquote（B:2537 一帶，行號會漂移）。
 8. **`DEC174-B1-INDEP-QA` 補字眼**：現況段五之一第 5 項該列屬「**需客戶指派（非裁示）**」——BACKLOG 該列：內部 QA（`CLAUDE.md` §-2 規則 4）、不需客戶裁示、無前置 Gate，但啟動仍須客戶指派（§-1 無指派不主動動工）；指派前維持不動工。
 9. **本補註的 NOT VERIFIED**：#1179 的 QA／CI 細節（轉述）；第 3 項 run `43353310836` 的最終結論（見該項）；上述 REST 結果撰寫時點快照。作者單組撰寫，**未經第二組驗證**。
+
+
+### 📌 Quality Batch 1 完成後最新接手點（2026-11-13，#1181 合併後；取代上方「📌 狀態更新（2026-11-13，#1178 合併後…）」成為現況段；只追加；非 QA PASS；非授權）
+
+> **有意識的更新，不是漏刪；2026-11-13；決策者 AI 總管〔事實更新〕。** 上方「狀態更新（#1178 合併後）」段除**標題行就地加刪除線**外，內文**一字未動**；「存檔完整性補註」段仍為其補充（不自稱現行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為作者 2026-11-13 約 05:00Z 以 `git`／`gh api` REST 實查（時點快照，會漂移，一律重查）。**精簡原則**：HOLD／Stop Gate 與待客戶裁示不在此重抄，指向既有段落。
+
+**一、主要欄位**
+
+| 欄位 | 內容 |
+|---|---|
+| latest verified main SHA | `8170876bc6c581e9bc3a2ac5390606935100ff59`（#1181 squash，2026-11-13T04:58:04Z）。取代上段 `c56afd45`／補註 `c00ed542`；cron 會推進，一律重查 |
+| PR | **#1181**（Quality Batch 1 ①②③）`merged ＝ true`，PR head `ba1e12239bcbaf0a336c86f1bb9eb3f01d68c604`；本批無開啟中的功能 PR（本同步 PR 另計）。Open PR 仍為 #1164（Draft，`6fddc582`）、#1124（`3cd3f525`）、#1125（`cf4739c5`）、#1126（`1654ae60`），皆 HOLD、不碰（head 為時點快照） |
+| CI | PR head `ba1e1223` 同 head 五項原生 check runs 皆 `completed／success`（Fast checks、Slow tests、ui2-browser 1.56.0／1.59.2、ui2-browser-gate；本組 `gh api` 實查）；review threads `[]`（本組實查）。**合併後 main push CI** run `43368890041`（head `8170876b`）：撰寫時 **`in_progress`、無結論；NOT VERIFIED，接手者重查**，不得假稱全綠（若非 success，先判斷是否 D6 已知非決定性紅燈，rerun 通過不等於已修） |
+| QA | 非作者兩組（證據準確性、治理金融語意）首輪 PASS with fixes（0 High）→ 修正後 Delta PASS。**總管轉述，本組未重讀 QA 原文，NOT VERIFIED** |
+| 六項狀態 | ① DONE；② DONE（DoR／Producer-Consumer **最小入口**；機械強制 GAP：無測試強制 PR 範本欄位）；③ DONE（索引矩陣；Production 完成 0 欄位；`fetched_at`／PIT／`currency`／Canonical｜Shadow 在 UI2 VM 契約層 NOT AVAILABLE）；④⑤⑥ 尚未開始（Batch 2）；⑦⑧⑨ 尚未開始（Batch 3） |
+| 唯一 NEXT | **Quality Batch 2（④E2E／Golden／Mutation、⑤最小 PR Impact Check、⑥Production 健康度五軸）**，以 `docs/vnext/QUALITY_BATCH1_COVERAGE_GAP_AUDIT_2026-11-13.md` §3 缺口清單為前提（**RECOMMENDATION，非客戶裁示**）。啟動**不需**客戶再次指派（DEC-178 fence）；仍受 Gate／HOLD、單批最多三項、寫入序列化、非作者獨立 QA、Merge Gate 約束。啟動前先重查 `8170876b` push CI 結論 |
+| HOLD／Stop Gate | **全部未解除**；清單見上方「存檔完整性補註」第 7 項、BACKLOG 檔尾「DEC-178 Quality Batch 1 完成同步」段末 blockquote 與 PROJECT_RULES 第 4 節，不在此重抄 |
+| 待客戶裁示 | 見上方「狀態更新（#1178 合併後）」段「五之一」清單（Q1～Q7、VG1／VG2、DPE-3／DPE-6、接線前決策單、DEC174-B1-INDEP-QA、I1144 兩項與 Q5、Bash 唯讀 settings）；本批**新增**：Active Contract「四頁」vs 守衛舊標題僅記錄，放寬守衛須客戶裁示（BACKLOG `DEC178-QB1-ACTIVE-CONTRACT-FOUR-PAGES`）。附推薦者為 RECOMMENDATION；沒答＝維持 HOLD／現狀 |
+| 過期事實 | 新增備忘 `DEC178-QB1-AUD-HEAD-STALE`：AUD（`NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md`）記載的 #1124 head `fc447def` 已落後，AUD 過期但原文不改；#1124～#1126 仍 HOLD。P3 備忘 `DEC178-QB1-FOLLOWUP-NOTES`（F1～F3，Delta QA 可選小建議，不阻塞）見 BACKLOG |
+
+**二、Agent 載入觀察（更新；FACT＝單次 session 觀察，由總管轉述，本組未獨立重現）**：本批總管 session 的 Agent 工具清單**直接列出**三個專業 Agent（`stock-data-integrity`、`stock-ui-ux`、`stock-independent-qa`），且**已成功派工使用過**（以各種角度執行 Quality Batch 1 的調查與非作者 QA）。這比上段「僅列出」多了「實際派工可用」一層。**仍 NOT VERIFIED**：`/agents`、`/doctor` 是否無警告；自動路由（依 description 自動委派）是否正確；Write／Edit 是否實際不可用（未實測呼叫）；新對話零記憶下是否仍載入；description 常駐 Token 成本。單次觀察不等於載入驗證完成，`DEC178-AGENT-LOAD-VERIFY` 仍併入 Batch 3 ⑦⑨，不得據此結案。
+
+**三、新對話接手提示語**：沿用上方「狀態更新（#1178 合併後）」第七節提示語的**規則部分**（GitHub-first 重核、閱讀順序、靜默回報、FACT／INFERENCE／NOT VERIFIED、HOLD／禁止、Token 基準、時點快照警語）；其**時點部分已過期**，請改為：「main 時點快照 `8170876b`（#1181 squash），之後必已推進；Quality Batch 1 ①②③ 已完成；唯一 NEXT＝Quality Batch 2（④⑤⑥），以稽核文件 §3 缺口清單為前提；先重查 `8170876b` push CI run `43368890041` 結論（作者自加的謹慎措施，非客戶指示）；現況段以 HANDOFF 檔尾本段為準」。沒有新指派時：停手，只做被動觀察並回報狀態與待客戶裁示清單。
+
+**四、仍 NOT VERIFIED**：run `43368890041` 結論；#1181 兩組非作者 QA 與合併前 mergeable 狀態（轉述）；稽核／矩陣文件中的所有「測試 PASS」；Agent 的 `/agents`／`/doctor`／自動路由／唯讀實測；Bash 唯讀 settings 層是否強制；新對話零記憶載入。本段單組撰寫，未經第二組驗證。
