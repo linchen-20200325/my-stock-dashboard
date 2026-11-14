@@ -1358,7 +1358,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 **七、仍 NOT VERIFIED**：DEC-181／DEC-182 fence 與客戶原訊息的逐字一致性；客戶 Cloud 實測（口述）；Cloud 部署 commit、日誌日期、repo owner、是否自動部署、Cloud Secrets；CI run id 與結論（總管轉述）；Repository 公開狀態與 Actions 設定（客戶陳述）；11-10～11-12 是否為交易日；11-12 台股缺列原因；inst 11-11／11-12 真值；相關測試是否通過。本段單組撰寫，未經第二組驗證。
 
-### 📌 #1124 發布 Gate 裁示後最新接手點（2026-11-14，DEC-183；取代上方「📌 資料更新程序規劃後最新接手點」成為現況段；只追加；非 QA PASS；非授權）
+### ~~📌 #1124 發布 Gate 裁示後最新接手點（2026-11-14，DEC-183；取代上方「📌 資料更新程序規劃後最新接手點」成為現況段；只追加；非 QA PASS；非授權）~~〔已被檔尾「📌 決策閉環 Batch 1 後最新接手點」段取代為現況；本段正文一字未動，其「唯一 NEXT＝客戶操作 DPE-5」「#1124 head check runs＝0／唯一 run 43469025728 action_required」「main d607acb8」等時點描述自新段起以新段為準（有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕）〕
 
 > **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** 上方「資料更新程序規劃後最新接手點」段除**標題行就地加刪除線並附指向本段註記**外，內文**一字未動**（這是本批唯一的刪除行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為 `git` 本地實查與 GitHub 唯讀讀取（2026-11-14 約 08:00～08:30 台北，時點快照，會漂移，一律重查）。**精簡原則**：不重抄歷史；細節以 `docs/DECISIONS.md` DEC-183 為準。
 >
@@ -1408,3 +1408,45 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 **六、仍 NOT VERIFIED**：DEC-183 fence 與客戶原訊息的逐字一致性；客戶是否已實際操作 DPE-5；11-12 與 11-10 外資官方值；`twii` `volume` 語意；`margin` 真值；交易日曆；`published_at`；證交所『交易資訊使用管理辦法』全文；FinMind 使用條款；Yahoo 完整服務條款與 `^TWII` 適用性；#1124 review threads 數；`shared/twii_ohlc_contract.py` 本組未重跑；Cloud 部署 commit／是否自動部署（沿 DEC-181）。本段單組撰寫，未經第二組驗證。
 
 **七、Batch 2 追加（2026-11-14；只追加一行）**：Commit 2 已追加 BACKLOG `UI2-1107-ACCEPTANCE-LEDGER`、`PANDAS-FLOOR-2-0-0-COMPAT-OBS` 與 DEC-183「後續註記（Batch 2）」：(Z1) #1124～#1126 自動 PR body「關閉 PR 並刪除分支」指示**不是客戶授權**，任何接手者**不得照做**（PROJECT_RULES §4 第 8 項、§10；不修改 publisher）；(Z2) #1105／#1103 留言抬頭自稱 ChatGPT 但張貼於 owner 帳號下，是否等同客戶正式裁示、#1103 Close→Reopen 實際執行者皆 NOT VERIFIED。
+
+### 📌 決策閉環 Batch 1 後最新接手點（2026-11-14，DEC-184～DEC-187；取代上方「📌 #1124 發布 Gate 裁示後最新接手點」成為現況段；只追加；非 QA PASS；非授權）
+
+> **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** 上方「#1124 發布 Gate 裁示後最新接手點」段除**標題行就地加刪除線並附指向本段註記**外，內文**一字未動**（這是本批唯一的刪除行）。**本段取代 L282–284 的 cleanup 候選表與舊現況段的「唯一 NEXT」**（兩者已過期，見 DEC-186 (四)）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；不是 QA PASS，不是授權。所有 SHA／run id／PR head 皆 2026-11-14 時點快照，一律以最新 GitHub 為準。找到本段：`grep -n '^###' docs/HANDOFF.md`，現行段＝檔尾最後一個標題含『最新接手點』且未被刪除線者。HANDOFF 檔頭的 2026-11-09 快照已過期，勿據以行動。
+
+**一、現在做到哪**：客戶 2026-11-14 的五則訊息已補登為 DEC-184（#1124 DPE-5 後續＋DG-LIC 解套方向）、DEC-185（緊急暫停三支資料 Workflow）、DEC-186（舊分支刪除資格稽核）、DEC-187（決策防遺漏與 Open Items 收斂計畫）；BACKLOG 檔尾新段含對帳表與新列；PROJECT_STATE §70.25；PROJECT_RULES 第 4 節新增「請示前查證（Pre-Ask Check）」。**本批停在 Decision Gate。**
+
+**二、main 與 Open 項目（時點快照，須重查）**：main `eb79df92`（#1190 squash）。
+
+| 項 | 一句話現況（細節見 BACKLOG 新段對帳表） |
+|---|---|
+| Issue #1119 | HOLD；僅唯讀盤點，無刪除授權 |
+| Issue #1116 | 修復已驗收；缺 2026-11-16 20:00 UTC 首次排程證據（NOT VERIFIED） |
+| Issue #1138 | 授權範圍內工作已完成；#1139 的同 head CI／獨立 QA 記錄缺漏 |
+| Issue #1110 | D6 修補完成；Cloud 端 Key／認證／線上資料日 NOT VERIFIED |
+| Issue #1107 | PARTIAL（`UI2-1107-ACCEPTANCE-LEDGER`） |
+| PR #1124 | HOLD；同 head 五項原生 CI success（run `43541275135`）、behind、DG-LIC／DG-PIT 未解除 |
+| PR #1125／#1126 | HOLD；同 head 原生 CI＝0 |
+| PR #1164 | Draft、維持不動；無非作者 QA |
+
+**三、阻塞（FACT）**：DG-LIC／DPE-3（5 檔無明示允許的逐字依據）、DG-PIT（無 `published_at`）；三支資料 workflow 現為 `disabled_manually`（客戶手動停用，DEC-185），main `data_cache` 不會再自動前進，台股卡最早 2026-11-17 轉過期（INFERENCE）。
+
+**四、唯一 NEXT＝客戶裁示**（Agent 在客戶回覆前只能做唯讀檢核與文件，不得自行推進；各題的完整內容見所列 DEC，**已有裁示者不得重問**）：
+1. **DG-LIC 走哪條路**：維持 #1124 HOLD 並由客戶取得書面授權，或採替代方案（需改發布架構，另案）；三支 workflow 暫停是否即其意圖（DEC-184 (七)）。
+2. **DG-PIT**：決策單決策 3 的 A／B／C，及「適用 PIT Gate」涵蓋哪些用途（DEC-184 (七)）。
+3. **分支刪除規則調和**：DEC-147 第 4 點條件授權是否仍有效、與 §4 第 8 項／§16.6／舊通則的關係；`ccr-ed362375-uplnw7` 三處保留文字；`NUI2-BRANCH-RETENTION-1107` 是否解除；#1048 提案檔與 #1034 規則文字去留（DEC-186 (五)）。
+4. **三支 workflow 的恢復條件與時點**；3 筆陳舊 queued Run 是否取消（DEC-185 (五)）。
+5. （資訊，非重問）DEC-178「六項」與 ①～⑨ 的指涉歧義（BACKLOG `QB-SIX-VS-NINE-AMBIGUITY`）。
+
+**五、禁止清單（逐項附出處；取聯集，不重抄他處清單）**：
+- 不得 merge／close／reopen／rebase／update branch #1124～#1126，不得處置 #1164（DEC-183 一、7 與三；DEC-184 (一)）。
+- 不得宣稱 DG-LIC、DG-PIT、DG-COV、DG-SCOPE、`I1144-WIRING-GATE` 已解除（DEC-187 本次禁止；DEC-184）。
+- 不得重新啟用三支 workflow、取消陳舊 queued Run、刪除任何 Workflow／Run／Artifact／YAML（DEC-185 (三)；DEC-187；DEC-183 Batch 1 A）。
+- 不得施工方案 C、搬移資料、新增儲存／Secret／API、改 publisher／cron／資料檔／schema、調整 repo 公開／私有（DEC-184 (一)）。
+- **未經客戶批准清單不得刪除任何分支**（見 DEC-186；DEC-147 第 4 點與 §4 第 8 項的關係**未裁示**，本句不是新通則，亦不重新確認 DEC-147）。
+- 不改 UI、投資公式、Risk Cap、System Action（DEC-187）；不新增第二份 DECISIONS／BACKLOG 或影子 SSOT（DEC-187）。
+
+**六、先讀哪些 SSOT**：`CLAUDE.md`（§-2、§-1、§-1.5）→ `PROCESS.md` → `PROJECT_RULES.md`（第 4 節含「請示前查證」、第 15／20／33／34 節）→ `docs/DECISIONS.md` DEC-183～DEC-187 → `docs/BACKLOG.md` 檔尾兩個 2026-11-14 段 → `docs/PROJECT_STATE.md` §70.24～§70.25。
+
+**七、避免重問檢查表**：向客戶提任何裁示題之前，先照 `PROJECT_RULES.md` 第 4 節「請示前查證」做（搜尋 DEC、BACKLOG、Issue／PR、最新 Gate；有相同條件下的有效裁示就遵循並引用 DEC）。本段不重抄該清單。
+
+**八、仍 NOT VERIFIED**：DEC-184～DEC-187 fence 與客戶原訊息的逐字一致性；2026-11-14 session 子 Agent 報告（僅存該 session）；停用三支 workflow 的實際按下者；Reopen 實際操作者；兩條已消失分支的刪除者；Yahoo ToS 等官方條款原文。
