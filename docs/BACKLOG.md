@@ -2868,3 +2868,9 @@
 | PR #1125／#1126 | **HOLD** | `PR1125-1126-NATIVE-CI-GAP` | 核准：DPE-5 僅授權 #1124，不涵蓋本二者｜已記：是 |
 
 > **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** 禁止清單／HOLD 清單的完整版只在 `docs/HANDOFF.md` 檔尾「📌 決策閉環 Batch 1 後最新接手點」五、（以及 DEC-183／DEC-184／DEC-186），此處不重抄；唯一 NEXT 見同段四。
+
+📌 2026-11-14（append-only）：`PREASK-GUARD-1` 已隨 PR #1191 合併（`bb00e341`，GitHub 讀取 FACT）→ 狀態 **COMPLETED**（實作＝規則文字已入 `PROJECT_RULES.md` §4；效力範圍見 DEC-187）。上列 PROPOSED 原文一字未動；以本註為準。
+
+| ID | 內容 | 狀態 | 來源 | 後續／Gate |
+|---|---|---|---|---|
+| **BATCH2-PRIORITY-1138-1116** | Batch 2（五個 Open Issues 轉為可驗收 Close 條件）優先順序：#1138、#1116（客戶交接指示 2026-11-14，經派工訊息轉錄、逐字一致性 NOT VERIFIED）；#1116 尚缺首次真實 ETF 排程發布驗收 | **PROPOSED**（待客戶啟動） | 客戶交接指示（轉錄，未核實原文） | **非施工授權**；新對話在客戶明確啟動前不施工；不解除任何 Gate |

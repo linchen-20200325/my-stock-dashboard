@@ -1462,3 +1462,15 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 **八、仍 NOT VERIFIED**：DEC-184～DEC-187 fence 與原提示語（客戶轉交）的逐字一致性；2026-11-14 session 子 Agent 報告（僅存該 session）；停用三支 workflow 的實際按下者；Reopen 實際操作者；兩條已消失分支的刪除者；Yahoo ToS 等官方條款原文。
 
 **九、來源標示更正（2026-11-14 後續；DEC-187 (六)）**：DEC-184～187 的 fence 是客戶轉交之派工提示語，不得標為客戶親自撰寫的逐字原文（亦未證明非客戶親撰）；授權效力僅限其實際載明的範圍，不代表推薦方案自動獲准。本更正**不改變任何 Gate**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向；DG-PIT 的「B＋X」類組合為總管於 session 內的推薦（repo 內未收錄其定義），**不得記成客戶已解除 Gate**；三支資料 Workflow 維持停用；queued Run 不取消、排程不重新啟用。DEC-183 及更早的同類標示是否也含 ChatGPT 擬稿＝NOT VERIFIED（BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`）。
+
+### 合併後更新（2026-11-14，append-only；補充上方「📌 決策閉環 Batch 1 後最新接手點」，原文一字未動；非 QA PASS；非授權）
+
+- **FACT（GitHub 讀取）**：PR #1191 已合併，merge SHA `bb00e341`（squash）；合併操作者帳號為 owner 帳號，實際操作者 NOT VERIFIED。Batch 1 完成。
+- **以本小節為準**：上方現況段中 main `eb79df92`、「本批停在 Decision Gate」、「作者單組撰寫，未經非作者獨立 QA」等合併前語句，自本小節起以本小節為準。#1191 合併前曾有多輪非作者 QA 與同 head 五項原生 CI success（來源：PR #1191 說明；QA 結論僅存 session、repo 外未複驗＝NOT VERIFIED）。
+- **NOT VERIFIED**：main push CI（run 43565950666）撰寫時進行中，須重查。
+- **唯一 NEXT（新對話）**：Batch 2（五個 Open Issues 轉為可驗收 Close 條件）——依客戶交接指示（2026-11-14，經派工訊息轉錄、逐字一致性 NOT VERIFIED）優先 #1138、#1116；但 Batch 2 是客戶下一步授權點，**新對話在客戶明確啟動前不施工**（見 BACKLOG `BATCH2-PRIORITY-1138-1116`）。
+- #1116：尚缺首次真實 ETF 排程發布驗收（2026-11-16 20:00 UTC 之後 `update_etf_managers` 的 schedule Run、`auto/data-etf-managers` PR）。
+- #1119、#1110、#1107：保留追蹤，狀態見上方現況段表格。
+- #1124～#1126、#1164：未授權處置；DG-LIC／DG-PIT 等 Gate 不解除（見 DEC-184、DEC-186、DEC-187）。
+- 三支資料 Workflow 維持停用、queued Run 不取消、排程不重新啟用（DEC-185）。
+- 已核准事項依 `PROJECT_RULES.md` 第 4 節「請示前查證」不得再問。
