@@ -10062,3 +10062,20 @@ Batch 2：最小追溯補強
 - **本條不解除任何 Gate／HOLD**，不授權：觸發任何抓取／bootstrap／回補／手動 workflow、合併／關閉／重開／rebase／update branch #1124～#1126、處置 #1164、刪除任何 Run／Artifact／YAML／分支、修改全域 retention、修改 NAS／Secrets／Branch Protection／資料契約／`app.py`／`app_ui2.py`／UI、新增 API／cron／Secrets／adapter、改 publisher／PR 模板、關閉 #1119／#1138／#1116／#1110／#1107、Cloud Reboot。
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶是否已實際操作 DPE-5；11-12 與 11-10 外資官方值；`twii` `volume` 語意；`margin` 真值；交易日曆；`published_at`；證交所『交易資訊使用管理辦法』全文；FinMind 使用條款；Yahoo 完整服務條款與 `^TWII` 適用性；GitHub Docs 的 retention 說明（舊留言引用，本組未重讀）；#1124 review threads 數；`shared/twii_ohlc_contract.py` 本組未重跑。
 - **單組聲明**：本條 (二)～(六) 的核實與判讀為單組撰寫，**未經非作者獨立 QA（`CLAUDE.md` §-2 規則 6）**；CI 與 QA 結果由總管於 PR 補記；**不得被引用為「已 QA PASS」**。
+
+#### DEC-183 後續註記（Batch 2；2026-11-14；只追加；DEC-183 上文一字未改；決策者 AI 總管〔事實更新／勘誤〕；**非新客戶裁示**；授權依據為客戶 2026-11-14 原文二、Batch 2 第 2、3 項；非 QA PASS）
+
+**(Z1) #1124～#1126 自動 PR body「關 PR 並刪分支」指示——不是客戶授權（客戶 Batch 2 第 2 項；僅註記，不修改 publisher 或 PR 模板）**
+
+- **事實（FACT）**：`scripts/publish_data_pr.py` 約 L676–677 產生的資料 PR body 含一段「人工處理（cron 發布 fail-closed 時）」——「若每日排程在『發布資料』步驟持續失敗：① 關閉本 PR（不合併）；② 刪除分支 `auto/data-…`；③ 下次排程會從 main 重建。」（#1124 現行 PR body 已讀取，分支名為 `auto/data-macro-history`）。另 `HUMAN_ACTION` 常數（約 L152）「請人工處理：關閉該資料 PR 並刪除分支，或回報 ChatGPT 決定契約。」被多個 fail-closed 錯誤訊息引用。#1126 的 PR body 本組已讀取，含同一段（分支名為 `auto/data-macro-forward-test`）；#1125 的 PR body 本組未重讀，依同一腳本與同一模板推論亦含此段（INFERENCE）。
+- **判定**：該段是**腳本產生的自動文字，不是客戶授權**。它與 `PROJECT_RULES.md` §4 表第 8 項（約 L243：不可逆操作含刪除 branch；DEC-009、DEC-012、DEC-020）及 §10（約 L426：既有遠端分支刪除不得自主執行，須客戶核准清單，DEC-012）**衝突**。任何 AI／接手者**不得照做**，不得直接執行不可逆刪除；「關 PR＋刪分支重建」已列 DEC-182 (五) 禁止清單。DPE-5 的 Close→Reopen **保留分支**，與該段 ② 的刪分支是**兩件事**。
+- **不做**：不修改 `scripts/publish_data_pr.py`、不改自動 PR 模板、不改 fail-closed 行為（資料契約疑義仍應回報客戶，不硬刪資料）。
+
+**(Z2) #1105／#1103 出處勘誤（客戶 Batch 2 第 3 項；保留原文，不改舊字；無法確定者一律 NOT VERIFIED）**
+
+- **兩處標示衝突（FACT）**：(a) 本檔 DEC-156 段之後「治理裁示紀錄（2026-11-10 追加）」（約 L7965）稱「僅紀錄 owner 於 #1105 留言所給裁示，非 AI 新決策」「owner／ChatGPT 治理裁示」；(b) `docs/vnext/DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（約 L100、L365）稱「原文為 ChatGPT 編擬，是否等同客戶正式裁示仍待客戶確認」。
+- **GitHub 逐字讀取（本組以 `pull_request_read get_comments` 取得）**：#1105 留言 `6754457744`——`created_at` 2026-11-09T23:38:51Z（台北 11-10 07:38）、作者帳號 `linchen-20200325`（`author_association`＝OWNER）、抬頭「**ChatGPT 獨立治理裁示**（2026-11-10）— PIT 不接受／NO MERGE」；內文含「拒絕以現有證據合併 #1105」「請先保存本 PR diff／QA 證據，然後依 PR 自帶的 fail-closed 人工處理機制，關閉**不合併**並清理 `auto/data-macro-forward-test` 分支…在關閉／刪分支前需 GitHub 重查…」。#1103 留言 `6754456437`（2026-11-09T23:38:46Z，同帳號，抬頭同為「ChatGPT 獨立治理裁示」）；留言 `6754511702`（2026-11-09T23:42:06Z，同帳號）自稱「**ChatGPT 按** PR 內建安全恢復路線 Close→Reopen（未合併、未改檔案或 head）」，並記該 head 新的原生 CI run `42722497312`；留言 `6755593793`（2026-11-10T00:45:57Z，同帳號）為「非作者獨立 QA」，署名 Claude Code，稱同 head 五項 success。
+- **勘誤（讀法）**：這些留言的**抬頭自稱「ChatGPT」，卻張貼在客戶（owner）帳號下**；內文是否經客戶審閱、是否為客戶逐字意旨，**repo 內無法判定（NOT VERIFIED）**。因此上列 (a) 的「owner 裁示」措辭**不得讀成客戶逐字裁示**；較忠實的讀法是「owner 帳號下、自稱 ChatGPT 編擬的治理裁示留言；是否等同客戶正式裁示 NOT VERIFIED」（與 (b) 一致）。舊字（含 L7965）一字未改，本註記為最小勘誤。
+- **#1105 留言指示「清理 `auto/data-macro-forward-test` 分支」**：本組在 repo 內**查無** `PROJECT_RULES.md` §10／DEC-012 要求的**客戶核准清單**（NOT VERIFIED）；該分支現存於遠端（現為 #1126 的 head，`git` 實查），其刪除屬不可逆操作，本註記**不授權**任何刪除。
+- **#1103 Close→Reopen 的執行者**：留言 `6754511702` 自稱「ChatGPT 按…」，帳號為 owner；而 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md` 的 S2 行與 DEC-181／DEC-182 把 DPE-5 寫為「客戶於同 head 觸發」且「Close→Reopen 僅限客戶操作」→ 兩者**不一致**；#1103 當時**實際按下者 NOT VERIFIED**（需 GitHub 事件時間軸或稽核紀錄才能確證，本組工具讀不到）。**影響**：以 #1103 作為「Reopen 後原生 CI 確實會跑完 `ui2-browser-gate`」的先例時，**先例本身成立與否（該 run 的五項 success 為上列非作者 QA 留言所述）與「是誰按的」是兩件事**；後者 NOT VERIFIED，不影響 DEC-183 要求 DPE-5 由客戶本人操作的規定。
+- **不改**：#1103（已合併）與 #1105（已關閉未合併）的結果，以及 DECISIONS 上述舊註記、vnext 文件的原文。

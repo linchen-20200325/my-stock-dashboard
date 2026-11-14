@@ -2776,3 +2776,20 @@
 > **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**本批無新證據，維持既有判讀**（`PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-LIC`、`DG-PIT`、`DG-COV`、`DG-SCOPE`、`I1144-WIRING-GATE`、DPE-1／2／3／7、#1125、#1126、#1124 合併、#1164（維持 Draft）、五個 Issues（#1119、#1138、#1116、#1110、#1107 暫不關閉）、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7）、`REORG3C-Q5-GATE`、`DEC178-QB3-*`／`DEC180-*`／`DEC181-*` Candidate 列、新增 API／cron／Secrets、`.claude/settings*`、NAS／Proxy／Secrets、Branch Protection、`app.py`／`app_ui2.py`、publisher／PR 模板均**未動**。
+
+**DEC-183 Batch 2 追加列（2026-11-14；最小追溯補強；只追加；Candidate／紀錄；不是施工指派）**
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **UI2-1107-ACCEPTANCE-LEDGER** | Issue #1107（New UI2 日 K：Streamlit Cloud 預覽真實資料與手機首屏）精簡驗收帳。依 Issue #1107 主文的驗收 Gate 1～5 逐項標 PASS／PARTIAL／NOT VERIFIED 與證據性質（不重抄研究；逐項見下方子表）。**#1107 保留 OPEN。** Preview≠Production 界線已完整保存（`PROJECT_RULES.md` 約 L283 (b)、DEC-123 Q1／Q4、DEC-156／157），不重登 | P2 | **帳（結論列，非工作項）**；#1107 open | Issue #1107 主文與留言 `6758363837`／`6758405539`／`6758485565`／`6758541700`（本組逐字讀取）；DEC-180／DEC-181 的客戶 Cloud 口述 | 無（帳）。AI 推薦（**非客戶要求**）的結案前提：在 Streamlit Cloud 的 Manage app 看到部署 commit 前 7 碼、Reboot 後重拍新順序市場頁（含 1440 寬）、觀察 11-17 後的過期降級——**是否結案由客戶決定，AI 不建議現在結案** |
+| **PANDAS-FLOOR-2-0-0-COMPAT-OBS** | #1042 pandas 2.0.0 相容風險（**低優先 Candidate，被動觀察，不進程式施工**）：`requirements.txt` 現行 `pandas>=2.0.0,<4.0.0`（第 74 行，本組實查），2.0.0 仍在支援區間；#1042 留言稱 `assert_frame_equal(check_exact=True)` 在 pandas 2.2.3 對 object 浮點微漂移 3／3 正確拒絕，但 **pandas 2.0.0 對 object 浮點的 `check_exact` 行為從未實測**（留言自述：容器為 Python 3.13／pandas 2.2.3，無 CPython 3.11／pandas 2.0.0，安裝失敗）。本檔約 L1811–1819 只登了 D1 的 `check_exact=True`，未登此相容性觀察。D6 維持「待獨立版本重現」，不得憑 API 文件直接提高 pandas 下限 | P3 | **Candidate／P3、open；未授權；不進程式施工** | #1042 留言 `6703713010`（2026-11-07T07:05:37Z；作者帳號 OWNER；抬頭「2026-11-07 ChatGPT 非 Code 版本相容性稽核」；本組逐字讀取；**AI 稽核，非客戶裁示**） | 無（`CLAUDE.md` §-1：無實際 bug 觸發不主動動工）。若日後要查：先在有 Python 3.11＋pandas 2.0.0 的環境做最小失敗測試，再比 (A) 值層精確比較／(B) 提高 pandas 下限／(C) fail-closed 型別限制（留言所列） |
+
+*`UI2-1107-ACCEPTANCE-LEDGER` 子表（Issue #1107 驗收 Gate 對照；證據性質欄分「客戶實測／客戶陳述／AI 唯讀讀取」，不得互相升級）*
+
+| Gate（主文） | 判定 | 證據與性質 | 缺口（NOT VERIFIED） |
+|---|---|---|---|
+| 1 確認有指向 main／`app_ui2.py` 的 Preview App | **PARTIAL** | 客戶陳述：留言 `6758485565` 轉記「使用者直接確認 Main file path 為 `app_ui2.py`」（非 Cloud 管理 API 獨立驗證）；客戶 2026-11-13 轉述 Cloud 啟動日誌顯示 main／`app_ui2.py`（DEC-180／DEC-181，日誌原文不在 repo） | repo owner、部署 commit、日誌日期、Cloud 設定頁證據 |
+| 2 `?ui2_dev=1` 選 Real-data Preview，確認非 FAKE | **PASS**（客戶實測） | 客戶手機截圖（留言 `6758541700`，2026-11-10，頂部「Real-data Preview（非正式 production default）」；原始圖片在 ChatGPT 會話、未上傳 GitHub）；客戶 2026-11-13 口述「預設 FAKE、切換 Real-data Preview 成功」（DEC-181） | 截圖原檔不在 repo |
+| 3 手機首屏（390×844 等） | **PARTIAL** | **PASS（客戶截圖）**：頂部 Real 標示、📊 市場頁、K 棒與開收紅綠灰圖例、資料日 2026-11-09、Yahoo 來源、台股卡 41,661.70、首屏 CTA／市場狀態／Risk Cap 誠實顯示「尚未提供／無法判定」、VIX／US10Y／利差／DXY／PMI 顯示未提供。**時序事實**：該截圖早於 #1109（新順序，DEC-157）合併，證明的是舊順序版；#1141（main `907322aa`，2026-11-11T17:29+08，`git log` 實查）之後又改了 close≤0 與未來 as_of 的顯示 | 確切 K 棒根數與約 220px、390／1440 斷點無溢出、1440×900、錯誤／過期降級（皆 NOT VERIFIED；截圖不是瀏覽器自動量測） |
+| 4 部署 commit／restart 與 main 比對；parquet 與 GitHub 快取一致；TWII 11-09 第二來源 | **NOT VERIFIED** | 客戶陳述「需手動 Reboot」（DEC-181，非實測）。**補註**：2026-11-14 AI 唯讀讀取證交所 FMTQIK 公開頁，11-09 收盤 41,661.70 與 `twii_ohlcv` 相符（DEC-183 (二) 2.3）→ TWII 11-09 官方值已有 AI 佐證，**但那是 AI 讀取，不等於客戶驗收，也不證明部署的 parquet 與 GitHub 一致** | Cloud 部署 commit、Reboot 前後比對、部署端 parquet 是否與 GitHub 一致 |
+| 5 輸出 PASS／FAIL／NOT VERIFIED＋可回查證據；cutover 另設 Decision Gate | 規範項（非可驗收項） | Issue #1107 主文 | — |
