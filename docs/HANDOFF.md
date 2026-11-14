@@ -1415,7 +1415,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 > **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** 上方「#1124 發布 Gate 裁示後最新接手點」段除**標題行就地加刪除線並附指向本段註記**外，內文**一字未動**（這是本批唯一的刪除行）。**本段取代 L282–284 的 cleanup 候選表與舊現況段的「唯一 NEXT」**（兩者已過期，見 DEC-186 (四)）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；不是 QA PASS，不是授權。所有 SHA／run id／PR head 皆 2026-11-14 時點快照，一律以最新 GitHub 為準。找到本段：`grep -n '^###' docs/HANDOFF.md`，現行段＝檔尾最後一個標題含『最新接手點』且未被刪除線者。HANDOFF 檔頭的 2026-11-09 快照已過期，勿據以行動。
 
-**一、現在做到哪**：客戶 2026-11-14 的五則訊息已補登為 DEC-184（#1124 DPE-5 後續＋DG-LIC 解套方向）、DEC-185（緊急暫停三支資料 Workflow）、DEC-186（舊分支刪除資格稽核）、DEC-187（決策防遺漏與 Open Items 收斂計畫）；BACKLOG 檔尾新段含對帳表與新列；PROJECT_STATE §70.25；PROJECT_RULES 第 4 節新增「請示前查證（Pre-Ask Check）」。**本批停在 Decision Gate。**
+**一、現在做到哪**：客戶轉交之 2026-11-14 五則派工提示語（客戶指出部分由 ChatGPT 擬稿；各句直接作者 NOT VERIFIED；更正見 DEC-187 (六)）已補登為 DEC-184（#1124 DPE-5 後續＋DG-LIC 解套方向）、DEC-185（緊急暫停三支資料 Workflow）、DEC-186（舊分支刪除資格稽核）、DEC-187（決策防遺漏與 Open Items 收斂計畫）；BACKLOG 檔尾新段含對帳表與新列；PROJECT_STATE §70.25；PROJECT_RULES 第 4 節新增「請示前查證（Pre-Ask Check）」。**本批停在 Decision Gate。**
 
 **二、main 與 Open 項目（時點快照，須重查）**：main `eb79df92`（#1190 squash）。
 
@@ -1430,14 +1430,14 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 | PR #1125／#1126 | HOLD；同 head 原生 CI＝0 |
 | PR #1164 | Draft、維持不動；無非作者 QA |
 
-**三、阻塞（FACT）**：DG-LIC／DPE-3（5 檔無明示允許的逐字依據）、DG-PIT（無 `published_at`）；三支資料 workflow 現為 `disabled_manually`（客戶手動停用，DEC-185），main `data_cache` 不會再自動前進，台股卡最早 2026-11-17 轉過期（INFERENCE）。
+**三、阻塞（FACT）**：DG-LIC／DPE-3（5 檔無明示允許的逐字依據）、DG-PIT（無 `published_at`）；三支資料 workflow 現為 `disabled_manually`（派工提示語記載為客戶手動停用，操作者 NOT VERIFIED，DEC-185），main `data_cache` 不會再自動前進，台股卡最早 2026-11-17 轉過期（INFERENCE）。
 
 **四、待客戶裁示的題目（其餘已授權工作照常進行）**。本批需要客戶回答的只有下列題目，不代表其他工作停止（見(乙)）；分兩層讀，勿混：
 
 (甲) **待客戶裁示的題目**——**僅針對這幾題**，Agent 在客戶回覆前只能做唯讀檢核與文件，不得自行推進；各題完整內容見所列 DEC，**已有裁示者不得重問**（`PROJECT_RULES.md` 第 4 節「請示前查證」）。**提問時須附推薦方案與商業語言**（`CLAUDE.md` §-1.5.D §03-2、`PROJECT_RULES.md` 第 4 節請示格式）；本段不預附選項。
 1. **DG-LIC 走哪條路**：維持 #1124 HOLD 並由客戶取得書面授權，或採替代方案（需改發布架構，另案）；三支 workflow 暫停是否即其意圖（DEC-184 (七)）。〔提問須附推薦方案與商業語言〕
 2. **DG-PIT**：決策單決策 3 的 A／B／C，及「適用 PIT Gate」涵蓋哪些用途（DEC-184 (七)）。〔提問須附推薦方案與商業語言〕
-3. **分支「實際執行刪除前的程序要求」**（**不再問**「DEC-147 第 4 點是否仍有效」——客戶已指示，依 DEC-147；撰寫組讀法）：客戶 2026-11-14 決策閉環訊息 D 點原文（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依客戶此句**，其餘分支依 DEC-147 第 4 點條件與 `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。僅保留一個真正的衝突為資訊／待裁示：`PROJECT_RULES.md` §4 第 8 項、§16.6（「最後再一次清」「未來刪除前重新查 GitHub」「branch deletion 視為不可逆治理動作」）、本檔「禁止清單」通則，與 DEC-147 第 4 點（條件滿足即可清理）、第 6 點（「清單外刪分支」須停止；「清單」未定義）之間，**執行時如何同時滿足**——例如實際刪除前是否仍須客戶核准刪除清單、是否須等「最後再一次清」的時點。**本文件不授權任何實際刪除。**實際刪除時的程序，現有規則並存：DEC-147 第 4 點條件（含清理前列 unique commit 並確認已入 main 或另存）、DEC-012、PROJECT_RULES §16.6 客戶原話「未來刪除前重新查 GitHub」；其間如何同時滿足屬殘留衝突，僅在真有分支擬實際刪除時才提出（提問須附推薦方案）。在客戶裁示前，依 PROJECT_RULES §14 暫行讀法「任一套規則要求停下就停下」處理。〔提問須附推薦方案與商業語言〕DEC-147 第 4 點本身已排除「含未保存獨有內容者、仍有開啟 PR 者」，故 #1048 提案檔、#1034 規則文字尚未保存者不屬可清理對象（INFERENCE），其去留由既有 BACKLOG 項目（`NUI2-GOV-1034-EXTRACT`、`NUI2-GOV-1034-RULES-RENUMBER`）追蹤，不另問。
+3. **分支「實際執行刪除前的程序要求」**（**不再問**「DEC-147 第 4 點是否仍有效」——派工提示語已指示，依 DEC-147；客戶轉交；撰寫組讀法）：2026-11-14 決策閉環派工提示語 D 點原句（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依該提示語此句**，其餘分支依 DEC-147 第 4 點條件與 `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。僅保留一個真正的衝突為資訊／待裁示：`PROJECT_RULES.md` §4 第 8 項、§16.6（「最後再一次清」「未來刪除前重新查 GitHub」「branch deletion 視為不可逆治理動作」）、本檔「禁止清單」通則，與 DEC-147 第 4 點（條件滿足即可清理）、第 6 點（「清單外刪分支」須停止；「清單」未定義）之間，**執行時如何同時滿足**——例如實際刪除前是否仍須客戶核准刪除清單、是否須等「最後再一次清」的時點。**本文件不授權任何實際刪除。**實際刪除時的程序，現有規則並存：DEC-147 第 4 點條件（含清理前列 unique commit 並確認已入 main 或另存）、DEC-012、PROJECT_RULES §16.6 客戶原話「未來刪除前重新查 GitHub」；其間如何同時滿足屬殘留衝突，僅在真有分支擬實際刪除時才提出（提問須附推薦方案）。在客戶裁示前，依 PROJECT_RULES §14 暫行讀法「任一套規則要求停下就停下」處理。〔提問須附推薦方案與商業語言〕DEC-147 第 4 點本身已排除「含未保存獨有內容者、仍有開啟 PR 者」，故 #1048 提案檔、#1034 規則文字尚未保存者不屬可清理對象（INFERENCE），其去留由既有 BACKLOG 項目（`NUI2-GOV-1034-EXTRACT`、`NUI2-GOV-1034-RULES-RENUMBER`）追蹤，不另問。
 4. **三支 workflow 的恢復條件與時點**；3 筆陳舊 queued Run 是否取消（DEC-185 (五)）。〔提問須附推薦方案與商業語言〕
 5. （資訊，非重問）DEC-178「六項」與 ①～⑨ 的指涉歧義（BACKLOG `QB-SIX-VS-NINE-AMBIGUITY`）。
 
@@ -1446,12 +1446,12 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 (丙) **客戶下一步授權點（現在不施工）**：Batch 2（五個 Open Issues 轉為可驗收的結案條件）、Batch 3（#1164 與 #1124～#1126 的處理）（DEC-187 (一)）。
 
 **五、禁止清單／HOLD 清單（全 repo 唯一一份完整版；他處只指向本段；逐項附出處）**：每條標明〔持續有效（來源）〕或〔僅 Batch 1 本批（來源）〕；標籤為撰寫組判讀，非客戶逐字，與來源 DEC 衝突時以來源 DEC 為準；**任何一條都不得被讀成停止四(乙)的已授權工作**。
-- 〔持續有效：DEC-183、DEC-184；DEC-187 本批亦重述〕不得 merge／close／rebase #1124～#1126，不得處置 #1164（客戶逐字：「禁止 Merge、Close、Rebase、修改資料或解除 HOLD」＝DEC-184 訊息一；DEC-183 一、7 與三）。**Update branch**：DEC-184 (二) 記為「須客戶另授權」（會換 head、使 CI 與 QA 失效）；**reopen** 無客戶逐字禁令，此處為**取嚴讀法**（DEC-183 Z2：Reopen 須客戶本人操作）。
+- 〔持續有效：DEC-183、DEC-184；DEC-187 本批亦重述〕不得 merge／close／rebase #1124～#1126，不得處置 #1164（派工提示語原句：「禁止 Merge、Close、Rebase、修改資料或解除 HOLD」（客戶轉交）＝DEC-184 訊息一；DEC-183 一、7 與三）。**Update branch**：DEC-184 (二) 記為「須客戶另授權」（會換 head、使 CI 與 QA 失效）；**reopen** 無提示語原句禁令，此處為**取嚴讀法**（DEC-183 Z2：Reopen 須客戶本人操作）。
 - 〔持續有效：DEC-184；DEC-147 第 6 點；DEC-187 本批亦重述〕不得宣稱 DG-LIC、DG-PIT、DG-COV、DG-SCOPE、`I1144-WIRING-GATE`（含 `I1144-*`）已解除（DEC-187 本次禁止；DEC-184）；DEC-147 第 6 點不放寬。
 - 〔僅 Batch 1 本批：DEC-187〕不得直接 Merge 或 Close 九個 Open 項目、不得關閉五個 Open Issues（DEC-187 本次禁止；Close 條件屬 Batch 2）。
 - 〔持續有效，未經客戶另行授權前：DEC-185 (三)、DEC-183 Batch 1 A；DEC-187 本批亦重述〕不得重新啟用三支 workflow、取消陳舊 queued Run、刪除任何 Workflow／Run／Artifact／YAML（DEC-185 (三)；DEC-187；DEC-183 Batch 1 A）。
 - 〔持續有效：DEC-184 (一)；DEC-187 本批亦重述〕未經客戶另行授權，不得施工方案 C、搬移資料、新增儲存／Secret／API／cron、改 publisher／排程／資料檔／schema、調整 repo 公開／私有（DEC-184 (一)；DEC-187）。
-- 〔持續有效：DEC-012、DEC-147 第 4 點；DEC-187 本批亦重述〕**不得刪除任何分支、Git 歷史、資料**（DEC-187 本次禁止；DEC-012）；依客戶 D 點，其餘分支依 DEC-147 第 4 點與原保留裁示處理，實際刪除前的程序要求見上文四(甲)3；本句不是新通則，亦不重新確認 DEC-147。
+- 〔持續有效：DEC-012、DEC-147 第 4 點；DEC-187 本批亦重述〕**不得刪除任何分支、Git 歷史、資料**（DEC-187 本次禁止；DEC-012）；依派工提示語 D 點，其餘分支依 DEC-147 第 4 點與原保留裁示處理，實際刪除前的程序要求見上文四(甲)3；本句不是新通則，亦不重新確認 DEC-147。
 - 〔僅 Batch 1 本批：DEC-187；投資公式等另受 PROJECT_RULES 第 4 節 Gate 持續約束〕不改 UI（已授權的 UI2 工作除外，見四(乙)）、投資公式、Risk Cap、System Action（DEC-187）。
 - 〔持續有效：DEC-187 (二)；`CLAUDE.md` §-1.5.D〕不新增第二份 DECISIONS／BACKLOG 或影子 SSOT；不新增請示情境。
 
@@ -1459,4 +1459,6 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 **七、避免重問檢查表**：向客戶提任何裁示題之前，先照 `PROJECT_RULES.md` 第 4 節「請示前查證」做（搜尋 DEC、BACKLOG、Issue／PR、最新 Gate；有相同條件下的有效裁示就遵循並引用 DEC）。本段不重抄該清單。
 
-**八、仍 NOT VERIFIED**：DEC-184～DEC-187 fence 與客戶原訊息的逐字一致性；2026-11-14 session 子 Agent 報告（僅存該 session）；停用三支 workflow 的實際按下者；Reopen 實際操作者；兩條已消失分支的刪除者；Yahoo ToS 等官方條款原文。
+**八、仍 NOT VERIFIED**：DEC-184～DEC-187 fence 與原提示語（客戶轉交）的逐字一致性；2026-11-14 session 子 Agent 報告（僅存該 session）；停用三支 workflow 的實際按下者；Reopen 實際操作者；兩條已消失分支的刪除者；Yahoo ToS 等官方條款原文。
+
+**九、來源標示更正（2026-11-14 後續；DEC-187 (六)）**：DEC-184～187 的 fence 是客戶轉交之派工提示語，非「客戶親自撰寫的逐字原文」；授權效力僅限其實際載明的範圍，不代表推薦方案自動獲准。本更正**不改變任何 Gate**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向；DG-PIT 的「B＋X」類組合為總管推薦，**不得記成客戶已解除 Gate**；三支資料 Workflow 維持停用；queued Run 不取消、排程不重新啟用。DEC-183 及更早的同類標示是否也含 ChatGPT 擬稿＝NOT VERIFIED（BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`）。

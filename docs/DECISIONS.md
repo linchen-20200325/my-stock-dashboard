@@ -88,7 +88,7 @@
 - **範圍**：治理｜**日期**：2026-10-15｜**決策者**：客戶｜**狀態**：生效
 - **來源**：D 客戶訊息 2026-10-15T13:40Z（本 session；本檔首次入庫）§25「必須停下裁示的事項 / 包括：/ - 新／修改投資公式」；同節「確認 bug 且只有一個安全修法：/ 未來施工階段可自行修。」。
 - **取代鏈**：擴充 DEC-003、DEC-006、DEC-008；與 DEC-008 §五的寬嚴差異見 `CV1-DR-08`。
-- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶〔DEC-187〕）：「已裁示過的不重問」的操作細則（請示前須先查證 DEC／BACKLOG／Issue／PR／最新 Gate；僅三種情形可再請示；不放寬高風險 Gate）見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187。
+- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶（透過轉交／採用派工提示語〔DEC-187〕；親撰與 ChatGPT 擬稿成分 NOT VERIFIED））：「已裁示過的不重問」的操作細則（請示前須先查證 DEC／BACKLOG／Issue／PR／最新 Gate；僅三種情形可再請示；不放寬高風險 Gate）見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187。
 
 ### DEC-010｜QA 分級（A／B／C）與回修上限
 - **內容**：A 級（程式邏輯、安全、合規）、B 級（新頁新元件）、C 級（文件、交接本）自驗不派稽核；跨級取最高；同檔回修超過 2 輪停手問客戶。
@@ -111,14 +111,14 @@
 ### DEC-013｜已裁示事項不重問；待裁示題內容未變不重送
 - **範圍**：治理｜**日期**：2026-10-09；2026-10-15 重申｜**決策者**：客戶｜**狀態**：生效
 - **來源**：C `H:187`「只要問題內容沒有變化，不要重複發送；等待客戶回答即可。」。D 客戶訊息 2026-10-15T13:40Z（本 session；本檔首次入庫）§19「已裁示事項：/ 不要無故重問。」
-- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶〔DEC-187〕）：「已裁示事項不重問」的搜尋範圍、「遵循並引用 DEC」義務與可再請示的三種情形見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187；待裁示題內容未變不重送的規則不變。
+- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶（透過轉交／採用派工提示語〔DEC-187〕；親撰與 ChatGPT 擬稿成分 NOT VERIFIED））：「已裁示事項不重問」的搜尋範圍、「遵循並引用 DEC」義務與可再請示的三種情形見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187；待裁示題內容未變不重送的規則不變。
 
 ### DEC-014｜Model／Mode／Effort 自主管理
 - **內容**：每個完整階段開始前自判模型／模式／Effort；只在有明顯品質或額度效益時，於安全停點只回固定格式；客戶回「改好了」後直接繼續、不重摘要不重問不重做；等 CI／workflow／稽核時不得要求切換；模式切換不算客戶裁示題。
 - **範圍**：治理｜**日期**：2026-10-16｜**決策者**：客戶｜**狀態**：生效
 - **來源**：D 客戶訊息 2026-10-16T02:32Z（本 session；本檔首次入庫）「另外，從現在開始正式啟用「模式／Effort 自主管理」：」；「等待 CI／workflow／稽核時不得要求切模式」；「模式切換不算「客戶裁示問題」。」（格式全文見 `PROJECT_RULES.md` 第 9 節）
 - **取代鏈**：無。
-- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶〔DEC-187〕）：「客戶回『改好了』後不重問」的搜尋範圍、「遵循並引用 DEC」義務與可再請示的三種情形見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187；本條其餘規定不變。
+- 📌 **被 DEC-187 強化**（2026-11-14；append-only；本條原文一字未改；決策者 客戶（透過轉交／採用派工提示語〔DEC-187〕；親撰與 ChatGPT 擬稿成分 NOT VERIFIED））：「客戶回『改好了』後不重問」的搜尋範圍、「遵循並引用 DEC」義務與可再請示的三種情形見 `PROJECT_RULES.md` 第 4 節「請示前查證」與 DEC-187；本條其餘規定不變。
 
 ### DEC-015｜Audit 不得順手施工；不得預先決定 Batch 1
 - **內容**：Audit 發現一律「記錄 → 分類 → 證據 → 建議」，不順手修（production-critical 例外：立即停下回報）；Audit 完成停一次回報；Batch 1 須經客戶確認方向後才開始。
@@ -10107,15 +10107,17 @@ Batch 2：最小追溯補強
 - **#1103 Close→Reopen 的執行者**：留言 `6754511702` 自稱「ChatGPT 按…」，帳號為 owner；而 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md` 的 S2 行與 DEC-181／DEC-182 把 DPE-5 寫為「客戶於同 head 觸發」且「Close→Reopen 僅限客戶操作」→ 兩者**不一致**；#1103 當時**實際按下者 NOT VERIFIED**（需 GitHub 事件時間軸或稽核紀錄才能確證，本組工具讀不到）。**影響**：以 #1103 作為「Reopen 後原生 CI 確實會跑完 `ui2-browser-gate`」的先例時，**先例本身成立與否（該 run 的五項 success 為上列非作者 QA 留言所述）與「是誰按的」是兩件事**；後者 NOT VERIFIED，不影響 DEC-183 要求 DPE-5 由客戶本人操作的規定。
 - **不改**：#1103（已合併）與 #1105（已關閉未合併）的結果，以及 DECISIONS 上述舊註記、vnext 文件的原文。
 
-### DEC-184｜客戶 2026-11-14「#1124 DPE-5 後續接手」與「DG-LIC 解套與 #1124 後續裁示」兩則訊息轉錄：授權範圍、DPE-5 後 #1124 事實更新、DG-LIC 逐資料集矩陣、DG-PIT 三層缺口、方案 C 研究方向（2026-11-14；只追加；非 QA PASS；非施工授權）
+### DEC-184｜客戶轉交之 2026-11-14「#1124 DPE-5 後續接手」與「DG-LIC 解套與 #1124 後續裁示」兩則派工提示語轉錄：授權範圍、DPE-5 後 #1124 事實更新、DG-LIC 逐資料集矩陣、DG-PIT 三層缺口、方案 C 研究方向（2026-11-14；只追加；非 QA PASS；非施工授權）
 
-> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-184"` 0 命中，DEC-183 為上一號）。**來源類別 D：客戶 2026-11-14 兩則訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～183）。下方兩個 fence 各收錄一則客戶訊息**全文**，未改一字；fence 內不含首尾 fence 行與結尾換行。**sha256 算法**：fence 內各行以 "\n" 連接、UTF-8，與 DEC-173～183 同一算法（撰寫組以 `sha256sum` 與 `python3 -I` 兩法重算一致）。
-> **本條不是 QA PASS，也不是授權擴張。** 下方「事實更新」「矩陣」「缺口」取自 **2026-11-14 session 唯讀稽核**（單組或兩組子 Agent＋總管 GitHub 直讀）；**子 Agent 報告只存在於該 session，#1124 上無 review／留言，repo 外未複驗**；撰寫組僅轉錄、不擴寫，待非作者 QA。訊息二結尾「不補登正式 DEC、不建立 PR」限於**該批**；本條補登依客戶同日「決策防遺漏」訊息 Batch 1 ③（見 DEC-187）。
+> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-184"` 0 命中，DEC-183 為上一號）。**來源類別：客戶轉交之派工提示語**（客戶指出部分由 ChatGPT 擬稿；各句直接作者未逐句區分＝NOT VERIFIED；經派工訊息轉錄、逐字一致性 NOT VERIFIED）（沿用原 D 類編號；2026-11-14 後續來源標示更正，見 DEC-187 (六)；DEC-183 及更早同類標示未重查，見 BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`）；原始對話 repo 內 NOT VERIFIED。下方兩個 fence 各收錄一則派工提示語**全文**，未改一字；fence 內不含首尾 fence 行與結尾換行。**sha256 算法**：fence 內各行以 "\n" 連接、UTF-8，與 DEC-173～183 同一算法（撰寫組以 `sha256sum` 與 `python3 -I` 兩法重算一致）。
+> **本條不是 QA PASS，也不是授權擴張。** 下方「事實更新」「矩陣」「缺口」取自 **2026-11-14 session 唯讀稽核**（單組或兩組子 Agent＋總管 GitHub 直讀）；**子 Agent 報告只存在於該 session，#1124 上無 review／留言，repo 外未複驗**；撰寫組僅轉錄、不擴寫，待非作者 QA。訊息二結尾「不補登正式 DEC、不建立 PR」限於**該批**；本條補登依同日「決策防遺漏」派工提示語 Batch 1 ③（客戶轉交；見 DEC-187）。
 > **標籤**：APPROVED／COMPLETED／VERIFIED／HOLD／PROPOSED／SUPERSEDED／NOT VERIFIED；事實分 FACT／INFERENCE／RECOMMENDATION，不互相升級。
 
-- **決策者**：**客戶**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：生效，**限字面範圍**；(二)～(五) 為 AI 整理，不具客戶裁示效力。｜**範圍**：#1124 後續、DG-LIC／DPE-3、DG-PIT、方案 C 研究方向。
+- **決策者**：**客戶（透過轉交／採用派工提示語；親撰與 ChatGPT 擬稿成分 NOT VERIFIED）**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：生效，**限字面範圍**；(二)～(五) 為 AI 整理，不具客戶裁示效力。｜**範圍**：#1124 後續、DG-LIC／DPE-3、DG-PIT、方案 C 研究方向。
+- **採用／轉交證據（類別丙；只列已知事實）**：(1) 兩則皆由客戶帳號送入 Claude Code session 並被當作任務指示執行（session 內事實；repo 內無原始對話）；(2) 訊息一所稱 Close→Reopen：GitHub 上 run `43541275135` 的 actor／triggering_actor 為 owner 帳號，實際操作者 NOT VERIFIED。
+- **授權效力**：授權效力僅限該提示語實際載明的範圍；客戶轉交／採用提示語，不代表每個句子都成為客戶親自說過的話，也不代表其中任何 AI 推薦方案自動獲准；AI 推薦／研究結論（類別丁）不因寫入 fence 外的 DEC 敘述而升格為 APPROVED。
 - **與既有 DEC 的關係**：承 DEC-183（本條只對其 AI 事實描述做 SUPERSEDED 事實更新，**客戶裁示本身不變、DEC-183 原文一字未改**）；DEC-171（唯讀稽核）、DEC-179（DPE-3＝D）、DEC-181（更新程序）、DEC-177（畫面只顯示資料日）、DEC-147 第 6 點（清單外請示）並存，不放寬任何一條。
-- **客戶訊息一（逐字；2026-11-14「#1124 DPE-5 後續接手」）**：fence 內容 sha256＝`b1baf00e91f048713869be628585814392957c441c6c508bb4212266e3a190c7`（撰寫時計算；尚未由測試釘住）。
+- **派工提示語原文（逐字保存；fence 內未改一字）— 訊息一（2026-11-14「#1124 DPE-5 後續接手」）**：fence 內容 sha256＝`b1baf00e91f048713869be628585814392957c441c6c508bb4212266e3a190c7`（撰寫時計算；尚未由測試釘住）。
 
 ```
 股票儀表板｜#1124 DPE-5 後續接手
@@ -10139,7 +10141,7 @@ DG-PIT 繼續 HOLD。
 禁止 Merge、Close、Rebase、修改資料或解除 HOLD；停在 Decision Gate。
 ```
 
-- **客戶訊息二（逐字；2026-11-14「DG-LIC 解套與 #1124 後續裁示」）**：fence 內容 sha256＝`159c4cfbf38852f02a4c2080407d9c8a153c5fb9b33c9f62b2e3cfef691aabe6`（撰寫時計算；尚未由測試釘住）。
+- **派工提示語原文（逐字保存；fence 內未改一字）— 訊息二（2026-11-14「DG-LIC 解套與 #1124 後續裁示」）**：fence 內容 sha256＝`159c4cfbf38852f02a4c2080407d9c8a153c5fb9b33c9f62b2e3cfef691aabe6`（撰寫時計算；尚未由測試釘住）。
 
 ```
 股票儀表板｜DG-LIC 解套與 #1124 後續裁示
@@ -10236,7 +10238,7 @@ C. 公開端只保存獲准公開的衍生資料；受限資料不再新增公�
 
 **(一) 授權範圍（狀態只標 APPROVED／HOLD／維持禁止；不擴張）**
 
-| 項 | 客戶原文要點（全文以 fence 為準） | 狀態 |
+| 項 | 提示語原文要點（全文以 fence 為準；客戶轉交） | 狀態 |
 |---|---|---|
 | 核實與非作者 QA（訊息一） | 「請先核實最新 GitHub 實況，然後由非作者 QA 獨立核對 #1124 最新 head、五檔差異、資料完整性及來源證據。」 | **APPROVED**（唯讀） |
 | 逐資料集授權矩陣（訊息一；訊息二 Batch 1-1） | 「沒有授權證據一律 NOT VERIFIED，不得自行解釋為已放行。」 | **APPROVED**（唯讀） |
@@ -10249,13 +10251,13 @@ C. 公開端只保存獲准公開的衍生資料；受限資料不再新增公�
 
 **(二) DPE-5 後 #1124 事實更新（FACT；來源＝2026-11-14 session 唯讀稽核＋總管 GitHub 直讀；時點快照，會漂移，一律重查）**
 
-- **FACT**：客戶陳述已 Close→Reopen（訊息一首句）。PR #1124 head `f87866ed`（未變）同 head 五項原生 CI 全 success，皆屬 run `43541275135`（run_number 2416，event＝pull_request，created 2026-11-14T01:33:14Z，actor／triggering_actor＝owner 帳號 `linchen-20200325`）：ui2-browser-gate（job `132283577443`）、Fast checks、Slow tests（informational）、ui2-browser 1.56.0、ui2-browser 1.59.2。review threads＝0。**NOT VERIFIED**：Reopen 實際操作者（帳號為 owner，但不能證明為客戶本人，DEC-183 Z2 對 #1103 先例已提醒）。
+- **FACT**：派工提示語陳述客戶已 Close→Reopen（訊息一首句；陳述者類別 NOT VERIFIED）。PR #1124 head `f87866ed`（未變）同 head 五項原生 CI 全 success，皆屬 run `43541275135`（run_number 2416，event＝pull_request，created 2026-11-14T01:33:14Z，actor／triggering_actor＝owner 帳號 `linchen-20200325`）：ui2-browser-gate（job `132283577443`）、Fast checks、Slow tests（informational）、ui2-browser 1.56.0、ui2-browser 1.59.2。review threads＝0。**NOT VERIFIED**：Reopen 實際操作者（帳號為 owner，但不能證明為客戶本人，DEC-183 Z2 對 #1103 先例已提醒）。
 - **FACT**：mergeable_state＝behind（base 已前進到 `eb79df92`，該 commit 為 docs-only，與 data_cache 無交集）。更早 bot 觸發的 run `43469025728` 為 0 job（現為 failure），**不是有效 CI 證據**。PR diff 剛好 5 檔皆在 data_cache（`finmind_inst.parquet`、`finmind_margin.parquet`、`twii_ohlcv.parquet`、`macro_last_good/tw_pmi.json`、`metadata.json`），無 workflow／src／tests／Secrets；7 commits 全為 github-actions[bot]。
 - **SUPERSEDED（僅事實更新；DEC-183 原文不改）**：DEC-183 (二)(三) 中「check runs＝0／唯一 run `43469025728` 為 action_required／mergeable_state＝blocked／待客戶 DPE-5」已被上列事實取代。DEC-183 的客戶裁示（含 DPE-5 須客戶本人操作）**不受影響**。
 - **非作者 QA（三組；結果只存於該 session，#1124 上無 review／留言）**：PR／CI／差異組＝INCOMPLETE→CI 完成後 PASS；資料層組＝**PASS（限資料層）**——與 main 比對只追加新列（twii 新增 11-10／11-11／11-12；inst、margin 新增 11-10～11-13），重疊列 0 格變動、0 刪列、0 重複，OHLC 不變量 0 違反，`shared/twii_ohlc_contract` 與 `shared/margin_schema` 檢核通過，`foreign_buy`（億元）11-10＝-341.17、11-11＝-7.66、11-12＝-6.85、11-13＝+288.37，metadata 與 parquet 列數／最後日一致。發現（Med）：twii 比 inst／margin 少一天（11-12 vs 11-13，原因 NOT VERIFIED）；`tw_pmi.json` 只有 fetched_at／cached_at 更新、PMI 值與資料日（2026-10-01）不變（誤導風險）。發現（Low）：PR body 的 fetched_at 取自 PMI json 重抓時間而非新增列最大 fetched_at（17:03:40Z）；twii volume 有 35 列缺值（既有）；volume 單位 NOT VERIFIED。**未做**：外部官方對帳、11-10～11-13 是否交易日、11-12／11-10 外資官方值（證交所頁面一度被安全封鎖頁擋下，原因 NOT VERIFIED）。**資料層合格≠PIT 合格≠授權放行。**
 - **合併資格尚缺（FACT）**：DG-LIC／DPE-3 未解除；DG-PIT 未解除；behind（Update branch 會換 head 使 CI 與 QA 失效，須客戶另授權）；0 approving review；main branch protection／required checks 讀不到（NOT VERIFIED）。依 DEC-183 一、7 條件，**#1124 不具合併資格，HOLD 續行**。
 
-**(三) DG-LIC／DPE-3 逐資料集授權矩陣（結論一句；FACT＋NOT VERIFIED；兩組；非法律結論）**：5 檔**無任何一檔有「明示允許」的逐字依據**；DG-LIC／DPE-3 **證據不足，維持未解除**（放行與否屬客戶裁示）。其中 4 檔（twii_ohlcv、finmind_inst、finmind_margin、metadata.json）自 2026-06 起、`macro_last_good/tw_pmi.json` 在該路徑自 2026-07-13 起即在 main 上，**為既有狀態，不是已放行**；repo 公開性為客戶陳述、工具無法獨立確認＝NOT VERIFIED。**逐資料集矩陣表、官方頁逐字句與需補的最小證據已移至 BACKLOG `DGLIC-PER-DATASET-MATRIX`**（AI 分析入 BACKLOG，不入 DECISIONS）。
+**(三) DG-LIC／DPE-3 逐資料集授權矩陣（結論一句；FACT＋NOT VERIFIED；兩組；非法律結論）**：5 檔**無任何一檔有「明示允許」的逐字依據**；DG-LIC／DPE-3 **證據不足，維持未解除**（放行與否屬客戶裁示）。其中 4 檔（twii_ohlcv、finmind_inst、finmind_margin、metadata.json）自 2026-06 起、`macro_last_good/tw_pmi.json` 在該路徑自 2026-07-13 起即在 main 上，**為既有狀態，不是已放行**；repo 公開性為派工提示語陳述、工具無法獨立確認＝NOT VERIFIED。**逐資料集矩陣表、官方頁逐字句與需補的最小證據已移至 BACKLOG `DGLIC-PER-DATASET-MATRIX`**（AI 分析入 BACKLOG，不入 DECISIONS）。
 
 **(四) DG-PIT 三層缺口（結論一句；單組；多為 INFERENCE；DG-PIT 未解除）**：5 檔皆無 `published_at`，歷史列無法證明「T 時已可得」，缺 published_at 一律不得用於歷史回測／歷史趨勢／跨日比較；最新收盤畫面只顯示資料日則不需 published_at。**三層條件、可驗收項目與仍缺證據已移至 BACKLOG `DGPIT-LAYERED-GAPS`**。
 
@@ -10264,24 +10266,26 @@ C. 公開端只保存獲准公開的衍生資料；受限資料不再新增公�
 **(六) A／B／C 消歧（同名不同義；引用時必須帶出處）**
 
 1. **稽核文件** `docs/vnext/PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md` §5（儲存架構候選，原文）：「**A**：維持公開 repo 與現行保存方式；僅在確認授權允許後繼續使用（補標示、補授權證據）。」「**B**：repo 維持公開，受限制資料（H1／H2 及客戶指定者）改存非公開儲存。」「**C**：公開端僅保留經確認允許公開的衍生聚合，原始／來源列另存非公開位置。」
-2. **客戶訊息二自列**（fence 內）：A＝繼續等取得 #1124 全部資料授權；B＝在既有架構中僅發布逐資料集確認具有公開權限的資料（評估是否調整五檔整包 publisher）；C＝公開端只保存獲准公開的衍生資料、受限資料不再新增公開版本。
+2. **提示語訊息二自列**（fence 內；客戶轉交）：A＝繼續等取得 #1124 全部資料授權；B＝在既有架構中僅發布逐資料集確認具有公開權限的資料（評估是否調整五檔整包 publisher）；C＝公開端只保存獲准公開的衍生資料、受限資料不再新增公開版本。
 3. 另：DEC-171 的客戶「方案 B」＝先做唯讀稽核；DEC-077、DEC-116 各有與本題無關的「方案 C」。
-- **客戶選的是上列 1 的稽核文件方案 C，作為優先研究方向（APPROVED 僅限研究）**；該文件階段 3（原始層另存非公開位置）需新儲存／Secret，屬 Decision Gate，**未授權**。BACKLOG `I1144-DATA-STORAGE-DECISION` 與 PROJECT_STATE 約 L1230 原寫「RECOMMENDATION（非裁示）優先評估方案 C」，自本條起該方向為**客戶選定研究方向**（兩處原文不改，另以 📌 引用本條）。
+- **依派工提示語（客戶轉交；採用證據見上）選定的是上列 1 的稽核文件方案 C，作為優先研究方向（APPROVED 僅限研究；只是研究方向，不是施工授權，亦不構成任何 Gate 解除）**；該文件階段 3（原始層另存非公開位置）需新儲存／Secret，屬 Decision Gate，**未授權**。BACKLOG `I1144-DATA-STORAGE-DECISION` 與 PROJECT_STATE 約 L1230 原寫「RECOMMENDATION（非裁示）優先評估方案 C」，自本條起該方向為**依派工提示語選定的研究方向**（兩處原文不改，另以 📌 引用本條）。
 
 **(七) 仍需客戶裁示（未裁示；本條不替客戶決定）與 NOT VERIFIED**
 
 1. **DG-LIC 走哪條路**：維持 #1124 HOLD 並由客戶向 Yahoo／TWSE／TPEX／FinMind 取得書面授權，或採替代方案（需改發布架構，另案）；以及三支資料 workflow 的暫停是否即其意圖與恢復條件（見 DEC-185）。
 2. **DG-PIT**：決策單決策 3 的 A／B／C，以及「適用 PIT Gate」涵蓋哪些用途。
-- **NOT VERIFIED**：兩 fence 與客戶原訊息的逐字一致性；Reopen 實際操作者；QA 結果（僅存 session）；Yahoo ToS、data.gov.tw、TPEX、TWSE 管理辦法原文；twii 缺 11-13 原因；11-10／11-12 外資官方值；volume 單位；published_at；交易日曆；repo 公開性；main branch protection／required checks；部署時區。
+- **NOT VERIFIED**：兩 fence 與原提示語（客戶轉交）的逐字一致性；Reopen 實際操作者；QA 結果（僅存 session）；Yahoo ToS、data.gov.tw、TPEX、TWSE 管理辦法原文；twii 缺 11-13 原因；11-10／11-12 外資官方值；volume 單位；published_at；交易日曆；repo 公開性；main branch protection／required checks；部署時區。
 - **單組聲明**：(二)～(六) 為撰寫組轉錄，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
 
-### DEC-185｜客戶 2026-11-14「緊急暫停三支資料發布 Workflow」授權轉錄：停用事實、AI 嘗試被 403 擋下並遵守「不得改用替代操作」、影響與恢復條件待裁示（2026-11-14；只追加；非 QA PASS；非施工授權）
+### DEC-185｜客戶轉交之 2026-11-14「緊急暫停三支資料發布 Workflow」派工提示語轉錄：停用事實、AI 嘗試被 403 擋下並遵守「不得改用替代操作」、影響與恢復條件待裁示（2026-11-14；只追加；非 QA PASS；非施工授權）
 
-> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-185"` 0 命中，DEC-184 為上一號）。**來源類別 D：客戶 2026-11-14 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**。fence 收錄訊息**全文**未改一字；sha256 算法同 DEC-184（`sha256sum` 與 `python3 -I` 兩法重算一致）。**本條不是 QA PASS，也不是授權擴張**；GitHub 事實取自總管 2026-11-14 直讀與同日 session 紀錄（時點快照，一律重查）。
+> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-185"` 0 命中，DEC-184 為上一號）。**來源類別：客戶轉交之派工提示語**（客戶指出部分由 ChatGPT 擬稿；各句直接作者未逐句區分＝NOT VERIFIED；經派工訊息轉錄、逐字一致性 NOT VERIFIED）（沿用原 D 類編號；更正見 DEC-187 (六)）；原始對話 repo 內 NOT VERIFIED。fence 收錄訊息**全文**未改一字；sha256 算法同 DEC-184（`sha256sum` 與 `python3 -I` 兩法重算一致）。**本條不是 QA PASS，也不是授權擴張**；GitHub 事實取自總管 2026-11-14 直讀與同日 session 紀錄（時點快照，一律重查）。
 
-- **決策者**：**客戶**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：授權已執行（由客戶手動完成停用，見下）；**恢復條件＝未裁示**。｜**範圍**：三支資料發布 Workflow 的暫停。
+- **決策者**：**客戶（透過轉交／採用派工提示語；親撰與 ChatGPT 擬稿成分 NOT VERIFIED）**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：授權已執行（停用現況為 FACT；派工提示語記載為客戶手動完成，操作者 NOT VERIFIED，見下）；**恢復條件＝未裁示**。｜**範圍**：三支資料發布 Workflow 的暫停。
+- **採用／轉交證據（類別丙；只列已知事實）**：(1) 該則由客戶帳號送入 Claude Code session 並被當作任務指示執行（session 內事實；repo 內無原始對話）；(3) GitHub 上三支 workflow 現為 `disabled_manually`（updated_at 2026-11-14 11:24:54／11:25:02／11:25:09 +08:00），與該提示語意旨相符，操作者 NOT VERIFIED（客戶回報為手動，來源為 DEC-187 fence 的 C 點，該來源本身亦是轉交提示語）。
+- **授權效力**：授權效力僅限該提示語實際載明的範圍；客戶轉交／採用提示語，不代表每個句子都成為客戶親自說過的話，也不代表其中任何 AI 推薦方案自動獲准；AI 推薦／研究結論（類別丁）不因寫入 fence 外的 DEC 敘述而升格為 APPROVED。
 - **與既有 DEC 的關係**：與 DEC-183 Batch 1 A（#1119／`RUN-RETENTION-30D-HOLD`：只保存規則、不授權刪 Run）、DEC-175（Actions 清理延後）、DEC-181（最新交易日更新程序）、DEC-184 (五)（台股卡 stale 時點）相關；不改其中任何一條。
-- **客戶原文（逐字，fence 內未改一字）**：fence 內容 sha256＝`7ae88a30c393dc07eae866c1b9a41291374a7f5aaeffe4f9e031805a4a176ac4`（撰寫時計算；尚未由測試釘住）。
+- **派工提示語原文（逐字保存；fence 內未改一字；作者類別見上）**：fence 內容 sha256＝`7ae88a30c393dc07eae866c1b9a41291374a7f5aaeffe4f9e031805a4a176ac4`（撰寫時計算；尚未由測試釘住）。
 
 ```
 股票儀表板｜緊急停用三支資料發布 Workflow
@@ -10324,7 +10328,7 @@ Repository：linchen-20200325/my-stock-dashboard
 **(一) 授權範圍（APPROVED 限字面）**
 
 - **APPROVED**：「我已明確授權你立即暫時停用」`update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 三支，使用「gh workflow disable」；完成後須重讀 GitHub 狀態，「必須確認三支都為 "disabled_manually"，才可回報成功」；「本次只是暫停這三支排程，日後可以重新啟用。」
-- **維持禁止（客戶逐字清單）**：停用其他 Workflow；刪除 Workflow／Run／Artifact；合併、關閉或刪除 #1124～#1126；修改程式、資料、Secrets 或 Git 歷史；未經授權取消已執行中的 Run。
+- **維持禁止（派工提示語原句清單；客戶轉交）**：停用其他 Workflow；刪除 Workflow／Run／Artifact；合併、關閉或刪除 #1124～#1126；修改程式、資料、Secrets 或 Git 歷史；未經授權取消已執行中的 Run。
 - 「若 CLI 權限不足，立即回報，不得改用刪除檔案等替代操作。」
 
 **(二) 事實（FACT；來源＝總管 2026-11-14 GitHub 直讀；時點快照）**
@@ -10336,8 +10340,8 @@ Repository：linchen-20200325/my-stock-dashboard
 | update_macro_forward_test.yml | 337758882 | `disabled_manually` | 2026-11-14 11:25:09 |
 
 - **FACT**：in_progress Run＝0；queued Run＝3，**均陳舊、未取消**：`37655507506`（update_macro_forward_test，schedule，created 2026-10-07T16:53Z）、`43095833804` 與 `43095575619`（PR Check，PR #1152 舊 head，created 2026-11-11T20:2xZ；#1152 已合併、其分支已不在遠端）。三支最後一次 Run 都是 2026-11-13 的 success（run_number #199／#100／#62；與三支的對應順序未載明，不猜）。其餘 16 支 workflow 皆 active。
-- **session 紀錄、repo 外未複驗（AI 嘗試）**：AI 對 `287599534` 執行 `gh workflow disable`（repository 見 fence），得 HTTP 403「Resource not accessible by integration」、退出碼 1；**依客戶指示立即停止，其餘兩支未執行，未改用任何替代方式**（遵守上列最後一句）。原因推論＝gh 憑證缺 `actions: write`（**INFERENCE**）。本條 HTTP 403、退出碼 1、其餘兩支未執行均為該 session 紀錄，repo 內無證據，列入 NOT VERIFIED。
-- **停用是客戶手動完成的，不是 AI**：客戶回報已手動停用（來源＝客戶同日「決策防遺漏」訊息 Batch 1 ②C，見 DEC-187 fence；轉錄、逐字一致性 NOT VERIFIED）。**誰按下停用**：事件證據讀不到，**NOT VERIFIED**。三支皆 `disabled_manually` 是 GitHub 讀取到的現況（FACT），不是 AI 操作的結果。
+- **session 紀錄、repo 外未複驗（AI 嘗試）**：AI 對 `287599534` 執行 `gh workflow disable`（repository 見 fence），得 HTTP 403「Resource not accessible by integration」、退出碼 1；**依派工提示語指示立即停止，其餘兩支未執行，未改用任何替代方式**（遵守上列最後一句）。原因推論＝gh 憑證缺 `actions: write`（**INFERENCE**）。本條 HTTP 403、退出碼 1、其餘兩支未執行均為該 session 紀錄，repo 內無證據，列入 NOT VERIFIED。
+- **停用不是 AI 操作的（操作者 NOT VERIFIED）**：派工提示語記載客戶回報已手動停用（來源＝同日「決策防遺漏」派工提示語 Batch 1 ②C，見 DEC-187 fence；客戶轉交、轉錄、逐字一致性 NOT VERIFIED；回報人與操作者皆未獨立查證）。**誰按下停用**：事件證據讀不到，**NOT VERIFIED**。三支皆 `disabled_manually` 是 GitHub 讀取到的現況（FACT），不是 AI 操作的結果。
 
 **(三) 這「不是」什麼（寫死，防誤用）**
 
@@ -10357,17 +10361,19 @@ Repository：linchen-20200325/my-stock-dashboard
 **(五) 恢復條件與陳舊 Run（未裁示；待客戶）**
 
 - 何時、依何條件重新啟用三支 workflow：**未裁示**（見 BACKLOG `WORKFLOW-PAUSE-3-DATA`；DEC-184 (七) 第 1 項已列為待裁示：該暫停是否即其意圖與恢復條件）。
-- 3 筆陳舊 queued Run 是否取消：**未裁示**；本條**不授權**取消（客戶原文只禁止「在未經授權下取消已執行中的 Run」，未提 queued Run 的處置；未載明即未授權）。
-- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；誰按下停用；AI 嘗試的 HTTP 403／退出碼 1／其餘兩支未執行（僅 session 紀錄）；403 的確切原因；三支與 run_number 的對應；影響 1～5 的實際效果。
+- 3 筆陳舊 queued Run 是否取消：**未裁示**；本條**不授權**取消（提示語原文只禁止「在未經授權下取消已執行中的 Run」，未提 queued Run 的處置；未載明即未授權）。
+- **NOT VERIFIED**：fence 與原提示語（客戶轉交）的逐字一致性；誰按下停用；AI 嘗試的 HTTP 403／退出碼 1／其餘兩支未執行（僅 session 紀錄）；403 的確切原因；三支與 run_number 的對應；影響 1～5 的實際效果。
 - **單組聲明**：本條為撰寫組轉錄，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
 
-### DEC-186｜客戶 2026-11-14「舊分支最終刪除資格稽核」授權轉錄：僅唯讀稽核、不授權刪除；七條稽核結果、現況 13 條分支、實際刪除前的程序要求待裁示（2026-11-14；只追加；非 QA PASS；非刪除授權）
+### DEC-186｜客戶轉交之 2026-11-14「舊分支最終刪除資格稽核」派工提示語轉錄：僅唯讀稽核、不授權刪除；七條稽核結果、現況 13 條分支、實際刪除前的程序要求待裁示（2026-11-14；只追加；非 QA PASS；非刪除授權）
 
-> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-186"` 0 命中，DEC-185 為上一號）。**來源類別 D：客戶 2026-11-14 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**。fence 收錄訊息**全文**未改一字；sha256 算法同 DEC-184。**本條不是 QA PASS，也不是刪除授權**；稽核事實取自 2026-11-14 session（Batch A／B／C 三組＋治理依賴組＋QA 複驗；報告只存於該 session，repo 外未複驗）與總管 GitHub 直讀。客戶該批另限「不得 push、merge、close PR、刪 branch、清理 worktree 或改正式文件」，本條的補登依 DEC-187 授權。
+> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-186"` 0 命中，DEC-185 為上一號）。**來源類別：客戶轉交之派工提示語**（客戶指出部分由 ChatGPT 擬稿；各句直接作者未逐句區分＝NOT VERIFIED；經派工訊息轉錄、逐字一致性 NOT VERIFIED）（沿用原 D 類編號；更正見 DEC-187 (六)）；原始對話 repo 內 NOT VERIFIED。fence 收錄訊息**全文**未改一字；sha256 算法同 DEC-184。**本條不是 QA PASS，也不是刪除授權**；稽核事實取自 2026-11-14 session（Batch A／B／C 三組＋治理依賴組＋QA 複驗；報告只存於該 session，repo 外未複驗）與總管 GitHub 直讀。該提示語另限「不得 push、merge、close PR、刪 branch、清理 worktree 或改正式文件」，本條的補登依 DEC-187 授權。
 
-- **決策者**：**客戶**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：稽核授權已執行；**刪除＝未授權**。｜**範圍**：七條舊分支的刪除資格判斷（唯讀）。
+- **決策者**：**客戶（透過轉交／採用派工提示語；親撰與 ChatGPT 擬稿成分 NOT VERIFIED）**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：稽核授權已執行；**刪除＝未授權**。｜**範圍**：七條舊分支的刪除資格判斷（唯讀）。
+- **採用／轉交證據（類別丙；只列已知事實）**：(1) 該則由客戶帳號送入 Claude Code session 並被當作任務指示執行（session 內事實；repo 內無原始對話）；(4) 除被送入 session 外，無 GitHub 側採用證據。
+- **授權效力**：授權效力僅限該提示語實際載明的範圍；客戶轉交／採用提示語，不代表每個句子都成為客戶親自說過的話，也不代表其中任何 AI 推薦方案自動獲准；AI 推薦／研究結論（類別丁）不因寫入 fence 外的 DEC 敘述而升格為 APPROVED。
 - **與既有 DEC 的關係**：DEC-012（分支刪除須客戶核准清單）、DEC-147 第 4 點（有條件授權）、DEC-175（Actions／死碼清理延後）並存；BACKLOG `BR-CLEANUP`、`NUI2-BRANCH-RETENTION-1107` 仍有效（見 BACKLOG 新段 📌）。
-- **客戶原文（逐字，fence 內未改一字）**：fence 內容 sha256＝`f754e5150d612863bdee56997b89c014c27c1d48a271b04068d166d4a0b49010`（撰寫時計算；尚未由測試釘住）。
+- **派工提示語原文（逐字保存；fence 內未改一字；作者類別見上）**：fence 內容 sha256＝`f754e5150d612863bdee56997b89c014c27c1d48a271b04068d166d4a0b49010`（撰寫時計算；尚未由測試釘住）。
 
 ```
 股票儀表板｜舊分支最終刪除資格稽核
@@ -10438,7 +10444,7 @@ Batch C：
 
 **(一) 授權範圍**：「本次授權唯讀稽核，不授權實際刪除分支。」每條只能判：「可刪：已證實無獨有必要內容、無依賴」／「保留」／「待裁示」；「沒有確認完成的不能列為可刪」；「不要刪除 main、data、v2、claude/stock-dashboard-handoff-g9dtm0」；「#1124～#1126 與 #1164 對應的 Open PR 分支全部保留，不得碰」。**APPROVED**＝唯讀稽核；**未授權**＝任何刪除、重新合併已關閉 PR、worktree 清理。
 
-**(二) 七條稽核結果（FACT；稽核當時共 15 條遠端分支；來源＝2026-11-14 session，單組／複驗見上，repo 外未複驗）**。下表「判定」欄為 **AI 稽核當時判定（建議；非客戶裁示、非刪除資格、非授權）**；客戶 D 點指示見 (四)(五)。
+**(二) 七條稽核結果（FACT；稽核當時共 15 條遠端分支；來源＝2026-11-14 session，單組／複驗見上，repo 外未複驗）**。下表「判定」欄為 **AI 稽核當時判定（建議；非客戶裁示、非刪除資格、非授權）**；派工提示語 D 點指示見 (四)(五)。
 
 | 分支（head） | 對應 PR | AI 稽核當時判定（建議，非客戶裁示、非刪除資格、非授權） | 要點 |
 |---|---|---|---|
@@ -10459,7 +10465,7 @@ Batch C：
 
 **(四) 規則關係與殘留衝突（資訊；本條不替客戶解釋哪個規則優先）**
 
-0. **客戶已指示（依 DEC-147；撰寫組讀法）**：客戶 2026-11-14 決策閉環訊息 D 點（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）原文：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依客戶此句**，其餘分支依 DEC-147 第 4 點條件（客戶逐字：「分支只有在確認沒有其他使用者或工作流程依賴、獨有內容已保存後才清理。」）與 BACKLOG `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。故「DEC-147 第 4 點是否仍有效」**不再是待裁示**。
+0. **派工提示語已指示（依 DEC-147；撰寫組讀法；客戶轉交，採用證據僅 session）**：2026-11-14 決策閉環派工提示語 D 點（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）原句：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依該提示語此句**，其餘分支依 DEC-147 第 4 點條件（客戶逐字：「分支只有在確認沒有其他使用者或工作流程依賴、獨有內容已保存後才清理。」）與 BACKLOG `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。故「DEC-147 第 4 點是否仍有效」**不再是待裁示**。
 1. **殘留衝突（資訊；實際執行刪除前的程序要求）**：下列規則與 DEC-147 第 4 點（條件滿足即可清理）、第 6 點（「清單外刪分支」須停止）之間，**執行時如何同時滿足**未明：DEC-012（遠端分支刪除須客戶核准清單）；PROJECT_RULES §10 原句（§31.2 已註明改以 DEC-147 為準）、§4 第 8 項（不可逆操作須停下問）；§16.6（客戶第 21 節逐字：「最後再一次清…未來刪除前重新查 GitHub…branch deletion 視為不可逆治理動作」）；最新 HANDOFF 禁止清單「不得刪除任何…分支」通則（AI 整理，非客戶逐字，語境為 #1124 批次）。例：實際刪除前是否仍須客戶核准刪除清單、是否須等「最後再一次清」的時點。
 2. DEC-147 第 6 點「清單外刪分支」之「清單」未定義。
 3. HANDOFF L282–284 的 cleanup 候選表已過期（列 11 條、缺 reorg3c、含已不存在分支；已加 📌 指標）；BACKLOG `BR-CLEANUP`（2026-10-23）已過期（已加 📌）。
@@ -10467,17 +10473,19 @@ Batch C：
 **(五) 仍需客戶裁示（僅殘留部分；未裁示）**
 - **實際執行刪除前的程序要求**：上列 (四)1 的同時滿足方式（僅在真有分支擬實際刪除時提出；提問須附推薦方案）。**本 DEC 不授權任何實際刪除**；實際刪除時的程序，現有規則並存（DEC-147 第 4 點、DEC-012、PROJECT_RULES §16.6），其間如何同時滿足屬殘留衝突，中性寫法與出處見 BACKLOG `BR-RULE-RECONCILE`；在客戶裁示前，依 PROJECT_RULES §14 暫行讀法「任一套規則要求停下就停下」處理。
 - `ccr-ed362375-uplnw7` 的三處保留文字（皆 AI／ChatGPT 撰寫、非客戶逐字）：僅在擬刪除該分支時才釐清其來源是否反映客戶意圖（實際刪除前）。
-- **不再待裁示（客戶 D 點已指示依 DEC-147 與原保留裁示）**：DEC-147 第 4 點是否仍有效；`NUI2-BRANCH-RETENTION-1107` 是否解除（依原保留裁示，仍有效、未解除）；#1048 提案檔與 #1034 的 §32／§33 規則文字（屬 DEC-147 第 4 點已排除的「含未保存獨有內容者」，INFERENCE；去留由 BACKLOG `NUI2-GOV-1034-EXTRACT`／`NUI2-GOV-1034-RULES-RENUMBER` 追蹤，不另問）。
-- **明確聲明**：依客戶 D 點，DEC-147 第 4 點與 DEC-012 的條件授權**不視為被撤銷**；本 DEC **不授權任何實際刪除**。
+- **不再待裁示（派工提示語 D 點已指示依 DEC-147 與原保留裁示；客戶轉交）**：DEC-147 第 4 點是否仍有效；`NUI2-BRANCH-RETENTION-1107` 是否解除（依原保留裁示，仍有效、未解除）；#1048 提案檔與 #1034 的 §32／§33 規則文字（屬 DEC-147 第 4 點已排除的「含未保存獨有內容者」，INFERENCE；去留由 BACKLOG `NUI2-GOV-1034-EXTRACT`／`NUI2-GOV-1034-RULES-RENUMBER` 追蹤，不另問）。
+- **明確聲明**：依派工提示語 D 點，DEC-147 第 4 點與 DEC-012 的條件授權**不視為被撤銷**；本 DEC **不授權任何實際刪除**。
 - **單組聲明**：本條為撰寫組轉錄，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
 
-### DEC-187｜客戶 2026-11-14「決策防遺漏與 Open Items 收斂計畫」訊息轉錄：Batch 1 範圍、防重問守衛、本次禁止清單、Batch 2／3 後續安排（2026-11-14；只追加；非 QA PASS；非施工授權）
+### DEC-187｜客戶轉交之 2026-11-14「決策防遺漏與 Open Items 收斂計畫」派工提示語轉錄：Batch 1 範圍、防重問守衛、本次禁止清單、Batch 2／3 後續安排（2026-11-14；只追加；非 QA PASS；非施工授權）
 
-> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-187"` 0 命中，DEC-186 為上一號）。**來源類別 D：客戶 2026-11-14 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**。fence 收錄訊息**全文**未改一字（含標題、抬頭行、段落）；sha256 算法同 DEC-184。**本條不是 QA PASS，也不是授權擴張**：客戶明示「這是執行規則補強，不允許自行放寬高風險 Gate」。本條是 DEC-184～DEC-186 補登與 PROJECT_RULES §4「請示前查證」的 **DEC 來源**。
+> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-187"` 0 命中，DEC-186 為上一號）。**來源類別：客戶轉交之派工提示語**（客戶指出部分由 ChatGPT 擬稿；各句直接作者未逐句區分＝NOT VERIFIED；經派工訊息轉錄、逐字一致性 NOT VERIFIED）（沿用原 D 類編號；更正見 DEC-187 (六)）；原始對話 repo 內 NOT VERIFIED。fence 收錄訊息**全文**未改一字（含標題、抬頭行、段落）；sha256 算法同 DEC-184。**本條不是 QA PASS，也不是授權擴張**：該提示語明示「這是執行規則補強，不允許自行放寬高風險 Gate」。本條是 DEC-184～DEC-186 補登與 PROJECT_RULES §4「請示前查證」的 **DEC 來源**。
 
-- **決策者**：**客戶**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：生效，限字面範圍。｜**範圍**：決策閉環（防重問）、Open Items 對帳與五治理文件最小同步。
+- **決策者**：**客戶（透過轉交／採用派工提示語；親撰與 ChatGPT 擬稿成分 NOT VERIFIED）**（2026-11-14，經轉錄）。｜**效力日期**：2026-11-14 起。｜**狀態**：生效，限字面範圍。｜**範圍**：決策閉環（防重問）、Open Items 對帳與五治理文件最小同步。
+- **採用／轉交證據（類別丙；只列已知事實）**：(1) 該則由客戶帳號送入 Claude Code session 並被當作任務指示執行（session 內事實；repo 內無原始對話）；(4) 除被送入 session 外，無 GitHub 側採用證據。
+- **授權效力**：授權效力僅限該提示語實際載明的範圍；客戶轉交／採用提示語，不代表每個句子都成為客戶親自說過的話，也不代表其中任何 AI 推薦方案自動獲准；AI 推薦／研究結論（類別丁）不因寫入 fence 外的 DEC 敘述而升格為 APPROVED。
 - **與既有 DEC 的關係**：**📌 被 DEC-187 強化**（原文一字未改、各自理由仍成立）＝DEC-009 末句「已裁示過的不重問」、DEC-013（已裁示事項不重問；待裁示題內容未變不重送）、DEC-014（客戶回「改好了」後不重問）。另與 DEC-147、174、175、177、178、183 並存，不放寬其中任何一條。強化的是「請示前先查證」的義務與可再請示的三種情形；**不新增請示情境**（`CLAUDE.md` §-1.5.D §03-2 封閉列舉不變）。
-- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`73d543eb1d5c6383cd44aee07b89aa877701ebcaa86011412b70e75eb7e98968`（撰寫時計算；尚未由測試釘住）。
+- **派工提示語原文（逐字保存；fence 內未改一字；作者類別見上）**：fence 內容 sha256＝`73d543eb1d5c6383cd44aee07b89aa877701ebcaa86011412b70e75eb7e98968`（撰寫時計算；尚未由測試釘住）。其約束力僅限提示語實際載明且經客戶採用的範圍；採用範圍外 NOT VERIFIED。
 
 ```
 股票儀表板｜決策防遺漏與 Open Items 收斂計畫
@@ -10584,17 +10592,17 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 
 **(一) 目標與批次（APPROVED 限字面）**
 
-| 批 | 內容（客戶原文） | 狀態 |
+| 批 | 內容（提示語原文；客戶轉交） | 狀態 |
 |---|---|---|
 | Batch 1 | ① 現有決策與九個 Open 項目（Issues #1119、#1116、#1138、#1110、#1107；PR #1164、#1124、#1125、#1126）對帳；② 補查近期可能沒有同步的裁示（A～G）；③ 最小必要 GitHub 同步（獨立 docs-only branch／PR，最小補登現有五治理文件） | **APPROVED**（本批） |
-| Batch 2 | 將五個 Open Issues 逐一轉換為明確可驗收的 Close 條件；已有足夠證據者才推薦關閉 | 客戶明寫「現在不施工」；**本批不寫 Close 條件** |
-| Batch 3 | 處理 #1164 文件 PR 與 #1124～#1126 資料 PR；資料授權／PIT 未解除時不得合併或為了歸零而關閉 | 客戶明寫「現在不施工」 |
+| Batch 2 | 將五個 Open Issues 逐一轉換為明確可驗收的 Close 條件；已有足夠證據者才推薦關閉 | 提示語明寫「現在不施工」；**本批不寫 Close 條件** |
+| Batch 3 | 處理 #1164 文件 PR 與 #1124～#1126 資料 PR；資料授權／PIT 未解除時不得合併或為了歸零而關閉 | 提示語明寫「現在不施工」 |
 
 - 規則：每批最多三項；不重寫既有架構；正式裁示入 DECISIONS、未完成工作更新既有 BACKLOG、長期有效知識更新 PROJECT_STATE、最新阻塞與下一步更新 HANDOFF、只有真正缺少永久行為規則時才補 PROJECT_RULES；已存在的決策只補來源或 superseded 引用；不能確認原始裁示時只記證據缺口，不替客戶作決定；不新增第二份 DECISIONS／BACKLOG 或影子 SSOT。
-- **本次禁止（客戶逐字清單）**：不直接 Merge 或 Close 九個 Open 項目；不刪分支、Git 歷史、資料、Run、Artifact；不重新啟用已暫停的資料 Workflow；不改 Secrets、資料源、publisher、排程；不改 UI、投資公式、Risk Cap、System Action；不解除 DG-LIC、DG-PIT、Coverage、Wiring Gate；不建立不必要的新資料庫或治理框架。
-- **驗收（客戶）**：docs-only PR 須通過非作者 QA、最新同 head 五項原生 CI、0 unresolved threads，且不得自行合併。
+- **本次禁止（派工提示語原句清單；客戶轉交）**：不直接 Merge 或 Close 九個 Open 項目；不刪分支、Git 歷史、資料、Run、Artifact；不重新啟用已暫停的資料 Workflow；不改 Secrets、資料源、publisher、排程；不改 UI、投資公式、Risk Cap、System Action；不解除 DG-LIC、DG-PIT、Coverage、Wiring Gate；不建立不必要的新資料庫或治理框架。
+- **驗收（派工提示語載明）**：docs-only PR 須通過非作者 QA、最新同 head 五項原生 CI、0 unresolved threads，且不得自行合併。
 
-**(二) 防重問守衛（客戶逐字原則；落點＝`PROJECT_RULES.md` 第 4 節「請示前查證（Pre-Ask Check）」）**
+**(二) 防重問守衛（派工提示語中的原則；客戶轉交，親撰與否 NOT VERIFIED；落點＝`PROJECT_RULES.md` 第 4 節「請示前查證（Pre-Ask Check）」）**
 
 > 「再次向客戶請示前，先搜尋既有 DEC、BACKLOG、Issue／PR 與最新 Gate；若已有相同條件下的有效裁示，直接遵循並引用 DEC，不得重複詢問。只有新條件使原裁示不適用、出現真正衝突或正式 Gate 缺失，才能再次請示。」「這是執行規則補強，不允許自行放寬高風險 Gate。」
 
@@ -10603,7 +10611,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 
 **(三) 對帳結論與 E～G 登錄狀況（FACT；只列指標與狀態，不重抄）**
 
-- 九個 Open 項目對帳（已明確核准／已實作驗收／僅研究建議／HOLD／被取代／缺證據）＝見 `docs/BACKLOG.md`「2026-11-14 決策閉環與 Open Items 對帳（Batch 1）」；A（#1124）→DEC-184、B（方案 C）→DEC-184、C（Workflow 暫停）→DEC-185、D（分支）→DEC-186（客戶 D 點指示已據以改寫 DEC-186 (四)(五)，見 DEC-186）。
+- 九個 Open 項目對帳（已明確核准／已實作驗收／僅研究建議／HOLD／被取代／缺證據）＝見 `docs/BACKLOG.md`「2026-11-14 決策閉環與 Open Items 對帳（Batch 1）」；A（#1124）→DEC-184、B（方案 C）→DEC-184、C（Workflow 暫停）→DEC-185、D（分支）→DEC-186（派工提示語 D 點指示已據以改寫 DEC-186 (四)(五)，見 DEC-186）。
 - **E 雙軌前進**：已登錄於 DEC-183 Batch 1 B、DEC-174、BACKLOG `UI2-1138-PRIORITY-RULE`；PROJECT_RULES 無對應行為條款（只有 §33 快照索引）。**F(i) 三 Agent**：DEC-178、PROJECT_RULES §34、`.claude/agents/` 三檔、`tests/test_agent_definitions_guard.py`；實際載入／路由 NOT VERIFIED（BACKLOG 已登記）。**F(iii) Old UI First**：治理文件 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`（PR #1087）與 PROJECT_RULES 索引存在，**DECISIONS 無該客戶裁示的 DEC 條目、無逐字原文**（只記證據缺口，見 BACKLOG `OLDUIFIRST-DEC-GAP`）。**F(iv) OneBrain Evidence**：DEC-128／131／136／142 方向已裁示；Evidence Coverage／Token 預算機制僅草案、未實作（`NUI2-EVIDENCE-COVERAGE-PREFLIGHT` P1 OPEN）。**F(v) 資料層／AI 層分離**：DEC-027、PROJECT_RULES §13 D3／D4、§16.1 已完整登錄。**G 30 天 Run 保留**：DEC-183 Batch 1 A 與 `RUN-RETENTION-30D-HOLD` 已區分「保留方向」與「刪除授權（無）」；#1119 仍 HOLD；三支 workflow 的停用**不是**刪 Run／retention 變更（DEC-185 (三)）。
 - **F(ii) 資訊（非重問）**：DEC-178 標題寫「六項」、內文列 ①～⑨ 九項，BACKLOG 也把 ①～⑨ 合稱六項；「六項」所指無法確定，**不猜**，記為歧義（BACKLOG `QB-SIX-VS-NINE-AMBIGUITY`）。
 
@@ -10616,4 +10624,11 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 5. 優先序與延後事項重複於 PROJECT_RULES §33、DEC-175、`UI2-1138-PRIORITY-RULE`、DEC-183 B；Actions 清理另有 `DEC175-CLEANUP-DEFER`、`RUN-RETENTION-30D-HOLD`。
 - **消除重複的方式**：新增**單一權威指向**（HANDOFF 新現況段與 PROJECT_RULES 守衛都指向 DEC，不再抄清單）；**不刪、不重寫**既有條目。
 
-**(五) 仍需客戶裁示與 NOT VERIFIED**：仍需客戶真正裁示者見 DEC-184 (七)（DG-LIC 路徑、DG-PIT）、DEC-185 (五)（workflow 恢復條件、陳舊 queued Run）、DEC-186 (五)（僅「實際執行刪除前的程序要求」；「DEC-147 第 4 點是否仍有效」已由客戶 D 點回答，不再待裁示）；DEC-178「六項」歧義僅為資訊。**NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；撰寫組澄清是否合客戶本意；Top 5 的完整度（只掃五份治理文件與 CLAUDE.md／PROCESS.md，其他 docs 未逐檔通讀）。**單組聲明**：本條為撰寫組轉錄與整理，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
+**(五) 仍需客戶裁示與 NOT VERIFIED**：仍需客戶真正裁示者見 DEC-184 (七)（DG-LIC 路徑、DG-PIT）、DEC-185 (五)（workflow 恢復條件、陳舊 queued Run）、DEC-186 (五)（僅「實際執行刪除前的程序要求」；「DEC-147 第 4 點是否仍有效」已由派工提示語 D 點回答，不再待裁示）；DEC-178「六項」歧義僅為資訊。**NOT VERIFIED**：fence 與原提示語（客戶轉交）的逐字一致性；撰寫組澄清是否合客戶本意；Top 5 的完整度（只掃五份治理文件與 CLAUDE.md／PROCESS.md，其他 docs 未逐檔通讀）。**單組聲明**：本條為撰寫組轉錄與整理，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
+
+**(六) 來源標示更正（2026-11-14 後續，append-only；執行：修正組；決策依據：下列客戶後續指示，本身亦經派工訊息轉錄、逐字一致性 NOT VERIFIED）**
+- **客戶後續指示要點（逐字摘要；經派工訊息轉錄）**：PR #1191 暫不合併，先處理來源標示必修問題——**區分客戶直接原文與 ChatGPT 代擬派工**。DEC-184～187 部分 fence 是 ChatGPT 提供、由客戶轉交 Claude Code 的提示語，不得直接標為「客戶親自撰寫的逐字原文」。**客戶採用提示語，不代表每個句子都成為客戶親自說過的話，也不代表推薦方案自動獲准；缺少直接採用證據者標 NOT VERIFIED，不升格 APPROVED。**不得更動已保存的 fence 內文，或重新計算出不同內容的 hash 來掩飾來源問題。
+- **四類區分**：(甲) 客戶親自提出的需求或正式裁示；(乙) ChatGPT 依需求擬出的派工提示語；(丙) 客戶轉交／採用該提示語的證據；(丁) AI 自行推論、推薦或研究結論。本條 DEC-184～187 的 fence 屬 (乙)，其中各句究屬 (甲) 或 (乙) **NOT VERIFIED**（repo 內無證據可逐句區分，不猜測）；各條「採用／轉交證據」行即 (丙)；fence 外的稽核整理、推薦、研究結論屬 (丁)。
+- **採路徑 A（最小）**：只更正 fence **外**的來源類別、決策者、fence 標題與授權效力敘述；5 個 fence 內文與 sha256 **一字未動**（重算與標題行所列一致）。**已更正位置**：DEC-184～187 的標題、來源類別、決策者、fence 標題行、約束力敘述、「客戶選擇／客戶 D 點」類措辭；DEC-009／013／014 的 📌 決策者；`PROJECT_RULES.md` 第 4 節；BACKLOG 2026-11-14 新段；`PROJECT_STATE.md` §70.25；HANDOFF 新現況段。
+- **尚未更正（本 PR 不處理）**：DEC-183 及更早以「客戶逐字 fence」標示的訊息是否同樣含 ChatGPT 擬稿＝NOT VERIFIED，只登記為 BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`，待客戶要求再另批處理；五份文件以外對 DEC-184～187 的引用未盤點；fence 內第一人稱字樣屬 fence 內文，未動。
+- **本更正不改變任何 Gate 與授權範圍**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向（非施工授權）；DG-PIT 的「B＋X」類組合為總管推薦（類別丁），**不得記成客戶已解除 Gate**——五份文件新增內容經檢查**沒有**此類記載，DG-PIT 一律為未解除；三支資料 Workflow 維持停用；queued Run 暫不取消、排程不重新啟用。
