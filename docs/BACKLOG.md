@@ -2752,3 +2752,27 @@
 > **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**維持 `PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md` 既有判讀**（本批無新證據）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
 >
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-LIC`、`DG-PIT`、`DG-COV`、`DG-SCOPE`、`I1144-WIRING-GATE`、DPE-1／2／4／5、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7）、`REORG3C-Q5-GATE`、#1124～#1126、#1164、#1119（Issue）、DPE-7（維持 A 觀察）、`DEC178-QB3-*`／`DEC180-*` P3 候選、Old UI、OneBrain 正式接線、投資公式／Risk Cap／System Action、新增 API／cron／Secrets、`.claude/settings*`、`SHOWN_FOLDS`／UI 契約／測試 allowlist、NAS／Proxy／Secrets、Branch Protection、`app.py`／`app_ui2.py` 均**未動**。
+
+## 2026-11-14｜DEC-183 #1124 發布 Gate 有條件裁示與 Batch 1 規則補登（只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-14；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-183）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 見下（落盤前 `git grep -n` 各 ID 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：`origin/main`＝`d607acb8dd51c80e5316f525f22817b80e3a09f9`（`git rev-parse` 實查）；main push CI run `43447327744`（head_sha＝`d607acb8`，`event`＝push）completed／success（本組以 GitHub 讀取）——**CI success ≠ 資料已更新 ≠ Production 有效**。**客戶本批原文第一句：「這是有條件授權，不是全面解除 HOLD」。**
+
+**追加註記（對既有列；原列不改）**
+
+- `DEC181-LATEST-TRADING-DAY-REFRESH` — 客戶 2026-11-14 裁示（DEC-183）更新其「待核准」清單：**DPE-4 已部分核准——僅 #1124 進入技術放行評估**（#1125、#1126 維持 HOLD；#1124 合併 HOLD 未解除）；**DPE-5 已核准進入同 head 原生 CI 驗證，但操作者為客戶本人**（客戶實際操作確認尚未取得；AI 不代做、不刪分支、不繞過 required checks、不改 branch protection）；`DG-LIC`／`DPE-3` 與 `DG-PIT` **維持未解除**；merge 與 Cloud Reboot **暫不授權**。同 head 原生 CI 全綠、非作者 QA、授權與 PIT Gate、0 unresolved threads、mergeability 五項前提達成後，也只是「才能再提出明確合併請求」。status 維持 `Candidate／未授權（Decision／Input Gate）`。
+- `DEC179-DPE3-TERMS-CONFIRM` — **仍 BLOCKED，`DG-LIC` 不解除**。本批新增兩份官方頁面的唯讀查核（FinMind「免責聲明與資料授權說明」版本日期 2026-10-31；Yahoo Finance「Exchanges and data providers」說明頁）——**兩者都含不得對外再散布類聲明**；證交所「交易資訊使用管理辦法」全文、FinMind 使用條款、Yahoo 完整服務條款仍零原文（NOT VERIFIED）。證據與逐字關鍵句見 DEC-183 (二) 2.4。**這不是條款確認完成，也不是 DPE-3 的 B 被授權。**
+- **#1139 已併入 main 的陳舊事實註記**（只追加，不改舊行）：本檔上方 Issue #1138 雙線結果段（約 L2163）與 `docs/HANDOFF.md` 約 L237–248 仍寫「PR 號待補」；#1139 已 squash 為 main `ba9821f3`（commit 時間 2026-11-11T16:45:40+08:00，`git log` 實查）。稽核組另指測試數 31／27 vs 35／27 不一致——本組未重數，NOT VERIFIED。
+- **唯一 NEXT 過期提醒**：`DEC181-*` 段與更早各段的「唯一 NEXT」自本段起過期，以檔尾最新未被取代者為準（`grep`「唯一 NEXT」會先命中較早段落，以本段與 HANDOFF 檔尾未被刪除線的現況段為準）。
+
+**新列（皆為紀錄／結論／原則／deferred；不是施工指派）**
+
+| ID | 標題 | P | status | 來源 | next action |
+|---|---|---|---|---|---|
+| **DEC183-1124-RELEASE-GATES** | #1124 發布 Gate 現況。head `f87866ed`（時點快照，cron 會推進）：資料層＝單組檢核「內部一致＋部分外部佐證」（twii 收盤 11-09～11-12、inst 外資 11-11／11-13 已與證交所公開頁逐日對照相符；11-12／11-10 外資官方值未取得；`volume` 語意、margin 真值、交易日曆 NOT VERIFIED）；發布層＝NOT VERIFIED（該 head check runs＝0，唯一已見 run `43469025728` 為 `action_required`）；`DG-LIC`／`DPE-3`、`DG-PIT` **未解除**（`fetched_at`≠`published_at`；PR body `published_at`＝n/a）。仍缺的 Merge Gate：同 head 原生 CI 全綠、非作者 QA、授權與 PIT Gate、0 unresolved threads、mergeability 合格 | P1 | **待客戶 DPE-5 操作＋DG-LIC／DG-PIT 裁示**；merge 暫不授權（Decision Gate） | DEC-183 (二)(三)；`DEC181-LATEST-TRADING-DAY-REFRESH`；`DEC179-DPE3-TERMS-CONFIRM` | **客戶**：確認最新 head SHA、避開排程時段、優先評估 Close→Reopen（保留分支、不得刪分支）、回報「head SHA＋run id」；同時裁示 DG-LIC／DG-PIT（授權無法確認時合法最小替代方案見 DEC-183 2.6，僅列不實作）。AI 在客戶回報前只能做唯讀檢核與文件 |
+| **RUN-RETENTION-30D-HOLD** | #1119 Actions Run 歷史保留規則（**僅規則保存**）：以**最近 30 天**為一般保留**方向**；重要 CI、PIT、Risk Cap、安全、未完成 PR 與重大事故等證據**例外保留**；**不自動變更 GitHub 全域 retention**；**不可逆刪除須另行逐批明確核准**。來源鏈：客戶 2026-11-14 重新確認（新授權依據）；舊留言 #1119 `6822675191`（2026-11-12）為 **AI 轉述／稽核報告**（客戶原話不在 repo，實際撰寫者 NOT VERIFIED），不冒稱逐字查證。與「19 個 workflow YAML 延後清理」（DEC-175、`DEC175-CLEANUP-DEFER`、`WORKFLOW-SLIM-AUDIT-1`）是**兩件事**，兩者目前皆無刪除授權 | P3 | **deferred**；**不授權刪除任何 Run／Artifact／YAML／變更 retention** | DEC-183 (五) A；DEC-175 | 無。待新版儀表板完成、死碼清理批次時，才在該批次另行逐批申請核准（`DEC175-CLEANUP-DEFER`）；屆時以當時 GitHub 實證為準，不沿用舊盤點統計 |
+| **UI2-1138-PRIORITY-RULE** | #1138 工作優先序（**結論列，非工作項**）：**先收尾已授權且可驗收的既有工作，再繼續進一步優化 UI**；**不取消 UI／資料契約雙軌推進**（DEC-174）；**已證明受外部條件阻塞的 HOLD 可保留追蹤，不必等其全面解除才進行其他合法工作**；**不重新制定既有 UI Gate**。與 DEC-174／175／176／177／178／179～182 對照：未發現真正衝突（單組 INFERENCE，對照表見 DEC-183 (五) B）。這是優先序，**不是**施工授權 | P2 | **結論列（非 Candidate、非授權）** | DEC-183 (五) B；Issue #1138 留言 `6818780219`（轉錄者整理，客戶逐字僅一句，原始對話 NOT VERIFIED） | 無（結論列）|
+| **DATA-REUSE-GITHUB-CANONICAL-RULE** | #1110 資料架構原則（**原則，非工作項**）：GitHub Actions 已可靠取得、驗證並落地的 canonical 資料，New UI2 應**優先唯讀重用**，不應為**同一指標**無理由在 Streamlit Cloud 再建立重複抓取。**限定**：資料架構方向，不代表禁止經核准的 Cloud 取數；**不授權**新增 API、cron、adapter 或正式接線；「已可靠取得、驗證並落地」不得推定（Key 已配置≠認證成功、API 可用≠語意有效、落地≠UI2 已接線）；仍受 `DG-LIC`／`DG-PIT`／`DG-COV`／`DG-SCOPE`、`I1144-WIRING-GATE` 與 G2F 守衛拘束 | P2 | **原則（非 Candidate、非授權）** | DEC-183 (五) C；Issue #1110 留言 `6765231976`（AI 研究；『客戶方向』為釋義） | 無（原則）。與本檔 ISSUE1110 區（約 L2058–2111）的 D1～D5 未裁示項互補，不取代 |
+
+> **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** Production 五軸**本批無新證據，維持既有判讀**（`PRODUCTION_HEALTH_FIVE_AXIS_SNAPSHOT_2026-11-13.md`）。**HOLD／Gate 清單以「HANDOFF『存檔完整性補註』第 7 項」＋「上方『DEC-178 Quality Batch 1 完成同步』段末 blockquote」＋「HANDOFF『狀態更新（#1178 合併後）』段『五之一』」三處取聯集為準**（不在此重抄）。
+>
+> 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-LIC`、`DG-PIT`、`DG-COV`、`DG-SCOPE`、`I1144-WIRING-GATE`、DPE-1／2／3／7、#1125、#1126、#1124 合併、#1164（維持 Draft）、五個 Issues（#1119、#1138、#1116、#1110、#1107 暫不關閉）、`DEC177-FRESHNESS-IMPL-DECISION-SHEET`（Q1～Q7）、`REORG3C-Q5-GATE`、`DEC178-QB3-*`／`DEC180-*`／`DEC181-*` Candidate 列、新增 API／cron／Secrets、`.claude/settings*`、NAS／Proxy／Secrets、Branch Protection、`app.py`／`app_ui2.py`、publisher／PR 模板均**未動**。
