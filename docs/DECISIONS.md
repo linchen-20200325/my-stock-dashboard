@@ -10259,7 +10259,7 @@ C. 公開端只保存獲准公開的衍生資料；受限資料不再新增公�
 
 **(四) DG-PIT 三層缺口（結論一句；單組；多為 INFERENCE；DG-PIT 未解除）**：5 檔皆無 `published_at`，歷史列無法證明「T 時已可得」，缺 published_at 一律不得用於歷史回測／歷史趨勢／跨日比較；最新收盤畫面只顯示資料日則不需 published_at。**三層條件、可驗收項目與仍缺證據已移至 BACKLOG `DGPIT-LAYERED-GAPS`**。
 
-**(五) 台股卡安全更新最小路徑（RECOMMENDATION；非施工授權）**：**INFERENCE**：不經 Decision Gate，台股卡無法取得比 2026-11-09 更新的資料；最小路徑候選 `TWII-ONLY-PUBLISH-SPLIT`（PROPOSED），**前置＝Yahoo `^TWII` 日 K 可否公開存放與 Cloud 呈現的書面答案**。**複驗結果**：QA 複驗 10 條承重宣稱，8 成立、2 部分成立（C2：metadata 耦合推論需補精確機制；C8：union 失敗條件比原先描述更廣），皆不改變結論；單組讀碼＋一組複驗（結果僅存 session）。讀碼依據、耦合點、stale 時點與「已公開不可收回」陳述已移至 BACKLOG `TWII-ONLY-PUBLISH-SPLIT` 詳述；三支資料 workflow 已停用（DEC-185），main 的 `data_cache` 不會再自動前進。
+**(五) 台股卡安全更新最小路徑（RECOMMENDATION；非施工授權）**：**INFERENCE**：不經 Decision Gate，台股卡無法取得比 2026-11-09 更新的資料；最小路徑候選 `TWII-ONLY-PUBLISH-SPLIT`（PROPOSED），**前置＝Yahoo `^TWII` 日 K 可否公開存放與 Cloud 呈現的書面答案**。**複驗結果**：QA 複驗 10 條承重宣稱，8 成立、2 部分成立、0 不成立（C2：metadata 耦合推論需補精確機制；C8：union 失敗條件比原先描述更廣；C2／C8 細節僅 session 紀錄，repo 外未複驗），皆不改變結論；單組讀碼＋一組複驗（結果僅存 session）。讀碼依據、耦合點、stale 時點與「已公開不可收回」陳述已移至 BACKLOG `TWII-ONLY-PUBLISH-SPLIT` 詳述；三支資料 workflow 已停用（DEC-185），main 的 `data_cache` 不會再自動前進。
 
 **(六) A／B／C 消歧（同名不同義；引用時必須帶出處）**
 
@@ -10444,7 +10444,7 @@ Batch C：
 |---|---|---|---|
 | claude/stock-dashboard-handoff-sync-ulwq8s（`5b180ea2`） | #1175～#1180 全 merged | 可刪（技術面） | head 是 main 祖先，獨有 commit 0；無 Open PR；無功能依賴 |
 | ccr-6ca9d77e-90ji2g（`cce84452`） | #1181～#1184 全 merged | 可刪（技術面） | tree 與 main 上 #1184 squash（`ae402ce8`）逐位元相同（tree id `f8fa36fb…`）；`cce84452` 為空內容同步合併 |
-| ccr-ed362375-uplnw7（`d3787b2a`） | 20 merged＋#1080 closed unmerged（由 #1081 取代） | 待裁示 | 內容與功能依賴達可刪；三處「保留／不刪」文字（#1080 留言、HANDOFF L282、`chatgpt_product_closeout` L10）皆 AI／ChatGPT 撰寫、非客戶逐字，需客戶或總管釐清 |
+| ccr-ed362375-uplnw7（`d3787b2a`） | 20 merged＋#1080 closed unmerged（由 #1081 取代） | 待裁示 | 內容與功能依賴達可刪；三處「保留／不刪」文字（#1080 留言、HANDOFF L282、`chatgpt_product_closeout` L10）皆 AI／ChatGPT 撰寫、非客戶逐字；殘留釐清僅在擬刪除該分支時才釐清 |
 | docs/newui2-data-page-trend-onebrain-pdf-20261106 | #1030 closed unmerged | 保留 | 12 份設計檔已原文入 main（#1053）；受 BACKLOG `NUI2-BRANCH-RETENTION-1107`「暫時全部保留」約束，原始客戶訊息不在 repo |
 | docs/newui2-hold-w11-draft-20261105 | #1027 closed unmerged | 保留 | 同上 |
 | docs/newui2-top-five-nav-wireframe-gate-20261107 | #1048 closed unmerged | 待裁示 | 提案檔 `NEWUI2_TOP_FIVE_NAV_VISUAL_GATE_PROPOSAL_2026-11-07.md` 在 main 不存在、57 行找不到對應；另受保留裁示約束 |
@@ -10459,14 +10459,14 @@ Batch C：
 
 **(四) 規則關係與殘留衝突（資訊；本條不替客戶解釋哪個規則優先）**
 
-0. **客戶已答（不再問）**：客戶 2026-11-14 決策閉環訊息 D 點（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）原文：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依客戶此句**，其餘分支依 DEC-147 第 4 點條件（客戶逐字：「分支只有在確認沒有其他使用者或工作流程依賴、獨有內容已保存後才清理。」）與 BACKLOG `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。故「DEC-147 第 4 點是否仍有效」**不再是待裁示**。
+0. **客戶已指示（依 DEC-147；撰寫組讀法）**：客戶 2026-11-14 決策閉環訊息 D 點（DEC-187 fence；轉錄，逐字一致性 NOT VERIFIED）原文：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」**依客戶此句**，其餘分支依 DEC-147 第 4 點條件（客戶逐字：「分支只有在確認沒有其他使用者或工作流程依賴、獨有內容已保存後才清理。」）與 BACKLOG `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**（撰寫組讀法，待非作者 QA）。故「DEC-147 第 4 點是否仍有效」**不再是待裁示**。
 1. **殘留衝突（資訊；實際執行刪除前的程序要求）**：下列規則與 DEC-147 第 4 點（條件滿足即可清理）、第 6 點（「清單外刪分支」須停止）之間，**執行時如何同時滿足**未明：DEC-012（遠端分支刪除須客戶核准清單）；PROJECT_RULES §10 原句（§31.2 已註明改以 DEC-147 為準）、§4 第 8 項（不可逆操作須停下問）；§16.6（客戶第 21 節逐字：「最後再一次清…未來刪除前重新查 GitHub…branch deletion 視為不可逆治理動作」）；最新 HANDOFF 禁止清單「不得刪除任何…分支」通則（AI 整理，非客戶逐字，語境為 #1124 批次）。例：實際刪除前是否仍須客戶核准刪除清單、是否須等「最後再一次清」的時點。
 2. DEC-147 第 6 點「清單外刪分支」之「清單」未定義。
 3. HANDOFF L282–284 的 cleanup 候選表已過期（列 11 條、缺 reorg3c、含已不存在分支；已加 📌 指標）；BACKLOG `BR-CLEANUP`（2026-10-23）已過期（已加 📌）。
 
 **(五) 仍需客戶裁示（僅殘留部分；未裁示）**
-- **實際執行刪除前的程序要求**：上列 (四)1 的同時滿足方式（僅在真有分支擬實際刪除時提出；提問須附推薦方案）。**本 DEC 不授權任何實際刪除**；在客戶就此裁示前，暫行取嚴（**非客戶裁示**）：任何實際刪除前須先取得客戶批准清單並重新查 GitHub。
-- `ccr-ed362375-uplnw7` 的三處保留文字（皆 AI／ChatGPT 撰寫、非客戶逐字）：實際刪除前須釐清其來源是否反映客戶意圖。
+- **實際執行刪除前的程序要求**：上列 (四)1 的同時滿足方式（僅在真有分支擬實際刪除時提出；提問須附推薦方案）。**本 DEC 不授權任何實際刪除**；實際刪除時的程序，現有規則並存（DEC-147 第 4 點、DEC-012、PROJECT_RULES §16.6），其間如何同時滿足屬殘留衝突，中性寫法與出處見 BACKLOG `BR-RULE-RECONCILE`；在客戶裁示前，依 PROJECT_RULES §14 暫行讀法「任一套規則要求停下就停下」處理。
+- `ccr-ed362375-uplnw7` 的三處保留文字（皆 AI／ChatGPT 撰寫、非客戶逐字）：僅在擬刪除該分支時才釐清其來源是否反映客戶意圖（實際刪除前）。
 - **不再待裁示（客戶 D 點已指示依 DEC-147 與原保留裁示）**：DEC-147 第 4 點是否仍有效；`NUI2-BRANCH-RETENTION-1107` 是否解除（依原保留裁示，仍有效、未解除）；#1048 提案檔與 #1034 的 §32／§33 規則文字（屬 DEC-147 第 4 點已排除的「含未保存獨有內容者」，INFERENCE；去留由 BACKLOG `NUI2-GOV-1034-EXTRACT`／`NUI2-GOV-1034-RULES-RENUMBER` 追蹤，不另問）。
 - **明確聲明**：依客戶 D 點，DEC-147 第 4 點與 DEC-012 的條件授權**不視為被撤銷**；本 DEC **不授權任何實際刪除**。
 - **單組聲明**：本條為撰寫組轉錄，**未經非作者獨立 QA**；不得被引用為「已 QA PASS」。
@@ -10599,7 +10599,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 > 「再次向客戶請示前，先搜尋既有 DEC、BACKLOG、Issue／PR 與最新 Gate；若已有相同條件下的有效裁示，直接遵循並引用 DEC，不得重複詢問。只有新條件使原裁示不適用、出現真正衝突或正式 Gate 缺失，才能再次請示。」「這是執行規則補強，不允許自行放寬高風險 Gate。」
 
 - **既有（不完整）的「不重問」散點**：DEC-009、DEC-013、DEC-014、PROJECT_RULES §3（約 L96）、§4、§20.7。缺：搜尋範圍（BACKLOG、Issue／PR、最新 Gate）、「遵循並引用 DEC」的義務、僅三種情形可再請示、不放寬高風險 Gate 的明文（`git grep`「新條件／相同條件／有效裁示／先搜尋既有／直接遵循」於 PROJECT_RULES、DECISIONS、BACKLOG、HANDOFF、CLAUDE.md、PROCESS.md 補登前皆 0 命中）。
-- **撰寫組澄清（非客戶逐字；只縮小適用、不放寬任何 Gate；單組，待非作者 QA）**：(1) 守衛**不新增請示情境**，只限制「已落在 PROJECT_RULES §4 表與 `CLAUDE.md` §-1.5.D §03-2 範圍內」的事項能否重複詢問；(2)「有效裁示」**不含** AI 推薦、研究候選、PROPOSED、已 SUPERSEDED、授權範圍僅限規則保存的條目；經轉錄的 DEC 只依其自身授權範圍適用，不得外推（例：DEC-184 方案 C 僅為研究方向）；(3) DG-LIC、DG-PIT、DG-COV、DG-SCOPE、I1144-WIRING-GATE、DEC-147 第 6 點不因本守衛放寬。全文見 PROJECT_RULES 新小節。
+- **撰寫組澄清（非客戶逐字；只縮小適用、不放寬任何 Gate；單組，待非作者 QA）**：(1) 守衛**不新增請示情境**，只限制「已落在 PROJECT_RULES §4 表與 `CLAUDE.md` §-1.5.D §03-2 範圍內」的事項能否重複詢問；(2)「有效裁示」**不含** AI 推薦、研究候選、PROPOSED、已 SUPERSEDED、授權範圍僅限規則保存的條目；經轉錄的 DEC 只依其自身授權範圍適用，不得外推（例：DEC-184 方案 C 僅為研究方向）；(3) DG-LIC、DG-PIT、DG-COV、DG-SCOPE、I1144-WIRING-GATE、DEC-147 第 6 點不因本守衛放寬；(4) 事實更新不等於 Gate 解除：CI 綠、QA 通過、head 或 base 變更等，**不等於** Gate 解除；head 變更使舊 QA／CI 不沿用，視為新條件。全文見 PROJECT_RULES 新小節。
 
 **(三) 對帳結論與 E～G 登錄狀況（FACT；只列指標與狀態，不重抄）**
 
