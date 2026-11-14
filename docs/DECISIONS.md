@@ -9685,3 +9685,421 @@ ChatGPT 最新獨立核實：
 
 - **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；Repository 的公開／私有狀態與 Actions 設定（客戶陳述）；GitHub 帳單頁；CI run id 與結論（總管轉述）；#1124～#1126、#1164 的開啟狀態（以 GitHub 為準）。
 - 本條 AI 整理單組撰寫，**未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6），不得被引用為「已 QA PASS」**；QA 結果由總管於 PR 補記。
+
+### DEC-183｜客戶 2026-11-14「#1124 發布 Gate 與歷史規則保存」有條件裁示轉錄：#1124 僅進技術放行評估、同 head 原生 CI 由客戶操作、授權與 PIT Gate 不解除、最小外部對帳；Batch 1 規則補登（#1119 Run 保留／#1138 優先序／#1110 資料重用）（2026-11-14；只追加；非 QA PASS；非授權擴張）
+
+> 2026-11-14 補登（ID 取下一個未用號；落盤前 `git grep -n "DEC-183" docs/DECISIONS.md` 0 命中，DEC-182 為上一號）。**來源類別 D：客戶 2026-11-14 訊息，經派工訊息轉錄；原始對話 repo 內 NOT VERIFIED，逐字一致性 NOT VERIFIED**（同 DEC-177～182 的標示方式）。下方 fence 收錄客戶訊息檔的**全文**（含標題、Model／Mode／Effort／Repository 抬頭行、段落間空行），未改一字；fence 內不含首尾 fence 行與結尾換行。fence 內**沒有**任何 Cloud 網址全文；內含的兩個官方頁面網址是客戶訊息自帶（`finmind.github.io`、`help.yahoo.com`、`www.twse.com.tw` 公開頁），不含帳密。
+> **sha256 算法**：對 fence 內文（以換行連接各行，不含首尾 fence 行與結尾換行）以 UTF-8 計算，**與 DEC-173～182 同一算法**（本組先以同法重算 DEC-182 的 fence，得 `c1111a7d…f03c1`，與其登記值 `c1111a7d792847ffbd3976530db0227a45ee7a5a0f7559e341b846c8085f03c1` 相符；DEC-181 得 `57ad41cf…66040`，亦相符，後才套用於本條）。
+> **本條不是 QA PASS，也不是授權擴張**：客戶原文第一句即「這是有條件授權，不是全面解除 HOLD」。本條下方所有「AI 整理」「核實」「Coverage」皆**單組撰寫，待非作者獨立 QA**（QA 結果由總管於 PR 補記；**本條不得被引用為「已 QA PASS」**）。
+
+> **TL;DR（AI 摘要，非客戶原文；細節以下方全文與 fence 為準）**
+>
+> | 項 | 一句話 |
+> |---|---|
+> | 授權了什麼 | #1124 進**技術放行評估**（不是合併）；DPE-5 同 head 原生 CI 驗證（**客戶本人操作**）；唯讀查核公開官方頁面；docs-only 規則補登（#1119／#1138／#1110＋Batch 2） |
+> | 沒授權什麼 | #1125／#1126 與 #1124 合併（HOLD）；DG-LIC／DPE-3、DG-PIT 不解除；Merge／Cloud Reboot；AI 代操作；刪分支；新增 API／付費來源／cron／下載／回填；刪任何 Run／Artifact／YAML |
+> | 客戶待辦兩件 | ① DPE-5：確認 head SHA、白天操作、Close→Reopen（保留分支）、回報 head SHA＋run id（見 (三)「客戶照做版」）；② 裁示 DG-LIC／DPE-3 與 DG-PIT（CI 全綠不會解除它們） |
+> | 仍缺的 Merge Gate | 同 head 原生 CI 全綠；非作者 QA；授權 Gate；PIT Gate；0 unresolved threads；mergeability 合格（客戶原文五項，詳 (二) 2.5） |
+> | #1124 資料品質結論 | 內部一致＋部分官方公開頁佐證（twii 收盤 11-09～11-12、外資 11-11／11-13）；**發布層 NOT VERIFIED**；不是「資料已驗證完整」 |
+> | 往哪看 | (二) 2.5（Merge Gate 現況）、(三)（客戶操作步驟與風險） |
+
+- **決策者**：**客戶**（2026-11-14，經上述轉錄）。｜**效力日期**：2026-11-14 起。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：fence 內容 sha256＝`11112fda9e5e8161a1fa28d90b3357482e7da5ed4fcaf8532db906e824d9bd8c`（撰寫時計算；尚未由測試釘住）。
+
+```
+股票儀表板｜#1124 發布 Gate 與歷史規則保存正式裁示
+
+Model：依 PROJECT_RULES §9 選 Minimum Sufficient Model，建議 Claude Sonnet 5.5
+Mode：靜默自主巡航
+Effort：High（純文件校驗可降 Medium）
+
+Repository：linchen-20200325/my-stock-dashboard
+
+請 GitHub-first 核對最新 main／Open PR／head SHA／CI／QA／branches／正式 DEC 後，依以下裁示執行。
+
+這是有條件授權，不是全面解除 HOLD。
+
+一、#1124 資料發布
+
+1. DPE-4：同意僅 #1124 進入技術放行評估。
+
+#1125、#1126 維持 HOLD。
+
+#1124 的合併 HOLD 尚未解除，不得擅自 Merge。
+
+2. DPE-5：同意進入同 head 原生 CI 驗證。
+
+由客戶本人在確認最新 head SHA 後，避開既有排程時段，使用既有安全操作方式觸發。
+
+優先評估 Close→Reopen，但不得刪分支；不得由 AI 代替操作、繞過 required checks 或改 branch protection。
+
+若最新 head 已變更，重新檢查差異，舊 QA／CI 不沿用。
+
+若尚未取得本次操作所需的客戶實際操作確認，AI 只提供最小步驟與風險提示，不自行操作。
+
+3. DG-LIC／DPE-3：不解除。
+
+新增需查核的官方證據：
+
+FinMind：
+https://finmind.github.io/Disclaimer/
+
+Yahoo Finance：
+https://help.yahoo.com/kb/finance/article-exchanges-data-delays-sln2310.html
+
+FinMind 限制原始資料對外再散布；Yahoo Finance 亦有限制再散布的官方聲明。
+
+因 #1124 會把 parquet 提交至公開 repository，應確認完整使用權限、是否屬原始資料再散布、原始來源機關授權及相關例外。
+
+不得把 CI 綠燈、資料為公開資訊或客戶自行承擔風險當成已取得合法授權。
+
+如授權無法確認，保持合併 HOLD，提出合法的最小替代方案；不自行修改資料發布架構。
+
+4. DG-PIT：維持未解除。
+
+11-12 台股 OHLC 通過契約只是資料層合格。
+
+"fetched_at" 不等於來源 "published_at"。沒有權威可得時間證據時不得聲稱 PIT 完整通過。
+
+5. 外資與資料真值：進行最小外部對帳。
+
+ChatGPT 已發現以下參考證據：
+
+- 11-11 外資約 −7.66 億。
+- 11-12 外資約 −6.85 億。
+- 11-13 官方外資約 +288.37 億。
+- 11-12 加權指數收盤 43,091.87。
+
+官方參考：
+
+https://www.twse.com.tw/fund/BFI82U?response=html&type=day
+
+https://www.twse.com.tw/exchangeReport/FMTQIK?response=html
+
+另外，11-11、11-12 數據有公開市場統計支持，並非單純因數字偏小即可判定異常。
+
+請對照最新 #1124 parquet 的日期、欄位、單位、統計口徑與來源；公開網頁的參考資訊不得直接視為分支資料已驗證。
+
+允許唯讀查核公開官方頁面，不授權新增 API、付費來源、cron、下載與回填流程。
+
+6. DG-SCOPE／DG-COV／WIRING-GATE：
+
+本次不涉及新的 UI 程式接線，因此不要求重做 UI 接線工程。
+
+但三個 Gate 原有適用範圍不變，不宣告全面解除；外資／融資資料涉及的正式資料品質與授權限制仍須遵守。
+
+7. Merge／Cloud：暫不授權。
+
+#1124 只有在同 head 原生 CI 全綠、非作者 QA 通過、授權及適用 PIT Gate 解決、0 unresolved threads、mergeability 合格後，才能再提出明確合併請求。
+
+不得自行合併或 Reboot Cloud。
+
+二、正式規則補登：核准最小 docs-only 工作
+
+沿用 PROJECT_RULES §15 的五份 SSOT 職責。
+
+分批處理，每批最多三項，盡量整合為一個最小必要 docs-only PR；若與 #1164 的 BACKLOG／歸檔內容衝突，停止重疊修改，不處置 #1164。
+
+Batch 1：優先正式補登
+
+A. #1119
+
+確認並補登這個使用者決策：
+
+- Actions Run 以最近 30 天作一般保留方向。
+- 重要 CI、PIT、Risk Cap、安全、未完成 PR 與重大事故等證據例外保留。
+- 不自動變更 GitHub 全域 retention。
+- 不可逆刪除須另行逐批明確核准。
+
+本次只授權規則保存，絕不授權刪除任何 Run、Artifact 或 YAML。
+
+原留言 "6822675191" 為 AI 轉述來源，須如實標記原始逐字來源未保存在 repo；本次客戶重新確認的內容可作為新的授權依據，不得冒稱舊留言已逐字查證。
+
+B. #1138
+
+確認「先收尾已授權且可驗收的既有工作，再進一步優化 UI」的工作優先序。
+
+與 DEC-174、175、176、177、178 及更新決策對照。
+
+這項優先序不取消 UI／資料契約雙軌推進；已證明受外部條件阻塞的 HOLD，可以保留追蹤，不必等待其全面解除才能進行其他合法工作。
+
+不重新制定既有 UI Gate。
+
+C. #1110
+
+補強資料架構原則：
+
+GitHub Actions 已可靠取得、驗證並落地的 canonical 資料，UI2 應優先唯讀重用，不應為同一指標無理由在 Streamlit Cloud 再建立一套重複抓取。
+
+這是資料架構方向，不代表禁止任何經核准的 Cloud 取數，也不授權新增 API、cron、adapter 或正式接線。
+
+Batch 2：最小追溯補強
+
+1. #1107：在既有 BACKLOG 補足精簡的 PASS／PARTIAL／NOT VERIFIED 驗收項目，不重抄研究。
+2. #1124～#1126：在既有治理或資料發布 Gate 紀錄中，註明自動 PR body 的「關 PR 並刪分支」指示不是客戶授權；不可直接執行不可逆刪除。不修改 publisher 或自動 PR 模板。
+3. #1105：查清客戶裁示與 AI 編擬出處不一致，保留原文及證據，必要時用最小勘誤補正；無法確定時標 NOT VERIFIED。
+
+#1042 pandas 2.0.0 相容風險僅列低優先 Candidate，不進本批程式施工。
+
+三、文件 PR 驗收及結案
+
+所有補登遵守：
+
+- 每批最多三項。
+- 客戶正式裁示與 AI 推論分開。
+- 不重複已有 SSOT。
+- 非作者多組獨立 QA。
+- 同 head 五項原生 CI 全綠。
+- Merge Gate、review threads 及分支保護不繞過。
+- 如無新的實質補登，不為湊 PR 製造文件變更。
+
+在內容能忠實追溯、無新 Gate、無越權，且滿足既有 Auto-Ship 規則時，准許合併核准範圍的最小文件 PR。
+
+#1164 維持 Draft。
+
+#1119、#1138、#1116、#1110、#1107 五個 Issues 暫不關閉。
+
+#1124～#1126 維持 Open；#1124 只解除唯讀放行評估及限定的 CI 前置準備限制，沒有合併授權。
+
+四、回報規則
+
+先完成 #1124 最新資料／CI 前置核實，再進行正式規則補登；不得因文件工作延誤必要的資料安全檢查。
+
+只在以下情況回報：
+
+- 客戶必須親自操作 CI。
+- 發現阻擋資料發布的實質授權或品質問題。
+- 新 Gate／規則衝突需要裁示。
+- 一批完成且 CI／QA 有可驗證結論。
+
+完成後報告：
+
+1. #1124 最新 head、CI、QA 和仍缺的 Merge Gate。
+2. 已補登的正式規則與 PR／merge SHA。
+3. 仍保留的 Open Issues／PR。
+4. 唯一下一個安全動作。
+
+沒有取得新資料 PR 合併授權之前，停在 Decision Gate。
+
+開始執行已核准的安全範圍。
+```
+
+#### AI 整理（非客戶原文；本組依上方原文逐項對應；**不得據以擴大授權**）
+
+**(一) 裁示逐條轉錄對照表（狀態標示只用「已授權」「維持不授權」「維持 HOLD」三種，外加『不適用』）**
+
+| 客戶原文位置 | 客戶原文要點（節錄；全文以 fence 為準） | 狀態 | 本組備註（AI 整理；不擴張） |
+|---|---|---|---|
+| 開頭 | 「這是有條件授權，不是全面解除 HOLD。」 | — | 本條全文以此句為總綱；下列任何「已授權」皆限該列字面範圍 |
+| 一、1 DPE-4 | 同意**僅 #1124** 進入技術放行評估；#1125、#1126 維持 HOLD；#1124 的合併 HOLD 尚未解除，不得擅自 Merge | **已授權**（僅「#1124 進技術放行評估」）；**維持 HOLD**（#1125、#1126、#1124 合併） | 這是 DEC-179／DEC-181 §S1 待核准項（DPE-4）的**部分**解除，且**僅限評估**；不是合併授權 |
+| 一、2 DPE-5 | 同意進入同 head 原生 CI 驗證；由**客戶本人**在確認最新 head SHA 後、避開既有排程時段、用既有安全操作方式觸發；優先評估 Close→Reopen，**不得刪分支**；不得由 AI 代為操作、繞過 required checks 或改 branch protection；head 已變更則重新檢查差異，舊 QA／CI 不沿用；尚未取得客戶實際操作確認時，AI 只提供最小步驟與風險 | **已授權**（進入同 head 原生 CI 驗證，**操作者＝客戶本人**）；AI 代操作＝**維持不授權** | 客戶實際操作確認**尚未取得**（截至本條撰寫）→ AI 只提供步驟與風險，見 (三)。Close→Reopen 只是「優先評估」，不是指定 |
+| 一、3 DG-LIC／DPE-3 | 不解除；新增需查核官方證據（FinMind、Yahoo Finance 兩頁）；因 #1124 會把 parquet 提交至公開 repository，應確認完整使用權限、是否屬原始資料再散布、原始來源機關授權及相關例外；不得把 CI 綠燈、資料為公開資訊或客戶自行承擔風險當成已取得合法授權；授權無法確認則保持合併 HOLD、提出合法最小替代方案、不自行修改資料發布架構 | **維持不授權／維持 HOLD** | 兩頁已唯讀查核，見 (二) 2.4；**結論仍是授權未確認**，替代方案只列不實作，見 (二) 2.6 |
+| 一、4 DG-PIT | 維持未解除；11-12 台股 OHLC 通過契約只是資料層合格；`fetched_at` 不等於來源 `published_at`；無權威可得時間證據不得聲稱 PIT 完整通過 | **維持 HOLD** | #1124 PR body 自身寫 `published_at`＝n/a（來源未提供）；本組未取得任何權威可得時間證據 |
+| 一、5 外資與資料真值 | 進行最小外部對帳（客戶列四個參考值與兩個官方頁網址）；對照最新 #1124 parquet 的日期、欄位、單位、統計口徑與來源；公開網頁參考資訊不得直接視為分支資料已驗證；允許**唯讀查核公開官方頁面**，**不授權新增 API、付費來源、cron、下載與回填流程** | **已授權**（僅唯讀查核公開官方頁面）；新增 API／付費來源／cron／下載／回填＝**維持不授權** | 已執行，結果見 (二) 2.3；本組只讀取兩個官方網頁，頁面全文存 scratchpad，**未進 repo** |
+| 一、6 DG-SCOPE／DG-COV／WIRING-GATE | 本次不涉及新的 UI 程式接線，不要求重做 UI 接線工程；三個 Gate 原有適用範圍不變，不宣告全面解除；外資／融資資料涉及的正式資料品質與授權限制仍須遵守 | **不適用**（本次不重做接線）；Gate 範圍＝**維持原狀** | 不是「這三個 Gate 已解除」；只是本次沒有 UI 接線工作要過它們 |
+| 一、7 Merge／Cloud | 暫不授權；#1124 僅在「同 head 原生 CI 全綠、非作者 QA 通過、授權及適用 PIT Gate 解決、0 unresolved threads、mergeability 合格」後才能**再提出明確合併請求**；不得自行合併或 Reboot Cloud | **維持不授權** | 上列五項前提（客戶原文五項；(二) 2.5 表為便於核對，將『授權及適用 PIT Gate 解決』拆為兩列，共六列）是「才能再提出請求」的條件，**不是**達成即自動授權 |
+| 二（總綱） | 沿用 PROJECT_RULES §15 五份 SSOT 職責；分批、每批最多三項、盡量整合為一個最小必要 docs-only PR；若與 #1164 的 BACKLOG／歸檔內容衝突，停止重疊修改，不處置 #1164 | **已授權**（docs-only 規則補登，限下列 A／B／C 與 Batch 2 字面範圍） | #1164 衝突檢查已做：無重疊，見 (六) |
+| 二、Batch 1 A（#1119） | 確認並補登四點使用者決策（30 天一般保留方向；重要 CI／PIT／Risk Cap／安全／未完成 PR／重大事故等證據例外保留；不自動變更 GitHub 全域 retention；不可逆刪除須另行逐批明確核准）；**本次只授權規則保存，絕不授權刪除任何 Run、Artifact 或 YAML**；舊留言 6822675191 為 AI 轉述來源，須如實標記；客戶本次重新確認可作新授權依據，不得冒稱舊留言已逐字查證 | **已授權**（僅規則保存）；刪除任何 Run／Artifact／YAML＝**維持不授權** | 見 (五) A |
+| 二、Batch 1 B（#1138） | 確認「先收尾已授權且可驗收的既有工作，再進一步優化 UI」的工作優先序；與 DEC-174、175、176、177、178 及更新決策對照；不取消 UI／資料契約雙軌推進；已證明受外部條件阻塞的 HOLD 可保留追蹤，不必等其全面解除才進行其他合法工作；不重新制定既有 UI Gate | **已授權**（僅規則保存與對照） | 見 (五) B |
+| 二、Batch 1 C（#1110） | 補強資料架構原則：GitHub Actions 已可靠取得、驗證並落地的 canonical 資料，UI2 應優先唯讀重用，不應為同一指標無理由在 Streamlit Cloud 再建立重複抓取；不禁止經核准的 Cloud 取數；不授權新增 API／cron／adapter／正式接線 | **已授權**（僅規則保存）；新增 API／cron／adapter／正式接線＝**維持不授權** | 見 (五) C |
+| 二、Batch 2 第 1 項（#1107） | 在既有 BACKLOG 補足精簡 PASS／PARTIAL／NOT VERIFIED 驗收項目，不重抄研究 | **已授權**（docs-only） | 另一個 commit（Batch 2）；見本條後「DEC-183 後續註記（Batch 2）」 |
+| 二、Batch 2 第 2 項（#1124～#1126 PR body 警語） | 註明自動 PR body「關 PR 並刪分支」指示不是客戶授權；不可直接執行不可逆刪除；**不修改 publisher 或自動 PR 模板** | **已授權**（僅註記）；改 publisher／PR 模板＝**維持不授權** | 同上（Batch 2） |
+| 二、Batch 2 第 3 項（#1105） | 查清客戶裁示與 AI 編擬出處不一致，保留原文及證據，必要時最小勘誤；無法確定標 NOT VERIFIED | **已授權**（僅最小勘誤） | 同上（Batch 2） |
+| 二、#1042 | pandas 2.0.0 相容風險僅列低優先 Candidate，不進本批程式施工 | **已授權**（僅登 Candidate）；程式施工＝**維持不授權** | 同上（Batch 2） |
+| 三 驗收規則 | 每批最多三項；客戶正式裁示與 AI 推論分開；不重複已有 SSOT；非作者多組獨立 QA；同 head 五項原生 CI 全綠；Merge Gate、review threads 及分支保護不繞過；無新的實質補登則不為湊 PR 製造文件變更；內容能忠實追溯、無新 Gate、無越權且滿足既有 Auto-Ship 規則時，**准許合併核准範圍的最小文件 PR** | **已授權**（限「核准範圍的最小文件 PR」，且須全部條件成立）；#1124～#1126、#1164 不在此列 | 合併動作由總管依既有 Auto-Ship 條件判斷；本條**不代表**該 PR 已通過任何驗收 |
+| 三（Issues／PR 處置） | #1164 維持 Draft；#1119、#1138、#1116、#1110、#1107 五個 Issues 暫不關閉；#1124～#1126 維持 Open；#1124 只解除唯讀放行評估及限定的 CI 前置準備限制，沒有合併授權 | **維持不授權**（關閉 Issues／處置 #1164）；**維持 HOLD**（#1124 合併） | 本批對五個 Issues 只追加紀錄，不建議結案 |
+| 四 回報規則 | 先完成 #1124 最新資料／CI 前置核實，再進行正式規則補登；僅在四種情況回報；完成後報告四項；沒有新資料 PR 合併授權前停在 Decision Gate | 流程指示（非授權） | 本條 (二) 即該核實；仍須客戶親自操作 CI，故屬回報情況之一 |
+
+**補充（INFERENCE）**：客戶一、5 的唯讀公開頁最小外部對帳，為對 DPE-3＝D（DEC-179：先確認來源條款）的**明示、限唯讀公開頁的局部例外**（本組解讀）；`DG-LIC`／DPE-3 仍未解除，B（正式對帳）仍待條款確認後另行明示。
+
+**方案代號／選項字母防混淆（寫死；引用本條時一律須帶 DEC 編號）**
+- 本條 DPE-4 的「同意僅 #1124 進入技術放行評估」，在 DEC-181 (五) 的記法是「DPE-4＝B（**僅 #1124**）」——那是 AI 在 DEC-179／DEC-181 提出的**變體**，**不是** GAPS 文件（`DATA_PR_EVIDENCE_GAPS…`）原 DPE-4 選項 B（#1124＋#1125 範本）的全案；客戶本條原文**沒有寫字母**，字母對應是本組解讀（INFERENCE）。**#1125、#1126 維持 HOLD。**
+- DPE-5 在此＝「同 head 原生 CI 驗證，由客戶本人操作」，與 DEC-170 的 CI 環境修復「方案 A→B」、DEC-174 的「方案 B＝雙軌」、DEC-171 的「同意方案 B＝資料曝露唯讀稽核」皆**不同義**。
+- DG-LIC 在此仍是「呈現／再散布授權」，與 DPE-3（外部對帳條款）互相關聯但不同；本條兩者都**不解除**。「DPE-3＝D」（DEC-179：先確認來源條款）的狀態**不因本條改變**。
+
+**(二) #1124 最新核實（單組；事實層級分開；本批唯讀；未觸發任何抓取／CI／workflow；時點 2026-11-14 約 08:00～08:30 台北，會漂移，一律重查）**
+
+*2.1 發布層（GitHub 讀取＋本地 ref；FACT 為讀取當下）*
+
+- PR #1124：`state`＝open、非草稿、`merged`＝false、`mergeable_state`＝blocked；head `f87866eda26d40cef66dd8107e25eff52a16333a`（分支 `auto/data-macro-history`，最後 commit 時間 2026-11-13T17:03:55Z〔`git` 實查〕）；base `main` `d607acb8dd51c80e5316f525f22817b80e3a09f9`；7 commits、5 changed files、+9／−9；PR 作者＝`github-actions[bot]`。
+- **該 head 的 check runs＝0**（`get_check_runs` 讀取）。該 head 唯一已見 workflow run＝`43469025728`（`event`＝pull_request、發起者 `github-actions[bot]`、`conclusion`＝`action_required`；本組以 `get_workflow_run` 讀取，**未列 jobs**〔素材稱 jobs＝0，本組未另重取〕）。**`action_required` 是 Actions 核准機制，不是 CI 失敗，也不是 CI 通過；設定本身 NOT VERIFIED。**
+- main push CI `43447327744`（head `d607acb8`，`event`＝push）：`completed`／`success`（本組以 `get_workflow_run` 讀取）。**CI success ≠ 資料已更新 ≠ Production 有效。**
+- #1124 PR body 自述：`published_at`（來源發布時間）＝n/a（來源未提供）；`fetched_at`＝2026-11-13T17:03:47.560404+00:00；各檔最後資料日：`finmind_inst`／`finmind_margin` 2026-11-13、`twii_ohlcv` 2026-11-12。
+
+*2.2 資料層檢核（本組以 `git show` 取 `origin/main` 與 `f87866ed` 的 blob，pyarrow 讀取；FACT）*
+
+- 變更檔恰為 5 個：`data_cache/finmind_inst.parquet`、`finmind_margin.parquet`、`macro_last_good/tw_pmi.json`、`metadata.json`、`twii_ohlcv.parquet`（`git diff --stat origin/main f87866ed` 實查：9 insertions、9 deletions）。無程式、測試、workflow。
+- 三個 parquet 與 `origin/main` 的**重疊列全欄位（含 `source`、`fetched_at`）零差異**；新增列 `twii_ohlcv` 4913→4916（11-10、11-11、11-12）、`finmind_inst`／`finmind_margin` 4939→4943（11-10～11-13）。schema 相同（`twii_ohlcv`：date、open、high、low、close、volume、source、fetched_at）。
+- `metadata.json` 的 `row_count`／`last_updated` 與 parquet 一致（twii 4916／2026-11-12；inst、margin 4943／2026-11-13）；`finmind_m1m2`＝`NO_NEW_DATA`、`tw_pmi`＝`UNDETERMINED` 原樣保留（非本 PR 造成）。
+- `twii_ohlcv` 11-10 的 `volume`：commit `d0f14437` 為空、`fc447def` 起為 4,766,000，列內 `fetched_at` 仍為首次寫入時間（2026-11-10T16:55:08.780479+00:00；兩個 blob 本組皆已讀）→ `fetched_at` 不代表列內各欄一次定稿（已登 BACKLOG `DEC181-TWII-PIT-VOLUME-BACKFILL-OBS`）。
+- 新列 `fetched_at`（UTC 時間戳字串，已讀）換算台北：11-10 列＝11-11 00:55、11-11 列＝11-13 01:29、11-12 列＝11-14 01:03 —— 皆晚於各自交易日 17:00。**這只是 `fetched_at`（抓取時間），不是 `published_at`（來源發布時間）**，不能據以宣稱 PIT 通過（DG-PIT 維持）。
+- `shared/twii_ohlc_contract.py` 契約：素材稱獨立兩組重驗整窗通過；**本組未重跑**（不執行 repo 腳本），以 NOT VERIFIED 登記，僅引用。`twii` 缺 11-13 屬預期（Yahoo T+1 規律，INFERENCE）；交易日曆 NOT VERIFIED（G-07）。
+
+*2.3 官方對帳（客戶本批授權的最小外部對帳；唯讀讀取證交所公開頁；**只描述「與官方公開頁的逐日對照」，不是「資料已驗證完整」**）*
+
+(a) 發行量加權股價指數：證交所 FMTQIK 頁（頁面標題「115年11月市場成交資訊」）vs `twii_ohlcv.close`（f87866ed）
+
+| 日期 | FMTQIK 發行量加權股價指數 | parquet `close` | 對照結果 |
+|---|---|---|---|
+| 2026-11-09 | 41,661.70 | 41661.699219 | 相符（至小數 2 位） |
+| 2026-11-10 | 42,711.92 | 42711.921875 | 相符 |
+| 2026-11-11 | 44,257.15 | 44257.148438 | 相符 |
+| 2026-11-12 | 43,091.87 | 43091.87109375 | 相符（與客戶參考值 43,091.87 一致） |
+| 2026-11-13 | 43,675.12 | （分支無此列） | 官方頁有值；分支缺列屬預期，非對照失敗 |
+
+另：11-05（41,574.72）、11-06（39,701.64）亦與分支既有列相符（本組順帶比對，非客戶要求範圍）。FMTQIK 頁不含高、低、開價，**開高低未對帳**。
+
+(b) 成交量：FMTQIK「成交股數」vs `twii_ohlcv.volume`
+
+| 日期 | FMTQIK 成交股數 | parquet `volume` | 比值 |
+|---|---|---|---|
+| 2026-11-10 | 12,827,159,729 | 4,766,000 | 約 2,691 |
+| 2026-11-11 | 11,518,562,054 | 4,012,900 | 約 2,870 |
+| 2026-11-12 | 13,624,025,071 | 5,242,800 | 約 2,599 |
+
+比值**非常數** → **parquet 的 `volume` 不是證交所成交股數**，其定義 NOT VERIFIED；UI2 的日 K 讀取不含 `volume`（`src/data/macro/macro_cache_reader.py` `TWII_OHLC_COLUMNS`＝open／high／low／close／fetched_at，本組實查）。對照 `CLAUDE.md` §1.A 第 1 點「加權指數日 K 成交量全為 0 → 隱藏該欄」：本批 `volume` 非全 0，該點不適用，但**不得把此欄當成交股數使用**。
+
+(c) 外資：證交所 BFI82U「三大法人買賣金額統計表」列「外資及陸資(不含外資自營商)」（單位元）vs `finmind_inst.foreign_buy`
+
+| 日期 | 官方買進（元） | 官方賣出（元） | 官方買賣差額（元） | 換算（÷1e8，億元） | parquet `foreign_buy` | 結果 |
+|---|---|---|---|---|---|---|
+| 2026-11-11 | 339,713,407,087 | 340,479,850,423 | −766,443,336 | −7.66443336 | −7.66443336 | **逐位相符** |
+| 2026-11-13 | 378,483,644,345 | 349,646,958,294 | +28,836,686,051 | +288.36686051 | +288.36686051 | **逐位相符** |
+| 2026-11-12 | **未取得** | | | | −6.84503883 | 客戶參考值「約 −6.85 億」與分支值量級一致，但那是**客戶提供的參考值，不是本批驗證**；官方值 NOT VERIFIED |
+| 2026-11-10 | **未取得** | | | | −341.16689906 | 官方值 NOT VERIFIED（客戶未列此日） |
+
+兩個已取得日期上，「外資自營商」列皆為 0；單位推論 `foreign_buy`＝外資及陸資(不含外資自營商)買賣差額÷1e8（兩個日期精確吻合；INFERENCE 高信心，**只限這兩日**）。**客戶所述「11-11、11-12 數據有公開市場統計支持，並非單純因數字偏小即可判定異常」，就 11-11 已獲官方公開頁佐證；11-12 仍未取得官方值。** `DEC181-INST-1111-1112-ANOMALY` 所列「量級離群＝可疑」的前提因此被削弱（11-11 不是資料錯誤的證據）；其 NOT VERIFIED 部分（11-12 官方值、歷史上其他 \|值\|<10 列）仍在。
+
+(d) 證交所公開頁對本組部分請求回傳安全封鎖頁（**事實描述；不下因果與法律結論**）：本組對指定 11-12、11-13 日的 BFI82U 請求，伺服器回傳 947 byte 的固定頁，文字為「因為安全性考量，您所執行的頁面無法呈現（FOR SECURITY REASONS, THIS PAGE CAN NOT BE ACCESSED）」；11-11 指定日與不帶指定日期的最新日請求則成功。**原因 NOT VERIFIED（可能與請求頻率有關，屬推論）**；本組在觸發後**停止重試**（不繞過、不換來源）。11-13 的內容由不帶指定日期的「最新」頁取得（頁面標題「115年11月13日 三大法人買賣金額統計表」）。此事實是否與 DG-LIC／DPE-3 的自動化存取條款議題有關，NOT VERIFIED；**證交所『交易資訊使用管理辦法』全文本批未讀到**。封鎖頁內的錯誤代碼與 IP 回顯**不登錄**。
+
+(e) 融資（`finmind_margin`）：客戶未提供官方頁，**未對帳**；結構檢核通過、真值 NOT VERIFIED。
+
+(f) 結論（單組；**非 QA PASS**）：**資料層＝內部一致，加部分外部佐證**（twii 收盤 11-09～11-12、inst 外資 11-11 與 11-13 已與證交所公開頁逐日對照相符）；**發布層＝NOT VERIFIED**（check runs＝0、`action_required`、無 head CI）；**授權（DG-LIC／DPE-3）與 PIT（DG-PIT）Gate 未解除**。仍 NOT VERIFIED：11-12 與 11-10 外資官方值、`volume` 語意、margin 真值、交易日曆、`published_at`。
+
+*2.4 授權官方頁面（客戶本條新增需查核；本組唯讀讀取，頁面全文存 scratchpad，不進 repo）*
+
+- **FinMind「免責聲明與資料授權說明」**（`finmind.github.io/Disclaimer/`；頁面載明版本日期 2026-10-31，與先前記載版本相同，此次是直接讀官方頁）。逐字關鍵句：「本服務之授權不包含將本服務提供之資料對外再散布、轉售，或建置實質等同於本服務之鏡像服務。」；「使用者如有將資料對外公開、再散布或提供予第三方之需求，應自行確認並取得原資料來源機關所要求之相應授權；此類授權非 FinMind 所能授予或代為取得。」；「FinMind 之合法使用基礎為上述公開授權架構，以及與資料來源機關另行簽訂之資訊使用契約；FinMind 不代表任何來源機關之立場。」；「本服務所提供之臺灣證券交易所交易資訊，資訊來源：臺灣證券交易所「TWSE」，本資訊由芬麥數據股份有限公司處理提供。」；「使用者須遵守臺灣證券交易所『交易資訊使用管理辦法』等交易資訊管理相關規定。」；「使用者如將透過本服務取得之資料用於對外用途，亦應依相關授權條款，以適當方式標示原資料提供機關。」；「本文件如與 FinMind 使用條款有歧異，以使用條款為準。」——**FinMind 使用條款本身未讀（NOT VERIFIED）**。
+- **Yahoo Finance「Exchanges and data providers」說明頁**（`help.yahoo.com/kb/finance/article-exchanges-data-delays-sln2310.html`；本組抓取文字中未見頁面日期，NOT VERIFIED）。逐字關鍵句：「Do not redistribute information - Yahoo Finance provides all information as is. You must not redistribute information displayed on or provided by Yahoo Finance.」。表列 Taiwan Stock Exchange (TWSE) 後綴 `.TW` 延遲 20 min、Taiwan OTC Exchange `.TWO` 延遲 20 min，資料提供者皆為 ICE Data Services；表中**未見** `^TWII` 指數列 → 該列是否適用於本專案取數的 `^TWII` chart 端點＝NOT VERIFIED。這是說明頁，**不是服務條款全文**；Yahoo 完整服務條款未讀（NOT VERIFIED）。
+- **判斷（INFERENCE，不下法律結論）**：兩家官方頁都含「不得再散布」類聲明；#1124 會把 Yahoo／FinMind 來源的 parquet 提交到**公開** repository；故 **DG-LIC／DPE-3 不能由 CI 綠燈、資料為公開資訊或客戶自行承擔風險解除**（此點與客戶原文一致，非本組新增）。證交所原始來源機關的授權／「交易資訊使用管理辦法」仍**零原文**。**DG-LIC／DPE-3 不解除。**
+
+*2.5 仍缺的 Merge Gate（客戶原文一、7，原文五項，本表為便於核對拆為六列；逐項現況，不是授權）*
+
+| 客戶要求的前提 | 現況 |
+|---|---|
+| 同 head 原生 CI 全綠 | **未達**：head `f87866ed` 的 check runs＝0；待客戶 DPE-5 操作 |
+| 非作者 QA 通過 | **未達**：本條 (二) 為單組檢核；#1124 的非作者 QA 須在最終 head 上做（head 漂移則重做） |
+| 授權（DG-LIC／DPE-3）解決 | **未達**：見 2.4 |
+| 適用 PIT Gate 解決（DG-PIT） | **未達**：`published_at`＝n/a；`fetched_at`≠`published_at` |
+| 0 unresolved threads | 本組未重查 review threads（NOT VERIFIED；以 GitHub 為準） |
+| mergeability 合格 | **未達**：`mergeable_state`＝blocked（讀取當下） |
+
+*2.6 授權無法確認時的「合法最小替代方案」（客戶原文一、3 要求提出；**只列不實作，不自行修改資料發布架構**，皆待客戶／法務）*
+
+(a) 維持合併 HOLD，等 DPE-3 條款確認（現狀）；(b) 向來源機關／法務取得書面確認後再放行；(c) 不把個股級／原始序列提交公開 repository，改只發布衍生／聚合指標，或把資料放私有儲存庫／私有分支（涉及資料契約與發布架構變更，需另案裁示，DEC-156 邊界）；(d) 讓 UI2 台股卡維持走現狀 main 既有路徑（現為 11-09）直到 (b) 完成（註：依 DEC-181，11-17 起該卡 `age_days`＝8 轉過期警示，時點會漂移）。以上為 AI 列舉，**不是推薦已被採納，也不是客戶裁示**。
+
+**(三) DPE-5 客戶操作最小步驟與風險（AI 不代做；客戶實際操作確認尚未取得）**
+
+| 步驟 | 內容 |
+|---|---|
+| S-a | 在 PR #1124 頁確認**最新 head SHA**，並與審閱用 SHA 一致（本條撰寫時為 `f87866ed`；cron 會推進，一律重查） |
+| S-b | **避開排程時段**：`update_macro_history.yml` 的 cron 為 UTC 09:00（台北 17:00），但實際常延遲數小時；DEC-181 (四) 的預期窗約台北 23:30～03:45。**建議白天操作**。（延遲 6.5～10.7 小時為素材觀察值，本組未重驗） |
+| S-c | 優先評估 **Close→Reopen**；**保留分支，不得刪分支**。若改用 Update branch 會產生**新 head**（merge main），須在新 head 重做審閱與 CI |
+| S-d | 觀察該 head 的 `pull_request` run 是否出現 `ui2-browser-gate` 與五項檢查，且 head SHA 與 S-a 相符 |
+| S-e | 若 Close 期間排程剛好執行，bot 可能另開新 PR（找不到 open PR 時請回報），屆時回報，不要自行處理 |
+| S-f | 完成後回報「**head SHA＋run id**」，AI 才能做同 head 審閱 |
+
+**風險**：head 漂移使 CI／審閱失效（舊 QA／CI 不沿用，客戶原文）；Close 期間分支仍在但 PR 暫非 open；Reopen 後以客戶帳號觸發的 `pull_request` 事件是否真的跑完 `ui2-browser-gate`，先例為 #1103（見 Batch 2 勘誤：該次執行者出處 NOT VERIFIED）。**不得**刪分支、不得繞過 required checks、不得改 branch protection、不得由 AI 代操作。**客戶同時需要處理的是 DG-LIC／DPE-3 與 DG-PIT 的裁示——CI 全綠不會解除它們。**
+
+**客戶照做版（AI 提供的最小步驟與風險提示，**不是 AI 操作**；沿用 #1103 先例，該次執行者出處 NOT VERIFIED）**
+1. 建議操作時段：台北 08:00–16:00（避開排程時段）。
+2. 開 PR #1124 頁，核對 head SHA（撰寫時為 `f87866ed`，會漂移）。
+3. 頁面底部按 Close pull request，**立刻** Reopen pull request（**保留分支、不刪分支**）。
+4. 到 Actions 找 PR Check（pytest fast + AppTest slow）、`event`＝pull_request 的 run；run id＝網址 `/actions/runs/` 後的數字。
+5. 確認該 head 出現 `ui2-browser-gate` 與五項檢查。
+6. 回報「head SHA＋run id＋結果」。
+7. 若 head 在你操作前後改變（分支 commit 變多）→回報新 head，AI 重做審閱；若出現 `action_required`／jobs 0／沒有 `ui2-browser-gate`→**不要重複 Close／Reopen**，回報現象與時間；若 Close 期間 bot 另開了新 PR→回報。
+
+**head 穩定性預期（INFERENCE，未實測）**：2026-11-14（六）、11-15（日）無新交易日時，依 `publish_data_pr.py` 揮發鍵規則（僅揮發欄位變動時不開 PR／不 commit，見 DEC-181），#1124 head 預期穩定；11-16（一）起排程可能帶入新列使 head 前進。
+
+**(四) 環境設定事實（據實登記；非 Secrets、非 Actions 預算、非 Branch Protection 的變更）**
+
+為讀取客戶授權的公開官方頁面，經 session 內核准提示，建立個人（personal）環境（名稱同專案；環境識別碼不登錄），並**僅**允許三個主機：`www.twse.com.tw`、`finmind.github.io`、`help.yahoo.com`（外加預設的套件源／MCP 主機）。原預設環境 Default 的允許主機為 `data.sec.gov`、`www.sec.gov`，與本專案無關，未使用。此為執行環境的網路白名單設定，**不是**專案 Secrets／Actions 預算／Branch Protection／NAS／Cloud 設定的變更；本批**未**觸發任何 workflow／CI／抓取／回填，**未** merge／close／reopen／rebase／update branch 任何 PR。
+
+**(五) Batch 1 Coverage 結論與本次補登內容（A／B／C；每項：Source｜Type｜Current SSOT｜Coverage｜補登內容｜來源鏈限制）**
+
+*通則（來源鏈）*：舊 GitHub 留言一律是**AI 轉述／AI 稽核報告**，客戶逐字原話不在 repo；**客戶本次（2026-11-14）重新確認的內容才是本條的新授權依據**，且本條自身也只是「經派工訊息轉錄、逐字 NOT VERIFIED」。以下不冒稱舊留言已逐字查證。
+
+**A. #1119 Actions Run 保留規則**
+
+| 欄 | 內容 |
+|---|---|
+| Source | (1) 客戶本條原文二、Batch 1 A（本次重新確認，**新授權依據**）；(2) 舊來源：Issue #1119 留言 `6822675191`（2026-11-12T11:44:11Z；作者帳號 `linchen-20200325`〔`author_association`＝OWNER〕；抬頭「客戶裁示｜Actions Run 歷史紀錄 30 天保留方案：第一輪唯讀稽核（2026-11-12）」；本組以 `issue_read get_comments` 逐字讀取）；(3) 留言 `6768487486`（2026-11-10T13:24:03Z，同帳號，「Action等儀表板好了 刪死碼時候再一起刪除」，已在 DECISIONS 約 L7999 登記）|
+| Type | (1) 客戶裁示（經派工訊息轉錄）；(2) **AI 撰寫的稽核報告**（內容為 3,034／2,032／1,002 等統計與 C1～C3 候選，文風為稽核報告；『客戶明確選擇：保留最近 30 天…』一句是**轉述**，客戶原話不在 repo；**實際撰寫者 NOT VERIFIED**〔帳號為 OWNER，但本組只能就內容推論為 AI 撰寫，INFERENCE〕）|
+| Current SSOT | `docs/DECISIONS.md`：DEC-175（Actions 清理延到收尾；其註記約 L8423 僅把留言 `6822675191` 當「脈絡佐證、未證實等同」）、DEC-179 禁止清單（約 L9227）含「清理 #1119 Actions」（DEC-180～182 禁止清單同類條目，本組未逐條重核）；`docs/BACKLOG.md` `WORKFLOW-SLIM-AUDIT-1`、`DEC175-CLEANUP-DEFER`；`PROJECT_RULES.md`（延後與逐批授權索引，約 L1157）。本組 grep：`保留最近 30 天`、`30 天保留` 等**作為決策規則**在正式 SSOT 中無登錄（僅 DEC-175 註記與 crosswalk 底稿提到留言標題）|
+| Coverage | 19 YAML 延後＝**完整保存**；30 天一般保留方向＝**缺漏**；例外保護清單＝**缺漏**；不改全域 retention＝**缺漏**；不可逆刪除逐批核准＝**部分保存**（DEC-175 等寫「延後、不執行刪除」，但無「逐批明確核准」成文規則）|
+| 補登內容 | 依客戶本次原文，登記四點：① **Run 歷史以最近 30 天為一般保留方向**（方向，不是已執行的刪除規則）；② **例外保留**：客戶本次列示「重要 CI、PIT、Risk Cap、安全、未完成 PR 與重大事故」等證據；舊留言（AI 轉述）較詳細列出的保護類（未合併 PR 的所有 run、DEC／Gate 可回查的 run ID、WIF 權限、重大 fail 與首次成功／修復基線、資料寫入或真實發布驗證、唯一證據 artifact）**列為參考，不當成客戶已逐項確認的清單**——其中「重大事故」只見於客戶本次原文，舊留言抬頭未出現同詞；③ **不自動變更 GitHub 全域 retention**（舊留言並稱：在完成獨立封存與客戶再次裁示前不得更改全域 retention，並引 GitHub Docs 說明改設定不追溯已存在紀錄；該官方文件說明為舊留言所引，**本組未重讀 GitHub Docs**，NOT VERIFIED）；④ **不可逆刪除須另行逐批明確核准**。**BACKLOG 新列 `RUN-RETENTION-30D-HOLD`（deferred）**。不重抄舊留言的統計數字（AI 當時的時點快照，會漂移）|
+| 來源鏈限制 | 舊留言＝AI 轉述，不冒稱逐字查證；客戶本次重新確認＝新授權依據；本條只授權「規則保存」|
+| **不授權** | 刪除任何 Run、Artifact、YAML；變更全域 retention；執行任何清理腳本；把 30 天界線當成「2,032 筆可刪」。workflow YAML 清理與 Run 歷史清理是**兩件事**（crosswalk 底稿已區分），兩者目前都**沒有刪除授權** |
+
+**B. #1138 工作優先序**
+
+| 欄 | 內容 |
+|---|---|
+| Source | (1) 客戶本條原文二、Batch 1 B（**新授權依據**）；(2) 舊來源：Issue #1138 留言 `6818780219`（2026-11-12T08:34:08Z；作者帳號 OWNER；抬頭「客戶最新優先順序裁示｜2026-11-12（依本次 ChatGPT 對話直接轉錄意旨）」；本組逐字讀取）|
+| Type | (1) 客戶裁示（經派工訊息轉錄）；(2) 轉錄者整理：客戶逐字**只有**被該留言引用的一句「好 我希望把這些項目完成後，再來繼續優化UI」（引文來源為該留言自身，原始對話 repo 內 NOT VERIFIED）；其「第一階段」「第二階段」清單與條件是**轉錄者整理**|
+| Current SSOT | `docs/vnext/UI2_OPEN_ISSUES_PR_SSOT_CROSSWALK_2026-11-12.md` 約 L66（底稿，**自述非正式**）；DEC-174／175／176／177／178／179～182 各自的優先序敘述（見下表）。**留言本身未成為 DEC**|
+| Coverage | **部分保存→本批補登**：優先序意旨散見於 DEC-174～182，但「先收尾已授權且可驗收的既有工作，再進一步優化 UI」這句裁示本身與其和既有 DEC 的關係，無單一正式落點 |
+| 補登內容 | 優先序：**先收尾已授權且可驗收的既有工作 → 再繼續進一步優化 UI**；**不取消 UI／資料契約雙軌推進**（DEC-174）；**已證明受外部條件阻塞的 HOLD 可保留追蹤，不必等待其全面解除才進行其他合法工作**；**不重新制定既有 UI Gate**（Gate 原樣：文字線框草稿先行、G-1～G-10 等仍依各 DEC）。**BACKLOG 新列 `UI2-1138-PRIORITY-RULE`（結論列，非工作項）**；並在新列追加一行註記：#1139 已合併（見下）|
+| 來源鏈限制 | 舊留言的第一／第二階段清單是轉錄者整理，**不是客戶逐項點名**；其「第二階段條件」在後續 DEC 中**未被引用也未被取代**（本組 grep `第二階段` 在 DECISIONS 僅命中 DEC-178 的另一個「第二階段：六項品質補強」，與該留言無關；INFERENCE）|
+
+與既有決策的對照（INFERENCE；標「兼容／補充／無關」；本組依標題與已讀段落判讀，DEC-178 只抽讀）：
+
+| DEC | 相關內容 | 與本次優先序的關係 |
+|---|---|---|
+| DEC-164（2026-11-11） | G-1～G-10 正式裁示、融資＋板塊唯讀 L3 與兩項獨立安全修復授權 | **無關／兼容**：早於優先序留言；其授權範圍不因本序改變。本組**未逐項核對**其各授權項是否已完成 |
+| DEC-174（2026-11-12） | UI 與資料契約**雙軌推進**，每批最多三項，不突破既有資料及接線 Gate | **兼容（補充）**：客戶本次明寫「不取消雙軌」；本序只補「同批內先收尾再優化」的順序 |
+| DEC-175（2026-11-12） | 先處理 UI＋資料庫；Actions／死碼清理延後到最後；跨對話持續落盤 | **兼容**：本序的「收尾」不含 Actions 清理（該項仍延後，見 A）|
+| DEC-176(c)（2026-11-12） | DEC-175 是已生效的優先序／架構／交接治理，**不是**無條件施工授權 | **兼容**：同理，本序也**不是**施工授權 |
+| DEC-177（2026-11-12） | UI 主線恢復，允許最小 UI 第一版實作、不解除任何 Gate，預防性交接 | **補充**：UI 主線「恢復」的時機＝本序「收尾後」；Gate 不變 |
+| DEC-178（2026-11-13） | 三個專業 Agent、六項品質補強分三批 | **兼容／無關**（抽讀）：品質補強屬「收尾」類工作；未見衝突 |
+| DEC-179～DEC-182（2026-11-13） | 資料優先、#1124～#1126 維持 HOLD、DPE-3＝D、DPE-6＝B、更新程序規劃、Actions 可用性澄清 | **兼容**：這些 HOLD 正是「已證明受外部條件阻塞者」的實例，可保留追蹤；本序同意不必等其解除才做其他合法工作 |
+| DEC-183（本條）一 | #1124 僅進技術放行評估等 | **兼容**：同為「HOLD 保留追蹤、其餘合法工作照做」|
+
+結論：**未發現與 DEC-174～182 的真正衝突**（單組 INFERENCE，待非作者 QA）。
+
+**陳舊事實註記（只追加，不改舊行）**：HANDOFF 約 L237–248 與 BACKLOG 約 L2163 的 Issue #1138 段仍寫「PR 號待補」；**#1139 已併入 main**（`ba9821f3`，commit 時間 2026-11-11T16:45:40+08:00；`git log` 實查）。稽核組另指測試數（31／27 vs 35／27）不一致——**本組未重數**，NOT VERIFIED。
+
+**C. #1110 資料架構原則（GitHub canonical 資料 UI2 優先唯讀重用）**
+
+| 欄 | 內容 |
+|---|---|
+| Source | (1) 客戶本條原文二、Batch 1 C（**新授權依據**）；(2) 舊來源：Issue #1110 留言 `6765231976`（2026-11-10T10:40:52Z；作者帳號 OWNER；抬頭「2026-11-10 GitHub-first 唯讀稽核補充：GitHub 取數優先、Cloud 不重複認證（研究，不是施工授權）」；本組逐字讀取）|
+| Type | (1) 客戶裁示（經派工訊息轉錄）；(2) AI 研究留言：其「客戶方向：若 GitHub Actions 已可使用 API Key 取得、驗證並落地資料，New UI2 不必另以 Streamlit Cloud Secret 重複連外取得同一份資料」是 **AI 對客戶方向的釋義**，客戶逐字 NOT VERIFIED；同一留言載明「方向性同意不等於授權新增來源／cron／改寫正式公式／OneBrain／Risk Cap」|
+| Current SSOT | 僅 `docs/vnext/UI2_OPEN_ISSUES_PR_SSOT_CROSSWALK_2026-11-12.md` 約 L68（釋義，底稿）；結構面有 G2F 守衛（`tests/test_ui2_guards.py` `G2F_IMPORT_ALLOWLIST`）、DEC-180（New UI2 不用 NAS 是設計）、DEC-182 禁止「直接讓 New UI2 呼叫 NAS 或 L1 抓取程式」|
+| Coverage | **部分保存→本批補登**：結構守衛有，**「優先唯讀重用已落地 canonical 資料、不重複抓取」這個資料架構方向本身**無正式登錄 |
+| 補登內容 | **原則**：GitHub Actions 已可靠取得、驗證並落地的 canonical 資料（即 `data_cache` 等已進 repo 的落地檔），New UI2 應**優先唯讀重用**，不應為**同一指標**無理由在 Streamlit Cloud 再建立一套重複抓取。**限定**：(i) 這是**資料架構方向**，不代表禁止任何經核准的 Cloud 取數；(ii) **不授權**新增 API、cron、adapter 或正式接線；(iii) 「已可靠取得、驗證並落地」不是推定——Key 已配置≠認證成功、API 可用≠語意有效、落地≠UI2 已接線（#1110 既有結論，只引用不重登）；(iv) 重用仍受 `DG-LIC`／`DG-PIT`／`DG-COV`／`DG-SCOPE`、`I1144-WIRING-GATE` 與 G2F 守衛拘束。**BACKLOG 新列 `DATA-REUSE-GITHUB-CANONICAL-RULE`（原則，非工作項）**。其餘 #1110 原則（D6 已完成不重做；D1～D5〔#1110 題號〕未裁示）已完整保存，不重登；注意 D1～D5 有兩組同名不同義（#1110 題號 vs DEC-172 治理 D1–D5，DECISIONS 已消歧）|
+| 來源鏈限制 | 舊留言的「客戶方向」是釋義；本次客戶重新確認為新授權依據；本條不冒稱舊留言逐字查證 |
+
+**(六) 範圍外、衝突檢查與 NOT VERIFIED**
+
+- **#1164 衝突檢查（寫入前已做）**：#1164（draft）以 `get_files` 讀取，僅改 2 個檔：`docs/BACKLOG.md`（hunk `@@ -227,46 +227,9 @@`，基底 `7eb48d6c` 的第 227～272 行範圍，將 Data Health 批 A 等已結案列搬至歸檔索引）與 `docs/archive/historical/BACKLOG_CLOSED_HISTORY_2026-11-12.md`。本批對 BACKLOG／DECISIONS／HANDOFF／PROJECT_STATE **皆只在檔尾追加**，不碰上述行區間與歸檔檔 → **無重疊**。#1164 維持 Draft，未處置。
+- **本條不解除任何 Gate／HOLD**，不授權：觸發任何抓取／bootstrap／回補／手動 workflow、合併／關閉／重開／rebase／update branch #1124～#1126、處置 #1164、刪除任何 Run／Artifact／YAML／分支、修改全域 retention、修改 NAS／Secrets／Branch Protection／資料契約／`app.py`／`app_ui2.py`／UI、新增 API／cron／Secrets／adapter、改 publisher／PR 模板、關閉 #1119／#1138／#1116／#1110／#1107、Cloud Reboot。
+- **NOT VERIFIED**：fence 與客戶原訊息的逐字一致性；客戶是否已實際操作 DPE-5；11-12 與 11-10 外資官方值；`twii` `volume` 語意；`margin` 真值；交易日曆；`published_at`；證交所『交易資訊使用管理辦法』全文；FinMind 使用條款；Yahoo 完整服務條款與 `^TWII` 適用性；GitHub Docs 的 retention 說明（舊留言引用，本組未重讀）；#1124 review threads 數；`shared/twii_ohlc_contract.py` 本組未重跑。
+- **單組聲明**：本條 (二)～(六) 的核實與判讀為單組撰寫，**未經非作者獨立 QA（`CLAUDE.md` §-2 規則 6）**；CI 與 QA 結果由總管於 PR 補記；**不得被引用為「已 QA PASS」**。
+
+#### DEC-183 後續註記（Batch 2；2026-11-14；只追加；DEC-183 上文一字未改；決策者 AI 總管〔事實更新／勘誤〕；**非新客戶裁示**；授權依據為客戶 2026-11-14 原文二、Batch 2 第 2、3 項；非 QA PASS）
+
+**(Z1) #1124～#1126 自動 PR body「關 PR 並刪分支」指示——不是客戶授權（客戶 Batch 2 第 2 項；僅註記，不修改 publisher 或 PR 模板）**
+
+- **事實（FACT）**：`scripts/publish_data_pr.py` 約 L676–677 產生的資料 PR body 含一段「人工處理（cron 發布 fail-closed 時）」——「若每日排程在『發布資料』步驟持續失敗：① 關閉本 PR（不合併）；② 刪除分支 `auto/data-…`；③ 下次排程會從 main 重建。」（#1124 現行 PR body 已讀取，分支名為 `auto/data-macro-history`）。另 `HUMAN_ACTION` 常數（約 L152）「請人工處理：關閉該資料 PR 並刪除分支，或回報 ChatGPT 決定契約。」被多個 fail-closed 錯誤訊息引用。#1126 的 PR body 本組已讀取，含同一段（分支名為 `auto/data-macro-forward-test`）；#1125 的 PR body 本組未重讀，依同一腳本與同一模板推論亦含此段（INFERENCE）。
+- **判定**：該段是**腳本產生的自動文字，不是客戶授權**。它與 `PROJECT_RULES.md` §4 表第 8 項（約 L243：不可逆操作含刪除 branch；DEC-009、DEC-012、DEC-020）及 §10（約 L426：既有遠端分支刪除不得自主執行，須客戶核准清單，DEC-012）**衝突**。任何 AI／接手者**不得照做**，不得直接執行不可逆刪除；「關 PR＋刪分支重建」已列 DEC-182 (五) 禁止清單。DPE-5 的 Close→Reopen **保留分支**，與該段 ② 的刪分支是**兩件事**。
+- **不做**：不修改 `scripts/publish_data_pr.py`、不改自動 PR 模板、不改 fail-closed 行為（資料契約疑義仍應回報客戶，不硬刪資料）。
+
+**(Z2) #1105／#1103 出處勘誤（客戶 Batch 2 第 3 項；保留原文，不改舊字；無法確定者一律 NOT VERIFIED）**
+
+- **兩處標示衝突（FACT）**：(a) 本檔 DEC-156 段之後「治理裁示紀錄（2026-11-10 追加）」（約 L7965）稱「僅紀錄 owner 於 #1105 留言所給裁示，非 AI 新決策」「owner／ChatGPT 治理裁示」；(b) `docs/vnext/DAILY_DATA_PR_EVIDENCE_GAPS_AND_DECISION_ORDER_2026-11-12.md`（約 L100、L365）稱「原文為 ChatGPT 編擬，是否等同客戶正式裁示仍待客戶確認」。
+- **GitHub 逐字讀取（本組以 `pull_request_read get_comments` 取得）**：#1105 留言 `6754457744`——`created_at` 2026-11-09T23:38:51Z（台北 11-10 07:38）、作者帳號 `linchen-20200325`（`author_association`＝OWNER）、抬頭「**ChatGPT 獨立治理裁示**（2026-11-10）— PIT 不接受／NO MERGE」；內文含「拒絕以現有證據合併 #1105」「請先保存本 PR diff／QA 證據，然後依 PR 自帶的 fail-closed 人工處理機制，關閉**不合併**並清理 `auto/data-macro-forward-test` 分支…在關閉／刪分支前需 GitHub 重查…」。#1103 留言 `6754456437`（2026-11-09T23:38:46Z，同帳號，抬頭同為「ChatGPT 獨立治理裁示」）；留言 `6754511702`（2026-11-09T23:42:06Z，同帳號）自稱「**ChatGPT 按** PR 內建安全恢復路線 Close→Reopen（未合併、未改檔案或 head）」，並記該 head 新的原生 CI run `42722497312`；留言 `6755593793`（2026-11-10T00:45:57Z，同帳號）為「非作者獨立 QA」，署名 Claude Code，稱同 head 五項 success。
+- **勘誤（讀法）**：這些留言的**抬頭自稱「ChatGPT」，卻張貼在客戶（owner）帳號下**；內文是否經客戶審閱、是否為客戶逐字意旨，**repo 內無法判定（NOT VERIFIED）**。因此上列 (a) 的「owner 裁示」措辭**不得讀成客戶逐字裁示**；較忠實的讀法是「owner 帳號下、自稱 ChatGPT 編擬的治理裁示留言；是否等同客戶正式裁示 NOT VERIFIED」（與 (b) 一致）。舊字（含 L7965）一字未改，本註記為最小勘誤。
+- **#1105 留言指示「清理 `auto/data-macro-forward-test` 分支」**：本組在 repo 內**查無** `PROJECT_RULES.md` §10／DEC-012 要求的**客戶核准清單**（NOT VERIFIED）；該分支現存於遠端（現為 #1126 的 head，`git` 實查），其刪除屬不可逆操作，本註記**不授權**任何刪除。
+- **#1103 Close→Reopen 的執行者**：留言 `6754511702` 自稱「ChatGPT 按…」，帳號為 owner；而 `docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md` 的 S2 行與 DEC-181／DEC-182 把 DPE-5 寫為「客戶於同 head 觸發」且「Close→Reopen 僅限客戶操作」→ 兩者**不一致**；#1103 當時**實際按下者 NOT VERIFIED**（需 GitHub 事件時間軸或稽核紀錄才能確證，本組工具讀不到）。**影響**：以 #1103 作為「Reopen 後原生 CI 確實會跑完 `ui2-browser-gate`」的先例時，**先例本身成立與否（該 run 的五項 success 為上列非作者 QA 留言所述）與「是誰按的」是兩件事**；後者 NOT VERIFIED，不影響 DEC-183 要求 DPE-5 由客戶本人操作的規定。
+- **不改**：#1103（已合併）與 #1105（已關閉未合併）的結果，以及 DECISIONS 上述舊註記、vnext 文件的原文。
