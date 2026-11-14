@@ -1474,3 +1474,14 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - #1124～#1126、#1164：未授權處置；DG-LIC／DG-PIT 等 Gate 不解除（見 DEC-184、DEC-186、DEC-187）。
 - 三支資料 Workflow 維持停用、queued Run 不取消、排程不重新啟用（DEC-185）。
 - 已核准事項依 `PROJECT_RULES.md` 第 4 節「請示前查證」不得再問。
+
+### 進度更正（2026-11-14，append-only；補充上方「合併後更新」小節，原文一字未動；非施工授權）
+
+- **以本小節為準**：上方「合併後更新」小節中「唯一 NEXT（新對話）……新對話在客戶明確啟動前不施工」與「NOT VERIFIED：main push CI（run 43565950666）撰寫時進行中，須重查」兩句，自本小節起以本小節為準。
+- **Batch 2 狀態**：客戶已於 2026-11-14 交接訊息中啟動 Batch 2 的**唯讀查核與驗收**（session 訊息轉錄，逐字一致性 NOT VERIFIED），不再標示為完全待啟動。**唯讀驗收已開始，不代表新增工程施工已獲授權**；本更正不新增 DEC、不解除任何 HOLD／Decision Gate。
+- **#1138**：已**部分核銷**——驗收帳已貼於 Issue #1138 留言（issuecomment-6873239522），引用 #1139（`ba9821f`）、#1141（`907322a`）、#1142（`1e5542a`）、#1146（`d4f7b3f`）已合併且各自同 head 五項 check success（GitHub 讀取 FACT）；各 PR 描述中的 QA／mutation 說法為作者陳述，本次未重跑。**Issue 維持 Open**；G-1～G-10 runtime 接線、G-F2～G-F6、coverage 門檻、PIT、上游授權、Cloud／真機／Playwright 仍未授權或 NOT VERIFIED。
+- **#1116**：既有證據已盤點（#1117、#1118 已合併，見 Issue #1116 留言）；修復後 `update_etf_managers.yml` 尚無新 Run（最新仍為 2026-11-10 run 42743389479 GH006 失敗）。首次真實排程（2026-11-16 20:00 UTC 之後）與 `auto/data-etf-managers` PR 建立＝**NOT VERIFIED**。
+- **#1119、#1110、#1107**：僅核對既有 Issue 留言與驗收帳；無新增研究、無新留言、無狀態變更；#1119 維持 HOLD。
+- **main push CI**：run 43565950666（head `bb00e341`）已 completed／**success**（GitHub 讀取 FACT）。
+- **標示**：「部分核銷」為 AI 總管依 GitHub 證據之對帳結論（單組讀取），**不是客戶裁示**；Issue 是否關閉由客戶決定。
+- **下一步**：2026-11-16 20:00 UTC 之後唯讀核對 ETF Managers 首次排程 Run；其餘新工作待客戶新授權。#1124～#1126、#1164、三支停用 Workflow、queued Run、DG-LIC／PIT／COV／SCOPE／WIRING-GATE 全部維持原狀（見 DEC-184～DEC-187）。
