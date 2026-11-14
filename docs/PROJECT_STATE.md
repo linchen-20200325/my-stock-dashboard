@@ -1402,7 +1402,7 @@
 
 ### 70.25 決策閉環 Batch 1 後專案狀態（2026-11-14；DEC-184～DEC-187；只追加；不改既有節；非授權；非 QA PASS；單組撰寫，未經非作者獨立 QA）
 
-> **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** §70.16～§70.24 原文**一字未動**；其中與下列衝突的描述（例：§70.24 的「#1124 head check runs＝0／action_required／blocked／唯一 NEXT＝客戶操作 DPE-5」；run id 等快照見 DEC-184 (二)）自本節起以本節為準（**SUPERSEDED 僅限事實描述**；DEC-183 客戶裁示不變）。事實取自 2026-11-14 session 唯讀稽核與總管 GitHub 直讀（時點快照，會漂移，一律重查）；細節以 `docs/DECISIONS.md` DEC-184～DEC-187 為準，本節只存長期有效知識，不重抄事實包。**來源標示**：DEC-184～187 為客戶轉交之派工提示語（客戶指出部分由 ChatGPT 擬稿；親撰與擬稿成分 NOT VERIFIED），授權效力僅限其實際載明範圍，不代表推薦方案自動獲准；更正見 DEC-187 (六)。
+> **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** §70.16～§70.24 原文**一字未動**；其中與下列衝突的描述（例：§70.24 的「#1124 head check runs＝0／action_required／blocked／唯一 NEXT＝客戶操作 DPE-5」；run id 等快照見 DEC-184 (二)）自本節起以本節為準（**SUPERSEDED 僅限事實描述**；DEC-183 客戶裁示不變）。事實取自 2026-11-14 session 唯讀稽核與總管 GitHub 直讀（時點快照，會漂移，一律重查）；細節以 `docs/DECISIONS.md` DEC-184～DEC-187 為準，本節只存長期有效知識，不重抄事實包。**來源標示**：DEC-184～187 為客戶轉交之派工提示語（依後續指示〔DEC-187 (六)〕部分可能由 ChatGPT 擬稿；親撰與擬稿成分 NOT VERIFIED），授權效力僅限其實際載明範圍，不代表推薦方案自動獲准；更正見 DEC-187 (六)。
 
 - **三支資料發布 workflow 現為 `disabled_manually`**（`update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml`；派工提示語記載為客戶手動停用，誰按下 NOT VERIFIED；DEC-185）。連帶影響（INFERENCE）：#1124～#1126 head 凍結、main `data_cache` 不再自動前進（台股卡最早 2026-11-17 轉過期）、停用中的 workflow 無法手動 dispatch。這**不是**刪 YAML／刪 Run／retention 變更，也**不是** #1119 的「已停排程三支」。恢復條件與 3 筆陳舊 queued Run 的處置：**未裁示**。
 - **#1124**：DPE-5 後同 head 五項原生 CI 全 success、review threads＝0、mergeable_state＝behind；非作者資料層 QA＝PASS（限資料層，結果僅存 session）。**資料層合格≠PIT 合格≠授權放行**；DG-LIC／DPE-3、DG-PIT 未解除，**仍 HOLD**。head／run id 等時點快照見 DEC-184 (二)，一律重查，此處不抄。

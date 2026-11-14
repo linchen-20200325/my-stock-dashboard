@@ -1415,7 +1415,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 > **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** 上方「#1124 發布 Gate 裁示後最新接手點」段除**標題行就地加刪除線並附指向本段註記**外，內文**一字未動**（這是本批唯一的刪除行）。**本段取代 L282–284 的 cleanup 候選表與舊現況段的「唯一 NEXT」**（兩者已過期，見 DEC-186 (四)）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；不是 QA PASS，不是授權。所有 SHA／run id／PR head 皆 2026-11-14 時點快照，一律以最新 GitHub 為準。找到本段：`grep -n '^###' docs/HANDOFF.md`，現行段＝檔尾最後一個標題含『最新接手點』且未被刪除線者。HANDOFF 檔頭的 2026-11-09 快照已過期，勿據以行動。
 
-**一、現在做到哪**：客戶轉交之 2026-11-14 五則派工提示語（客戶指出部分由 ChatGPT 擬稿；各句直接作者 NOT VERIFIED；更正見 DEC-187 (六)）已補登為 DEC-184（#1124 DPE-5 後續＋DG-LIC 解套方向）、DEC-185（緊急暫停三支資料 Workflow）、DEC-186（舊分支刪除資格稽核）、DEC-187（決策防遺漏與 Open Items 收斂計畫）；BACKLOG 檔尾新段含對帳表與新列；PROJECT_STATE §70.25；PROJECT_RULES 第 4 節新增「請示前查證（Pre-Ask Check）」。**本批停在 Decision Gate。**
+**一、現在做到哪**：客戶轉交之 2026-11-14 五則派工提示語（依後續指示〔DEC-187 (六)〕部分可能由 ChatGPT 擬稿；各句直接作者 NOT VERIFIED；更正見 DEC-187 (六)）已補登為 DEC-184（#1124 DPE-5 後續＋DG-LIC 解套方向）、DEC-185（緊急暫停三支資料 Workflow）、DEC-186（舊分支刪除資格稽核）、DEC-187（決策防遺漏與 Open Items 收斂計畫）；BACKLOG 檔尾新段含對帳表與新列；PROJECT_STATE §70.25；PROJECT_RULES 第 4 節新增「請示前查證（Pre-Ask Check）」。**本批停在 Decision Gate。**
 
 **二、main 與 Open 項目（時點快照，須重查）**：main `eb79df92`（#1190 squash）。
 
@@ -1441,7 +1441,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 4. **三支 workflow 的恢復條件與時點**；3 筆陳舊 queued Run 是否取消（DEC-185 (五)）。〔提問須附推薦方案與商業語言〕
 5. （資訊，非重問）DEC-178「六項」與 ①～⑨ 的指涉歧義（BACKLOG `QB-SIX-VS-NINE-AMBIGUITY`）。
 
-(乙) **其他已授權且可驗收的合法工作照常進行，不因等待上列裁示而停止**：UI2 與資料契約**雙軌前進**、先完成已授權可驗收工作（客戶 E 點；來源 DEC-174、DEC-183 Batch 1 B、BACKLOG `UI2-1138-PRIORITY-RULE`）。仍受五、禁止清單與各 Gate 約束；不得因此把已完成的工作重新施工。
+(乙) **其他已授權且可驗收的合法工作照常進行，不因等待上列裁示而停止**：UI2 與資料契約**雙軌前進**、先完成已授權可驗收工作（提示語 E 點，客戶轉交；來源 DEC-174、DEC-183 Batch 1 B、BACKLOG `UI2-1138-PRIORITY-RULE`）。仍受五、禁止清單與各 Gate 約束；不得因此把已完成的工作重新施工。
 
 (丙) **客戶下一步授權點（現在不施工）**：Batch 2（五個 Open Issues 轉為可驗收的結案條件）、Batch 3（#1164 與 #1124～#1126 的處理）（DEC-187 (一)）。
 
@@ -1461,4 +1461,4 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 **八、仍 NOT VERIFIED**：DEC-184～DEC-187 fence 與原提示語（客戶轉交）的逐字一致性；2026-11-14 session 子 Agent 報告（僅存該 session）；停用三支 workflow 的實際按下者；Reopen 實際操作者；兩條已消失分支的刪除者；Yahoo ToS 等官方條款原文。
 
-**九、來源標示更正（2026-11-14 後續；DEC-187 (六)）**：DEC-184～187 的 fence 是客戶轉交之派工提示語，非「客戶親自撰寫的逐字原文」；授權效力僅限其實際載明的範圍，不代表推薦方案自動獲准。本更正**不改變任何 Gate**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向；DG-PIT 的「B＋X」類組合為總管推薦，**不得記成客戶已解除 Gate**；三支資料 Workflow 維持停用；queued Run 不取消、排程不重新啟用。DEC-183 及更早的同類標示是否也含 ChatGPT 擬稿＝NOT VERIFIED（BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`）。
+**九、來源標示更正（2026-11-14 後續；DEC-187 (六)）**：DEC-184～187 的 fence 是客戶轉交之派工提示語，不得標為客戶親自撰寫的逐字原文（亦未證明非客戶親撰）；授權效力僅限其實際載明的範圍，不代表推薦方案自動獲准。本更正**不改變任何 Gate**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向；DG-PIT 的「B＋X」類組合為總管於 session 內的推薦（repo 內未收錄其定義），**不得記成客戶已解除 Gate**；三支資料 Workflow 維持停用；queued Run 不取消、排程不重新啟用。DEC-183 及更早的同類標示是否也含 ChatGPT 擬稿＝NOT VERIFIED（BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`）。
