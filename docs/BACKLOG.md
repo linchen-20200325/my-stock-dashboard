@@ -2755,12 +2755,12 @@
 
 ## 2026-11-14｜DEC-183 #1124 發布 Gate 有條件裁示與 Batch 1 規則補登（只追加；不改既有列；登記不等於施工授權）
 
-> **有意識的更新，不是漏刪；2026-11-14；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-183）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 見下（落盤前 `git grep -n` 各 ID 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：`origin/main`＝`d607acb8dd51c80e5316f525f22817b80e3a09f9`（`git rev-parse` 實查）；main push CI run `43447327744`（head_sha＝`d607acb8`，`event`＝push）completed／success（本組以 GitHub 讀取）——**CI success ≠ 資料已更新 ≠ Production 有效**。**客戶本批原文第一句：「這是有條件授權，不是全面解除 HOLD」。**
+> **有意識的更新，不是漏刪；2026-11-14；決策者 客戶（經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-183）。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 見下（落盤前 `git grep -n` 各 ID 0 命中，不重複）。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**（QA 結果由總管於 PR 補記）。事實基準：`origin/main`＝`d607acb8dd51c80e5316f525f22817b80e3a09f9`（`git rev-parse` 實查）；main push CI run `43447327744`（head_sha＝`d607acb8`，`event`＝push）completed／success（本組以 GitHub 讀取）——**CI success ≠ 資料已更新 ≠ Production 有效**。**客戶本批原文第一句：「這是有條件授權，不是全面解除 HOLD」。** 行號僅為時點快照，以搜尋 ID 為準；#1164（draft）若先合併，本檔行號約位移 37 行；本批與 #1164 無 hunk 重疊。
 
 **追加註記（對既有列；原列不改）**
 
-- `DEC181-LATEST-TRADING-DAY-REFRESH` — 客戶 2026-11-14 裁示（DEC-183）更新其「待核准」清單：**DPE-4 已部分核准——僅 #1124 進入技術放行評估**（#1125、#1126 維持 HOLD；#1124 合併 HOLD 未解除）；**DPE-5 已核准進入同 head 原生 CI 驗證，但操作者為客戶本人**（客戶實際操作確認尚未取得；AI 不代做、不刪分支、不繞過 required checks、不改 branch protection）；`DG-LIC`／`DPE-3` 與 `DG-PIT` **維持未解除**；merge 與 Cloud Reboot **暫不授權**。同 head 原生 CI 全綠、非作者 QA、授權與 PIT Gate、0 unresolved threads、mergeability 五項前提達成後，也只是「才能再提出明確合併請求」。status 維持 `Candidate／未授權（Decision／Input Gate）`。
-- `DEC179-DPE3-TERMS-CONFIRM` — **仍 BLOCKED，`DG-LIC` 不解除**。本批新增兩份官方頁面的唯讀查核（FinMind「免責聲明與資料授權說明」版本日期 2026-10-31；Yahoo Finance「Exchanges and data providers」說明頁）——**兩者都含不得對外再散布類聲明**；證交所「交易資訊使用管理辦法」全文、FinMind 使用條款、Yahoo 完整服務條款仍零原文（NOT VERIFIED）。證據與逐字關鍵句見 DEC-183 (二) 2.4。**這不是條款確認完成，也不是 DPE-3 的 B 被授權。**
+- `DEC181-LATEST-TRADING-DAY-REFRESH` — 客戶 2026-11-14 裁示（DEC-183）更新其「待核准」清單：**DPE-4 已部分核准——僅 #1124 進入技術放行評估**（#1125、#1126 維持 HOLD；#1124 合併 HOLD 未解除）；**DPE-5 已核准進入同 head 原生 CI 驗證，但操作者為客戶本人**（客戶實際操作確認尚未取得；AI 不代做、不刪分支、不繞過 required checks、不改 branch protection）；`DG-LIC`／`DPE-3` 與 `DG-PIT` **維持未解除**；merge 與 Cloud Reboot **暫不授權**。同 head 原生 CI 全綠、非作者 QA、授權與 PIT Gate、0 unresolved threads、mergeability 五項前提（客戶原文五項；DEC-183 (二) 2.5 表為便於核對拆為六列）達成後，也只是「才能再提出明確合併請求」。status 維持 `Candidate／未授權（Decision／Input Gate）`。
+- `DEC179-DPE3-TERMS-CONFIRM` — **仍 BLOCKED，`DG-LIC` 不解除**。本批新增兩份官方頁面的唯讀查核（FinMind「免責聲明與資料授權說明」版本日期 2026-10-31；Yahoo Finance「Exchanges and data providers」說明頁）——**兩者都含不得對外再散布類聲明**；證交所「交易資訊使用管理辦法」全文、FinMind 使用條款、Yahoo 完整服務條款仍零原文（NOT VERIFIED）。證據與逐字關鍵句見 DEC-183 (二) 2.4。**這不是條款確認完成，也不是 DPE-3 的 B 被授權。** DEC-181 所列「或明示承擔風險」選項，已被客戶 2026-11-14 原文收窄：不得把客戶自行承擔風險當成已取得合法授權（DEC-183 一、3）。
 - **#1139 已併入 main 的陳舊事實註記**（只追加，不改舊行）：本檔上方 Issue #1138 雙線結果段（約 L2163）與 `docs/HANDOFF.md` 約 L237–248 仍寫「PR 號待補」；#1139 已 squash 為 main `ba9821f3`（commit 時間 2026-11-11T16:45:40+08:00，`git log` 實查）。稽核組另指測試數 31／27 vs 35／27 不一致——本組未重數，NOT VERIFIED。
 - **唯一 NEXT 過期提醒**：`DEC181-*` 段與更早各段的「唯一 NEXT」自本段起過期，以檔尾最新未被取代者為準（`grep`「唯一 NEXT」會先命中較早段落，以本段與 HANDOFF 檔尾未被刪除線的現況段為準）。
 
@@ -2789,7 +2789,7 @@
 | Gate（主文） | 判定 | 證據與性質 | 缺口（NOT VERIFIED） |
 |---|---|---|---|
 | 1 確認有指向 main／`app_ui2.py` 的 Preview App | **PARTIAL** | 客戶陳述：留言 `6758485565` 轉記「使用者直接確認 Main file path 為 `app_ui2.py`」（非 Cloud 管理 API 獨立驗證）；客戶 2026-11-13 轉述 Cloud 啟動日誌顯示 main／`app_ui2.py`（DEC-180／DEC-181，日誌原文不在 repo） | repo owner、部署 commit、日誌日期、Cloud 設定頁證據 |
-| 2 `?ui2_dev=1` 選 Real-data Preview，確認非 FAKE | **PASS**（客戶實測） | 客戶手機截圖（留言 `6758541700`，2026-11-10，頂部「Real-data Preview（非正式 production default）」；原始圖片在 ChatGPT 會話、未上傳 GitHub）；客戶 2026-11-13 口述「預設 FAKE、切換 Real-data Preview 成功」（DEC-181） | 截圖原檔不在 repo |
+| 2 `?ui2_dev=1` 選 Real-data Preview，確認非 FAKE | **PASS**（客戶實測；**註**：截圖不在 repo，留言貼在 owner 帳號下可能由 ChatGPT 撰寫；另有 DEC-181 客戶口述佐證） | 客戶手機截圖（留言 `6758541700`，2026-11-10，頂部「Real-data Preview（非正式 production default）」；原始圖片在 ChatGPT 會話、未上傳 GitHub）；客戶 2026-11-13 口述「預設 FAKE、切換 Real-data Preview 成功」（DEC-181） | 截圖原檔不在 repo |
 | 3 手機首屏（390×844 等） | **PARTIAL** | **PASS（客戶截圖）**：頂部 Real 標示、📊 市場頁、K 棒與開收紅綠灰圖例、資料日 2026-11-09、Yahoo 來源、台股卡 41,661.70、首屏 CTA／市場狀態／Risk Cap 誠實顯示「尚未提供／無法判定」、VIX／US10Y／利差／DXY／PMI 顯示未提供。**時序事實**：該截圖早於 #1109（新順序，DEC-157）合併，證明的是舊順序版；#1141（main `907322aa`，2026-11-11T17:29+08，`git log` 實查）之後又改了 close≤0 與未來 as_of 的顯示 | 確切 K 棒根數與約 220px、390／1440 斷點無溢出、1440×900、錯誤／過期降級（皆 NOT VERIFIED；截圖不是瀏覽器自動量測） |
 | 4 部署 commit／restart 與 main 比對；parquet 與 GitHub 快取一致；TWII 11-09 第二來源 | **NOT VERIFIED** | 客戶陳述「需手動 Reboot」（DEC-181，非實測）。**補註**：2026-11-14 AI 唯讀讀取證交所 FMTQIK 公開頁，11-09 收盤 41,661.70 與 `twii_ohlcv` 相符（DEC-183 (二) 2.3）→ TWII 11-09 官方值已有 AI 佐證，**但那是 AI 讀取，不等於客戶驗收，也不證明部署的 parquet 與 GitHub 一致** | Cloud 部署 commit、Reboot 前後比對、部署端 parquet 是否與 GitHub 一致 |
 | 5 輸出 PASS／FAIL／NOT VERIFIED＋可回查證據；cutover 另設 Decision Gate | 規範項（非可驗收項） | Issue #1107 主文 | — |

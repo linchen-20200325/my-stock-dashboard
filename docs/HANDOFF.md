@@ -1362,9 +1362,9 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 > **有意識的更新，不是漏刪；2026-11-14；決策者 AI 總管〔事實更新〕。** 上方「資料更新程序規劃後最新接手點」段除**標題行就地加刪除線並附指向本段註記**外，內文**一字未動**（這是本批唯一的刪除行）。**單組聲明**：本段為作者（執行 AI）單組撰寫，**未經非作者獨立 QA**（`CLAUDE.md` §-2 規則 6）；**不是 QA PASS，不是授權**，不解除任何 Gate／HOLD。事實為 `git` 本地實查與 GitHub 唯讀讀取（2026-11-14 約 08:00～08:30 台北，時點快照，會漂移，一律重查）。**精簡原則**：不重抄歷史；細節以 `docs/DECISIONS.md` DEC-183 為準。
 >
-> **找到本段的方法**：本段為 `###` 層級，用 `grep -n '^###' docs/HANDOFF.md` 或搜尋『最新接手點』，現行段＝檔尾最後一個標題含『最新接手點』且**未被刪除線**者。**提醒**：`grep`「唯一 NEXT」會先命中較早的段落與 BACKLOG 舊列，以檔尾未被刪除線者為準。HANDOFF 檔頭的「2026-11-09 快照」已過期，勿據以行事。
+> **找到本段的方法**：本段為 `###` 層級，用 `grep -n '^###' docs/HANDOFF.md` 或搜尋『最新接手點』，現行段＝檔尾最後一個標題含『最新接手點』且**未被刪除線**者。**提醒**：`grep`「唯一 NEXT」會先命中較早的段落與 BACKLOG 舊列，以檔尾未被刪除線者為準。HANDOFF 檔頭的「2026-11-09 快照」已過期，勿據以行事。行號僅為時點快照，以搜尋 ID 為準；#1164（draft）若先合併，BACKLOG 行號約位移 37 行；本批與 #1164 無 hunk 重疊。
 
-**一、本批在做什麼（一句話）**：客戶 2026-11-14 以「**有條件授權，不是全面解除 HOLD**」裁示 #1124 的發布 Gate 與歷史規則保存，已登錄為 **DEC-183**。結論：**#1124 僅進技術放行評估**（#1125、#1126 維持 HOLD；#1124 合併 HOLD 未解除）；**DPE-5 同 head 原生 CI 由客戶本人操作**（AI 不代做）；**DG-LIC／DPE-3 與 DG-PIT 不解除**（FinMind、Yahoo Finance 兩份官方頁都含不得再散布類聲明）；已做最小外部對帳（twii 收盤 11-09～11-12、inst 外資 11-11／11-13 與證交所公開頁逐日對照相符；11-12／11-10 外資官方值未取得；證交所對連續自動化請求有安全封鎖）；Batch 1 規則補登（#1119 Run 30 天保留方向＋例外＋不改全域 retention＋不可逆刪除逐批核准〔**不授權刪除任何 Run／Artifact／YAML**〕；#1138 工作優先序；#1110 GitHub canonical 資料優先唯讀重用）。**本批只登錄與唯讀核實，不觸發任何抓取／CI、不解除任何 Gate。**
+**一、本批在做什麼（一句話）**：客戶 2026-11-14 以「**有條件授權，不是全面解除 HOLD**」裁示 #1124 的發布 Gate 與歷史規則保存，已登錄為 **DEC-183**。結論：**#1124 僅進技術放行評估**（#1125、#1126 維持 HOLD；#1124 合併 HOLD 未解除）；**DPE-5 同 head 原生 CI 由客戶本人操作**（AI 不代做）；**DG-LIC／DPE-3 與 DG-PIT 不解除**（FinMind、Yahoo Finance 兩份官方頁都含不得再散布類聲明）；已做最小外部對帳（twii 收盤 11-09～11-12、inst 外資 11-11／11-13 與證交所公開頁逐日對照相符；11-12／11-10 外資官方值未取得；證交所對本組部分請求回安全封鎖頁，原因 NOT VERIFIED）；Batch 1 規則補登（#1119 Run 30 天保留方向＋例外＋不改全域 retention＋不可逆刪除逐批核准〔**不授權刪除任何 Run／Artifact／YAML**〕；#1138 工作優先序；#1110 GitHub canonical 資料優先唯讀重用）。**本批只登錄與唯讀核實，不觸發任何抓取／CI、不解除任何 Gate。**
 
 **二、Resume Checkpoint 15 欄逐欄現況（欄位名稱沿用 `PROJECT_RULES.md` §20.2）**
 
@@ -1372,15 +1372,15 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 |---|---|---|
 | 1 | latest verified main SHA | `d607acb8dd51c80e5316f525f22817b80e3a09f9`（#1189 squash；`git rev-parse origin/main` 與 GitHub 讀取，**2026-11-14 快照**）。以最新 GitHub 為準；本批 docs PR 合併後與 cron 都會推進，一律重查 |
 | 2 | current working branch | 本批 docs PR 分支（**時點值，不可據以操作**；一律以 GitHub 上本批 PR 的 head 為準） |
-| 3 | current PR | 本批 docs-only PR（**PR 號以 GitHub 為準**）。Open PR 仍為 #1164（Draft，維持 Draft）、#1124（head `f87866ed`）、#1125（head `1d2d2531`）、#1126（head `f8ee08ba`），皆 HOLD、未動（head 為 2026-11-14 快照，cron 會推進，一律重查） |
-| 4 | current task／batch | DEC-183 登錄＋BACKLOG／HANDOFF／PROJECT_STATE §70.24 同步（Commit 1：Batch 1＝#1119／#1138／#1110＋#1124 核實）＋Batch 2 最小追溯補強（Commit 2；若已存在則見 DEC-183 後續註記）（docs-only，只追加） |
+| 3 | current PR | 本批 docs-only PR **#1190**（時點值，以 GitHub 為準）。Open PR 仍為 #1164（Draft，維持 Draft）、#1124（head `f87866ed`）、#1125（head `1d2d2531`）、#1126（head `f8ee08ba`），皆 HOLD、未動（head 為 2026-11-14 快照，cron 會推進，一律重查） |
+| 4 | current task／batch | DEC-183 登錄＋BACKLOG／HANDOFF／PROJECT_STATE §70.24 同步。本批 PR #1190 含三個 docs-only commit：Commit 1＝Batch 1（#1119／#1138／#1110）＋#1124 核實；Commit 2＝Batch 2 最小追溯補強（DEC-183 後續註記 Z1／Z2、BACKLOG #1107 驗收帳與 #1042 Candidate）；Commit 3＝#1190 非作者 QA 修正（TL;DR、DPE-5 客戶照做版、引文與歸屬精確化）（皆只追加） |
 | 5 | completed in this batch | DECISIONS DEC-183（fence 逐字＋sha256）；BACKLOG 檔尾「DEC-183」段（含 `DEC183-1124-RELEASE-GATES`、`RUN-RETENTION-30D-HOLD`、`UI2-1138-PRIORITY-RULE`、`DATA-REUSE-GITHUB-CANONICAL-RULE`）；HANDOFF 本段；PROJECT_STATE §70.24。**已完成不得重做**：DEC-181／DEC-182 登錄；DEC-180 稽核；#1124 最新資料層核實與官方對帳（見 DEC-183 (二)；head 漂移時才重做）|
 | 6 | exact current stopping point | 本批 PR 待非作者 QA→同 head 原生 CI→Merge Gate（依客戶「准許合併核准範圍的最小文件 PR」與既有 Auto-Ship 條件）。合併後：**停在 Decision／Input Gate** |
-| 7 | next single action | **唯一 NEXT＝客戶操作 DPE-5**：在 PR #1124 頁確認最新 head SHA、避開排程時段（建議白天）、優先評估 Close→Reopen（**保留分支，不得刪分支**）、回報「**head SHA＋run id**」；**同時等客戶對 DG-LIC／DPE-3 與 DG-PIT 的裁示**（CI 全綠不會解除它們）。**AI 在客戶回報前只能做唯讀檢核與文件**；**不得代操作、不得觸發任何抓取／bootstrap／回補、不得 merge／close／reopen／rebase／update branch #1124～#1126**。最小步驟與風險見 DEC-183 (三)。**提醒**：`grep`「唯一 NEXT」會先命中較早的段落，以檔尾未被刪除線者為準 |
+| 7 | next single action | **唯一 NEXT＝客戶操作 DPE-5**：在 PR #1124 頁確認最新 head SHA、避開排程時段（建議白天）、優先評估 Close→Reopen（**保留分支，不得刪分支**）、回報「**head SHA＋run id**」；**同時等客戶對 DG-LIC／DPE-3 與 DG-PIT 的裁示**（CI 全綠不會解除它們）。**AI 在客戶回報前只能做唯讀檢核與文件**；**不得代操作、不得觸發任何抓取／bootstrap／回補、不得 merge／close／reopen／rebase／update branch #1124～#1126**。最小步驟與風險見 DEC-183 (三)。**順序註記**：若本批 docs PR（#1190）尚未合併，AI 先完成本 PR 的 QA／CI／Merge Gate；之後 NEXT 才是客戶操作 DPE-5。**提醒**：`grep`「唯一 NEXT」會先命中較早的段落，以檔尾未被刪除線者為準 |
 | 8 | tests／CI 已完成 | main push CI run `43447327744`（head_sha＝`d607acb8`）completed／success（GitHub 讀取）。**CI success ≠ 資料已更新 ≠ Production 有效**；本批 Commit 1 自檢已跑 `tests/test_ui2_active_contract_docs.py` 與 `tests/test_agent_definitions_guard.py`（`--noconftest`，結果由總管於 PR 補記，非 CI 取代）|
 | 9 | tests／CI 尚未完成 | 本批 PR 的非作者 QA 與同 head 原生 CI 尚未做（結果由總管於 PR 補記）。**#1124 head `f87866ed` 的 check runs＝0**（唯一已見 run `43469025728` 為 `action_required`），同 head 原生 CI 待客戶 DPE-5 操作 |
 | 10 | unresolved true Stop Gates | **全部未解除**；以「存檔完整性補註」第 7 項＋BACKLOG「DEC-178 Quality Batch 1 完成同步」段末 blockquote＋「狀態更新（#1178 合併後）」段「五之一」三處取聯集為準，不在此重抄；另併讀 PROJECT_RULES 第 4 節。特別是 `DG-LIC`／DPE-3、`DG-PIT`、#1124 合併、Merge／Cloud Reboot |
-| 11 | uncommitted／unpushed work | 本批 commit 在本地分支，**未 push**（以本批 PR 的 head 為準） |
+| 11 | uncommitted／unpushed work | 已 push；本批 PR #1190（時點值，以 GitHub 為準；head 以 GitHub 為準） |
 | 12 | relevant evidence location | `docs/DECISIONS.md` DEC-183（含 #1124 核實、官方對帳表、兩份授權頁面逐字關鍵句、DPE-5 步驟、Batch 1 Coverage）；BACKLOG 檔尾 DEC-183 段；PROJECT_STATE §70.24；`docs/vnext/LATEST_TRADING_DAY_REFRESH_PROCEDURE_2026-11-13.md`（承接）。官方頁面抓取全文只存 session scratchpad，**未進 repo** |
 | 13 | recommended Model | Sonnet 5.5（不可用則選目前高可靠程式模型）；現行值只以本表為準 |
 | 14 | recommended Effort | High（純文件校驗可降 Medium）；建議值 |
@@ -1403,7 +1403,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 9. 時點警語：所有 SHA／run id／PR head 皆 2026-11-14 時點快照，一律以最新 GitHub 為準；未合併 HOLD PR 的 head 會被 cron 推進，全部不碰。靜默自主巡航；Model／Effort 建議：Sonnet 5.5／High。
 ```
 
-**五、已知風險（精簡）**：(1) 資料停在 main 11-09，持續到客戶完成 DPE-5 與兩個 Gate 裁示（11-17 起 UI2 台股卡轉過期警示，依 DEC-181，時點會漂移）；(2) #1124 head 會被 cron 推進或因 Update branch 變動，CI→審閱→合併須在同一 head 內完成；(3) 證交所公開頁對連續自動化請求有安全封鎖，外部對帳不可批次化（不繞過）；(4) 授權條款原文仍缺（證交所辦法、FinMind 使用條款、Yahoo 完整條款）；(5) 本批所有核實為單組、唯讀；(6) 若 Close 期間排程剛好執行，bot 可能另開新 PR。
+**五、已知風險（精簡）**：(1) 資料停在 main 11-09，持續到客戶完成 DPE-5 與兩個 Gate 裁示（11-17 起 UI2 台股卡轉過期警示，依 DEC-181，時點會漂移）；(2) #1124 head 會被 cron 推進或因 Update branch 變動，CI→審閱→合併須在同一 head 內完成；（INFERENCE，未實測）2026-11-14（六）、11-15（日）無新交易日時，依 `publish_data_pr.py` 揮發鍵規則 head 預期穩定；11-16（一）起排程可能帶入新列使 head 前進；(3) 證交所公開頁曾對本組指定 11-12／11-13 日的請求回安全封鎖頁（11-11 指定日與最新日請求成功；原因 NOT VERIFIED，可能與請求頻率有關，屬推論），外部對帳不宜批次化（不繞過）；(4) 授權條款原文仍缺（證交所辦法、FinMind 使用條款、Yahoo 完整條款）；(5) 本批所有核實為單組、唯讀；(6) 若 Close 期間排程剛好執行，bot 可能另開新 PR。
 
 **六、仍 NOT VERIFIED**：DEC-183 fence 與客戶原訊息的逐字一致性；客戶是否已實際操作 DPE-5；11-12 與 11-10 外資官方值；`twii` `volume` 語意；`margin` 真值；交易日曆；`published_at`；證交所『交易資訊使用管理辦法』全文；FinMind 使用條款；Yahoo 完整服務條款與 `^TWII` 適用性；#1124 review threads 數；`shared/twii_ohlc_contract.py` 本組未重跑；Cloud 部署 commit／是否自動部署（沿 DEC-181）。本段單組撰寫，未經第二組驗證。
 
