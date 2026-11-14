@@ -1485,3 +1485,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **main push CI**：run 43565950666（head `bb00e341`）已 completed／**success**（GitHub 讀取 FACT）。
 - **標示**：「部分核銷」為 AI 總管依 GitHub 證據之對帳結論（單組讀取），**不是客戶裁示**；Issue 是否關閉由客戶決定。
 - **下一步**：2026-11-16 20:00 UTC 之後唯讀核對 ETF Managers 首次排程 Run；其餘新工作待客戶新授權。#1124～#1126、#1164、三支停用 Workflow、queued Run、DG-LIC／PIT／COV／SCOPE／WIRING-GATE 全部維持原狀（見 DEC-184～DEC-187）。
+
+### Issue #1138 tests-only 批次（2026-11-14，append-only；上文一字未動；非新施工授權）
+
+- **目前工作**：Issue #1138 A／B 線 tests-only 批次 PR（分支 `claude/dreamy-fermi-dz6zq8`；`I1138-EVIDENCE-MATRIX-GUARD`／`I1138-UI2-NO-SECOND-AI-GUARD`／`I1138-UI2-REAL-VIEWPORT-CI`，見 `docs/BACKLOG.md` 檔尾）；只動 `tests/` 與本兩份文件的檔尾追加。
+- **下一個安全步驟**：非作者獨立 QA＋同 head 五項原生 CI；#1116 仍於 2026-11-16 20:00 UTC 之後唯讀核對首次排程。所有 HOLD／Decision Gate 維持不變。
