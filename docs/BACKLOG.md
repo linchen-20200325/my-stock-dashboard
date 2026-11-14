@@ -2793,3 +2793,78 @@
 | 3 手機首屏（390×844 等） | **PARTIAL** | **PASS（客戶截圖）**：頂部 Real 標示、📊 市場頁、K 棒與開收紅綠灰圖例、資料日 2026-11-09、Yahoo 來源、台股卡 41,661.70、首屏 CTA／市場狀態／Risk Cap 誠實顯示「尚未提供／無法判定」、VIX／US10Y／利差／DXY／PMI 顯示未提供。**時序事實**：該截圖早於 #1109（新順序，DEC-157）合併，證明的是舊順序版；#1141（main `907322aa`，2026-11-11T17:29+08，`git log` 實查）之後又改了 close≤0 與未來 as_of 的顯示 | 確切 K 棒根數與約 220px、390／1440 斷點無溢出、1440×900、錯誤／過期降級（皆 NOT VERIFIED；截圖不是瀏覽器自動量測） |
 | 4 部署 commit／restart 與 main 比對；parquet 與 GitHub 快取一致；TWII 11-09 第二來源 | **NOT VERIFIED** | 客戶陳述「需手動 Reboot」（DEC-181，非實測）。**補註**：2026-11-14 AI 唯讀讀取證交所 FMTQIK 公開頁，11-09 收盤 41,661.70 與 `twii_ohlcv` 相符（DEC-183 (二) 2.3）→ TWII 11-09 官方值已有 AI 佐證，**但那是 AI 讀取，不等於客戶驗收，也不證明部署的 parquet 與 GitHub 一致** | Cloud 部署 commit、Reboot 前後比對、部署端 parquet 是否與 GitHub 一致 |
 | 5 輸出 PASS／FAIL／NOT VERIFIED＋可回查證據；cutover 另設 Decision Gate | 規範項（非可驗收項） | Issue #1107 主文 | — |
+
+## 2026-11-14｜決策閉環與 Open Items 對帳（Batch 1；DEC-184～DEC-187；只追加；不改既有列；登記不等於施工授權）
+
+> **有意識的更新，不是漏刪；2026-11-14；決策者 客戶（透過轉交／採用派工提示語；親撰與 ChatGPT 擬稿成分 NOT VERIFIED；經派工訊息轉錄，見 `docs/DECISIONS.md` DEC-184～DEC-187）＋AI 總管〔事實更新〕。** 上方各列與前面各追加段**一字未動**；本段以追加註記更新其狀態。新列 ID 落盤前 `git grep -n` 0 命中。事實取自 2026-11-14 session 唯讀稽核（子 Agent 報告只存於該 session，repo 外未複驗）與總管 GitHub 直讀；時點快照，一律重查。本段單組撰寫，**未經非作者獨立 QA；不是 QA PASS，不是授權**。**本批不寫 Issue 結案條件**（客戶 Batch 2，現在不施工）。本段不指派優先序（P）。
+
+**追加註記（對既有列；原列不改）**
+
+- `DEC183-1124-RELEASE-GATES` — 📌 **事實更新（SUPERSEDED：僅該列的 AI 事實描述，客戶裁示不變）**：DPE-5 後，#1124 head `f87866ed`（未變）同 head 五項原生 CI 全 success（run `43541275135`，ui2-browser-gate／Fast checks／Slow tests／ui2-browser 1.56.0／1.59.2），review threads＝0；mergeable_state＝behind。原列「check runs＝0／唯一 run `43469025728` action_required／blocked／待客戶 DPE-5」自本註記起以此為準（來源 DEC-184 (二)）。**仍 HOLD**：DG-LIC／DPE-3、DG-PIT 未解除；0 approving review；behind 的 Update branch 會換 head 使 CI 與 QA 失效，須客戶另授權；Reopen 實際操作者 NOT VERIFIED。
+- `I1144-DATA-STORAGE-DECISION` — 📌 **方案 C＝依派工提示語（客戶轉交）選定的優先研究方向（DEC-184 (六)）；不是施工授權，不解除任何 Gate**：指的是稽核文件 `PUBLIC_DATA_EXPOSURE_LICENSE_ARCH_AUDIT_2026-11-11.md` §5 的方案 C；與提示語訊息二自列 A／B／C、DEC-171「方案 B」、DEC-077／DEC-116 的「方案 C」**同名不同義**，引用須帶出處。該文件階段 3（原始層另存非公開位置）需新儲存／Secret，仍屬 Decision Gate、未授權。本列原「RECOMMENDATION（非裁示）」字樣不改。
+- `BR-CLEANUP` — 📌 **現況（DEC-186）**：本列（2026-10-23）已過期；2026-11-14 遠端現為 13 條分支（不含本 docs PR 分支 `ccr-5c18058f-e9dj06`；時點快照，須重查）；七條舊分支唯讀稽核結果見 DEC-186 (二)（前兩條「可刪」已成過去式——兩者已不在遠端，刪除者與原因 NOT VERIFIED）。**刪除仍未授權。**
+- `NUI2-BRANCH-RETENTION-1107` — 📌 **仍有效，未解除**（DEC-186、DEC-187 fence D 點）：docs/newui2-data-page-trend-onebrain-pdf-20261106、docs/newui2-hold-w11-draft-20261105、docs/newui2-top-five-nav-wireframe-gate-20261107 仍受「暫時全部保留」約束。派工提示語（客戶轉交）2026-11-14 指示「其餘依 DEC-147 與原保留裁示處理」（DEC-187 fence D 點，轉錄），故本列**不再列為待裁示**；未經客戶另行裁示，不視為解除。
+
+**新列（皆為紀錄／結論／HOLD／PROPOSED；不是施工指派）**
+
+| ID | 標題 | status | 來源 | next action／Gate |
+|---|---|---|---|---|
+| **WORKFLOW-PAUSE-3-DATA** | 三支資料發布 workflow（`update_macro_history.yml` 287599534、`update_sector_flow.yml` 331497850、`update_macro_forward_test.yml` 337758882）現為 `disabled_manually`（GitHub 讀到的現況，updated_at 2026-11-14 11:24:54～11:25:09 +08:00；派工提示語記載為客戶手動停用，操作者 NOT VERIFIED）；in_progress Run＝0；3 筆**陳舊 queued Run 未取消**（`37655507506`、`43095833804`、`43095575619`）。**不是**刪 YAML／刪 Run／retention 變更，**也不是** #1119 的「已停排程三支」（push_daily_signals／push_watchlist_signals／update_health_history，移除 cron、仍 active）。影響（INFERENCE）：#1124～#1126 head 凍結；main data_cache 不再自動前進；台股卡最早 2026-11-17 轉過期；DEC-181 更新程序前提改變；停用中的 workflow 無法手動 dispatch | **HOLD**（恢復條件**未裁示**） | DEC-185 | **等客戶裁示**：恢復條件與時點；陳舊 queued Run 是否取消。Gate：重新啟用、取消 Run 皆未授權 |
+| **DGLIC-PER-DATASET-MATRIX** | #1124 五檔逐資料集授權矩陣（DEC-184 (三) 結論）：5 檔無任何一檔有「明示允許」的逐字依據，DG-LIC／DPE-3 證據不足、維持未解除。**缺的最小證據與提供者**：twii_ohlcv＝Yahoo ToS 原文或書面許可＋`^TWII` 實際資料商授權（客戶／Yahoo）；finmind_inst／finmind_margin＝FinMind 對來源機關歸屬的書面答覆＋來源機關（可能 TWSE，INFERENCE）授權（客戶／FinMind／TWSE）；tw_pmi.json＝data.gov.tw 6100 資料集頁授權欄與顯名文字原文（客戶提供或網域放行）；metadata.json＝無。其他已公開 data_cache 檔條款未查＝NOT VERIFIED。**完整矩陣表與官方頁逐字句見下方「`DGLIC-PER-DATASET-MATRIX` 詳表」**。相鄰既有項：`DEC179-DPE3-TERMS-CONFIRM`（DPE-3＝D 的條款確認缺口，仍 BLOCKED；非同一件事，本列為其逐資料集展開） | **HOLD／NOT VERIFIED** | DEC-184 | **等客戶**取得書面授權或選替代方案（需改發布架構＝另案）。Gate：`DG-LIC`／DPE-3 |
+| **DGPIT-LAYERED-GAPS** | DG-PIT 三層缺口（DEC-184 (四) 結論）：(a) 最新收盤畫面只顯示資料日則不需 published_at；(b) 歷史保存與修訂——無 vintage、無逐格取得時間；(c) 回測／前瞻——缺 published_at 一律不得使用。仍缺：TWSE／Yahoo 官方發布時刻、published_at 欄位契約、交易日曆（G-07）、決策單決策 3 回答、「適用 PIT Gate」涵蓋範圍。**完整三層條件與驗收項目見下方「`DGPIT-LAYERED-GAPS` 詳述」** | **HOLD／NOT VERIFIED** | DEC-184 | **等客戶**回答決策單決策 3（A／B／C）。Gate：`DG-PIT` 未解除 |
+| **TWII-ONLY-PUBLISH-SPLIT** | 台股卡安全更新最小路徑（DEC-184 (五) 結論）：workflow 發布步驟只發 twii（新 `--job`）；metadata 二選一（不發／改 publisher 只替換 twii 條目約 50–120 行）；同步改 `tests/test_cron_workflows_no_direct_push.py` 的集合相等斷言；不新增來源／API／Secret／儲存、不動 UI2；約 6 次客戶操作、至少 2 個 cron 週期。**前置＝Yahoo `^TWII` 日 K 可否公開存放與 Cloud 呈現的書面答案**。與方案 C 研究方向不同層級（本列是最小工程批次候選，不是方案 C 施工）。**依據、耦合點與 stale 時點見下方「`TWII-ONLY-PUBLISH-SPLIT` 詳述」** | **PROPOSED**（RECOMMENDATION；**非施工授權**） | DEC-184 | **不得開工**；先等 DG-LIC 書面答案與客戶批准。Gate：`DG-LIC`、改發布機制＝Decision Gate；且三支 workflow 現為停用（`WORKFLOW-PAUSE-3-DATA`） |
+| **PR1125-1126-NATIVE-CI-GAP** | #1125（head `1d2d2531`）、#1126（head `f8ee08ba`）：同 head 原生 CI＝0，只有 bot 觸發的 action_required run（`43471623790`／`43472278709`，**非有效 CI 證據**）；DPE-5 僅授權 #1124；#1126 另涉 DG-PIT | **HOLD** | DEC-183、DEC-184 | 維持 HOLD、不動。Gate：各自的 DG-LIC／DG-PIT；DPE-5 未授權 |
+| **PR1164-STATE-NOTE** | #1164：head `6fddc582`，Draft，behind（base `7eb48d6c`）；同 head 五項原生 CI success（run `43189165451`）；merge-tree 與 main 無衝突（#1164 hunk 為 BACKLOG L227–272，main 之後的變動為第 74 行附近 +1 與檔尾追加）；唯一 review 為作者帳號自評；**無非作者 QA**；合併後 INDEX 註記行號會偏移 1（輕微）。客戶 DEC-183 三：「#1164 維持 Draft」 | **HOLD**（維持 Draft；不動） | DEC-183、DEC-184 | 不動。Gate：客戶 Batch 3 才處理（DEC-187）；需非作者 QA 方可談合併 |
+| **BR-RULE-RECONCILE** | 分支刪除：**實際執行前的程序要求**（DEC-186 (四)(五) 已依 DEC-187 fence D 點改寫）。派工提示語 D 點原句（客戶轉交；轉錄）：「分支清理目前剩 13 條；兩條原可刪候選已不在遠端，刪除原因 NOT VERIFIED；其餘依 DEC-147 與原保留裁示處理。」→ **依該提示語此句**，其餘分支依 DEC-147 第 4 點條件與 `NUI2-BRANCH-RETENTION-1107` 原保留裁示處理；**DEC-147 第 4 點不視為被撤銷**，**「DEC-147 第 4 點是否仍有效」不再是待裁示**。僅殘留的衝突（資訊／待裁示）：`PROJECT_RULES.md` §4 第 8 項、§16.6（「最後再一次清」「刪除前重新查 GitHub」「branch deletion 視為不可逆治理動作」）、HANDOFF「禁止清單」通則，與 DEC-147 第 4 點（條件滿足即可清理）、第 6 點（「清單外刪分支」須停止；「清單」未定義）之間，**執行時如何同時滿足**（例：實際刪除前是否仍須客戶核准刪除清單、是否須等「最後再一次清」的時點）。另：`ccr-ed362375-uplnw7` 的三處保留文字皆 AI／ChatGPT 撰寫、非客戶逐字，僅在擬刪除該分支時才釐清（實際刪除前）；#1048 提案檔與 #1034 的 §32／§33 規則文字屬 DEC-147 第 4 點已排除的「含未保存獨有內容者」（INFERENCE），其去留由 `NUI2-GOV-1034-EXTRACT`／`NUI2-GOV-1034-RULES-RENUMBER`（仍 OPEN）追蹤，不另問。HANDOFF 舊 cleanup 候選表與 `BR-CLEANUP` 已過期（已加 📌）。**本文件不授權任何實際刪除。**實際刪除時的程序，現有規則並存：DEC-147 第 4 點條件（含清理前列 unique commit 並確認已入 main 或另存）、DEC-012、PROJECT_RULES §16.6 客戶原話「未來刪除前重新查 GitHub」；其間如何同時滿足屬殘留衝突，僅在真有分支擬實際刪除時才提出（提問須附推薦方案）。在客戶裁示前，依 PROJECT_RULES §14 暫行讀法「任一套規則要求停下就停下」處理。 | **needs client**（僅殘留的程序要求；其餘已由派工提示語 D 點指示） | DEC-186、DEC-187 | **等客戶**就殘留程序要求裁示（僅在真有分支擬實際刪除時提出）。Gate：DEC-012、DEC-147 第 6 點 |
+| **PREASK-GUARD-1** | 防重問守衛（客戶轉交提示語中的原則；親撰與否 NOT VERIFIED）落點＝`PROJECT_RULES.md` 第 4 節「請示前查證（Pre-Ask Check）」；`PROJECT_RULES.md` §3（約 L96）與 §20.7 各加一行指向。不新增請示情境、不放寬任何高風險 Gate | **PROPOSED**（隨本 docs PR 合併後另行追加一筆註記轉為 COMPLETED；在此之前本列不得被引用為已生效） | DEC-187 | 無後續施工；日後若客戶改字，另追加 DEC。Gate：不得自行放寬高風險 Gate |
+| **OLDUIFIRST-DEC-GAP** | Old UI First：治理文件 `docs/governance/OLD_UI_FIRST_ADAPTATION_GATE_2026-11-08.md`（PR #1087）與 PROJECT_RULES 索引存在，但 `docs/DECISIONS.md` **無對應 DEC 條目、無客戶逐字原文**。**只記證據缺口，不替客戶補寫裁示** | **NOT VERIFIED**（證據缺口） | DEC-187 (三) | 不補寫 DEC；待客戶提供原文或另行裁示。Gate：不得升格成核准 |
+| **QB-SIX-VS-NINE-AMBIGUITY** | DEC-178 標題寫「六項」品質補強、內文列 ①～⑨ 九項，BACKLOG 也合稱六項；「六項」所指無法確定。**資訊，非重問，不猜** | **NOT VERIFIED**（歧義） | DEC-187 (三) | 不處置；有人需要時再讀 DEC-178 原文判斷 |
+| **PROVENANCE-DISPATCH-PROMPT-1** | DEC-183 及更早以「客戶逐字 fence」標示的訊息，是否同樣含 ChatGPT 擬稿的派工提示語（DEC-184～187 已於本 PR 更正標示，見 DEC-187 (六)）；各 DEC 的來源類別是否需同法更正。本 PR **不處理**、不改舊 DEC，只登記待核項 | **NOT VERIFIED**（待客戶） | DEC-187 (六)；客戶後續指示（經派工訊息轉錄） | 若客戶要求，另批處理（路徑 A：只改 fence 外標籤，保留 fence 與 sha256）。Gate：不得自行判定誰是作者；不得升格任何狀態 |
+| **ISSUE-RECORD-GAPS-1114** | 治理文件記錄缺漏（只列事實）：#1139 的同 head CI（run `42987116603`、head `16a74b11`）與獨立 QA 在五份治理文件 0 命中、PR #1139 留言為空；#1118 的 `48d7c28f`／CI run `42816615467` 與 #1112 的 `3a05c476` 在五份治理文件 0 命中（低優先追溯）。5 個 Open Issues 的 GitHub 留言作者 API 一律為 owner 帳號，無法分辨客戶／ChatGPT／Claude Code，**沒有任何一則是可確認的客戶逐字原文** | **NOT VERIFIED**（記錄缺漏） | DEC-187 | 低優先；不補寫、不推定。Issue 結案條件屬 Batch 2（DEC-187），本批不寫 |
+
+**以下三節自 DEC-184 (三)(四)(五) 搬入（正式裁示入 DECISIONS、AI 分析與未完成工作入 BACKLOG；DEC-184 僅留結論一句＋標籤＋指向本處）。內容為撰寫組轉錄，單組撰寫，待非作者 QA。**
+
+**`DGLIC-PER-DATASET-MATRIX` 詳表（FACT＋NOT VERIFIED；兩組；非法律結論）**
+
+官方頁 2026-11-14 取回成功：FinMind Disclaimer（版本日期 2026-10-31）、PrivacyPolicy（含使用條款）、CommercialUse、Chip 頁、Pricing，Yahoo Help SLN2310（重取後 FinMind 四頁 SHA-1 與存檔相同；頁面全文不在 repo）。**取不到**：Yahoo ToS（legal.yahoo.com）、data.gov.tw、TPEX（沙箱 proxy 403）；TWSE 網站條款頁只得 302 轉址（內容未取得）；TWSE『交易資訊使用管理辦法』未取得。關鍵逐字句（取自官方頁；repo 外逐字未複驗）：FinMind Disclaimer §三「本服務之授權不包含將本服務提供之資料對外再散布、轉售，或建置實質等同於本服務之鏡像服務。」「使用者如有將資料對外公開、再散布或提供予第三方之需求，應自行確認並取得原資料來源機關所要求之相應授權；此類授權非 FinMind 所能授予或代為取得。」使用條款「使用者不得將即時資料直接呈現於 web、App 等對外介面，亦不得對外再散布原始資料或建立實質等同於本服務之鏡像服務。」（「原始資料」未定義；Pricing 頁「再散布原始資料」在 Free／Backer／Sponsor／Sponsor Pro 皆為 ❌。）Yahoo Help「Do not redistribute information - Yahoo Finance provides all information as is. You must not redistribute information displayed on or provided by Yahoo Finance.」（該頁非完整服務條款，無 `^TWII` 列；通用句未載明適用於哪個資料商。）
+
+| 檔案 | 鏈 | ③a 公開 GitHub 儲存 | ③b Streamlit Cloud 呈現 | ③c 衍生／聚合 |
+|---|---|---|---|---|
+| twii_ohlcv.parquet | TWSE（INFERENCE）→Yahoo chart 端點（`fetch_twii_ohlcv`，source `Yahoo:^TWII:chart`）→repo | 明示禁止（僅限 Help 頁字面「不得再散布」，ToS 未取得） | NOT VERIFIED | 條款未涵蓋；此檔為逐日原值，非聚合 |
+| finmind_inst.parquet | 來源機關頁面未載明→FinMind `TaiwanStockTotalInstitutionalInvestors`→repo（只取 Foreign_Investor，(buy-sell)/1e8＝`foreign_buy`） | 字面禁止對外再散布（條款未提 GitHub／儲存）；需向原來源機關取得授權 | 條款未涵蓋；「即時資料」限制的適用性 NOT VERIFIED | 條款未涵蓋（不等於允許） |
+| finmind_margin.parquet | 同上，dataset `TaiwanStockTotalMarginPurchaseShortSale`（`MarginPurchaseMoney`／`TodayBalance`，元） | 同上 | 同上 | 條款未涵蓋；為選取欄位，非計算聚合 |
+| macro_last_good/tw_pmi.json | 國發會→data.gov.tw dataset 6100（現行 source `data.gov.tw/6100`）；但 `fetch_tw_pmi` 為 8 源賽跑，任一命中皆存檔；Git 歷史有 1 版（commit `2d94ce3c`，2026-07-13）source 為「CIER 官方公布 2026-06」 | NOT VERIFIED（原頁取不到；FinMind 對 OGDL 的轉述屬二手） | NOT VERIFIED | NOT VERIFIED |
+| metadata.json | 自產，無第三方資料列 | 條款未涵蓋 | 條款未涵蓋 | 條款未涵蓋 |
+
+- **整體（FACT）**：5 檔**無任何一檔有「明示允許」的逐字依據**；DG-LIC／DPE-3 **證據不足，維持未解除**（放行與否屬客戶裁示）。其中 **4 檔**（twii_ohlcv、finmind_inst、finmind_margin、metadata.json）自 2026-06 起、`macro_last_good/tw_pmi.json` 在該路徑自 2026-07-13 起即在 main 上，**為既有狀態，不是已放行**；#1124 分支內容即使不合併也已可取得。**repo 公開性為派工提示語陳述，工具無法獨立確認＝NOT VERIFIED。**其他已公開 data_cache 檔（sector_flow、fundamentals、finmind_m1m2、tw_pmi.parquet、forward_test 等）條款本輪**未查，一律 NOT VERIFIED**。
+- **需補的最小證據**：twii＝Yahoo ToS 原文或書面許可與 `^TWII` 實際資料商授權；inst／margin＝FinMind 對來源機關歸屬的書面答覆＋來源機關（可能 TWSE，INFERENCE）授權；tw_pmi＝6100 資料集頁授權欄與顯名文字原文；metadata 無。
+
+**`DGPIT-LAYERED-GAPS` 詳述（單組；多為 INFERENCE；DG-PIT 未解除）**
+
+- **FACT 現況**：5 檔皆無 `published_at`（PR body 固定寫 n/a）；fetched_at 語意不一致（parquet＝該列首次寫入、tw_pmi.json 每次重蓋）；約 99.4% 的 twii／inst／margin 歷史列 fetched_at＝2026-09-24T13:25:07（一次 bootstrap 蓋章，無逐日取得時間）；無 vintage／修訂版本欄；twii 11-10 的 volume 先空後補而 fetched_at 不變。
+- **(a) 最新收盤畫面**：只顯示「資料日」時不需 published_at（DEC-177 已選擇只顯示資料日）；多顯示抓取時間屬決策單決策 3 方案 A，需先出線框（`CLAUDE.md` §-1.5.D §03-2 ①）。可驗收條件：as_of＝日 K 末根日期＝來源檔 date 最大值；UI2 不得以 metadata.updated_at／fetched_at／cached_at 當資料日；無 published_at 時不得出現「官方公布／已公布」字樣；fetched_at 不可單獨用來宣稱「最新」。
+- **(b) 歷史保存與修訂**：增量路徑 `_merge_dedupe keep=last`、start＝last+1，正常不覆蓋舊列；但 `--bootstrap` 與 sanity 重建會整段取代且不留舊值；無 vintage 儲存；缺逐格取得時間。
+- **(c) 回測／前瞻**：沒有任何資料集的歷史列能被證明「T 時已可得」；缺 published_at 時一律不得用於歷史回測／歷史趨勢／跨日比較；fetched_at 是發布時間的**上界**、不是下界，只能避免 look-ahead，不能證明某時點已可得；macro 校準日頻欄位（外資、融資）仍以 date 左 join（INFERENCE，只讀了 `_enrich_with_finmind` 一段）。
+- **仍缺**：TWSE／Yahoo 官方發布時刻；published_at 欄位契約；可靠交易日曆（G-07）；客戶對決策單決策 3（DG-PIT A／B／C）的回答；「適用 PIT Gate」涵蓋哪些用途的定義。對五份治理文件 grep，**找不到任何「畫面層可先放行 DG-PIT」的客戶裁示**（其他 docs 未逐檔通讀）。
+
+**`TWII-ONLY-PUBLISH-SPLIT` 詳述（RECOMMENDATION；單組讀碼＋一組複驗；非施工授權）**
+
+- **INFERENCE 結論**：不經 Decision Gate，台股卡無法取得比 2026-11-09 更新的資料。**複驗結果**：QA 複驗 10 條承重宣稱，8 成立、2 部分成立、0 不成立（C2：metadata 耦合推論需補精確機制；C8：union 失敗條件比原先描述更廣；C2／C8 細節僅 session 紀錄，repo 外未複驗），皆不改變結論；單組讀碼＋一組複驗。
+- **讀碼所見（依據）**：「五檔整包」只定義在 workflow 發布步驟的 `--paths`，不在 publisher 程式內；publisher 逐檔、逐 date key union，不跨檔連動；真正耦合在 `metadata.json`（`main()` 整檔覆寫；`_expected_claims`／`reconcile_metadata`／`verify_metadata` 對 metadata 內每個 dataset 核對工作樹同名檔）；`tests/test_cron_workflows_no_direct_push.py` 的 `test_macro_history_paths_cover_all_fetchers_and_metadata` 為集合相等斷言，縮減 `--paths` 會紅燈；`update_macro_history.py --only twii_ohlcv` 會抹掉 metadata 其他 4 個 dataset 條目，不可用。UI2 台股卡只讀 `twii_ohlcv.parquet` 與 metadata 的 twii 條目，不讀 inst／margin／m1m2／tw_pmi，只更新 twii 能獨立成立。repo 內無從政府來源取得 TWII OHLC 的 fetcher；TWSE FMTQIK 只有收盤、無開高低，無法通過日 K 契約。
+- **台股卡 stale（INFERENCE，時區假設 UTC，部署時區 NOT VERIFIED）**：main 最後一列 2026-11-09；`STALE_DAYS_DAILY=7`、嚴格大於；main 不更新則最早 2026-11-17（週二）轉過期（age 8）；若 #1124 的 twii 至 11-12 進 main 則 11-20。**三支資料 workflow 已停用（DEC-185），main 的 data_cache 不會再自動前進。**
+- **已公開不可收回（FACT 與風險陳述）**：data_cache 歷史多版本在 git 歷史中；#1124 分支已推送；新決策不能收回已公開內容。
+
+**九個 Open 項目對帳（只標狀態；FACT 為 2026-11-14 時點；不寫結案條件）**
+
+| 項 | 狀態 | 依據與缺口 | 標記（只標狀態：已核准／研究建議／被取代／已記錄；未標＝本批未逐項核對，不代表無） |
+|---|---|---|---|
+| Issue #1119 | **HOLD**（僅唯讀盤點，無刪除授權） | 規則保存見 `RUN-RETENTION-30D-HOLD`（DEC-183）；三支 workflow 停用不等於刪 Run（DEC-185 (三)） | 核准：僅規則保存（DEC-183 Batch 1 A），無刪除授權｜已記：是 |
+| Issue #1116 | **COMPLETED**（＝實作合併；非 VERIFIED，缺口見同列）（修復已驗收：PR #1117→`aa69d99e`，五項 CI success，run `42810373018`）；**缺**首次排程證據 NOT VERIFIED | 僅缺 2026-11-16 20:00 UTC 首次排程證據；`update_etf_managers` 最近一次 Run 仍是失敗的 `42743389479` | 已記：是；缺：首次排程證據（未記） |
+| Issue #1138 | **COMPLETED**（＝實作合併；非 VERIFIED，缺口見同列）（授權範圍內工作已完成：#1139→`ba9821f3`、#1141→`907322aa`、#1142→`1e5542a8`、#1146→`d4f7b3f6`） | 缺記錄見 `ISSUE-RECORD-GAPS-1114`；優先序見 `UI2-1138-PRIORITY-RULE` | 已記：部分（#1139 同 head CI／獨立 QA 未記） |
+| Issue #1110 | **COMPLETED**（＝實作合併；非 VERIFIED，缺口見同列）（D6 修補完成）；Cloud 端 Key／認證／線上資料日 **NOT VERIFIED** | 資料重用原則見 `DATA-REUSE-GITHUB-CANONICAL-RULE` | 已記：是；缺：Cloud 端 Key／認證／線上資料日（未記） |
+| Issue #1107 | **PARTIAL** | `UI2-1107-ACCEPTANCE-LEDGER` | 已記：是（`UI2-1107-ACCEPTANCE-LEDGER`）；PARTIAL |
+| PR #1164 | **HOLD**（Draft） | `PR1164-STATE-NOTE` | 核准：維持 Draft（DEC-183 三）｜已記：是；無非作者 QA |
+| PR #1124 | **HOLD** | `DEC183-1124-RELEASE-GATES`（📌 更新）、`DGLIC-PER-DATASET-MATRIX`、`DGPIT-LAYERED-GAPS` | 核准：DPE-5 須客戶本人操作（DEC-183）｜研究建議：方案 C 僅研究方向（DEC-184）｜被取代：DEC-183 (二)(三) 的 AI 事實描述被 DEC-184 (二) 取代（客戶裁示不變）｜已記：是 |
+| PR #1125／#1126 | **HOLD** | `PR1125-1126-NATIVE-CI-GAP` | 核准：DPE-5 僅授權 #1124，不涵蓋本二者｜已記：是 |
+
+> **本批沒有解除任何 Gate／HOLD，沒有新增任何施工授權。** 禁止清單／HOLD 清單的完整版只在 `docs/HANDOFF.md` 檔尾「📌 決策閉環 Batch 1 後最新接手點」五、（以及 DEC-183／DEC-184／DEC-186），此處不重抄；唯一 NEXT 見同段四。
