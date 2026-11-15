@@ -530,3 +530,38 @@ def test_real_browser_viewport_acceptance(tmp_path):
     # 2 viewport × (4 頁×6 場景 ＋ 6 查一檔 ＋ 2 帳戶態)；另加手機市場頁每場景一個長字串壓力態（DEC-127，只有手機）
     assert report["summary"]["states"] == 2 * (len(PAGE_IDS) * len(SCENARIO_IDS) + len(SCENARIO_IDS) + 2) + len(SCENARIO_IDS)
     assert report["summary"]["failed"] == [], report["summary"]["failed"]
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_real_browser_real_feed_first_screen_and_daily_k(tmp_path):
+    """Issue #1138 B 線（tests-only）：Real-data Preview（`feed="real"`）第一屏＋日 K 在 CI browser lane 實跑。
+
+    上一支只量 FAKE 場景；real feed 的量測（`MV._run_real`）原本只有手動腳本＋存證 JSON（`docs/vnext/newui2_realfeed`），
+    CI 從未在真瀏覽器跑過。本測試沿用同一量測與同一組既有門檻（`MV.THRESHOLDS`，⛔ 不新增門檻），只換 feed。
+    """
+    from shared.ui2_contract.pages import P4_MARKET, P4_TARGET
+    from tests.ui2_browser import launch_or_fail, require_browser
+    with require_browser()() as p:                     # 先確認 Chromium 可啟動（不行 → required fail／本機 skip）
+        launch_or_fail(p).close()
+    proc, url = MV.start_server(ROOT)
+    try:
+        report = MV.run_measurements(url, tmp_path, "none", feed="real")
+    finally:
+        proc.kill()
+    # `_run_real` 的量測態數（由常數推導，不寫死）：每 viewport 量 PAGE_IDS 每頁一次＋🎯 頁再量『即時查一檔』一次；
+    # 手機寬（≤ MOBILE_MAX_W）的 📊 市場頁另加一個長字串壓力態。
+    expected = sum(len(PAGE_IDS) + (P4_TARGET in PAGE_IDS) + (P4_MARKET in PAGE_IDS and w <= MV.MOBILE_MAX_W)
+                   for w, _h in MV.VIEWPORTS.values())
+    assert report["meta"]["feed"] == "real"
+    assert report["summary"]["states"] == expected == len(report["results"])
+    assert report["summary"]["failed"] == [], report["summary"]["failed"]
+    assert all(r["feed"] == "real" for r in report["results"])
+    # 每個 viewport 的 📊 市場頁（非壓力態）都必須畫出日 K（真資料 ≥1 根；上限與圖高等由既有 `kbar_primary_chart` 門檻判）
+    for vp_name in MV.VIEWPORTS:
+        market = [r for r in report["results"]
+                  if r["viewport_name"] == vp_name and r["page"] == P4_MARKET and r["mode"] != "stress"]
+        assert len(market) == 1, (vp_name, len(market))
+        p2 = market[0]["p2"]
+        assert p2 is not None, vp_name
+        assert int(p2.get("chart_bars") or 0) >= 1, (vp_name, p2.get("chart_state"), p2.get("chart_bars"))
