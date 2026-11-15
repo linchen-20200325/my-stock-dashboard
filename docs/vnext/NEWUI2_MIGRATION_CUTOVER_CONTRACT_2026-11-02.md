@@ -1,5 +1,7 @@
 # New UI2 Migration／Cutover Contract
 
+> 📌 **2026-11-15 現行五頁 Cutover 適用性補註（不改 C1～C7 Gate）**：下文 2026-11-02「四頁逐頁驗收」為當時客戶裁示的歷史原文，**不得改寫或刪除**；依較新 DEC-142／DEC-146，正式 New UI2 驗收對象已改為 📊市場／🎯標的／💼持股／👤我的／🗂資料 **五頁頂部兩列導覽**，詳見 `NEWUI2_CUTOVER_GAP_MATRIX_2026-11-10.md` §1 C2 與 `NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md`。其餘 Preview→逐頁→mobile/desktop→資料故障降級→real data→跨頁一致→正式切換→Rollback/Removal Gate 的**通過順序與安全門檻不變**；現有五頁 Preview 不等於 C1～C7 全部 PASS，所有待驗證與資料／授權 Gate 仍 HOLD。
+
 > ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§1.1 關卡 C2「四頁逐頁驗收」中的「L1／L2／L3」口徑（改讀「四頁 Human UI 無完整 L2／L3；資料健康度三層」）；「放不下依 Freeze §16.5」中「下沉」的頁內落點（S32）。**其餘（Cutover 鏈、Rollback、Removal Gate、新債清單，含「Preview 控制 cutover 前移除」）全部仍有效**，並新增：Preview 控制須先移到開發面（BACKLOG §5.1.26 P1），再於 cutover 前移除。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
 
 - **狀態**：**客戶核准（Q4=A，2026-11-02；逐字見 `docs/DECISIONS.md` DEC-123「客戶裁示 Q1～Q4」）；~~隨 #997 獨立稽核＋合併後凍結~~ #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；#997 合併即凍結（merge SHA 由下一位補記）。** Cutover 鏈、rollback、不得先刪、Removal Gate 另進＝客戶原文；migration 細則（§3）＝Architecture Gate §5 的條文化，屬 AI 總管內部自決（客戶可推翻）。
