@@ -1,5 +1,7 @@
 # UI Visual Fidelity Gate（視覺保真閘門）
 
+> 📌 **2026-11-15 現行五頁規則補充（DEC-142／DEC-146；只校正舊引用，不變更 Gate）**：本檔 2026-11-03 的「backend／👤 資料健康度」「👤 我的（Level 2／3）」描述，是當時四頁資訊架構的歷史定位。**目前五頁 UI2 的完整來源健康度與診斷應集中於第五頁「🗂 資料」**，而不是要求在 👤 我的頁重做 L2／L3；現行五頁布局／首屏／導航的依據是 `docs/vnext/NEWUI2_TOP_FIVE_APPROVED_VISUAL_AND_SAFETY_GATE_2026-11-07.md` 和 DEC-146（舊 `NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 的四頁布局條文只作歷史回歸參照）。本檔的視覺驗收、390／1440、缺值、QA／CI 安全門檻仍有效；**🗂 資料目前尚未接入正式資料健康度，不能將設計落點寫成實作已完成或 C1～C7 PASS**。
+
 > ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§1 第 3 點、V7 與 §8 報告格式中的「第一眼／第二眼／第三層答不出＝FAIL」之**第三層（頁內摺疊）**判準（S21）——改讀「第一眼／第二眼在頁內；完整 evidence 層在 backend／👤 資料健康度」。**A8「下沉清單全在 L3」與 V11「所有 L3 內容在手機可點開」亦已取代（S39，見 §2.1／§2.2 橫幅；PROJECT_RULES §24.2 要求每個 UI PR 過此 Gate，故不得再逼出頁內 L3）。其餘（Gate 本體、V1～V6、V8～V11、Decision Density／Text Reduction、截圖規格、判定者）全部仍有效**。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
 
 - **狀態**：正式／現行

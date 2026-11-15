@@ -80,7 +80,7 @@
 
 - 開工、宣稱完成、合併、交接前，先 `git fetch` 並實查 main SHA、open PR、check-run；不靠記憶、不靠交接文件、不靠聊天。
 - 合併前逐條看 check-run `conclusion`。
-- ⚠️ 本 repo 的 main 會被每日 cron 資料 commit 推進（例：`🤖 每日總經歷史增量`、`🤖 板塊資金泡泡圖每日增量`）；寫 main SHA 時附量測時間，並區分「最後一個非 cron commit」與「當下 tip」。
+- ~~⚠️ 本 repo 的 main 會被每日 cron 資料 commit 推進（例：`🤖 每日總經歷史增量`、`🤖 板塊資金泡泡圖每日增量`）；寫 main SHA 時附量測時間，並區分「最後一個非 cron commit」與「當下 tip」。~~ **📌 2026-11-15 適用性更正（依 DEC-185 與現有 workflow，非新客戶裁示）**：上述三支資料發布流程 `update_macro_history.yml`、`update_sector_flow.yml`、`update_macro_forward_test.yml` 已改為資料分支＋PR 發布，不再設計為 cron 直接推進 main；依 DEC-185 的最近記錄，它們目前為 `disabled_manually`（本次未重新取得 workflow API state，啟用前務必重查），main 是否前進只能用當下 main／PR／merge／CI 實況判定。**其他 workflow 是否仍有直接 push 或定期合併需逐支查證，不可由此推論所有 cron 都停用**。原規則「每次寫 main SHA 附量測時間」仍有效；本更正不授權恢復停用流程、合併資料 PR 或修改 branch protection。
 - 已知過期值：`70416a6a` 是 #852／Z65（2026-10-15）的 commit，**不是目前 main**。
 - 📌 **DEC-118（客戶 2026-10-30；append-only，上文未改，同向加嚴）**：客戶原文「另外 GitHub Verification Gate 必須以當下 "origin/main" 實查為準；cron 可能已推進 main，不得把舊的功能 merge SHA 說成「最新 main」。」→ 任何文件（含 HANDOFF）與回報寫 main 時，一律寫「以 `git fetch` 後的 `origin/main` 為準」或附量測時間的當下 tip；⛔ 把某個功能 PR 的 merge SHA 寫成「最新 main」。
 

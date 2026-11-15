@@ -1490,3 +1490,10 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 - **目前工作**：Issue #1138 A／B 線 tests-only 批次 PR（分支 `claude/dreamy-fermi-dz6zq8`；`I1138-EVIDENCE-MATRIX-GUARD`／`I1138-UI2-NO-SECOND-AI-GUARD`／`I1138-UI2-REAL-VIEWPORT-CI`，見 `docs/BACKLOG.md` 檔尾）；只動 `tests/` 與本兩份文件的檔尾追加。
 - **下一個安全步驟**：非作者獨立 QA＋同 head 五項原生 CI；#1116 仍於 2026-11-16 20:00 UTC 之後唯讀核對首次排程。所有 HOLD／Decision Gate 維持不變。
+
+### 既有修正安全收尾接手（2026-11-15，append-only；GPT-6 Work／GitHub-first／High）
+
+- **本批範圍**：只完成既有 #1194／#1195 驗收與安全收尾；不重新全庫稽核、不另開重複 PR、不新增治理架構。使用者本批授權在完整 Merge Gate 與既有合併授權均成立後處理合併。
+- **#1194**：已合併，merge SHA `d37f44200121bd3859d09604283c72470123923c`；原 head `3b33c8df6da94aaacf0c81f2d9af45d5723eb84a` 經非作者獨立 agent QA PASS 與同 head 五項原生 CI success。main push run `43674771519` 本段撰寫時仍進行中，須查 GitHub 最終結果，不能先寫 PASS。
+- **#1195**：原七檔內容獨立 QA 初步 PASS；原 head `5c652e980f783cf40b23397bacc3551993ba274c` 的 Fast CI 因 Active Contract 新橫幅把既有單一有效語意宣告擠出前 2500 字而失敗（`tests/test_ui2_active_contract_docs.py::test_active_contract_exists_and_declares_single_source_of_truth`）。本 PR 最小修正只前置仍有效的 DEC-128 語意宣告，不修改測試、既有歷史原文或 Gate；修正後必須以最新 head 重新獨立 QA、核實五項原生 CI、head/base/full diff、mergeability clean 與 unresolved review threads=0，未全過維持 Draft/HOLD。此為中途檢查點，最終驗收以本 PR 後續同 head QA／CI／合併紀錄與 main push CI 為準。
+- **所有其他 HOLD 不變**：不處置 #1124～#1126、#1164 或既有 queued Run；不恢復停用 Workflow；DG-LIC／PIT／COV／SCOPE／WIRING-GATE、C1～C7 不解除。不改 production Python、資料、投資公式、Risk Cap、OneBrain Runtime、正式 Schema 或 UI2 正式接線；CI success 不代表 Cloud／正式投資功能驗收。
