@@ -1364,3 +1364,19 @@ def test_risk_cap_very_old_snapshot_is_disclosed_via_as_of_but_not_judged():
     assert seg(a, SEGMENT_RISK_CAP).as_of == date(2025, 1, 1) and seg(a, SEGMENT_MARKET).as_of == D
     assert a.coverage.is_complete is True
     assert "不判斷新鮮度" in (A.__doc__ or "")
+
+
+# ── 無戳 × 抓取結果：原因以抓取結果為準（不得誤記 no_stamp） ─────────────────
+@pytest.mark.parametrize("up,reason", [
+    pytest.param(O.FETCH_FAILED, WITHHELD_FETCH_FAILED, id="nostamp-fetch-failed"),
+    pytest.param(O.UNDETERMINED, WITHHELD_UNDETERMINED, id="nostamp-undetermined"),
+    pytest.param(None, WITHHELD_NO_STAMP, id="nostamp-upstream-none"),
+    pytest.param(O.NO_NEW_DATA, WITHHELD_NO_STAMP, id="nostamp-no-new-data"),
+])
+def test_stampless_evidence_reason_follows_upstream_state(up, reason):
+    from shared.decision_digest_coverage import assert_coverage_valid
+    a = assemble_digest(**full_kwargs(2, macro_evidence=EvidenceInput(None, F.FRESH, up)))
+    s = seg(a, SEGMENT_MARKET)
+    assert s.used is False and s.withheld_reason == reason
+    assert (s.source, s.as_of) == (None, None)
+    assert_coverage_valid(a.coverage)

@@ -125,13 +125,19 @@ def _pit_ok(stamp: SourceStamp, generated_at: datetime) -> bool:
 
 
 def _classify(evidence: EvidenceInput | None, generated_at: datetime) -> str | None:
-    """證據可用 → None；否則回 `WITHHELD_*` 原因（先到先得：無戳 → 抓取結果 → 新鮮度 → 時序）。"""
-    if evidence is None or evidence.stamp is None:
+    """證據可用 → None；否則回 `WITHHELD_*` 原因（先到先得：無證據 → 抓取結果 → 無戳 → 新鮮度 → 時序）。
+
+    抓取結果（FETCH_FAILED／UNDETERMINED）排在無戳判斷之前：抓取失敗常見就是沒有戳，
+    原因必須記 fetch_failed／undetermined，不得被誤記為 no_stamp（與模組 docstring 一致）。
+    """
+    if evidence is None:
         return WITHHELD_NO_STAMP
     if evidence.upstream_state is FetchOutcome.FETCH_FAILED:
         return WITHHELD_FETCH_FAILED
     if evidence.upstream_state is FetchOutcome.UNDETERMINED:
         return WITHHELD_UNDETERMINED
+    if evidence.stamp is None:
+        return WITHHELD_NO_STAMP
     # NO_NEW_DATA／None 不擋，但**不蘊含**新鮮：一律還要看 freshness 軸。
     if evidence.freshness is FreshnessStatus.FRESH:
         return None if _pit_ok(evidence.stamp, generated_at) else WITHHELD_PIT_VIOLATION

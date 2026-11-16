@@ -303,9 +303,10 @@ def conclusion_row_html(field: FieldVM) -> str:
     """今日結論（📊 市場第一屏首列；DEC-081 Q2-1）：句子原樣顯示，⛔ 由 UI 加工／推導。
 
     無值（冷啟動）→ 以狀態 chip＋原因取代句子（⛔ 空白、⛔ 紅色）。
+    有值 → 先畫句子，其後一律附狀態 chip（Stale 等非 OK 態不得看起來像有效；OK 態該函式回空字串，畫面不變）。
     """
-    text = (f'<span class="ui2-concl__text">{escape(field.value_text)}</span>'
-            if field.value_text is not None else status_chip_html(field))
+    text = ((f'<span class="ui2-concl__text">{escape(field.value_text)}</span>'
+             if field.value_text is not None else "") + status_chip_html(field))
     detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
     return (f'<div class="ui2-qrow ui2-qrow--concl" data-ui2-q="concl" data-axis="{field.layer}" '
             f'data-state="{_state_attr(field)}"><span class="ui2-q">今日結論</span>{text}{detail}</div>')
