@@ -1497,3 +1497,11 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **#1194**：已合併，merge SHA `d37f44200121bd3859d09604283c72470123923c`；原 head `3b33c8df6da94aaacf0c81f2d9af45d5723eb84a` 經非作者獨立 agent QA PASS 與同 head 五項原生 CI success。main push run `43674771519` 本段撰寫時仍進行中，須查 GitHub 最終結果，不能先寫 PASS。
 - **#1195**：原七檔內容獨立 QA 初步 PASS；原 head `5c652e980f783cf40b23397bacc3551993ba274c` 的 Fast CI 因 Active Contract 新橫幅把既有單一有效語意宣告擠出前 2500 字而失敗（`tests/test_ui2_active_contract_docs.py::test_active_contract_exists_and_declares_single_source_of_truth`）。本 PR 最小修正只前置仍有效的 DEC-128 語意宣告，不修改測試、既有歷史原文或 Gate；修正後必須以最新 head 重新獨立 QA、核實五項原生 CI、head/base/full diff、mergeability clean 與 unresolved review threads=0，未全過維持 Draft/HOLD。此為中途檢查點，最終驗收以本 PR 後續同 head QA／CI／合併紀錄與 main push CI 為準。
 - **所有其他 HOLD 不變**：不處置 #1124～#1126、#1164 或既有 queued Run；不恢復停用 Workflow；DG-LIC／PIT／COV／SCOPE／WIRING-GATE、C1～C7 不解除。不改 production Python、資料、投資公式、Risk Cap、OneBrain Runtime、正式 Schema 或 UI2 正式接線；CI success 不代表 Cloud／正式投資功能驗收。
+
+### 2026-11-16 接手批（append-only；上文一字未動；非施工授權）
+
+- **基線**：main `5ab53d1c`。Open PR：#1164（ChatGPT，勿碰）、#1196（本批 Draft）。
+- **本批兩項（PR #1196，僅動 `src/`／`tests/` 與本兩份文件檔尾追加）**：(1) Digest `_classify` 抓取結果先於無戳，`stamp=None` 且 FETCH_FAILED／UNDETERMINED 不再誤記 `no_stamp`（withheld 結果不變、只修原因；對應 BACKLOG #1138 限制 f）；(2) UI2 `conclusion_row_html` 有值時補非 OK 狀態 chip（潛伏缺口）。
+- **未完成**：非作者 QA、同 head 五項原生 CI、merge 皆待；目前不得寫成 QA PASS 或已合併。`field_row_html` 不顯示資料日（C2）為觀察項，需客戶／總管確認是否算新增視覺元件，未施工。
+- **下一個唯一安全點**：#1196 完成 QA＋同 head CI 並合併之後。其餘 production 限制（Q4 tie-break、schema 欄位、services eager import、`field_from_spec` 空字串）皆需 Gate；Digest 裸摘要屬 DEC-159 v2 嵌入 Gate。
+- **不可自行做**：碰 #1164；自行合併 #1196；解除 WIRING-GATE／DG-*／G-F2～G-F6；做上列需 Gate 的 production 限制；新增視覺元件。

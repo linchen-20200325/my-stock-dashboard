@@ -2172,6 +2172,7 @@
     - **d. L1 Digest builder 對 regime／light 無詞彙白名單**：『待評估／載入中／pending／error／資料不足／⚪』等 37 個字串→`DataStatus.OK`（僅 AB-0 `PLACEHOLDER_TEXTS` 降級）；`macro_state_locker` 快路徑直接透傳 warroom 的 light。
     - **e. Q4 階層 tie-break 依呼叫端 `station_rows` 順序**：5 檔 add 順序反轉結果不同；`holdings_rows` 順序改變 `to_dict`。
     - **f. `EvidenceInput(stamp=None, upstream_state=FETCH_FAILED)` 的 coverage 原因為 `no_stamp`**（`_classify` 先到先得），與 docstring『記錄 fetch_failed』不一致；現有測試未涵蓋。
+      - 📌 2026-11-16 補註（append-only；上句原文一字未動）：no_stamp 原因誤記（stamp=None 且 FETCH_FAILED／UNDETERMINED）→ PR #1196 修正（`_classify` 抓取結果先於無戳；withheld 結果不變、只修原因；待 QA／同 head CI／merge 後才算結案）。
     - **g. 摘要在站內證據被拒用時只寫『規則層未產出可引用依據』**，無法區分 stale／fetch_failed（Digest v1 無原因欄）。
     - **h. `src/services/__init__.py` 急切 import**，使任何 `src.services.decision_digest_*` 動態載入 streamlit／requests／pandas（套件層既有性質；是否改 lazy：NOT VERIFIED，未評估）。
     - **i. 風險上限句為固定措辭**（DEC-081 Q2-2）；cap MISSING 與 OK 同文字。
@@ -2878,3 +2879,5 @@
 📌 2026-11-14（append-only；進度更正）：上列 `BATCH2-PRIORITY-1138-1116` 的「PROPOSED（待客戶啟動）」原文一字未動；以本註為準 → 客戶已於 2026-11-14 交接訊息中啟動 Batch 2 的**唯讀查核與驗收**（session 訊息轉錄，逐字一致性 NOT VERIFIED），狀態讀作 **IN PROGRESS（唯讀驗收）**：#1138 已部分核銷、Issue 維持 Open；#1116 首次真實排程 NOT VERIFIED（2026-11-16 20:00 UTC 之後核對）；#1119／#1110／#1107 僅核對既有證據。**唯讀驗收已開始，不代表新增工程施工已獲授權**；不解除任何 Gate；細節見 `docs/HANDOFF.md` 檔尾「進度更正（2026-11-14）」。
 
 📌 2026-11-14（append-only；Issue #1138 A／B 線 tests-only 批次；上文一字未動）：本批只新增／擴充 `tests/`，**不改 src／shared／app／CI／資料**，Digest v1 schema 凍結、未新增門檻、未放寬任何既有測試。三個 ID 狀態皆為 **IMPLEMENTATION COMPLETE — waiting QA／CI**（作者單組；非作者 QA 與同 head 五項 CI 未完成）：`I1138-EVIDENCE-MATRIX-GUARD`（`tests/test_decision_digest_evidence_matrix_guard.py`：stamp×FreshnessStatus×FetchOutcome 全組合、macro／station 兩側證據採用資格矩陣）、`I1138-UI2-NO-SECOND-AI-GUARD`（`tests/test_ui2_no_second_ai_guard.py`：UI2 四範圍禁 LLM SDK／網路客戶端／專案 AI 模組／LLM 端點字串）、`I1138-UI2-REAL-VIEWPORT-CI`（`tests/test_ui2_batch2.py` 新增 real feed 第一屏＋日 K 真瀏覽器測試，進 CI ui2-browser lane）。**不是 Stage F／G**；Cloud／真機 **NOT VERIFIED**；#1139 所列開放限制 c、e、f、g、h、i 維持原狀、本批未觸碰（矩陣刻意不 pin 拒用原因優先序＝限制 f）。不解除任何 Gate／HOLD。
+
+📌 2026-11-16（append-only；上文一字未動；PR #1196 Draft；非施工授權）：**UI2 `conclusion_row_html` 有值時補非 OK 狀態 chip（潛伏缺口）**——有值時原本不附非 OK 狀態 chip，PR #1196 補上；狀態＝**IMPLEMENTATION COMPLETE — waiting QA／同 head CI／merge**（作者單組，非 QA PASS、未合併）。**仍未解除** `I1144-WIRING-GATE`、`DG-*`、G-F2～G-F6；runtime 接線未授權。**觀察項（未施工）**：`field_row_html` 不顯示資料日（C2）——需客戶或總管確認是否算「新增視覺元件」（UI 草稿先行，v3 §03-2 ①），確認前不動。
