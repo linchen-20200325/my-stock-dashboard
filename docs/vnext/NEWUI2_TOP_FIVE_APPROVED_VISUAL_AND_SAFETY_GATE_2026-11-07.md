@@ -76,3 +76,28 @@
 - **已核准**：五頁頂部兩列方向；不用臨時五項 Drawer B0；以首屏安全/身分資料正確性為必要保護；規劃最小施工與驗收。
 - **未聲稱已通過**：具體像素、真瀏覽器高度、完整視覺 pixel parity、Auth/Sheet 實接、資料頁完整真資料、JS_V4 等價退役、production 切換。
 - **不得合併條件**：首屏 <160px、缺任一必需測試/CI、真瀏覽器/等價安全證據不足、資料或權限造假、與現行 PR 衝突。以 fail-closed 回到本文件 Gate 調整，不要求使用者重覆核准同一大方向。
+
+
+## 7. 2026-11-16 新裁示：🗂資料頁 NAS／Proxy 安全連線診斷（Issue #1110）
+
+> **客戶已核准**在現有 New UI2「🗂資料」頁安排 NAS／Proxy 連線檢查，避免使用者重新檢查或修改早已設定的舊 UI NAS、Proxy 與 Secrets。**本節只授權狹義診斷功能的最小施工，不等於部署、資料來源接線、投資資料資格或 Cloud 連線已通過**。待辦、owner／Gate／驗收生命週期唯一追蹤入口：[Issue #1110](https://github.com/linchen-20200325/my-stock-dashboard/issues/1110#issuecomment-6916608567)；不另開重複任務。
+
+### 7.1 現行視覺位置與文字線框（新增診斷，不改五頁導航）
+
+- 在既有「🗂資料」頁內新增 **「連線診斷」**，以 Dark-only、Mobile-first、簡潔資訊階層呈現。舊 UI「🔧 工具箱 → 🔎 資料診斷 → 進階診斷」只供參照；不得把舊 render、app.py 或其 session 邏輯直接移入 UI2。
+- 狀態分成 **NAS FastAPI 中繼、NAS Squid Proxy、已核准 API Provider、已發布資料的新鮮度** 四類；最後一項是**獨立的資料發布狀態**，不得用 NAS 連通代替行情已更新。狀態須辨別 **未設定、尚未檢查、連線成功、連線失敗、認證未驗證**，沒有實際證據不顯示「正常」。
+- 首屏只呈現簡短狀態摘要＋「檢查連線」手動按鈕；必要錯誤提示只用固定安全分類與最後檢查時間，不顯示 Secrets／網址／IP／內網位置／token／headers／例外原文／回應內容。
+
+### 7.2 舊 UI First 重用與安全邊界
+
+- 先核對 caller→service→L1→source：`src/ui/pages/api_diagnostic.py`、`src/data/proxy/proxy_helper.py`、`src/data/proxy/nas_server.py`、`src/data/proxy/yf_proxy.py`；優先沿用既有安全診斷與最小隔離的**唯讀 adapter**，不得為新 UI2 重新發明資料管線。
+- **只在使用者主動點擊**時，才做固定 allowlist、有界次數、短 timeout 的安全探測；Streamlit rerun 不得自動對外探測。不得接受任意 URL／host 做 Proxy SSRF 測試，不得把 Secrets 或完整診斷結果寫進 repo、瀏覽器、公開 log。
+- **NAS 安全前提**：舊 `nas_server.py` 在 `NAS_API_KEY` 未設定時，程式現狀可能允許未認證訪問；不能把該情況判為認證成功，未滿足認證／安全條件時應 fail-closed。既有 `verify=False` 為已知風險，診斷新功能不可擴大其使用或關閉新的 TLS 驗證；涉及 NAS server 安全修補／部署／CA／防火牆／Secrets 須另過安全 Gate，不要求使用者自行改。
+- **UI2 Feed Gate**：不得偷偷新增 `src/services/ui2/real_feed.py` 外連或擴充已核准真實資料 I/O／來源白名單；如診斷與 G2F／資料頁 Wiring Gate 衝突，先提出最小裁示。不可因本功能取得新的 TWII／VIX／DXY／PMI 取數或發布資格。
+
+### 7.3 完成條件與待驗範圍
+
+- 必須有方案 A（既有能力直接重用）、B（最小唯讀診斷 adapter）、C（新建服務）的比對與對應本頁的精簡文字線框；僅在規則與 Gate 都容許的範圍施工。
+- 測試涵蓋無設定／失效憑證／401、403／連線逾時／NAS 不可用／無自動探測／輸出遮罩／多 session 隔離，保留 fail-closed，無副作用。
+- 非作者獨立 QA、同 head 原生 CI、merge 後 main CI、Cloud 實際連線驗收分開記錄。**GitHub code/CI PASS ≠ Cloud runtime NAS/APIs PASS**；若缺 Cloud 證據維持 NOT VERIFIED，不宣告功能完成。
+- #1107（UI2 Cloud）、#1116（ETF Managers）、#1119（workflow 清理 HOLD）、#1197（TWII DG-LIC/PIT HOLD）均平行追蹤到結案，但本節不解除任何既有 Gate，不修改 parquet、workflow、Risk Cap、OneBrain、Auth／Sheet 或正式 production cutover。
