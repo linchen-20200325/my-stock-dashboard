@@ -109,6 +109,23 @@ def test_conclusion_cold_is_gray_not_loaded_not_a_sentence():
     assert "ui2-chip--danger" not in h and T.TEXT_NOT_LOADED in h
 
 
+def test_conclusion_row_with_value_still_shows_non_ok_status_chip():
+    """Stale／Missing 帶句子的結論不得看起來像有效；OK 有值＝無 chip（畫面不變）。"""
+    sentence = "FAKE 示意結論：甲 平穩；乙 平穩"
+    stale = FieldVM("今日結論", FieldState.STALE, value_text=sentence, status_text=T.stale_text(3))
+    h = H.conclusion_row_html(stale)
+    assert sentence in h and T.stale_text(3) in h
+    assert 'data-state="stale"' in h and "ui2-chip--danger" not in h
+    assert h.index(sentence) < h.index(T.stale_text(3))                 # 先值、後 chip
+    # 契約不允許 MISSING 帶值；此處刻意繞過建構檢查，只驗 renderer 不會吞掉缺值字樣
+    missing = FieldVM("今日結論", FieldState.MISSING, status_text=T.TEXT_MISSING_NOT_FETCHED)
+    object.__setattr__(missing, "value_text", sentence)
+    hm = H.conclusion_row_html(missing)
+    assert sentence in hm and T.TEXT_MISSING_NOT_FETCHED in hm
+    ok = H.conclusion_row_html(FieldVM("今日結論", FieldState.OK, value_text=sentence))
+    assert sentence in ok and "ui2-chip" not in ok
+
+
 def test_vm_passes_conclusion_through_verbatim_never_derives_it():
     """VM 原樣帶出 canonical 的句子；改 regime 值不會讓 VM 長出任何結論字樣。"""
     c = fake_canonical(P4_MARKET, "loaded")
