@@ -217,7 +217,7 @@ def _series_with(**attrs):
 def test_service_view_upstream_state(monkeypatch, attrs, state):
     import src.data.macro.macro_cache_reader as R
     from src.services.market_twii_view_service import get_twii_trend_view
-    monkeypatch.setattr(R, "load_twii_close", lambda: _series_with(**attrs))
+    monkeypatch.setattr(R, "load_twii_close", lambda **_k: _series_with(**attrs))
     v = get_twii_trend_view(1)
     assert v.upstream_state == state
     assert v.upstream_error == attrs.get("upstream_error", "")          # 原樣轉述

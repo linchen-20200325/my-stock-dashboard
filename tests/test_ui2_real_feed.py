@@ -1048,9 +1048,19 @@ def test_1202_not_ok_fact_does_not_validate_as_of():
 
 
 def test_1202_known_gap_future_as_of_cannot_be_checked_without_a_clock():
-    """已知邊界（未修）：services/ui2 禁時鐘（G2），純函式無法判斷「as_of 晚於今日」；未來日仍靠 L3
-    （age_days<0 → age_days=None＋既有 #1140 C2）。本測試把現況釘住，避免被誤讀成已防護。"""
-    RC.validate_twii_fact(TwiiFact(True, (100.0,), "2099-01-01", True, "", None, False, "", False, "s"))
+    """【已解（#1202 future as_of，候選 1）；測試名保留以便追溯】services/ui2 仍禁時鐘（G2），純函式**不會**自己判斷
+    「as_of 晚於今日」——那由 L3 用單一台北基準日比出 `as_of_future` 後轉述。釘新行為：
+    - `as_of_future is None`（無可信基準／as_of 缺失）→ 不判未來（維持既有 fail-closed／stale 語意，不 raise）；
+    - `False`（已比對、不晚於基準）→ 通過；
+    - `True` → 專用子類 `RealFeedFutureAsOfError`（仍是 `RealFeedContractError`，但 `exception_code` 給專用代碼）。"""
+    far = TwiiFact(True, (100.0,), "2099-01-01", True, "", None, False, "", False, "s")
+    assert far.as_of_future is None
+    RC.validate_twii_fact(far)                                         # 沒有基準 ⛔ 自行判斷（純函式不讀時鐘）
+    RC.validate_twii_fact(dataclasses.replace(far, as_of_future=False))
+    with pytest.raises(RC.RealFeedFutureAsOfError) as ei:
+        RC.validate_twii_fact(dataclasses.replace(far, as_of_future=True))
+    assert isinstance(ei.value, RC.RealFeedContractError)
+    assert RC.exception_code(ei.value) == RC.FUTURE_AS_OF_ERROR != RC.CONTRACT_ERROR
 
 
 _UP = ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED")
