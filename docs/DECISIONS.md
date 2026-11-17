@@ -10647,3 +10647,14 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **關聯**：#1201 已 CLOSED／未合併（陳昱維換手資料 QA FAIL／INSUFFICIENT_SOURCE_PROOF，不得重開）；#1207 CLOSED／NOT_PLANNED（parser 硬化不再施工）；#1116 來源權利證據另行追蹤。
 - **邊界（不因本決策放寬）**：其他 MoneyDJ 取用（費用率／持股／中文名／追蹤指數、macro PMI fallback）**不視為已獲授權**，權利盤點另案；不動 #1119 workflow 清理、branch protection、Secrets、NAS／Proxy／TLS、`src/ui2/**`。
 - **落地**：見 BACKLOG／HANDOFF 2026-11-17 #1208 段、`docs/ARCHIVED_FEATURES.md` 同日段；反向守衛 `tests/test_issue1208_manager_strategy_removed.py`。關閉 #1208 前不得稱主線換手流程已移除。
+
+### DEC-189｜MoneyDJ 全入口零請求止血（Issue #1208 第二個 PR；GPT 2026-11-17 裁示；只追加；非 QA PASS）
+
+> 2026-11-17 補登（ID 取下一個未用號；落盤前 `grep -n "DEC-189" docs/*.md PROJECT_RULES.md CLAUDE.md` 0 命中，DEC-188 為上一號）。**來源**：Issue #1208 2026-11-17T15:23Z GPT 正式答覆（核准分階段 S2）＋15:37Z 專案 AI 設計留言；逐字以 GitHub 原留言為準。
+
+- **決策**：所有可達入口（cron、人工 probe、AI 問答、舊 UI／健康檢查）對 `www.moneydj.com` 的真實出站請求數**嚴格 = 0**。屬止血（stop-gap），**不代表** MoneyDJ 權利已有結論 —— MoneyDJ 權利仍未解決。
+- **移除**：PMI 競速 MoneyDJ 段（8→7 源）；`fetch_etf_meta_moneydj`、`fetch_moneydj_expense_ratio`；`fetch_etf_info` 的 MoneyDJ 補位；`fetch_etf_holdings` MoneyDJ 段（含 curl_cffi 模擬 chrome）；`fetch_etf_nav_history` 第 4 段；`fetch_etf_zh_name` MoneyDJ 備援；死碼 `fetch_etf_underlying_index`／`_ETF_INDEX_LAST_ERR`；0 caller 的 `_html_kv_pairs`；`data_registry` 兩筆 MoneyDJ 登錄。
+- **誠實降級**：缺值照實顯示（AUM 只剩 yfinance，缺則 N/A，不補 0）；費用率鏈＝SITCA → 元大(主動式) → yfinance；來源字樣（AI 問答 provenance、health_inspector、data_registry）與實際 caller 一致。
+- **刻意不改**：`shared/input_provenance_policy.PMI_SECONDARY_SOURCE_LABELS` 的 "MoneyDJ"（DEC-080 資料契約；舊快取可能帶 `stale-cache(MoneyDJ)`）；`curl-cffi` 套件（yfinance 用）；data_cache 歷史；NAS／Proxy／`fetch_url` 全域行為／User-Agent；`src/ui2/**`、`app_ui2.py`；Risk Cap／OneBrain 公式；其他 workflow。
+- **邊界**：替代來源（SITCA、FinMind、yfinance、台灣 Yahoo、goodinfo、TWSE、元大）各自的使用權利屬 DG-LIC，**NOT VERIFIED**，不得把「仍在用」讀成「已授權」。使用者可見文案（「建議（事實版）」欄）**待 ChatGPT 定稿**。
+- **守衛**：`tests/test_issue1208_moneydj_zero_requests.py`（transport 錄音機＋靜態掃描＋正向對照）。第二個 PR 未合併前不得宣稱「MoneyDJ 零請求 DONE」。

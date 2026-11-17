@@ -85,3 +85,8 @@ macro_validation 前例處理。刪除前逐一 grep 驗證 0 production caller 
   `publish_data_pr` 其他三個 job。
 - **反向守衛**:`tests/test_issue1208_manager_strategy_removed.py`。
 - **還原**:`git show efa0e015:<path>`(本批前 main)。⚠️ 復活前須先過 MoneyDJ 來源權利 Gate(#1116／#1207)。
+
+## 2026-11-17 Issue #1208 PR2｜MoneyDJ 全入口請求路徑移除（DEC-189；只追加）
+- **移除**：`src/data/macro/macro_core._pmi_src_moneydj`（＋`PMI_SOURCE_REGISTRY` 該筆）；`src/data/etf/etf_fetch` 的 `fetch_etf_meta_moneydj`、`fetch_moneydj_expense_ratio`、`fetch_etf_underlying_index`、`_ETF_INDEX_LAST_ERR`、`_html_kv_pairs`，以及 `fetch_etf_info`（補位）、`fetch_etf_holdings`（含 curl_cffi 模擬 chrome）、`fetch_etf_nav_history`（第 4 段）、`fetch_etf_zh_name`（備援）內的 MoneyDJ 段；`data_registry` 兩筆 MoneyDJ 登錄；`tests/test_etf_moneydj_nav_parse.py`。
+- 📌 上一段（同日 PR1）「保留(仍 LIVE)」所列的 `_html_kv_pairs` 自本批起**已移除**（0 caller）；該段原文不改。
+- **反向守衛**：`tests/test_issue1208_moneydj_zero_requests.py`。**還原**：`git show b06a7eca:<path>`。⚠️ 復活前須先過 MoneyDJ 來源權利 Gate。

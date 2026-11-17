@@ -1540,3 +1540,10 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 保留：持股探測、主動式 ETF 判別、Yuanta 費用率備援、其他 ETF 指標；`publish_data_pr` 其他三 job。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 未動（DEC-137 hash 不受影響）。
 - #1201 已 CLOSED／未合併；#1207 CLOSED／NOT_PLANNED；其他 MoneyDJ 權利盤點另案。決策見 DEC-188。
 - 舊鏈守衛同步（有意識，非放寬）：`tests/test_batch_z60.py` 舊 UI 指紋依其 docstring 慣例更新並註明 #1208；`shared/signal_thresholds.py` 被 DEC-074 等還原鏈管 ⇒ 新增鏈頭節 `tests/test_issue1208_revert_chain.py`（基底＝efa0e015 sha），由 `twii_ohlc_revert_for` 開頭先呼叫。本地 fast lane（`pytest`，同 pr-check.yml）＝40035 passed／38 skipped／3 xfailed／0 failed。
+
+## 2026-11-17 Issue #1208 PR2｜MoneyDJ 全入口零請求止血（append-only；自跑，未經第二組驗證）
+- 狀態：**IMPLEMENTED（本地 commit，未 push／未開 PR）**；下一步＝推分支開 PR → 非作者 QA → 同 head 五項原生 CI → merge → main push CI → 更新 #1208。決策 DEC-189。
+- 結果：PMI 7 源（無 MoneyDJ）；ETF 費用率 SITCA → 元大(主動式) → yfinance；AUM 只剩 yfinance（缺＝N/A）；持股 yfinance → 台灣 Yahoo；NAV FinMind → goodinfo → TWSE → yfinance；中文名只剩 FinMind。所有 MoneyDJ 請求點與 curl_cffi 模擬 chrome 直連已刪。
+- 守衛：`tests/test_issue1208_moneydj_zero_requests.py`（transport 層 0 請求＋靜態掃描）、`tests/test_issue1208_pr2_revert_chain.py`（舊還原鏈頭節）。
+- 待辦：使用者可見文案待 ChatGPT 定稿（程式內標 `#1208 PR2 文案（待 ChatGPT 定稿）`）；PMI 列 macromicro `ping_url` 未改；PR1 QA low findings 見 BACKLOG 同日段。`push_holdings_daily` 完整 `main()` 需 Google Sheet 憑證未實跑，僅測 `fetch_metrics` ETF 腿與 `resolve_holding_names`。
+- 本地 fast lane（`pytest`，同 pr-check.yml）＝40056 passed／38 skipped／3 xfailed／0 failed（改前同 lane 首輪 20 failed 皆為舊還原鏈／指紋守衛，已依慣例接鏈，未放寬任何斷言）。
