@@ -331,10 +331,10 @@ def _fetch_fred_series_edu(series_id: str, units: str = 'lin', months: int = 24)
 
 
 #: ⓪ 資料來源地圖「🇹🇼 TW PMI」列的來源欄。
-#: #1208 PR2（2026-11-17，DEC-189）：MoneyDJ 移出 PMI 競速 → 7 源；文案待 ChatGPT 定稿。
+#: #1208 PR2（2026-11-17，DEC-189）：MoneyDJ 移出 PMI 競速 → 7 源；#1208 GPT 2026-11-17 定稿（留言 6955097932）。
 #: 抽成模組常數，讓舊批次「整頁 golden」測試可暫時換回修前原文
 #: （tests/test_issue1208_pr2_revert_chain.py::i1208pr2_restore_edu_text；⛔ 不是洗掉本批改動）。
-_TW_PMI_SOURCE_MAP_TEXT = '7 源賽跑：CIER-EN → data.gov.tw → NDC → CIER首頁 → StockFeel → Cnyes → CIER-cid8'
+_TW_PMI_SOURCE_MAP_TEXT = '台灣 PMI：7 源並行（CIER-EN、政府資料開放平臺、NDC、CIER 首頁、StockFeel、鉅亨、CIER cid8）。'
 
 
 def render_tab_edu():

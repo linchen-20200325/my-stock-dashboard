@@ -338,9 +338,12 @@ class TestDownstreamEntries:
                             lambda t: {"stars": 3, "score": 60, "coverage": 1.0, "factors": {}})
         _out = AQ._tool_get_etf_quality("0050")
         assert _out["ok"] is True
+        # #1208 GPT 2026-11-17 定稿（留言 6955097932）：候選來源說明、不冒稱命中；as_of 維持 None。
         assert _out["provenance"]["source"] == (
-            "ETF 品質(AUM規模/費用率/配息穩定度/beta;"
-            "AUM、Beta、配息＝yfinance；費用率＝SITCA→元大(主動式)→yfinance)")
+            "ETF 品質（AUM／Beta 候選：yfinance；費用率候選：SITCA→元大投信〔僅主動式 ETF〕"
+            "→yfinance；配息穩定度：既有配息資料；缺值不補）")
+        assert _out["provenance"]["as_of"] is None
+        assert "yfinance+SITCA" not in _out["provenance"]["source"]
 
     def test_station_fetch_metrics_etf(self, mdj, monkeypatch):
         """`push_holdings_daily.yml` → `get_station_rows` → `fetch_metrics`（ETF 腿）。
@@ -421,3 +424,85 @@ def test_scan_targets_nonempty():
     """守衛自身：掃描範圍不得是空的（路徑寫錯會讓上一條恆綠）。"""
     _n = sum(1 for _ in _iter_scan_targets())
     assert _n > 100, _n
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 3. #1208 GPT 2026-11-17 定稿文字（Issue #1208 留言 6955097932）—— 逐字釘住
+# ════════════════════════════════════════════════════════════════════════
+import ast as _ast
+
+_GPT_PMI_SOURCE = "CIER-EN／政府資料開放平臺／NDC／CIER 首頁／StockFeel／鉅亨／CIER cid8（7 源並行）"
+
+
+def _str_consts(rel: str) -> list[str]:
+    """檔案內所有字串常值（含 f-string 的常值片段；不含註解）。"""
+    _t = _ast.parse((REPO / rel).read_text(encoding="utf-8"))
+    return [n.value for n in _ast.walk(_t) if isinstance(n, _ast.Constant) and isinstance(n.value, str)]
+
+
+class TestGptFinalCopy:
+    def test_pmi_registry_is_seven_sources(self):
+        from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
+        assert [n for n, _ in PMI_SOURCE_REGISTRY] == [
+            "CIER-EN", "data.gov.tw", "NDC", "CIER", "StockFeel", "Cnyes", "CIER-cid8"]
+
+    def test_r7_4_exact(self):
+        assert ("台灣製造業 PMI（中華經濟研究院 CIER 等 7 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）"
+                in _str_consts("src/compute/macro/macro_helpers.py"))
+
+    def test_tab_edu_exact(self):
+        import src.ui.tabs.tab_edu as TE
+        assert TE._TW_PMI_SOURCE_MAP_TEXT == (
+            "台灣 PMI：7 源並行（CIER-EN、政府資料開放平臺、NDC、CIER 首頁、StockFeel、鉅亨、CIER cid8）。")
+
+    def test_health_inspector_exact(self):
+        _c = _str_consts("src/ui/pages/health_inspector.py")
+        assert _c.count(_GPT_PMI_SOURCE) == 2                  # PMI 兩列同一文字
+        assert "SITCA → 元大投信（僅主動式 ETF）→ yfinance" in _c
+        assert _c.count("yfinance／台灣 Yahoo") == 2           # 持股探測有／無兩列
+        _blob = "\n".join(_c)
+        for _dead in ("MoneyDJ", "Basic0007", "Basic0008", "RankA0001", "8 段", "8段"):
+            assert _dead not in _blob, _dead
+
+    def test_data_registry_pmi_row(self):
+        from src.data.core.data_registry import DATA_REGISTRY
+        _rows = [r for r in DATA_REGISTRY if r.get("name") == "台灣製造業 PMI (CIER)"]
+        assert len(_rows) == 1
+        _r = _rows[0]
+        assert _r["source"] == _GPT_PMI_SOURCE
+        assert _r["pingable"] is False and _r["ping_url"] is None     # 退役 macromicro ping 清掉、不換未核准 URL
+        for _dead in ("moneydj", "macromicro"):
+            assert _dead not in _r["endpoint"].lower(), _dead
+        assert not any("moneydj" in str(r.get("ping_url") or "").lower() or r.get("source") == "MoneyDJ"
+                       for r in DATA_REGISTRY)
+
+    def test_macro_snapshot_err_pmi_default(self, monkeypatch):
+        from src.data.macro import macro_core as MC
+        from src.data.macro import macro_snapshot as MS
+        monkeypatch.setattr(MC, "fetch_tw_pmi", lambda *a, **k: {"value": None})
+        _fn = getattr(MS.fetch_tw_pmi_block, "__wrapped__", MS.fetch_tw_pmi_block)
+        assert _fn() == {"_err_pmi": "本次 7 個來源均未取得可用的 PMI 資料。"}
+
+    def test_etf_tab_single_exact_and_no_proxy_blame(self):
+        import src.ui.etf.etf_tab_single as TS
+        assert TS._ERR_EXPENSE_ALL_TRIED_ACTIVE == "SITCA、元大投信（僅主動式 ETF）、yfinance 均未取得可用費用率，暫時無法顯示。"
+        # 被動式：元大投信只對主動式查 ⇒ 不得列為失敗
+        assert TS._ERR_EXPENSE_ALL_TRIED_PASSIVE == "SITCA、yfinance 均未取得可用費用率，暫時無法顯示。"
+        assert "元大" not in TS._ERR_EXPENSE_ALL_TRIED_PASSIVE
+        assert TS._ERR_NAV_ALL_TRIED == "FinMind、goodinfo、TWSE OpenAPI、yfinance 均未取得可用淨值，暫時無法顯示。"
+        assert TS._ERR_NAV_NO_ATTEMPT_EVIDENCE == "目前沒有可用淨值資料，暫時無法顯示。"
+        _src = (REPO / "src/ui/etf/etf_tab_single.py").read_text(encoding="utf-8")
+        assert "else _ERR_NAV_NO_ATTEMPT_EVIDENCE" in _src            # 無逐路嘗試證據 ⇒ 保守句
+        assert "elif _is_active:\n        _err_expense = _ERR_EXPENSE_ALL_TRIED_ACTIVE" in _src
+        _c = _str_consts("src/ui/etf/etf_tab_single.py")
+        assert "目前沒有可用的 ETF 淨值資料，暫時無法計算折溢價。" in _c
+        _blob = "\n".join(_c)
+        for _dead in ("PROXY_URL", "Streamlit secrets", "MoneyDJ", "收益分配", "即可解鎖"):
+            assert _dead not in _blob, _dead                              # 全域 PROXY 警示／歸因／MoneyDJ 導流皆不在
+
+    def test_portfolio_and_render_exact(self):
+        assert "（成分股資料不足，無法判定重疊度）" in _str_consts("src/ui/etf/etf_tab_portfolio.py")
+        _r = "\n".join(_str_consts("src/ui/render/etf_render.py"))
+        assert "上游成分股資料暫時無法取得" in _r
+        assert "端點變動" not in _r and "MoneyDJ" not in _r
+        assert "MoneyDJ" not in "\n".join(_str_consts("src/ui/etf/etf_tab_portfolio.py"))

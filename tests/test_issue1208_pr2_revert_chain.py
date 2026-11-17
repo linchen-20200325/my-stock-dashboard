@@ -62,16 +62,34 @@ I1208PR2_REVERT_PAIRS = {'app.py': (('            #   render_data_health_raw 內
                                          '        "ism_pmi":       _traced("ism_pmi", "台灣製造業 PMI（中華經濟研究院 '
                                          'CIER 等 8 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）", _g(macro_info, '
                                          '"ism_pmi", "value"), macro_info),\n'),),
- 'src/data/core/data_registry.py': (("    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', "
-                                     "'source':'CIER-EN + data.gov.tw 6100 + 7 段並行',\n"
+ 'src/data/core/data_registry.py': (('    # #1208 GPT 2026-11-17 定稿（留言 6955097932）：source／endpoint 只列現存 7 '
+                                     '源（無 MoneyDJ、無退役 macromicro）；\n'
+                                     '    # 退役 macromicro ping_url 清掉 → 未經 Gate 驗證新健康端點前 '
+                                     'pingable=False、ping_url=None。\n'
+                                     "    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', "
+                                     "'source':'CIER-EN／政府資料開放平臺／NDC／CIER 首頁／StockFeel／鉅亨／CIER cid8（7 "
+                                     "源並行）',\n"
                                      "     'endpoint':'cier.edu.tw/en/eco (首選) / "
-                                     'data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / '
-                                     "stockfeel / cnyes',\n",
+                                     'data.gov.tw/api/v2/rest/dataset/6100 / index.ndc.gov.tw / cier.edu.tw '
+                                     '(首頁) / stockfeel.com.tw / news.cnyes.com / '
+                                     "cier.edu.tw/news/list?cid=8',\n"
+                                     "     'identifier':'cier-pmi',\n"
+                                     "     'frequency':'monthly', 'requires_key':None,\n"
+                                     "     'usage':'台灣製造業景氣領先指標 (>50 擴張，CIER 中華經濟研究院每月第一個工作日公布；v18.142 確認首源為 "
+                                     "data.gov.tw dataset 6100)',\n"
+                                     "     'state_key':'macro_info.ism_pmi.date', 'pingable':False, "
+                                     "'ping_url':None},\n",
                                      "    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', "
                                      "'source':'CIER-EN + data.gov.tw 6100 + 8 段並行',\n"
                                      "     'endpoint':'cier.edu.tw/en/eco (首選) / "
                                      'data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / '
-                                     "stockfeel / cnyes / moneydj',\n"),
+                                     "stockfeel / cnyes / moneydj',\n"
+                                     "     'identifier':'cier-pmi',\n"
+                                     "     'frequency':'monthly', 'requires_key':None,\n"
+                                     "     'usage':'台灣製造業景氣領先指標 (>50 擴張，CIER 中華經濟研究院每月第一個工作日公布；v18.142 確認首源為 "
+                                     "data.gov.tw dataset 6100)',\n"
+                                     "     'state_key':'macro_info.ism_pmi.date', 'pingable':True,\n"
+                                     "     'ping_url':'https://www.macromicro.me/charts/22/taiwan-pmi'},\n"),
                                     ('    # Issue #1208 PR2（2026-11-17）：「MoneyDJ ETF '
                                      '基本資料」（Basic0004）與「基金淨值」\n'
                                      '    # （MoneyDJ YP010001）兩筆登錄已移除 —— MoneyDJ 全入口零請求止血，程式已無對應 caller。\n',
@@ -191,27 +209,28 @@ I1208PR2_REVERT_PAIRS = {'app.py': (('            #   render_data_health_raw 內
  'src/data/macro/macro_snapshot.py': (('    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 多源並行賽跑;#1208 '
                                        'PR2 起 7 源)。\n',
                                        '    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 8 源並行賽跑)。\n'),
-                                      ("    return {'_err_pmi': _result.get('_err_pmi', '7 源並行全失敗')}\n",
+                                      ("    return {'_err_pmi': _result.get('_err_pmi', '本次 7 個來源均未取得可用的 PMI "
+                                       "資料。')}\n",
                                        "    return {'_err_pmi': _result.get('_err_pmi', '8 源並行全失敗')}\n")),
  'src/data/macro/tw_macro.py': (('# 當期 TW PMI 由 `fetch_tw_pmi`(macro_core,多源賽跑)供應,不需本死路徑。\n',
                                  '# 當期 TW PMI 由 `fetch_tw_pmi`(macro_core,8 源賽跑)供應,不需本死路徑。\n'),),
- 'src/services/ai_qa_service.py': (('            # #1208 PR2（2026-11-17）：來源字樣對齊實際 '
-                                    'caller（原「yfinance+SITCA」漏寫當時的第一順位\n'
-                                    '            # MoneyDJ；MoneyDJ 移除後費用率鏈＝SITCA→元大(主動式)→yfinance）。文案待 '
-                                    'ChatGPT 定稿。\n'
-                                    '            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;"\n'
-                                    '                                     '
-                                    '"AUM、Beta、配息＝yfinance；費用率＝SITCA→元大(主動式)→yfinance)",\n'
+ 'src/services/ai_qa_service.py': (('            # #1208 GPT 2026-11-17 定稿（留言 6955097932）：候選來源說明，不冒稱命中（無逐因子 '
+                                    'hit-level 證據）；\n'
+                                    '            # as_of 維持 None（多個慢變因子無共同資料日）。\n'
+                                    '            "provenance": {"source": "ETF 品質（AUM／Beta '
+                                    '候選：yfinance；費用率候選：SITCA→元大投信〔僅主動式 ETF〕"\n'
+                                    '                                     "→yfinance；配息穩定度：既有配息資料；缺值不補）",\n'
                                     '                           "as_of": None}}\n',
                                     '            "provenance": {"source": "ETF '
                                     '品質(AUM規模/費用率/配息穩定度/beta;yfinance+SITCA)", "as_of": None}}\n'),),
  'src/ui/tabs/tab_edu.py': (('#: ⓪ 資料來源地圖「🇹🇼 TW PMI」列的來源欄。\n'
-                             '#: #1208 PR2（2026-11-17，DEC-189）：MoneyDJ 移出 PMI 競速 → 7 源；文案待 ChatGPT 定稿。\n'
+                             '#: #1208 PR2（2026-11-17，DEC-189）：MoneyDJ 移出 PMI 競速 → 7 源；#1208 GPT 2026-11-17 '
+                             '定稿（留言 6955097932）。\n'
                              '#: 抽成模組常數，讓舊批次「整頁 golden」測試可暫時換回修前原文\n'
                              '#: （tests/test_issue1208_pr2_revert_chain.py::i1208pr2_restore_edu_text；⛔ '
                              '不是洗掉本批改動）。\n'
-                             "_TW_PMI_SOURCE_MAP_TEXT = '7 源賽跑：CIER-EN → data.gov.tw → NDC → CIER首頁 → "
-                             "StockFeel → Cnyes → CIER-cid8'\n"
+                             "_TW_PMI_SOURCE_MAP_TEXT = '台灣 PMI：7 源並行（CIER-EN、政府資料開放平臺、NDC、CIER "
+                             "首頁、StockFeel、鉅亨、CIER cid8）。'\n"
                              '\n'
                              '\n',
                              ''),
@@ -292,12 +311,12 @@ def test_i1208pr2_link_is_reached_from_i1208_head():
 
 
 def test_tw_pmi_source_map_text_is_current():
-    """現行教學地圖 TW PMI 來源欄：7 源、無 MoneyDJ（文案待 ChatGPT 定稿），且與 registry 數量一致。"""
+    """現行教學地圖 TW PMI 來源欄：GPT 2026-11-17 定稿逐字、7 源、無 MoneyDJ，且與 registry 數量一致。"""
     import src.ui.tabs.tab_edu as TE
     from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
     assert TE._TW_PMI_SOURCE_MAP_TEXT == (
-        '7 源賽跑：CIER-EN → data.gov.tw → NDC → CIER首頁 → StockFeel → Cnyes → CIER-cid8')
-    assert TE._TW_PMI_SOURCE_MAP_TEXT.startswith(f'{len(PMI_SOURCE_REGISTRY)} 源')
+        '台灣 PMI：7 源並行（CIER-EN、政府資料開放平臺、NDC、CIER 首頁、StockFeel、鉅亨、CIER cid8）。')
+    assert f'{len(PMI_SOURCE_REGISTRY)} 源並行' in TE._TW_PMI_SOURCE_MAP_TEXT
     assert 'MoneyDJ' not in TE._TW_PMI_SOURCE_MAP_TEXT
 
 

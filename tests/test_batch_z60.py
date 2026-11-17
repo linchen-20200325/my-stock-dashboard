@@ -920,7 +920,12 @@ class TestOldFilesUntouched:
     #   `src/ui/pages/health_inspector.py`（PMI 7 段、費用率／持股來源字樣與實際鏈一致）、`src/ui/tabs/tab_edu.py`（教學地圖 TW PMI 列 7 源，
     #   抽成模組常數 `_TW_PMI_SOURCE_MAP_TEXT`）、`app.py`（一行註解）。其餘 83 檔一個字都沒動。指紋依本 docstring 的指示同步更新
     #   （⛔ 未回退該改動）；反向守衛見 `tests/test_issue1208_moneydj_zero_requests.py`。
-    _BASE_DIGEST = "e88ebc7b9acd8a175154fffbf4962133632cfcadc6b5f4b60c6ac4dbf7b03987"
+    # ~~"e88ebc7b9acd8a175154fffbf4962133632cfcadc6b5f4b60c6ac4dbf7b03987"~~（#1208 PR2 首版 78d7e9a3）
+    # 📌 #1208 PR2 文案依 GPT 2026-11-17 定稿（Issue #1208 留言 6955097932；非作者 QA 退回項，⛔ 不是漏改）：
+    #   只動 `src/ui/etf/etf_tab_single.py`（刪全域 PROXY 警示；`_prem_reason`／NAV 說明改固定缺值句；`_err_expense`／`_err_nav`
+    #   改定稿句並依實際嘗試路徑選句）、`src/ui/etf/etf_tab_portfolio.py`、`src/ui/render/etf_render.py`、`src/ui/pages/health_inspector.py`、
+    #   `src/ui/tabs/tab_edu.py`（`_TW_PMI_SOURCE_MAP_TEXT`）。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
+    _BASE_DIGEST = "57a5e5f48ff6989309c516b2380d8468f4073a0b44cbb198c13d7610340ab354"
 
     def test_no_diff_against_base(self):
         import hashlib

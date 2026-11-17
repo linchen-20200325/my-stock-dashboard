@@ -822,7 +822,7 @@ def fetch_tw_pmi_block() -> dict:
     _result = _ftp()
     if _result.get('value') is not None:
         return {'ism_pmi': _result}
-    return {'_err_pmi': _result.get('_err_pmi', '7 源並行全失敗')}
+    return {'_err_pmi': _result.get('_err_pmi', '本次 7 個來源均未取得可用的 PMI 資料。')}
 
 
 def _ndc_prev_month_keys(df, value_col: str, cur_date: str) -> dict:

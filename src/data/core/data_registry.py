@@ -75,13 +75,14 @@ DATA_REGISTRY: list[dict[str, Any]] = [
      'usage':'通膨判讀、Fed 升降息預測',
      'state_key':'macro_info.us_core_cpi.date', 'pingable':True,
      'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL'},
-    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN + data.gov.tw 6100 + 7 段並行',
-     'endpoint':'cier.edu.tw/en/eco (首選) / data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / stockfeel / cnyes',
+    # #1208 GPT 2026-11-17 定稿（留言 6955097932）：source／endpoint 只列現存 7 源（無 MoneyDJ、無退役 macromicro）；
+    # 退役 macromicro ping_url 清掉 → 未經 Gate 驗證新健康端點前 pingable=False、ping_url=None。
+    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN／政府資料開放平臺／NDC／CIER 首頁／StockFeel／鉅亨／CIER cid8（7 源並行）',
+     'endpoint':'cier.edu.tw/en/eco (首選) / data.gov.tw/api/v2/rest/dataset/6100 / index.ndc.gov.tw / cier.edu.tw (首頁) / stockfeel.com.tw / news.cnyes.com / cier.edu.tw/news/list?cid=8',
      'identifier':'cier-pmi',
      'frequency':'monthly', 'requires_key':None,
      'usage':'台灣製造業景氣領先指標 (>50 擴張，CIER 中華經濟研究院每月第一個工作日公布；v18.142 確認首源為 data.gov.tw dataset 6100)',
-     'state_key':'macro_info.ism_pmi.date', 'pingable':True,
-     'ping_url':'https://www.macromicro.me/charts/22/taiwan-pmi'},
+     'state_key':'macro_info.ism_pmi.date', 'pingable':False, 'ping_url':None},
     {'category':'🌍 美國總經', 'name':'BLS CPI 備援', 'source':'BLS',
      'endpoint':'api.bls.gov/publicAPI/v2/timeseries/data', 'identifier':'CUUR0000SA0',
      'frequency':'monthly', 'requires_key':None,

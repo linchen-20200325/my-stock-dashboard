@@ -570,7 +570,7 @@ def render_data_health_raw():
            date_str=str((_ma_g.get('us_core_cpi') or {}).get('date',''))[:10] or None,
            fred_series_id='CPILFESL', indicator='us_core_cpi')
     _g_add('🇹🇼 台灣製造業 PMI',
-           'CIER-EN+data.gov.tw+NDC+CIER首頁+StockFeel+鉅亨+CIER-cid8 7 段', 'monthly',  # #1208 PR2 文案（待 ChatGPT 定稿）
+           'CIER-EN／政府資料開放平臺／NDC／CIER 首頁／StockFeel／鉅亨／CIER cid8（7 源並行）', 'monthly',  # #1208 GPT 2026-11-17 定稿
            date_str=str((_ma_g.get('ism_pmi') or {}).get('date',''))[:10] or None,
            indicator='ism_pmi')
     _g_add('NDC 景氣燈號',      'StockFeel+MacroMicro 雙源', 'monthly',
@@ -769,8 +769,8 @@ def render_data_health_raw():
             ('美國核心 CPI YoY',       'us_core_cpi', 'monthly', '_err_cpi',
              'FRED',                          'CPILFESL',                            True),
             ('🇹🇼 台灣製造業 PMI',     'ism_pmi',     'monthly', '_err_pmi',
-             # #1208 PR2 文案（待 ChatGPT 定稿）：MoneyDJ 移出 PMI 競速 → 7 段
-             'CIER-EN+data.gov.tw+NDC+CIER首頁+StockFeel+鉅亨+CIER-cid8 7段',
+             # #1208 GPT 2026-11-17 定稿：與上方 PMI 列同一文字
+             'CIER-EN／政府資料開放平臺／NDC／CIER 首頁／StockFeel／鉅亨／CIER cid8（7 源並行）',
              'cier.edu.tw / data.gov.tw/dataset/6100 / index.ndc / stockfeel / cnyes', True),
             ('NDC 景氣燈號分數',        'ndc_signal',  'monthly', '_err_ndc',
              'FinMind-TBI+StockFeel+MacroMicro 三源',
@@ -1259,8 +1259,8 @@ def render_data_health_raw():
                                         else _private_msg if _is_private_etf
                                         else _e1.get('_err_expense')),
                              probe_status=('na' if _exp_na else None),
-                             # #1208 PR2 文案（待 ChatGPT 定稿）：與 get_etf_expense_ratio_safe 實際順序一致
-                             source='SITCA → 元大(主動式) → yfinance',
+                             # #1208 GPT 2026-11-17 定稿：候選查詢順序（實際命中以可回查結果為準）
+                             source='SITCA → 元大投信（僅主動式 ETF）→ yfinance',
                              endpoint='sitca.org.tw / yuantaetfs / .info',
                              proxy=True))
             # NAV 淨值
@@ -1372,7 +1372,7 @@ def render_data_health_raw():
                         _probe_rows.append(_row(
                             f'{_tk_p} 持股 = {len(_hd)} 檔',
                             _today_ep, FREQ_STATIC,
-                            # #1208 PR2 文案（待 ChatGPT 定稿）：持股來源只剩 yfinance／台灣 Yahoo
+                            # #1208 GPT 2026-11-17 定稿：來源 yfinance／台灣 Yahoo；舊 MoneyDJ 三條備援說明刪除
                             source='yfinance／台灣 Yahoo',
                             endpoint='funds_data → tw.stock.yahoo.com /holding',
                             proxy=True))
@@ -1380,8 +1380,8 @@ def render_data_health_raw():
                         _probe_rows.append(_row(
                             f'{_tk_p} 持股',
                             None, FREQ_STATIC, optional=True,
-                            # #1208 PR2 文案（待 ChatGPT 定稿）
-                            error_msg='yfinance／台灣 Yahoo 皆無持股資料（403 / 端點變動）',
+                            # #1208 GPT 2026-11-17 定稿（來源欄）；錯誤句不預設原因（不寫 403／端點變動）
+                            error_msg='yfinance／台灣 Yahoo 均未取得可用成分股資料',
                             source='yfinance／台灣 Yahoo',
                             endpoint='funds_data → tw.stock.yahoo.com /holding',
                             proxy=True))
