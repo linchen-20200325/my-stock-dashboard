@@ -1519,3 +1519,9 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 未修（已知邊界）：as_of 為未來日無法在 services/ui2 驗（G2 禁時鐘），仍靠 L3 age_days<0 -> None（#1140 C2），測試釘住現況。
 - G1 現況：`read_real_snapshot` 丟例外時 `src/ui2/shell/app.py::run` 無 try/except，整頁崩潰（at.exception 帶出例外訊息）；測試為 strict xfail，降級畫面待 ChatGPT 定稿，本批不修。
 - 仍登記待 Gate：D1 `field_from_spec`、D2 `validate_ohlc_window` as_of=None 邊界。#1201（DATA_QA_NOT_VERIFIED）與 Cloud runtime 狀態不變。
+
+## 2026-11-17 Issue #1204 G1 Real feed 全域讀取例外 → 五頁安全降級（append-only；自跑，未經第二組驗證）
+- 狀態：**IMPLEMENTATION COMPLETE，待非作者 QA／同 head 五項原生 CI／merge**。Cloud runtime **NOT VERIFIED**。
+- 實作：`src/ui2/shell/app.py::run` 僅在 Real 分支、僅接 `Exception`（非 BaseException）於 `read_real_snapshot()` 邊界降級為 `RealFeedSnapshot.of(None,"Exception",None,"Exception",kbar_error="Exception")`，走既有 `get_real_page_vm`；導覽之後、本頁內容之前輸出一條固定警示（`shared/ui2_contract/text.py::REAL_FEED_DEGRADED_TEXT`，重用既有 DANGER chip，無新 CSS；`html.py::degraded_notice_html`）。不記例外原文。
+- 測試：`test_1202_g1_shell_survives_read_real_snapshot_raising` 已移除 strict xfail，改五頁參數化並真 PASS；另增正常 Real／FAKE 控制組與單欄例外控制組（無整頁警示）。突變（移除 try/except、畫面印 str(e)）皆轉紅。viewport 4 份重跑，版面數值零差異，僅 meta 更新；量測腳本不涵蓋降級畫面，未調門檻。
+- #1202 三邊界（as_of 未來日、D1 `field_from_spec`、D2 `validate_ohlc_window`）仍待下一批；#1201 不變。

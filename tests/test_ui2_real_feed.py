@@ -1098,23 +1098,90 @@ def test_1202_bad_regime_snapshot_is_unavailable_everywhere(page):
             assert f.state is FieldState.UNAVAILABLE and f.value_text is None
 
 
-@pytest.mark.xfail(strict=True, reason="待 ChatGPT 定稿降級畫面；#1202")
-def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch):
-    """G1（已知缺陷，未修）：`src/ui2/shell/app.py::run` 無 try/except，`read_real_snapshot` 丟例外 → 整頁以未捕捉例外崩潰
-    （現況：`at.exception` 非空，Streamlit 預設錯誤頁可能帶出例外訊息）。
-    預期（待定稿）：畫面不洩漏例外訊息（"secret-token"）、不顯示任何數值、不崩潰。
-    降級畫面的版面／文案屬設計權限（ChatGPT），本批不修；strict xfail：一旦被修好，本測試轉 XPASS 紅燈提醒移除標記。"""
+def _boom_shell(monkeypatch, exc_factory=lambda: RuntimeError("secret-token")):
     from src.ui2.shell import app as shell
 
     def boom():
-        raise RuntimeError("secret-token")
+        raise exc_factory()
     monkeypatch.setattr(shell, "read_real_snapshot", boom)
+
+
+@pytest.mark.parametrize("page", PAGE_IDS)
+def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch, page):
+    """#1204 G1：`read_real_snapshot` 整體拋 Exception → 五頁安全降級（固定警示＋既有 Unavailable 規則），不崩潰、不洩漏原文。"""
+    _boom_shell(monkeypatch)
     at = _at(dev=True)
     at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+    at.radio(key="ui2_page").set_value(page).run(timeout=60)
     blob = _blob(at)
-    assert "secret-token" not in blob
-    assert "23,456" not in blob
     assert not at.exception
+    assert T.REAL_FEED_DEGRADED_TEXT == "⚠️ 真實資料暫時無法讀取，相關資料已停止顯示。請稍後再試。"
+    assert blob.count(T.REAL_FEED_DEGRADED_TEXT) == 1
+    assert "secret-token" not in blob and "RuntimeError" not in blob and "Traceback" not in blob
+    assert "23,456" not in blob
+    assert not any(lbl in blob for lbl in REGIME_LABEL.values() if lbl)          # 無位階字樣殘留
+    assert "<svg" not in blob and "<rect" not in blob                            # 無日 K 圖（僅剩既有 Unavailable 說明）
+    assert T.REAL_PREVIEW_BANNER_TEXT in blob and "FAKE" not in blob and T.PREVIEW_BANNER_TEXT not in blob
+    # 警示位於導覽（橫幅）之後、本頁第一屏內容之前
+    assert blob.index(T.REAL_PREVIEW_BANNER_TEXT) < blob.index(T.REAL_FEED_DEGRADED_TEXT)
+    assert blob.index(T.REAL_FEED_DEGRADED_TEXT) < blob.index(f'data-ui2-scenario="{SCENARIO_REAL}"')
+    assert at.session_state["ui2_feed"] == "real"
+
+
+def test_1204_degraded_market_page_shows_unavailable_not_values(monkeypatch):
+    _boom_shell(monkeypatch)
+    at = _at(dev=True)
+    at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+    at.radio(key="ui2_page").set_value(P4_MARKET).run(timeout=60)
+    blob = _blob(at)
+    assert "台股加權指數暫時無法讀取" in blob and "市場位階暫時無法讀取" in blob and "台股日 K暫時無法讀取" in blob
+
+
+def test_1204_base_exception_is_not_swallowed(monkeypatch):
+    """只接 Exception：KeyboardInterrupt 必須向上傳播（不得被降級成警示畫面）。直接呼叫 `run()`（bare mode，session_state 為替身 dict）。"""
+    from src.ui2.shell import app as shell
+
+    class _State(dict):
+        def __getattr__(self, k):
+            return self[k]
+    st_state = _State(ui2_feed="real", ui2_page=PAGE_IDS[0])
+    monkeypatch.setattr(shell.st, "session_state", st_state, raising=False)
+    monkeypatch.setattr(shell.st, "markdown", lambda *a, **k: None)
+    monkeypatch.setattr(shell.st, "query_params", {}, raising=False)
+
+    def boom():
+        raise KeyboardInterrupt()
+    monkeypatch.setattr(shell, "read_real_snapshot", boom)
+    with pytest.raises(KeyboardInterrupt):
+        shell.run()
+
+
+@pytest.mark.parametrize("page", PAGE_IDS)
+def test_1204_control_normal_real_has_no_degraded_notice(monkeypatch, page):
+    _feed(monkeypatch)       # 只為安裝注入版本的 canonical service（真 feed 路徑）
+    at = _at(dev=True)
+    at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+    at.radio(key="ui2_page").set_value(page).run(timeout=60)
+    assert not at.exception and T.REAL_FEED_DEGRADED_TEXT not in _blob(at) and 'data-ui2-degraded' not in _blob(at)
+    if page == P4_MARKET:
+        assert "23,456" in _blob(at)
+
+
+@pytest.mark.parametrize("page", PAGE_IDS)
+def test_1204_control_fake_has_no_degraded_notice(page):
+    at = _at(dev=True)
+    at.radio(key="ui2_page").set_value(page).run(timeout=60)
+    assert not at.exception and T.REAL_FEED_DEGRADED_TEXT not in _blob(at)
+
+
+def test_1204_single_field_exception_keeps_field_protection_without_page_notice(monkeypatch):
+    _feed(monkeypatch, twii_exc=RuntimeError("secret-token"))
+    at = _at(dev=True)
+    at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+    at.radio(key="ui2_page").set_value(P4_MARKET).run(timeout=60)
+    blob = _blob(at)
+    assert not at.exception and "secret-token" not in blob
+    assert T.REAL_FEED_DEGRADED_TEXT not in blob and "台股加權指數暫時無法讀取" in blob
 
 
 def _kbar_fact_xs(xs):  # as_of 取末根日期，隔離「末根≠as_of」旁路，使 xs 格式檢查獨立受測
