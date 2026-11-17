@@ -67,7 +67,7 @@ PREVIEW_BANNER_NOTE = "非真實行情、持股或建議"
 REAL_PREVIEW_BANNER_TEXT = "Real-data Preview（非正式 production default）"
 REAL_PREVIEW_BANNER_NOTE = "僅台股與市場位階為真資料"
 #: Real 讀取整體失敗（`read_real_snapshot` 拋 Exception）時五頁共用的固定警示（#1204；ChatGPT 定稿，逐字）。
-REAL_FEED_DEGRADED_TEXT = "⚠️ 真實資料暫時無法讀取，相關資料已停止顯示。請稍後再試。"
+REAL_FEED_DEGRADED_TEXT = "⚠️ 真實資料讀取失敗，數值已隱藏。"
 
 #: 「規則分支 id」型 provenance 的來源前綴：它是規則分支識別，不是資料來源（Active Contract §8）。
 #: 值留在 `FieldVM.freshness.source`；UI 不把它畫成「來源」chip（P1）。

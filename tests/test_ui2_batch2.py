@@ -565,3 +565,37 @@ def test_real_browser_real_feed_first_screen_and_daily_k(tmp_path):
         p2 = market[0]["p2"]
         assert p2 is not None, vp_name
         assert int(p2.get("chart_bars") or 0) >= 1, (vp_name, p2.get("chart_state"), p2.get("chart_bars"))
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_real_browser_degraded_alert_is_single_line_and_keeps_nav_margin():
+    """#1204 targeted regression：Real 讀取整體失敗的降級畫面（五頁 × 390×844／1440×900）。
+
+    既有門檻原樣套用（`MV.evaluate` 經 `_record`，⛔ 不改門檻定義）；另對降級態的手機 📊 市場頁套用既有常數
+    `MV.P2_NAV_MARGIN_MIN_PX`（160）——既有 `p2_nav_margin_160` 只涵蓋 stale／unavailable 場景，不含 Real 場景，
+    故降級警示折成兩行（實測 −22px → 146.6px）原本不會被抓到。警示須單行、role=status、在固定導覽之下。
+    """
+    from shared.ui2_contract.pages import P4_MARKET
+    from shared.ui2_contract.text import REAL_FEED_DEGRADED_TEXT
+    from tests.ui2_browser import launch_or_fail, require_browser
+    from tests.ui2_viewport import degraded as DG
+    with require_browser()() as p:
+        launch_or_fail(p).close()
+    proc, url = DG.start_degraded_server(ROOT)
+    try:
+        rows = DG.run_degraded(url)
+    finally:
+        proc.kill()
+    assert len(rows) == 2 * len(PAGE_IDS)
+    for r in rows:
+        tag = (r["viewport_name"], r["page"])
+        a = r["alert"]
+        assert a is not None, tag
+        assert a["role"] == "status" and a["visible"] and a["text"].strip() == REAL_FEED_DEGRADED_TEXT, (tag, a)
+        assert a["text_lines"] == 1, (tag, "警示須單行", a)
+        assert a["top"] >= a["nav_bottom"] - 0.5, (tag, "警示被固定導覽遮住", a)
+        assert not a["body_leak"], tag
+        assert r["record"]["pass"], (tag, r["record"]["failures"])
+        if r["vw"] <= MV.MOBILE_MAX_W and r["page"] == P4_MARKET:
+            assert r["nav_margin"] is not None and r["nav_margin"] >= MV.P2_NAV_MARGIN_MIN_PX - 0.05, (tag, r["nav_margin"])

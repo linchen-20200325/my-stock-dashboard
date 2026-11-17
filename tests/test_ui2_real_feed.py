@@ -1115,7 +1115,7 @@ def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch, page):
     at.radio(key="ui2_page").set_value(page).run(timeout=60)
     blob = _blob(at)
     assert not at.exception
-    assert T.REAL_FEED_DEGRADED_TEXT == "⚠️ 真實資料暫時無法讀取，相關資料已停止顯示。請稍後再試。"
+    assert T.REAL_FEED_DEGRADED_TEXT == "⚠️ 真實資料讀取失敗，數值已隱藏。"
     assert blob.count(T.REAL_FEED_DEGRADED_TEXT) == 1
     assert "secret-token" not in blob and "RuntimeError" not in blob and "Traceback" not in blob
     assert "23,456" not in blob
