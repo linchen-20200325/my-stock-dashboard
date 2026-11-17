@@ -1552,3 +1552,6 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 15 項使用者／LLM 可見文字已依 GPT 17:05Z 定稿（#1208 留言 6955097932）施工，不再「待定稿」；`etf_tab_single` 全域 PROXY 警示已刪；PMI registry 列 `pingable=False, ping_url=None`。零請求程式碼未再改動。
 - 待 GPT 判斷的非表列殘句與 QA M3（`_likely_private` 誤判風險）見 BACKLOG 同日「文案依 ChatGPT 定稿回修」段。
 - 回修後本地 fast lane＝40064 passed／38 skipped／3 xfailed／0 failed。
+
+## 2026-11-17 Issue #1208 PR2｜ChatGPT 簽核（PR #1210 留言 6963995185）
+- 前段「15 項逐字」更正為 14 項逐字＋1 項（被動式費用率缺值句）依 GPT 規則推導；N1–N3 已簽核原樣；(e) etf_render 括號只留「上游成分股資料暫時無法取得」已施工。死碼 LOW 項見 BACKLOG 同日段。

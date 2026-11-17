@@ -2894,3 +2894,9 @@
 - **QA M3 風險揭露（未改邏輯；owner ChatGPT／量化審閱）**：`etf_tab_single._likely_private`（台股代號且 AUM、費用率、NAV 三者皆缺 ⇒ 視為私募／受限 ETF、診斷改走不適用分支）在 AUM 只剩 yfinance 後，誤判機率可能上升（yfinance 缺 AUM＋另兩項暫時抓不到時，會把公開 ETF 當成私募並隱藏缺值錯誤）。邏輯本批未動。
 - 另修 `ARCHITECTURE.md` 主動 ETF 持股探測列的刪除線巢狀錯誤（原文保留，單層刪除線＋註記）。
 - 回修後本地 fast lane＝40064 passed／38 skipped／3 xfailed／0 failed。
+
+## 2026-11-17 Issue #1208 PR2｜施工宣稱更正＋ChatGPT 簽核（PR #1210 留言 6963995185；append-only）
+- **更正前段宣稱**：「15 項依 GPT 定稿逐字施工」言過其實 → 實為 **14 項逐字**；被動式 ETF 費用率缺值句依 GPT「未實際嘗試的候選不可假稱失敗」規則推導（GPT 主動式原句不可達：`_restricted` 已排除主動式）。
+- ChatGPT 簽核 N1（被動式 `_err_expense`）、N2（淨值／折溢價句）、N3（持股探測錯誤句）原樣；(e) `src/ui/render/etf_render.py` 括號改為「（上游成分股資料暫時無法取得）」，前段登記的「etf_render 句首『海外 IP 受限或』」已刪除、該待辦結案。
+- 補註：`macro_snapshot._err_pmi` 定稿句僅為預設值；production 全敗時帶的是 `macro_core` 的技術錯誤字串。
+- **LOW（登記，不在本批清理）**：`etf_tab_single._ERR_NAV_ALL_TRIED` 常數（無 caller）與 `elif _is_active:` 分支（`_restricted` 已排除主動式，不可達）屬死碼，且被 `tests/test_issue1208_moneydj_zero_requests.py::TestGptFinalCopy` 的原始碼字串測試釘住；日後清理時須同步改測試。Owner：專案 AI；觸發：再動該檔時。
