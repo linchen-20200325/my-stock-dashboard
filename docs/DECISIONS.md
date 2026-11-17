@@ -10637,3 +10637,13 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **採路徑 A（最小）**：只更正 fence **外**的來源類別、決策者、fence 標題與授權效力敘述；5 個 fence 內文與 sha256 **一字未動**（重算與標題行所列一致）。**已更正位置**：DEC-184～187 的標題、來源類別、決策者、fence 標題行、約束力敘述、「客戶選擇／客戶 D 點」類措辭；DEC-009／013／014 的 📌 決策者；`PROJECT_RULES.md` 第 4 節；BACKLOG 2026-11-14 新段；`PROJECT_STATE.md` §70.25；HANDOFF 新現況段（含四（乙）「客戶 E 點」→「提示語 E 點」）。
 - **尚未更正（本 PR 不處理）**：DEC-183 及更早以「客戶逐字 fence」標示的訊息是否同樣含 ChatGPT 擬稿＝NOT VERIFIED，只登記為 BACKLOG `PROVENANCE-DISPATCH-PROMPT-1`，待客戶要求再另批處理；五份文件以外對 DEC-184～187 的引用未盤點；fence 內第一人稱字樣屬 fence 內文，未動。
 - **本更正不改變任何 Gate 與授權範圍**：DG-LIC 維持 HOLD；方案 C 只是已選定的研究方向（非施工授權）；DG-PIT 的「B＋X」類組合為總管於 session 內的推薦（類別丁；repo 內未收錄其定義），**不得記成客戶已解除 Gate**——五份文件新增內容經檢查**沒有**此類記載，DG-PIT 一律為未解除；三支資料 Workflow 維持停用；queued Run 暫不取消、排程不重新啟用。
+
+### DEC-188｜客戶 2026-11-17 取消「ETF 經理人換手策略」並完整移除（Issue #1208；只追加；非 QA PASS）
+
+> 2026-11-17 補登（ID 取下一個未用號；落盤前 `grep -n "DEC-188" docs/*.md PROJECT_RULES.md` 0 命中，DEC-187 為上一號）。**來源**：Issue #1208 2026-11-17T15:09Z 留言（倉庫擁有者帳號張貼，內含使用者原文與 ChatGPT 定稿範圍）；逐字一致性以 GitHub 原留言為準。
+
+- **使用者原文（轉錄自 #1208 留言）**：「那換手策略就不考慮了 這個方式移除」。
+- **決策**：取消 ETF 經理人換手策略（換手偵測、任期／新任判斷、「新經理人 <6 月 → 再給時間」例外、經理人投資建議、每週 MoneyDJ 經理人抓取與資料 PR），完整移除而非暫停；不新增替代建議、不改其他 ETF 分數／公式。取代 #1208 原「僅停用一條每週抓取、續硬化 parser」方向。
+- **關聯**：#1201 已 CLOSED／未合併（陳昱維換手資料 QA FAIL／INSUFFICIENT_SOURCE_PROOF，不得重開）；#1207 CLOSED／NOT_PLANNED（parser 硬化不再施工）；#1116 來源權利證據另行追蹤。
+- **邊界（不因本決策放寬）**：其他 MoneyDJ 取用（費用率／持股／中文名／追蹤指數、macro PMI fallback）**不視為已獲授權**，權利盤點另案；不動 #1119 workflow 清理、branch protection、Secrets、NAS／Proxy／TLS、`src/ui2/**`。
+- **落地**：見 BACKLOG／HANDOFF 2026-11-17 #1208 段、`docs/ARCHIVED_FEATURES.md` 同日段；反向守衛 `tests/test_issue1208_manager_strategy_removed.py`。關閉 #1208 前不得稱主線換手流程已移除。

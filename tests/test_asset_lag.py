@@ -54,22 +54,24 @@ def _m(down=0.0, up=0.0, streak=0):
 
 
 def test_verdict_streak_alert_stock_and_etf():
-    """連續 ≥2 季輸盤 → 🚨。個股(無經理人)與 ETF 都亮,建議換大盤被動。"""
-    v_stock = classify_lag_verdict(_m(streak=4), is_etf=False)
-    assert v_stock["燈號"] == "🚨 連續4季輸盤"
-    assert "0050" in v_stock["動作建議"]
-    v_etf = classify_lag_verdict(_m(streak=2), is_etf=True, tenure_days=800)
-    assert v_etf["燈號"] == "🚨 連續2季輸盤"
-    assert "0050" in v_etf["動作建議"]
+    """連續 ≥2 季輸盤 → 🚨,建議換大盤被動(ETF/個股同一份 SSOT)。"""
+    v4 = classify_lag_verdict(_m(streak=4))
+    assert v4["燈號"] == "🚨 連續4季輸盤"
+    assert "0050" in v4["動作建議"]
+    v2 = classify_lag_verdict(_m(streak=2))
+    assert v2["燈號"] == "🚨 連續2季輸盤"
+    assert "0050" in v2["動作建議"]
 
 
-def test_verdict_streak_new_manager_only_etf():
-    """ETF + 新經理人(<180 天)→ 建議『再給時間』;個股不套用(無經理人)。"""
-    v_new = classify_lag_verdict(_m(streak=3), is_etf=True, tenure_days=90)
-    assert "再給時間" in v_new["動作建議"]
-    # 個股即使傳 tenure_days 也不套新經理人邏輯
-    v_stock = classify_lag_verdict(_m(streak=3), is_etf=False, tenure_days=90)
-    assert "再給時間" not in v_stock["動作建議"]
+def test_verdict_streak_has_no_new_manager_exception():
+    """Issue #1208:「新經理人 <6 月 → 再給時間」例外已移除(客戶取消換手策略)。
+
+    連敗 ≥2 季一律建議換大盤被動,不存在任期輸入、也不存在「再給時間」文案。
+    """
+    v = classify_lag_verdict(_m(streak=3))
+    assert "再給時間" not in v["動作建議"]
+    assert "經理人" not in v["動作建議"]
+    assert "0050" in v["動作建議"]
 
 
 def test_verdict_dual_and_single_weakness():

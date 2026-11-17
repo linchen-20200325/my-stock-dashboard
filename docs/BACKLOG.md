@@ -2867,3 +2867,11 @@
 - 台北牆鐘語意：**僅是 UI「資料日期可顯示性」基準**，⛔ 不是官方 `published_at`、交易日公布判準、歷史可得性／PIT 證據。副作用（明示）：未注入 `today` 時，L1 新鮮度基準由 host 本地日改為台北日（舊 UI `_market_blocks` 亦同；僅在 host≠台北日的時窗有差，消除了卡片與日 K 判準錯位）。
 - 測試：新 `tests/test_issue1202_future_as_of.py`（55 項：+1／+3、=基準／基準-1、`>` 邊界、stale 10 天、基準缺失／as_of 缺失或無法解析、fresh／STALE／FAULT／FAKE 控制組、台北日與 host 日不同時 L1／卡片／日 K 同基準、每次呼叫僅取一次時鐘、feed 逐欄拷貝、其他 CONTRACT_ERROR 文案不變、新字串單一定義單一使用）；`test_1202_known_gap_future_as_of_cannot_be_checked_without_a_clock` 改釘新行為（名稱保留，註明已解）；`test_b2_consumer_consistency` 的 loader stub 改 `lambda **_k`（L3 現在恆明確傳 `today=`）。突變 10 組（移除比對、`>`→`>=`、卡片／日 K 分支 today 改回 None、日 K 驗證重取時鐘、validate 不 raise、spec 不轉 unavailable、新字串套泛用 CONTRACT_ERROR、子類代碼塌縮、feed 不拷貝）全數轉紅，驗後復原。
 - 維持登記不動：#1202 (2) `field_from_spec` 空字串／NaN、(3) `validate_ohlc_window(as_of=None)`——Real 路徑不可達。#1201、#1197、NAS/Secrets、Cloud/工作流刪除不變，未混入。
+
+## 2026-11-17 Issue #1208 ETF 經理人換手策略完整移除（append-only；自跑，未經第二組驗證）
+- 狀態：**IMPLEMENTED（本地 commit，未 push／未開 PR）**；待非作者 QA／同 head 五項原生 CI／merge／main push CI。關閉 #1208 前不得稱主線換手流程已移除。
+- 範圍：客戶 2026-11-17 取消換手策略（#1208 留言 15:09Z）。移除經理人抓取／換手偵測／任期例外／UI 經理人卡與提示／health_inspector 經理人診斷與 MoneyDJ 經理人 regex 深度診斷；刪除 `.github/workflows/update_etf_managers.yml`、`scripts/update_etf_managers.py`、`src/data/etf/etf_managers.json`、`src/data/etf/etf_manager_watchlist.json`、`tests/test_etf_managers_data_pr.py`；`publish_data_pr` 只拿掉 etf_managers.json 登記，其他 job 不動。細節見 `docs/ARCHIVED_FEATURES.md` 同日段、DEC-188。
+- caller 矩陣：`fetch_etf_manager` 的 consumer 僅 etf_calc 弱勢度列（經理人／任期欄＋任期例外）、etf_tab_single 經理人卡、health_inspector 兩處、etf_dashboard re-export（無下游）⇒ 皆屬換手策略，無合法非換手 consumer ⇒ 刪除。
+- 測試：新增 `tests/test_issue1208_manager_strategy_removed.py`（41 項，含 mutation 守衛；以 HEAD 版 asset_lag／etf_tab_single 回填驗證 25 項轉紅）；更新 `test_asset_lag`、`test_active_etf_fallback`、`test_pr_q2_etf_provenance`、`test_pr_q5c_singles`、`test_sec3_scrub_legacy_pages`、`test_c3_layering_guard`。
+- 未做（另案）：其他 MoneyDJ 呼叫入口（費用率／持股／中文名／追蹤指數、macro PMI fallback）的權利盤點維持獨立唯讀任務，**不因本批宣稱已獲授權**；#1119 workflow 清理、branch protection／Secrets／NAS／Proxy 不動；`src/ui2/**` 未動。
+- 舊鏈守衛同步（有意識，非放寬）：`tests/test_batch_z60.py` 舊 UI 指紋依其 docstring 慣例更新並註明 #1208；`shared/signal_thresholds.py` 被 DEC-074 等還原鏈管 ⇒ 新增鏈頭節 `tests/test_issue1208_revert_chain.py`（基底＝efa0e015 sha），由 `twii_ohlc_revert_for` 開頭先呼叫。本地 fast lane（`pytest`，同 pr-check.yml）＝40035 passed／38 skipped／3 xfailed／0 failed。

@@ -1412,3 +1412,8 @@
 - **防重問守衛**：再次請示客戶前須先查證既有 DEC／BACKLOG／Issue／PR／最新 Gate，詳見 `PROJECT_RULES.md` 第 4 節「請示前查證」（DEC-187）；不新增請示情境、不放寬任何高風險 Gate。
 - **仍 HOLD／未授權**：本批一個都沒解除。完整禁止／HOLD 清單只在 `docs/HANDOFF.md` 檔尾「📌 決策閉環 Batch 1 後最新接手點」五、（以及 DEC-183／DEC-184／DEC-186），此處不重抄。
 - 出處：DECISIONS DEC-184～DEC-187；BACKLOG 檔尾「2026-11-14｜決策閉環與 Open Items 對帳（Batch 1）」（`WORKFLOW-PAUSE-3-DATA`、`DGLIC-PER-DATASET-MATRIX`、`DGPIT-LAYERED-GAPS`、`TWII-ONLY-PUBLISH-SPLIT`、`BR-RULE-RECONCILE`、`PREASK-GUARD-1` 等）；HANDOFF 檔尾「📌 決策閉環 Batch 1 後最新接手點」。本節單組撰寫，未經非作者獨立 QA。
+
+### 70.26 Issue #1208 ETF 經理人換手策略移除後狀態（2026-11-17；只追加；不改既有節；非 QA PASS；單組撰寫，未經非作者獨立 QA）
+
+- **ETF**：經理人不再是投資因子。單檔 ETF 頁不顯示經理人／任期／換手／新任；弱勢度燈號只看價格績效（相同指標＝相同結論）；不再有每週 MoneyDJ 經理人抓取 workflow 或經理人資料 PR。其餘 ETF 指標（價格、配息、AUM、Beta、費用率、持股、品質評等）不變。
+- **狀態**：本地已實作待 PR／QA／CI／merge；決策 DEC-188；細節見 BACKLOG／HANDOFF 2026-11-17 #1208 段、`docs/ARCHIVED_FEATURES.md`。其他 MoneyDJ 來源權利仍未核准、另案追蹤。

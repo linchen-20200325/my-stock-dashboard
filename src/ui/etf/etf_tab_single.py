@@ -119,7 +119,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         return
 
     # ── PROXY 健診：MoneyDJ／TWSE 封鎖海外資料中心 IP，未設 PROXY_URL 時，
-    #    內扣費用率／折溢價／經理人／中文名／AUM 全 N/A（這是 N/A 的真正原因）──
+    #    內扣費用率／折溢價／中文名／AUM 全 N/A（這是 N/A 的真正原因）──
     if ticker.endswith(('.TW', '.TWO')):
         import os as _os_prx
         _has_proxy = bool(_os_prx.environ.get('PROXY_URL')
@@ -133,7 +133,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         if not _has_proxy:
             st.warning(
                 '⚠️ 未偵測到 **PROXY_URL**：MoneyDJ／TWSE 封鎖海外資料中心 IP'
-                '（Streamlit Cloud 美國 IP），因此 **內扣費用率／折溢價／基金經理人／'
+                '（Streamlit Cloud 美國 IP），因此 **內扣費用率／折溢價／'
                 '中文名／AUM** 會是 N/A。請在本 App 的 **Streamlit secrets** 設定 '
                 '`PROXY_URL`（家用 NAS 台灣 IP，與新聞專案同一台）即可解鎖。')
 
@@ -219,46 +219,6 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
             '- **Beta（β）**：相對大盤的波動敏感度。**β≈1** 與大盤同步；**β>1** 漲跌更兇（攻擊型）；**β<1** 較抗跌（防禦型）—— 配置時用來控整體風險。\n'
             '- **AUM（基金規模）**：總管理資產。**太小（如 <10 億）有清算下市風險**；規模大則流動性好、買賣價差小。'
         )
-
-    # ── 基金經理人 + 異動偵測（ETF 表現與經理人相關，換手須提醒）──────
-    if ticker.endswith(('.TW', '.TWO')):
-        try:
-            from src.data.etf import fetch_etf_manager, track_etf_manager_change
-            _mgr = fetch_etf_manager(ticker)
-            _chg = track_etf_manager_change(ticker, _mgr)
-            if _mgr and _mgr.get('name'):
-                _since = _mgr.get('since')
-                _td = _mgr.get('tenure_days')
-                # 持久檔 / /tmp 推算的 tenure（MoneyDJ 未揭露到職日時）
-                _td_approx = _chg.get('tenure_days') if _chg.get('tenure_approx') else None
-                if isinstance(_td, int):
-                    _tenure_txt = (f'{_td // 30} 個月' if _td < 365
-                                   else f'{_td / 365:.1f} 年')
-                elif _since:
-                    _tenure_txt = f'自 {_since}'
-                elif isinstance(_td_approx, int) and _td_approx > 0:
-                    _tenure_txt = (f'≥{_td_approx} 天' if _td_approx < 365
-                                   else f'≥{_td_approx / 365:.1f} 年')
-                else:
-                    _tenure_txt = '任期未揭露'
-                mc1, mc2 = st.columns([1, 1])
-                mc1.metric('基金經理人', _mgr['name'])
-                _tenure_help = ('ETF 績效與經理人選股/換股策略高度相關，任期越短越需觀察。'
-                                + ('（任期資料不足，以系統首見日估算）' if _chg.get('tenure_approx') else ''))
-                mc2.metric('任期', _tenure_txt, help=_tenure_help)
-                if _chg.get('changed'):
-                    _colored_box(
-                        f'🔁 <b>經理人異動</b>：<b>{_chg["prev"]}</b> → '
-                        f'<b>{_mgr["name"]}</b>（偵測於 {_chg.get("detected_at")}）'
-                        '；新經理人選股風格可能改變，建議重新檢視持股與績效。', 'red')
-                elif _chg.get('is_new'):
-                    _colored_box(
-                        f'🆕 <b>新任經理人</b>：{_mgr["name"]}（任期 {_tenure_txt}）'
-                        '，操盤績效尚短、待觀察，暫不宜只看歷史報酬下結論。', 'yellow')
-            else:
-                st.caption('👤 基金經理人：查無資料（MoneyDJ／SITCA 未揭露或抓取失敗）')
-        except Exception as _e_mgr:
-            st.caption(f'👤 經理人資訊載入失敗：{type(_e_mgr).__name__}')
 
     # ── 自製品質評等（4 因子：AUM / 費用率 / 殖利率穩定度 / Beta）──
     try:

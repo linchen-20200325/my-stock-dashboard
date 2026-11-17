@@ -1523,11 +1523,9 @@ VPOC_PRESSURE_DISTANCE_THRESHOLD: float = 0.15
 當前價 < VPOC 且 (VPOC-現價)/現價 < 0.15 → 判定上方有近 N 日最大量套牢賣壓。
 原 src/compute/strategy/v4_strategy_engine.py:214 inline。"""
 
-# ── #5 ETF 基金經理新任門檻(etf_calc 經理人燈號)──
-ETF_MANAGER_TENURE_NEW_DAYS: int = 180
-"""ETF 基金經理「新任」判定門檻(單位:天,約 6 個月)。
-任期 <180 天視為新經理人,表現待觀察 → UI 顯示「再給時間」建議。
-原 src/compute/etf/etf_calc.py:915 inline。"""
+# ── #5(已移除)ETF 基金經理新任門檻 ETF_MANAGER_TENURE_NEW_DAYS ──
+# Issue #1208(2026-11-17 客戶取消 ETF 經理人換手策略):唯一 consumer
+# asset_lag.classify_lag_verdict 的「新經理人 <6 月再給時間」例外已移除,本常數一併刪除。
 
 # ── #6 FGMS 存貨營收背離 — 無背離資料時的 YoY 退路評分 ──
 FGMS_NO_DIV_GOOD_SCORE: int = 65

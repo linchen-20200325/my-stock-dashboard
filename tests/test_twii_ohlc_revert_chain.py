@@ -100,6 +100,11 @@ def _rel(file_path) -> str:
 def twii_ohlc_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 PR-1 之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 #1208（2026-11-17；有意識的接鏈，⛔ 不是漏改）：#1208 刪了 `shared/signal_thresholds.py` 的
+    #   ETF_MANAGER_TENURE_NEW_DAYS（被 DEC-074 等舊鏈管）⇒ 最新的那一批先換回（`i1208_revert_for` 只套一次；
+    #   ⛔ 不動本表與 TWII_OHLC_BASE_SHA）。
+    from tests.test_issue1208_revert_chain import i1208_revert_for
+    code = i1208_revert_for(rel, code)
     pairs = TWII_OHLC_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code
