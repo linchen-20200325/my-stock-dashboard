@@ -81,17 +81,32 @@ class RealFeedContractError(ValueError):
     """
 
 
+class RealFeedFutureAsOfError(RealFeedContractError):
+    """Issue #1202：台股資料日晚於 L3 這次呼叫的單一台北基準日（`TwiiFact.as_of_future is True`）。
+
+    是 `RealFeedContractError` 的**狹義子類**（沿用既有「讀取期驗證、本事實 Unavailable、另一事實照常」路徑），
+    但 `exception_code()` 給它**專用代碼**，讓畫面能把「資料日期不可信」與「資料格式異常」分開；
+    ⛔ 不是格式壞掉，所以不得走泛用 `CONTRACT_ERROR` 文案。基準日只是 UI 的台北牆鐘顯示基準，⛔ 不是 `published_at`／PIT。
+    """
+
+
 #: 錯誤代碼只允許「例外型別名」這種識別字（⛔ 例外訊息／路徑／URL 進 snapshot；全文只進 log）。
 _ERR_CODE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 #: 對外（feed 用）同一條正規式（⛔ 另寫一份）。
 ERROR_CODE_RE = _ERR_CODE_RE
 #: 錯誤代碼：canonical 契約違反（`RealFeedContractError`）。
 CONTRACT_ERROR = "RealFeedContractError"     # ＝類別名（測試鎖定；⛔ dunder 屬性，G2／G2F 通用禁令）
+#: 錯誤代碼：台股資料日在未來（`RealFeedFutureAsOfError`；專用代碼，⛔ 與 `CONTRACT_ERROR` 混用）。
+FUTURE_AS_OF_ERROR = "RealFeedFutureAsOfError"
+#: Issue #1202（ChatGPT 定稿，逐字）：**只**用於已確認的未來資料日（全 repo 僅此一處定義、`twii_card_spec` 一處使用）。
+TWII_FUTURE_AS_OF_TEXT = "台股加權指數：資料日期不可信，暫時無法顯示。"
 
 
 def exception_code(e: BaseException) -> str:
     """例外 → 錯誤代碼（類別名；契約違反＝`CONTRACT_ERROR`）。不經 dunder 屬性：由 `repr(type(e))`
     （`<class 'pkg.Cls'>`）取最後一段；不符正規式 → `Exception`。⛔ 訊息原文。"""
+    if isinstance(e, RealFeedFutureAsOfError):      # 子類先判（它也是 RealFeedContractError）
+        return FUTURE_AS_OF_ERROR
     if isinstance(e, RealFeedContractError):
         return CONTRACT_ERROR
     r = repr(type(e))
@@ -124,6 +139,9 @@ class TwiiFact:
     #: B2（DEC-148）：最近一次抓取三態 ""／NO_NEW_DATA／FETCH_FAILED／UNDETERMINED（L0 `shared.upstream_state` 判定）。
     #: 與 `is_stale`（新鮮度）、`has_upstream_error`（＝FETCH_FAILED）各自獨立；`""` 且 has_upstream_error → 沿用舊讀法（失敗句）。
     upstream_state: str = ""
+    #: Issue #1202：L3 以單一台北基準日比對的結果（`as_of > 基準日` 才 True）；None ＝ 沒有可信基準／as_of 缺失或無法解析
+    #: （⛔ 不判未來）。本檔不讀時鐘（G2），只轉述 L3 的判定；True → `validate_twii_fact` 專用例外。加性尾欄。
+    as_of_future: bool | None = None
 
     def __post_init__(self) -> None:
         if self.error_type and not _ERR_CODE_RE.match(self.error_type):
@@ -351,6 +369,8 @@ def validate_twii_fact(t: TwiiFact) -> None:
     # 身分比較（⛔ `in (True, False, None)`：`1`／`1.0`／`np.True_` 會被 `==` 當成 True 而漏網；複驗 P2-1）
     if not (t.is_stale is True or t.is_stale is False or t.is_stale is None):
         raise RealFeedContractError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
+    if not (t.as_of_future is True or t.as_of_future is False or t.as_of_future is None):
+        raise RealFeedContractError(f"台股：as_of_future 不是 True／False／None：{t.as_of_future!r}")
     if t.ok and t.failed:
         raise RealFeedContractError("台股：ok=True 與 failed=True 矛盾")
     if t.upstream_state not in ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED"):
@@ -370,6 +390,10 @@ def validate_twii_fact(t: TwiiFact) -> None:
     # ⛔ 「不晚於今日」無法在此驗：services/ui2 禁時鐘（G2）；未來日由 L3 轉 age_days=None＋is_stale=True（L1 權威）。
     if t.ok and t.as_of is not None and not _is_valid_iso_date(t.as_of):
         raise RealFeedContractError("台股：as_of 不是有效的 ISO 日期（YYYY-MM-DD）")
+    # Issue #1202：L3 已用同一個台北基準日比對出「資料日在未來」→ 專用子類（畫面＝「資料日期不可信」，⛔ 非格式異常）。
+    # 本檔不讀時鐘：只轉述 L3 的布林；None（無基準／as_of 缺失）不判。
+    if t.ok and t.as_of_future is True:
+        raise RealFeedFutureAsOfError("台股：資料日晚於台北基準日（as_of_future=True）")
     # Issue #1140 C2：age_days 為負＝資料日在未來；L3 已改 None，這裡 fail loud 擋「過期 -N 天」再度流入。
     if t.age_days is not None and t.age_days < 0:
         raise RealFeedContractError(f"台股：age_days 為負（資料日在未來）{t.age_days!r}")
@@ -403,6 +427,8 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
     """台股加權指數 → 📊 `cards.twii` spec（值＝最新一筆收盤，原樣格式化；⛔ 任何計算）。"""
     base: dict[str, Any] = {"key": "twii", "label": "台股", "value": None, "as_of": None, "source": None}
     if snap.twii is None:
+        if snap.twii_error == FUTURE_AS_OF_ERROR:       # Issue #1202：已確認未來資料日（專用代碼）；其他錯誤照舊
+            return {**base, "state": "unavailable", "reason": TWII_FUTURE_AS_OF_TEXT}
         return {**base, "state": "unavailable", "reason": _error_text("台股加權指數", snap.twii_error)}
     t = snap.twii
     validate_twii_fact(t)                       # 防呆：feed 已驗

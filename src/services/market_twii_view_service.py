@@ -53,6 +53,10 @@ class TwiiTrendView:
         open／high／low: 日 K 開高低（**只在 `ohlc_ok is True` 才填**，與 `xs`／`close` 同一批列等長）；
             不合格 → 一律空 tuple（⛔ 不部分填、不剔除壞棒後照畫）。
         n_ohlc: 合格日 K 的根數；可少於要求的 n（資料不足 ⇒ 由 L5 顯示「不足」，⛔ 不補）。不合格 → 0。
+        as_of_future: Issue #1202：資料日是否晚於**本次呼叫的單一台北基準日**（`as_of > 基準日` 才 True；等於不算）。
+            True／False ＝ 已與基準日比對；None ＝ 沒有可信基準日、或 `as_of` 缺失／無法解析 → ⛔ 不判未來
+            （維持既有 fail-closed／stale 語意）。基準日是 UI「資料日期可顯示性」的台北牆鐘，⛔ 不是官方
+            `published_at`、⛔ 不是交易日公布／PIT 證據。與 `age_days<0 → None＋is_stale=True`（下）各自獨立、不改。
     """
 
     ok: bool
@@ -77,6 +81,8 @@ class TwiiTrendView:
     high: tuple[float, ...] = ()
     low: tuple[float, ...] = ()
     n_ohlc: int = 0
+    # ── Issue #1202：未來資料日旗標（加性尾欄、預設 None ⇒ 既有建構方式不受影響）──
+    as_of_future: bool | None = None
 
     def __post_init__(self) -> None:
         # Issue #1140 C2：負的 age_days ＝ 資料日晚於基準日（未來日；L1 `compute_cache_staleness` D2 照實保留負值供診斷）。
@@ -109,15 +115,19 @@ def get_twii_trend_view(n_trading_days: int, *, with_ohlc: bool = False, today=N
         n_trading_days: 取尾端幾列（parquet 每一列就是一個交易日）；< 1 → `ValueError`（⛔ 不默默回空）。
         with_ohlc: False（預設）＝ 原行為（只讀 `load_twii_close`）；True ＝ 改讀 `load_twii_ohlc` **一次**
             （單一快照），收盤卡欄位語意不變，另以 L0 契約驗證尾端 n 列日 K（Issue #1099 PR-1，DEC-156）。
-        today: 基準日（測試注入）；None → 新鮮度沿用 L1 預設（今天），日 K 未來日判定用台北今日。
+        today: 基準日（測試注入）；None → 本次呼叫**只取一次**台北今日（`_taipei_today()`），同一個值明確傳給
+            L1 `today=`（新鮮度）、卡片的未來日比對（`as_of_future`）與日 K 的 `validate_ohlc_window(today=)`
+            （Issue #1202：不再讓 host 本地日與台北日各取一次）。此日期僅是 UI 的台北牆鐘顯示基準，⛔ 不是
+            `published_at`／PIT。台北日取不到 → 該值為 None：L1 沿用自己的預設、`as_of_future=None`（不判未來）。
     """
     if n_trading_days < 1:
         raise ValueError(f"n_trading_days 必須 ≥ 1，收到 {n_trading_days!r}")
     if with_ohlc:
         return _get_twii_trend_view_with_ohlc(n_trading_days, today=today)
+    _l1_today, _base = _card_base(today)
     try:
         from src.data.macro.macro_cache_reader import load_twii_close
-        _s = load_twii_close() if today is None else load_twii_close(today=today)
+        _s = load_twii_close() if _l1_today is None else load_twii_close(today=_l1_today)
     except Exception as _e:  # noqa: BLE001 — 讀不到就講出來（§1），由 L5 決定灰／紅
         print(f"[market_twii_view_service] load_twii_close 失敗：{_e!r}")
         return TwiiTrendView(ok=False, failed=True, error=f"{type(_e).__name__}: {_e}")
@@ -130,7 +140,7 @@ def get_twii_trend_view(n_trading_days: int, *, with_ohlc: bool = False, today=N
         # 畫面沿用既有「讀不到」灰態字樣（不新增使用者可見文案）；具體原因只進 log。
         print(f"[market_twii_view_service] 收盤價未通過價格有效性檢查，整段不用：{_bad}")
         return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT)
-    return TwiiTrendView(**_close_view_kwargs(_s, _attrs, n_trading_days))
+    return TwiiTrendView(**_close_view_kwargs(_s, _attrs, n_trading_days, base=_base))
 
 
 #: 讀不到（檔不存在／壞檔／缺欄／空）時的說明（灰，非例外）。
@@ -157,19 +167,23 @@ def _card_price_problem(_s, _attrs: dict, n_trading_days: int) -> str:
     return ""
 
 
-def _close_view_kwargs(_s, _attrs: dict, n_trading_days: int) -> dict:
-    """收盤序列＋attrs → `TwiiTrendView` 的收盤卡欄位（with_ohlc 兩條路徑共用，語意只寫一處）。"""
+def _close_view_kwargs(_s, _attrs: dict, n_trading_days: int, *, base=None) -> dict:
+    """收盤序列＋attrs → `TwiiTrendView` 的收盤卡欄位（with_ohlc 兩條路徑共用，語意只寫一處）。
+
+    `base`＝本次呼叫的單一基準日（`datetime.date`）；None → `as_of_future=None`（不判未來）。"""
     _tail = _s.tail(n_trading_days)
     _is_stale = _attrs.get("is_stale")
     _age = _attrs.get("age_days")
     _up_err = str(_attrs.get("upstream_error") or "")
     _up_state = str(_attrs.get("upstream_state") or "")       # 缺 → TwiiTrendView.__post_init__ 由 upstream_error 判定
+    _as_of = _iso(_attrs.get("as_of")) or _iso(_tail.index[-1])
     return dict(
         ok=True,
         xs=tuple(_iso(_i) or "" for _i in _tail.index),
         close=tuple(float(_v) for _v in _tail.values),
         n_available=int(len(_s)),
-        as_of=_iso(_attrs.get("as_of")) or _iso(_tail.index[-1]),
+        as_of=_as_of,
+        as_of_future=_as_of_future(_as_of, base),
         is_stale=(bool(_is_stale) if _is_stale is not None else None),
         stale_reason=str(_attrs.get("stale_reason") or ""),
         age_days=(int(_age) if isinstance(_age, (int, float)) and not isinstance(_age, bool) else None),
@@ -186,6 +200,49 @@ def _taipei_today():
     return datetime.now(taipei_tz()).date()
 
 
+def _as_date(v):
+    """基準日 → `datetime.date`；不是日期型別 → None（⛔ 不猜、不用今天代替）。"""
+    from datetime import date, datetime
+
+    if isinstance(v, datetime):
+        return v.date()
+    return v if isinstance(v, date) else None
+
+
+def _card_base(today):
+    """卡片路徑的單一基準日：回 `(傳給 L1 的 today, 比對用的 date)`。
+
+    注入的 `today` 優先（原物件照傳 L1，維持既有行為）；否則**只取一次**台北今日，同一個值給 L1 與比對。
+    台北日取不到 → `(None, None)`：L1 沿用自己的預設、`as_of_future=None`（沒有可信基準 ⛔ 不判未來）。"""
+    if today is not None:
+        return today, _as_date(today)
+    try:
+        _d = _taipei_today()
+    except Exception as _e:  # noqa: BLE001 — 沒有可信基準日：不判未來，維持既有 fail-closed／stale 語意（§1，有 log）
+        print(f"[market_twii_view_service] 取不到台北今日，這次不判斷資料日是否在未來：{_e!r}")
+        return None, None
+    return _d, _d
+
+
+def _as_of_future(as_of, base) -> bool | None:
+    """資料日是否晚於基準日（嚴格 `>`；等於＝今日資料，不算未來）。
+
+    無基準日、`as_of` 缺失或不是有效 ISO 日期 → None（⛔ 不判、⛔ 不當 False 稱「最新」）。純比較，不讀時鐘。"""
+    if base is None or not isinstance(as_of, str):
+        return None
+    import re
+    from datetime import date
+
+    # 嚴格 `YYYY-MM-DD`（ASCII、fullmatch）：⛔ `fromisoformat` 在新版 Python 也吃 `20261118`／週日期等寬鬆格式。
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", as_of):
+        return None
+    try:
+        _d = date.fromisoformat(as_of)
+    except ValueError:
+        return None
+    return _d > base
+
+
 def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTrendView:
     """`with_ohlc=True`：一次讀 `load_twii_ohlc`（單一快照）→ 收盤卡欄位＋日 K 契約結果。
 
@@ -198,8 +255,11 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
         EMPTY, OHLC_OK, READ_FAILED, WINDOW_MISMATCH, validate_ohlc_window,
     )
     try:
+        # Issue #1202：本次呼叫只取一次基準日（注入優先，否則台北今日），L1／卡片比對／日 K 驗證共用同一個值。
+        _base_in = today if today is not None else _taipei_today()
+        _base = _as_date(_base_in)
         from src.data.macro.macro_cache_reader import load_twii_ohlc
-        _df = load_twii_ohlc() if today is None else load_twii_ohlc(today=today)
+        _df = load_twii_ohlc(today=_base_in)
         if _df is None or len(_df) == 0:
             return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT, ohlc_requested=True, ohlc_ok=False,
                                  ohlc_error=EMPTY, ohlc_detail=_UNREADABLE_TEXT)
@@ -211,7 +271,7 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
         if len(_s) == 0:
             return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT, ohlc_requested=True, ohlc_ok=False,
                                  ohlc_error=EMPTY, ohlc_detail="收盤欄全為空值")
-        _kw = _close_view_kwargs(_s, _attrs, n_trading_days)
+        _kw = _close_view_kwargs(_s, _attrs, n_trading_days, base=_base)
 
         _win = _df.tail(n_trading_days)
         _dates = tuple(_iso(_i) or "" for _i in _win.index)
@@ -221,7 +281,7 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
             tuple(_win["low"].tolist()), tuple(_win["close"].tolist()),
             tuple((_v if isinstance(_v, str) else None) for _v in _win["fetched_at"].tolist()),
             as_of=_kw["as_of"],
-            today=(today if today is not None else _taipei_today()),
+            today=_base_in,
         )
         if _ok and _dates != _kw["xs"]:
             # 同快照自檢：通過驗證的視窗（無 NaN close）理應與收盤卡的 dropna 尾端是同一批列；不是就 fail-closed。
