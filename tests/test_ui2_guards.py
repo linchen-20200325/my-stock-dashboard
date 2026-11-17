@@ -160,6 +160,7 @@ def test_g2_vm_layer_is_pure(path):
     "from .real_feed import read_real_snapshot\n",           # 相對 import 繞過（QA 2026-11-03）
     "from ..allocation_service import get_allocation\n",
     # 複驗 P2-3 通用禁令（代表例，非窮舉）
+    "from src.services.connection_diag_service import run_connection_check\n",   # #1110：VM 純度層不得引入連線診斷服務
     "x = obj.__class__\n", "m = __import__('os')\n", "df.to_parquet('x')\n", "from datetime import date as D\nx = D.today()\n",
 ])
 def test_g2_guard_has_teeth(injected):
@@ -297,6 +298,10 @@ def test_g2f_feed_respects_boundary(path):
     "p.write_text('x')\n",
     # 複驗 P2-3（代表例，非窮舉）
     "x = type(e).__name__\n", "from src.services.ui2.real_canonical import real_canonical\n",
+    # #1110 D-T2：real_feed 不得引入連線診斷服務（G2F 精確名稱白名單必紅）
+    "from src.services.connection_diag_service import run_connection_check\n",
+    "import src.services.connection_diag_service\n",
+    "from src.services import connection_diag_service\n",
 ])
 def test_g2f_guard_has_teeth(injected):
     clean = FEED_FILES[0].read_text(encoding="utf-8")
@@ -367,14 +372,70 @@ def test_g4_src_ui2_is_not_confused_with_src_ui():
     assert _mod_match("src.ui.views", "src.ui")
 
 
+#: #1110 D-T2（GPT 核准方案 A′）：唯一一條 AST 精確例外——只有 `app_ui2.py`，只有下列 module＋單一 symbol（無 `as` 別名）。
+#: ⛔ 不得改成整個 `src.services.*`／`src.data.*` 的寬鬆白名單；⛔ 第二個 symbol／第二個檔案都不在例外內。
+G4B_EXACT_EXCEPTIONS: dict[str, tuple[str, str]] = {
+    "app_ui2.py": ("src.services.connection_diag_service", "run_connection_check"),
+}
+
+
+def _g4b_node_approved(n: ast.AST, relpath: str) -> bool:
+    exc = G4B_EXACT_EXCEPTIONS.get(relpath)
+    return bool(exc and isinstance(n, ast.ImportFrom) and n.level == 0 and n.module == exc[0]
+                and len(n.names) == 1 and n.names[0].name == exc[1] and n.names[0].asname is None)
+
+
+def check_l5_service_reads(source: str, relpath: str) -> list[str]:
+    """L5／L6 取數唯一入口：只准 `src.services.ui2`（其餘 `src.services.*`、`src.data.*`、`src.compute.*` 一律違規）；
+    唯一例外＝`G4B_EXACT_EXCEPTIONS`（檔案＋module＋symbol 三者皆精確相符的那一個 ImportFrom 節點）。"""
+    bad: list[str] = []
+    for n in ast.walk(ast.parse(source)):
+        if not isinstance(n, (ast.Import, ast.ImportFrom)) or _g4b_node_approved(n, relpath):
+            continue
+        mods: list[str] = []
+        if isinstance(n, ast.Import):
+            mods = [a.name for a in n.names]
+        elif n.level == 0 and n.module:
+            mods = [n.module] + [f"{n.module}.{a.name}" for a in n.names]
+        for mod in mods:
+            if _mod_match(mod, "src.services") and not _mod_match(mod, "src.services.ui2"):
+                bad.append(f"L{n.lineno}: {mod}")
+            if _mod_match(mod, "src.data") or _mod_match(mod, "src.compute"):
+                bad.append(f"L{n.lineno}: {mod}")
+    return bad
+
+
 def test_g4b_l5_only_reads_services_ui2():
-    """L5 取數唯一入口：只准 `src.services.ui2`（其餘 `src.services.*`、`src.data.*` 一律不准）。"""
+    """L5 取數唯一入口：只准 `src.services.ui2`（其餘 `src.services.*`、`src.data.*` 一律不准）；唯一 AST 精確例外見 `G4B_EXACT_EXCEPTIONS`。"""
     for p in _py(L5_DIR) + [L6_FILE]:
-        for ln, mod in _imports(ast.parse(p.read_text(encoding="utf-8"))):
-            if _mod_match(mod, "src.services"):
-                assert _mod_match(mod, "src.services.ui2"), f"{p.name}:L{ln} {mod}"
-            assert not _mod_match(mod, "src.data"), f"{p.name}:L{ln} {mod}"
-            assert not _mod_match(mod, "src.compute"), f"{p.name}:L{ln} {mod}"
+        assert check_l5_service_reads(p.read_text(encoding="utf-8"), p.relative_to(ROOT).as_posix()) == [], p.name
+
+
+_G4B_OK = "from src.services.connection_diag_service import run_connection_check\n"
+
+
+def test_g4b_exception_dict_is_exactly_one_precise_entry():
+    assert G4B_EXACT_EXCEPTIONS == {"app_ui2.py": ("src.services.connection_diag_service", "run_connection_check")}
+    assert check_l5_service_reads(_G4B_OK, "app_ui2.py") == []
+
+
+@pytest.mark.parametrize("src,rel", [
+    (_G4B_OK, "src/ui2/views/data.py"),                                   # 同 import 出現在 src/ui2/**
+    (_G4B_OK, "src/ui2/shell/app.py"),
+    (_G4B_OK, "other_entry.py"),                                          # 別的檔案
+    ("from src.services.connection_diag_service import run_connection_check, other\n", "app_ui2.py"),   # 多取第二個 symbol
+    ("from src.services.connection_diag_service import other\n", "app_ui2.py"),
+    ("from src.services.connection_diag_service import run_connection_check as r\n", "app_ui2.py"),   # 別名
+    ("import src.services.connection_diag_service\n", "app_ui2.py"),                                    # 整包 import
+    ("from src.services import connection_diag_service\n", "app_ui2.py"),
+    ("from src.services.macro_refresh_service import refresh_macro_now\n", "app_ui2.py"),             # 其他 service
+    ("from src.services.connection_diag_service import *\n", "app_ui2.py"),
+    ("from src.data.core import data_loader\n", "app_ui2.py"),
+    ("from src.compute.risk import risk_radar\n", "app_ui2.py"),
+    (_G4B_OK + "from src.services.allocation_service import get_allocation\n", "app_ui2.py"),         # 例外旁夾帶別的
+])
+def test_g4b_exception_has_teeth(src, rel):
+    assert check_l5_service_reads(src, rel), f"L5/L6 守衛沒抓到：{src!r} @ {rel}"
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -14,6 +14,7 @@ import streamlit as st
 
 st.set_page_config(page_title="New UI2 Preview", page_icon="🧪", layout="wide")
 
+from src.services.connection_diag_service import run_connection_check  # noqa: E402  (唯一允許的非 src.ui2 import；#1110 D-T2)
 from src.ui2.shell import run  # noqa: E402
 
-run()
+run(diag_check=run_connection_check)

@@ -18,7 +18,7 @@ import streamlit as st
 
 from shared.ui2_contract.pages import (
     ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, FEED_FAKE, FEED_IDS, FEED_REAL,
-    PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
+    P4_DATA, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
 )
 from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import get_real_page_vm
@@ -73,7 +73,7 @@ def _render_dev_surface(real: bool) -> None:
                      format_func=lambda a: _ACCOUNT_LABELS[a])
 
 
-def run() -> None:
+def run(diag_check=None) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     dev = dev_surface_enabled()
     if KEY_PAGE not in st.session_state:
@@ -96,7 +96,11 @@ def run() -> None:
                                  account=st.session_state[KEY_ACCOUNT])
     # 頂部兩列導覽（fixed；DOM 順序＝Tab 順序最先）。第一列含資料模式標示（FAKE＝示意資料、Real＝Real-data Preview（非正式 production default））。
     _render_nav(vm)
-    VIEWS[st.session_state[KEY_PAGE]](vm)
+    page = st.session_state[KEY_PAGE]
+    if page == P4_DATA:      # 🔌 連線診斷：唯一注入點（只傳給資料頁；其他頁 render 簽名不變）
+        VIEWS[page](vm, diag_check=diag_check)
+    else:
+        VIEWS[page](vm)
     if dev:
         _render_dev_surface(real)
 

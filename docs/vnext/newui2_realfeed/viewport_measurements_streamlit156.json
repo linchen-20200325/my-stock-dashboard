@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "b625a824a9170687457fbeb8b586d406ea934c1a",
-  "source_hash": "1facc82173e26d952934bb7e2d476512eb387885794f7bad715c43e6c241d985",
-  "generated_at": "2026-11-16T03:59:29+00:00",
+  "git_sha": "4cdc1494f4ac30de4557dc414f6aefedf35ea36e",
+  "source_hash": "f9b1cafa6dffada4c8270a4827991499351a63555572e008241ee45f4f05e87e",
+  "generated_at": "2026-11-17T00:39:21+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.56.0",
@@ -285,10 +285,10 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.1,
+   "last_content_bottom": 433.8,
    "card_heights": [
-    158,
-    158,
+    244,
+    244,
     180,
     180,
     159,
@@ -297,8 +297,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1525.3,
-     "bottom": 1602.1,
+     "top": 1683.1,
+     "bottom": 1759.8,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -306,11 +306,11 @@
     },
     "slot": null,
     "grid": {
-     "top": 992.0,
-     "bottom": 1505.3,
+     "top": 1063.6,
+     "bottom": 1663.1,
      "left": 14.4,
      "right": 375.6,
-     "height": 513.3,
+     "height": 599.5,
      "width": 361.2
     },
     "slot_graphics": 0,
@@ -319,18 +319,18 @@
     "slot_danger": 0,
     "chart": {
      "top": 611.2,
-     "bottom": 976.0,
+     "bottom": 1047.6,
      "left": 14.4,
      "right": 375.6,
-     "height": 364.8,
+     "height": 436.4,
      "width": 361.2
     },
-    "chart_state": "ok",
+    "chart_state": "stale",
     "chart_bars": 20,
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 8 天 twii_ohlcv 最新資料日 2026-11-09,距今 8 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -355,7 +355,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 622.2,
     "risk_line_height": 24,
-    "scroll_end_bottom": 763.8,
+    "scroll_end_bottom": 763.6,
     "nav_margin_after_risk": 168.8
    },
    "failures": {},
@@ -456,9 +456,9 @@
    "stress": {
     "risk_top": 582.4,
     "risk_bottom": 659.1,
-    "scroll_end_bottom": 763.7,
-    "scroll_end_gap_to_nav": 27.3,
-    "risk_bottom_at_scroll_end": -556.9
+    "scroll_end_bottom": 763.5,
+    "scroll_end_gap_to_nav": 27.5,
+    "risk_bottom_at_scroll_end": -714.9
    },
    "failures": {},
    "pass": true
@@ -1303,19 +1303,19 @@
    "elements": [
     {
      "q": "q1",
-     "text": "資料健康度 ⬜ 尚未提供 資料健康度尚未開放；這裡不顯示任何來源狀態與資料日",
+     "text": "資料健康度 ⬜ 尚未提供 完整資料健康度尚未開放；本區僅檢查連線，不代表資料已更新",
      "top": 139.0,
-     "bottom": 193.9,
+     "bottom": 213.0,
      "left": 27.4,
      "right": 362.6,
-     "height": 54.9,
+     "height": 74.1,
      "width": 335.2
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
-     "top": 193.9,
-     "bottom": 248.8,
+     "top": 213.0,
+     "bottom": 268.0,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -1324,8 +1324,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 資料健康度清單開放後才可查看",
-     "top": 248.8,
-     "bottom": 303.7,
+     "top": 268.0,
+     "bottom": 322.9,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -1334,8 +1334,8 @@
     {
      "q": "q4",
      "text": "查看資料健康度 資料健康度尚未開放",
-     "top": 303.7,
-     "bottom": 377.4,
+     "top": 322.9,
+     "bottom": 396.6,
      "left": 27.4,
      "right": 362.6,
      "height": 73.7,
@@ -1404,7 +1404,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.0,
+   "last_content_bottom": 434.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -1435,10 +1435,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 406.4,
+    "first_block_after_l1_top": 425.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 763.7,
-    "nav_margin_after_risk": 384.6
+    "scroll_end_bottom": 764.0,
+    "nav_margin_after_risk": 365.4
    },
    "failures": {},
    "pass": true
@@ -1579,20 +1579,20 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.1,
+   "last_content_bottom": 537.8,
    "card_heights": [
-    183,
-    183,
-    183,
-    183,
-    183,
-    183
+    208,
+    208,
+    208,
+    208,
+    208,
+    208
    ],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1030.5,
-     "bottom": 1072.1,
+     "top": 1082.2,
+     "bottom": 1123.8,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -1600,11 +1600,11 @@
     },
     "slot": null,
     "grid": {
-     "top": 839.5,
-     "bottom": 1022.5,
+     "top": 866.2,
+     "bottom": 1074.2,
      "left": 80,
      "right": 1360,
-     "height": 183.1,
+     "height": 208.0,
      "width": 1280
     },
     "slot_graphics": 0,
@@ -1613,18 +1613,18 @@
     "slot_danger": 0,
     "chart": {
      "top": 494.7,
-     "bottom": 823.5,
+     "bottom": 850.2,
      "left": 80,
      "right": 1360,
-     "height": 328.8,
+     "height": 355.5,
      "width": 1280
     },
-    "chart_state": "ok",
+    "chart_state": "stale",
     "chart_bars": 20,
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 8 天 twii_ohlcv 最新資料日 2026-11-09,距今 8 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo，每日更新）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1649,7 +1649,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 505.7,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.9,
+    "scroll_end_bottom": 867.5,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -2519,7 +2519,7 @@
    "elements": [
     {
      "q": "q1",
-     "text": "資料健康度 ⬜ 尚未提供 資料健康度尚未開放；這裡不顯示任何來源狀態與資料日",
+     "text": "資料健康度 ⬜ 尚未提供 完整資料健康度尚未開放；本區僅檢查連線，不代表資料已更新",
      "top": 130.1,
      "bottom": 185.0,
      "left": 93,
@@ -2620,7 +2620,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.1,
+   "last_content_bottom": 538.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -2653,7 +2653,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 397.5,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.8,
+    "scroll_end_bottom": 867.9,
     "nav_margin_after_risk": null
    },
    "failures": {},

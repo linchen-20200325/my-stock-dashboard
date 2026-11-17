@@ -99,10 +99,50 @@ def test_app_ui2_first_streamlit_call_is_set_page_config():
     assert first.value.func.attr == "set_page_config"
 
 
+#: #1110 D-T2（GPT 方案 A′）：app_ui2.py 唯一 AST 精確例外＝單一 module＋單一 symbol（無別名）；⛔ 寬鬆白名單。
+_APP_UI2_EXACT = ("src.services.connection_diag_service", "run_connection_check")
+
+
+def check_app_ui2_imports(source: str, relpath: str = "app_ui2.py") -> list[str]:
+    bad = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Import):
+            bad += [f"L{n.lineno}: import {a.name}" for a in n.names
+                    if a.name.split(".")[0] in {"src", "shared", "app"} and not (a.name == "src.ui2" or a.name.startswith("src.ui2."))]
+        elif isinstance(n, ast.ImportFrom):
+            if n.level or not n.module:
+                bad.append(f"L{n.lineno}: 相對 import")
+            elif n.module == "src.ui2" or n.module.startswith("src.ui2."):
+                continue
+            elif (relpath == "app_ui2.py" and n.module == _APP_UI2_EXACT[0] and len(n.names) == 1
+                  and n.names[0].name == _APP_UI2_EXACT[1] and n.names[0].asname is None):
+                continue
+            else:
+                bad.append(f"L{n.lineno}: from {n.module}")
+    return bad
+
+
 def test_app_ui2_only_imports_src_ui2():
-    mods = [n.module for n in ast.walk(ast.parse(APP_UI2.read_text(encoding="utf-8")))
-            if isinstance(n, ast.ImportFrom) and n.module]
-    assert mods and all(m == "src.ui2" or m.startswith("src.ui2.") for m in mods), mods
+    src = APP_UI2.read_text(encoding="utf-8")
+    assert check_app_ui2_imports(src) == []
+    mods = [n.module for n in ast.walk(ast.parse(src)) if isinstance(n, ast.ImportFrom) and n.module]
+    assert mods and mods.count(_APP_UI2_EXACT[0]) == 1 and all(
+        m == "src.ui2" or m.startswith("src.ui2.") or m == _APP_UI2_EXACT[0] for m in mods), mods
+
+
+@pytest.mark.parametrize("src,rel", [
+    ("from src.services.connection_diag_service import run_connection_check, x\n", "app_ui2.py"),
+    ("from src.services.connection_diag_service import x\n", "app_ui2.py"),
+    ("from src.services.connection_diag_service import run_connection_check as r\n", "app_ui2.py"),
+    ("import src.services.connection_diag_service\n", "app_ui2.py"),
+    ("from src.services import connection_diag_service\n", "app_ui2.py"),
+    ("from src.services.other import run_connection_check\n", "app_ui2.py"),
+    ("from src.data.proxy.proxy_helper import get_nas_relay\n", "app_ui2.py"),
+    ("from src.services.connection_diag_service import run_connection_check\n", "app.py"),    # 別的檔案
+    ("from .x import y\n", "app_ui2.py"),
+])
+def test_app_ui2_import_exception_has_teeth(src, rel):
+    assert check_app_ui2_imports(src, rel), f"沒抓到：{src!r}"
 
 
 # ── G10 floor（現場讀 requirements.txt；掃描範圍補上 app_ui2.py）──────────
