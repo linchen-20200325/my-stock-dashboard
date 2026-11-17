@@ -194,7 +194,8 @@ def test_every_request_is_https_verified_bounded_no_redirect(monkeypatch):
     log = _setup(monkeypatch, nas=(f"https://{NAS_HOST}", SECRET_KEY), proxy={"https": "http://p:1"},
                  token=SECRET_TOKEN, responder=_nas_responder())
     S.run_connection_check()
-    assert 0 < len(log) <= S.MAX_REQUESTS <= 7 and len(log) == 4      # NAS 3 ＋ Yahoo 1
+    assert S.MAX_REQUESTS == 4
+    assert 0 < len(log) <= S.MAX_REQUESTS and len(log) == 4      # NAS 3 ＋ Yahoo 1
     for url, kw in log:
         assert url.startswith("https://")
         assert kw["verify"] is True and kw["allow_redirects"] is False and kw["stream"] is True

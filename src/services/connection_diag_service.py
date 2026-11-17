@@ -2,11 +2,11 @@
 
 安全邊界（測試以 AST／行為鎖住）：
 - `run_connection_check()` **無參數**；探測 URL 只用本檔常數（或 `get_nas_relay()` 的 base＋固定路徑），不接受任何外部輸入。
-- TLS 一律 `verify=True`、`allow_redirects=False`、timeout＝(connect 3s, read 5s)；單次檢查 ≤ 7 個請求；`stream=True` 且不讀 body。
+- TLS 一律 `verify=True`、`allow_redirects=False`、timeout＝(connect 3s, read 5s)；單次檢查 ≤ 4 個請求（NAS 中繼站最多 3＋Yahoo 1）；`stream=True` 且不讀 body。
 - 全進程 `threading.Lock` 非阻塞＋模組層 cooldown（跨 session）：忙碌／冷卻中回前次結果並帶 `DiagNotice.WAIT`。
 - 輸出只有 `shared.ui2_contract.diag` 的枚舉；例外原文／host／IP／URL／header／body 一律不輸出（分類只看例外型別與整數狀態碼）。
 - 不用 fetch_url／nas_relay_fetch／build_unverified_proxy_session；不抓 OHLC／行情；Gemini、FRED 不探測。
-- 金鑰只送往 https 的 NAS base（明文 http 一律不送，顯示「認證未驗證」）；FinMind token 只送往本檔常數的 https 端點。
+- 金鑰只送往 https 的 NAS base（明文 http 一律不送，顯示「認證未驗證」）；FinMind／TWSE／NAS 代理不發請求（固定「尚未檢查」；無 token／無設定者為「未設定」），FinMind token 不送往任何端點。
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ NAS_PROXY_PATH = "/proxy"          # 不帶 url 參數：只用來判斷是否�
 CONNECT_TIMEOUT_S = 3
 READ_TIMEOUT_S = 5
 COOLDOWN_S = 20.0
-MAX_REQUESTS = 5          # NAS 中繼站 3 ＋ Yahoo 1（其餘不發請求）；上限仍 ≤ 7
+MAX_REQUESTS = 4          # NAS 中繼站最多 3 ＋ Yahoo 1（其餘不發請求）
 
 _NO_PROXY = {"http": None, "https": None}      # 直連：忽略環境 proxy
 
@@ -36,7 +36,7 @@ _LOCK = threading.Lock()
 _STATE: dict = {"last_report": None, "last_finished": None}
 
 
-# ── 分類（複製自 src/ui/pages/api_diagnostic.py 的 _classify_*，parity 測試鎖住；另加 SSLError／407）──
+# ── 分類（複製自 src/ui/pages/api_diagnostic.py 的 _classify_*，parity 測試鎖住；另加 SSLError）──
 def _classify_status(code: int) -> DiagReason | None:
     if code < 400:
         return None
