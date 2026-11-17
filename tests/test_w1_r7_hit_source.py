@@ -18,7 +18,8 @@ from src.compute.macro import macro_helpers as MH
 R7_LABELS = [
     ("ndc_signal", "R7-2", "國發會景氣對策信號，依序：FinMind（國發會官方鏡像）→ data.gov.tw 官方「景氣指標及燈號」→ StockFeel 股感 → MacroMicro 財經 M 平方"),
     ("m1b_m2_gap", "R7-3", "M1B 年增率減 M2 年增率，依序：央行公開 JSON → 央行 EF15M01 → FRED → IMF → 大盤動能代理估算"),
-    ("ism_pmi", "R7-4", "台灣製造業 PMI（中華經濟研究院 CIER 等 8 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）"),
+    # #1208 PR2（2026-11-17）：MoneyDJ 移出 PMI 競速 → 8 源改 7 源（事實更正；文案待 ChatGPT 定稿）。
+    ("ism_pmi", "R7-4", "台灣製造業 PMI（中華經濟研究院 CIER 等 7 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）"),
     ("us_core_cpi", "R7-5", "美國核心 CPI 年增率，依序：FRED 公開檔（無需 key）→ FRED API → BLS 備援"),
     ("tw_export", "R7-6", "財政部海關出口金額年增率，依序：中華民國統計資訊網 → FRED（OECD）→ 海關出口統計 → FRED → 財政部進出口統計"),
     ("bias_240", "R7-7", "計算值：加權指數（Yahoo）對年線的乖離；不足 240 天時改抓 2 年補，仍不足則標「（估算）」"),

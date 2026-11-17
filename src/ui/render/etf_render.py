@@ -507,7 +507,8 @@ def render_etf_holdings(ticker: str, holdings: dict = None, top_n: int = 15,
         with st.spinner(f'抓取 {ticker} 成分股清單...'):
             holdings = fetch_etf_holdings(ticker)
     if not holdings:
-        st.caption(f'⚪ {ticker} 成分股清單暫時抓不到（海外 IP 受限或 MoneyDJ/yfinance 端點變動）。'
+        # #1208 PR2 文案（待 ChatGPT 定稿）：拿掉 MoneyDJ
+        st.caption(f'⚪ {ticker} 成分股清單暫時抓不到（海外 IP 受限或 yfinance 端點變動）。'
                    '可至投信官網或公開說明書查閱前十大持股。')
         return
     _k = key or ticker or 'etf'

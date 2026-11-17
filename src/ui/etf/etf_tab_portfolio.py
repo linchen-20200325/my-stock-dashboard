@@ -955,8 +955,9 @@ def render_etf_portfolio(gemini_fn=None):
     )
     _method_key = 'jaccard' if 'Jaccard' in _ov_method else 'weight'
     if _h_miss:
+        # #1208 PR2 文案（待 ChatGPT 定稿）：拿掉 MoneyDJ
         st.warning(f'⚪ 以下 ETF 拿不到成份股，對應行列顯示 N/A：{", ".join(_h_miss)}'
-                   f'（MoneyDJ 暫無資料或為新 ETF）')
+                   f'（暫無資料或為新 ETF）')
     _valid_count = len(_h_dict)
     # ══════════════════════════════════════════════════════════════════
     # §1 B5-a v19.180:重疊度三態判定（原碼只有「有警示 / 綠燈」兩態）

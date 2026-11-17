@@ -80,7 +80,7 @@ _MACRO_CACHE_TTL_DAYS = 90
 # 時讀它（帶 is_stale）。寫入僅由 cron（update_macro_history.yml, permissions: contents:write）
 # 呼叫 `_macro_durable_save` + workflow `git add -f data_cache/` 提交;runtime（Cloud）**只讀**。
 _MACRO_DURABLE_DIR = _os.path.join("data_cache", "macro_last_good")
-# v19.119：PMI 8 源並行賽跑的**硬上限**。必須 < macro_trio_orchestrator 的
+# v19.119：PMI 多源並行賽跑的**硬上限**（#1208 PR2 起 7 源,見 PMI_SOURCE_REGISTRY）。必須 < macro_trio_orchestrator 的
 # inner_pool_timeout_s(70s),留餘裕給下方 durable/stale fallback。根因:v19.116 把
 # dgtw metadata timeout 放寬到 25s×2 attempts×3 URL = 最壞 ~150s,而原碼
 # `for _fut: _fut.result()` 無限等最慢源 → 雲端 data.gov.tw「連得上但 hang」時
@@ -1099,17 +1099,17 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 #   Stock 端是台股視角，台灣景氣與本地 PMI 直接相關（CIER 是官方發布單位，
 #   每月第一個工作日上午 10:00 公布前一個月數據）。
 #
-# 備援順序：見檔末 PMI_SOURCE_REGISTRY(v19.113 起 8 源;本註解原列 4 段為
-# v10 時代殘影,以 registry 為 SSOT 不再重複列舉)
+# 備援順序：見檔末 PMI_SOURCE_REGISTRY(v19.113 起 8 源;#1208 PR2 移除 MoneyDJ 後 7 源;
+# 本註解原列 4 段為 v10 時代殘影,以 registry 為 SSOT 不再重複列舉)
 # ══════════════════════════════════════════════════════════════
 
 @monitored('fetch_tw_pmi', category='🇹🇼 台灣總經', frequency='monthly',
            registry_key='🇹🇼 台灣 PMI 製造業指數',   # v19.96 批次4 Item1
-           # v19.118:治假綠燈——8 源全敗仍回 dict(value=None)不拋例外,舊版恆綠誤導。
+           # v19.118:治假綠燈——全源全敗仍回 dict(value=None)不拋例外,舊版恆綠誤導。
            # 有值(含 durable stale 值)=綠;value=None(連 durable 都沒有)=紅。
            success_check=lambda r: isinstance(r, dict) and r.get('value') is not None)
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
-    """抓取台灣製造業 PMI（8 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
+    """抓取台灣製造業 PMI（多來源並行賽跑〔現 7 源，以 PMI_SOURCE_REGISTRY 為準〕，依優先序取最高優先的有效值；月頻）。
 
     ⭐ 批 Z63（客戶 2026-10-14 Q-z38=A）—— 本函式裡的兩個「90 天」都**不是**新鮮度規則：
     - `max_age_days`：**來源合理性篩選**（資料月月初距今超過此天數的頁面不收，防抓到舊文章）；
@@ -1120,7 +1120,9 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     的 `date`（只改 `source`／`is_stale`／`stale_err`／`fetched_at`）。
 
     來源優先序：CIER-EN → data.gov.tw → NDC → CIER(首頁) → StockFeel
-                → Cnyes → CIER(cid8) → MoneyDJ
+                → Cnyes → CIER(cid8)
+    (#1208 PR2 2026-11-17 拔除 MoneyDJ 段 — GPT 裁示 MoneyDJ 全入口零請求止血;
+    平行競速下即使前段命中仍會送出請求,故必須從 registry 移除而非降序。)
     (v19.113 拔除 MacroMicro 段 — 探針 run 29182317622 實錘 host 級無回應;
     CIER 段的 cid=21 列表 URL 同輪實錘下架,改僅掃首頁。user 核准提案②。)
     (v19.85 拔除 FinMind 段 — 原打 dataset `TaiwanEconomicIndicator` 不存在於
@@ -1179,16 +1181,16 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     # 依來源優先序回傳第一個命中（與原序列 fallback 語義一致）
     for _nm, _ in _sources:
         if _nm in _results:
-            print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（8 源並行，依優先序）')
+            print(f'[macro_core/TW-PMI] ✅ 採用 {_nm}（{len(_sources)} 源並行，依優先序）')
             # v18.225 T1：命中即 snapshot 持久化，作為後續全失敗時的 stale fallback
             _macro_cache_save('tw_pmi', _results[_nm])
             # S-PROV-1 v18.254:provenance fetched_at(orchestrator-level)
             _hit = dict(_results[_nm])
             _hit['fetched_at'] = _fetched_at
             return _hit
-    err_msg = ' | '.join(errs) or 'all 8 stages failed'
-    print(f'[macro_core/TW-PMI] ❌ 8 段並行全失敗：{err_msg}')
-    # v18.225 T1：8 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
+    err_msg = ' | '.join(errs) or f'all {len(_sources)} stages failed'
+    print(f'[macro_core/TW-PMI] ❌ {len(_sources)} 段並行全失敗：{err_msg}')
+    # v18.225 T1：全段失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
     # 批 Z63：90 天 TTL 只決定「快取還在不在」，不決定「資料還有沒有效」——
     #   回傳的 `date` 是快取當時的**資料月**（下面只改 source／is_stale／stale_err／fetched_at），
     #   有效性由 L0 `freshness_policy.assess_monthly` 依資料月判（快取再新，資料月落後 2 期照樣 STALE）。
@@ -1682,39 +1684,8 @@ def _pmi_src_cier8(today, max_age_days, errs):
     return None
 
 
-def _pmi_src_moneydj(today, max_age_days, errs):
-    """方案 7: MoneyDJ 財經知識庫（搜尋頁，HTML 含 PMI 圖表 alt）。"""
-    try:
-        from bs4 import BeautifulSoup
-        mdj_url = ('https://www.moneydj.com/KMDJ/Search/SearchListNew.aspx'
-                   '?keyword=%E5%8F%B0%E7%81%A3PMI&type=knowledge')
-        r = fetch_url(mdj_url, timeout=12, attempts=1)
-        if r is None:
-            errs.append('MoneyDJ:無回應')
-        else:
-            r.encoding = 'utf-8'
-            txt = BeautifulSoup(r.text, 'html.parser').get_text(' ', strip=True)
-            m = _re.search(
-                r'(20\d{2})\s*年\s*(\d{1,2})\s*月.{0,40}?'
-                r'(?:台灣|TW)\s*(?:製造業)?[^。]{0,40}?PMI[^。]{0,30}?(\d{2}\.\d)',
-                txt)
-            if m:
-                yr, mo, v = m.group(1), int(m.group(2)), float(m.group(3))
-                if 30 <= v <= 70 and 1 <= mo <= 12:
-                    last_date = _dt.date(int(yr), mo, 1)
-                    if (today - last_date).days <= max_age_days:
-                        date = f'{yr}-{mo:02d}-01'
-                        print(f'[macro_core/TW-PMI/MoneyDJ] ✅ {v} date={date}')
-                        return {'value': v, 'date': date,
-                                'label': 'MoneyDJ 財經知識庫',
-                                'source': 'MoneyDJ', 'is_proxy': False,
-                                'series_id': 'mdj-tw-pmi'}
-            else:
-                errs.append('MoneyDJ:no-parse')   # v19.114:200 無 match 原為靜默
-    except Exception as e:
-        errs.append(f'MoneyDJ:{type(e).__name__}')
-        print(f'[macro_core/TW-PMI/MoneyDJ] ❌ {e}')
-    return None
+# Issue #1208 PR2（2026-11-17 GPT 裁示）：`_pmi_src_moneydj`（MoneyDJ 財經知識庫搜尋頁）已移除。
+# MoneyDJ 權利未解決；平行競速下每次都會送出請求，故整段刪除（非降序）。
 
 
 # v18.240 SSOT — TW-PMI 來源註冊表
@@ -1729,7 +1700,7 @@ PMI_SOURCE_REGISTRY: list[tuple[str, Callable]] = [
     ('StockFeel',   _pmi_src_stockfeel),
     ('Cnyes',       _pmi_src_cnyes),
     ('CIER-cid8',   _pmi_src_cier8),
-    ('MoneyDJ',     _pmi_src_moneydj),
+    # ('MoneyDJ', _pmi_src_moneydj) — #1208 PR2 移除（MoneyDJ 全入口零請求止血）
 ]
 
 

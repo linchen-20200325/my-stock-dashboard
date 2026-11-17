@@ -52,7 +52,7 @@ PMI history 裡的「**前一資料月官方值**」，取不到 → 該紅線�
 session_state、上次按按鈕的值頂替（舊 UI `section_news_ai` 的 `_s10_prev_pmi_value` 正是後者，未改）。
 ⇒ `extract_pmi_prev(history_df, anchor_data_month)`：在 cron 寫的 `data_cache/tw_pmi.parquet` 歷史
 （L1 `macro_cache_reader.load_tw_pmi_history` 原樣讀出）裡找 data_month 恰好是**當期前一個月**的那一列。
-⚠️ 當期（live 8 源賽跑或其 stale-cache）與前月（parquet 歷史）**可能來自不同來源** —— 兩者都在
+⚠️ 當期（live 多源賽跑或其 stale-cache）與前月（parquet 歷史）**可能來自不同來源** —— 兩者都在
 `DatedValue.source` 如實記錄；前月有效與否由 L0 `assess_previous_month` **跟著當期**判。
 """
 from __future__ import annotations

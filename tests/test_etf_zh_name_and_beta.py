@@ -6,6 +6,8 @@ user 回報(截圖):
    格式,連 0050 都 FAIL(user 實測 log `[MDJ/zhname] FAIL 0050.TW`)。
    修:改用 FinMind TaiwanStockInfo.stock_name(官方結構化中文名)為 PRIMARY,
    MoneyDJ 降為 fallback。
+   ⚠️ #1208 PR2(2026-11-17):MoneyDJ fallback 已整段移除(全入口零請求止血),
+   FinMind 為唯一來源;下方 fallback 測試改為「FinMind 未命中 → None 且 0 次 fetch_url」。
 2. 單檔診斷頁 Beta 顯示 N/A(yfinance .info 對台股主動式 ETF 無 beta)。
    修:新增 L2 `calc_beta(df, bench_df)`,以自身 vs 基準日報酬回歸估算。
 """
@@ -121,17 +123,18 @@ class TestFetchEtfZhNameFinMind:
         assert _seen.get('data_id') == '00982A', f"應查純代號,實際 {_seen.get('data_id')}"
         assert name == '主動群益台灣強棒'
 
-    def test_finmind_english_name_rejected_falls_to_moneydj(self, monkeypatch):
-        """FinMind 回英文名(無 CJK)→ 視為未命中,落到 MoneyDJ fallback。"""
+    def test_finmind_english_name_rejected_returns_none_without_moneydj(self, monkeypatch):
+        """FinMind 回英文名(無 CJK)→ 視為未命中 → None;#1208 PR2 起不再落到 MoneyDJ。"""
         import requests as _rq
         monkeypatch.setattr(_rq, 'get',
                             lambda *a, **k: _FakeResp({'data': [{'stock_name': 'YUANTA ETF'}]}))
         from src.data.proxy import proxy_helper as _proxy  # v19.74:patch 持有者,防 package 屬性釘死(同上)
-        # MoneyDJ 也回不到 → 最終 None(驗證有走到 fallback 路徑)
-        monkeypatch.setattr(_proxy, 'fetch_url', lambda *a, **k: None)
+        _calls: list = []
+        monkeypatch.setattr(_proxy, 'fetch_url', lambda *a, **k: _calls.append(a) or None)
         ef.fetch_etf_zh_name.clear()
         name = ef.fetch_etf_zh_name('9999.TW')
-        assert name is None  # 兩源皆無中文 → None,呼叫端再 fallback yfinance
+        assert name is None  # FinMind 無中文 → None,呼叫端再 fallback yfinance(不捏造)
+        assert _calls == [], f'#1208 PR2:不得再走 fetch_url(原 MoneyDJ 備援):{_calls}'
 
     def test_finmind_helper_direct(self, monkeypatch):
         """_fetch_etf_zh_name_finmind 純函式:非中文/查無 → None。"""

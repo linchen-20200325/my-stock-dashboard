@@ -75,8 +75,8 @@ DATA_REGISTRY: list[dict[str, Any]] = [
      'usage':'通膨判讀、Fed 升降息預測',
      'state_key':'macro_info.us_core_cpi.date', 'pingable':True,
      'ping_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL'},
-    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN + data.gov.tw 6100 + 8 段並行',
-     'endpoint':'cier.edu.tw/en/eco (首選) / data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / stockfeel / cnyes / moneydj',
+    {'category':'🇹🇼 台灣總經', 'name':'台灣製造業 PMI (CIER)', 'source':'CIER-EN + data.gov.tw 6100 + 7 段並行',
+     'endpoint':'cier.edu.tw/en/eco (首選) / data.gov.tw/api/v2/rest/dataset/6100 / index.ndc / macromicro.me / stockfeel / cnyes',
      'identifier':'cier-pmi',
      'frequency':'monthly', 'requires_key':None,
      'usage':'台灣製造業景氣領先指標 (>50 擴張，CIER 中華經濟研究院每月第一個工作日公布；v18.142 確認首源為 data.gov.tw dataset 6100)',
@@ -492,18 +492,8 @@ DATA_REGISTRY: list[dict[str, Any]] = [
      'frequency':'daily', 'requires_key':None,
      'usage':'ETF NAV 備援',
      'state_key':None, 'pingable':False, 'ping_url':None},
-    {'category':'🏦 ETF / 基金', 'name':'MoneyDJ ETF 基本資料', 'source':'MoneyDJ',
-     'endpoint':'moneydj.com/ETF/X/Basic/Basic0004.xdjhtm',
-     'identifier':'Basic0004',
-     'frequency':'event', 'requires_key':None,
-     'usage':'ETF 成分股、追蹤指數',
-     'state_key':None, 'pingable':False, 'ping_url':None},
-    {'category':'🏦 ETF / 基金', 'name':'基金淨值', 'source':'MoneyDJ',
-     'endpoint':'moneydj.com/funddj/yb/YP010001.djhtm',
-     'identifier':'YP010001',
-     'frequency':'daily', 'requires_key':None,
-     'usage':'基金淨值查詢',
-     'state_key':None, 'pingable':False, 'ping_url':None},
+    # Issue #1208 PR2（2026-11-17）：「MoneyDJ ETF 基本資料」（Basic0004）與「基金淨值」
+    # （MoneyDJ YP010001）兩筆登錄已移除 —— MoneyDJ 全入口零請求止血，程式已無對應 caller。
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 📰 八、新聞 RSS

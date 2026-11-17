@@ -444,7 +444,11 @@ def _tool_get_etf_quality(etf_id: str) -> dict:
     return {"ok": True,
             "data": {"etf_id": ticker, **{k: q.get(k) for k in keys if k in q}},
             # 慢變基本面屬性,無單一 as_of(不套過期標記);coverage<1 表部分因子缺,AI 應提醒
-            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;yfinance+SITCA)", "as_of": None}}
+            # #1208 PR2（2026-11-17）：來源字樣對齊實際 caller（原「yfinance+SITCA」漏寫當時的第一順位
+            # MoneyDJ；MoneyDJ 移除後費用率鏈＝SITCA→元大(主動式)→yfinance）。文案待 ChatGPT 定稿。
+            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;"
+                                     "AUM、Beta、配息＝yfinance；費用率＝SITCA→元大(主動式)→yfinance)",
+                           "as_of": None}}
 
 
 REAL_TOOLS: dict = {

@@ -118,8 +118,9 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         st.session_state.pop('etf_s_active', None)
         return
 
-    # ── PROXY 健診：MoneyDJ／TWSE 封鎖海外資料中心 IP，未設 PROXY_URL 時，
-    #    內扣費用率／折溢價／中文名／AUM 全 N/A（這是 N/A 的真正原因）──
+    # ── PROXY 健診：TWSE 封鎖海外資料中心 IP，未設 PROXY_URL 時，
+    #    內扣費用率／折溢價／中文名可能 N/A。AUM 僅來自 yfinance（#1208 PR2 移除 MoneyDJ 補位），
+    #    與 PROXY 無關 ──
     if ticker.endswith(('.TW', '.TWO')):
         import os as _os_prx
         _has_proxy = bool(_os_prx.environ.get('PROXY_URL')
@@ -132,12 +133,14 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 print(f'[etf_tab_single] PROXY_URL secrets 讀取失敗:{type(_e_secrets).__name__}')
         if not _has_proxy:
             st.warning(
-                '⚠️ 未偵測到 **PROXY_URL**：MoneyDJ／TWSE 封鎖海外資料中心 IP'
+                # #1208 PR2 文案（待 ChatGPT 定稿）：拿掉 MoneyDJ；AUM 改述為「僅來自 yfinance」
+                '⚠️ 未偵測到 **PROXY_URL**：TWSE 封鎖海外資料中心 IP'
                 '（Streamlit Cloud 美國 IP），因此 **內扣費用率／折溢價／'
-                '中文名／AUM** 會是 N/A。請在本 App 的 **Streamlit secrets** 設定 '
-                '`PROXY_URL`（家用 NAS 台灣 IP，與新聞專案同一台）即可解鎖。')
+                '中文名** 會是 N/A。請在本 App 的 **Streamlit secrets** 設定 '
+                '`PROXY_URL`（家用 NAS 台灣 IP，與新聞專案同一台）即可解鎖。'
+                'AUM 僅來自 yfinance，缺值顯示 N/A。')
 
-    # 中文名優先：MoneyDJ 抓取（cache 7 天，主動式 ETF 含 'A' 後綴也支援）
+    # 中文名優先：FinMind TaiwanStockInfo（cache 7 天；#1208 PR2 已移除 MoneyDJ 備援）
     # → fallback 至 yfinance longName/shortName（多為英文）→ 最後用 ticker
     from src.data.etf import fetch_etf_zh_name as _fetch_zh_n
     _zh_name = _fetch_zh_n(ticker)
@@ -203,6 +206,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                     else (None if beta else 'yfinance .info 無資料，且價格重疊不足 60 交易日無法回歸估算')))
     # FIX(AUM 幣別): 原為 f'{aum/1e9:.1f}B USD' —— info['totalAssets'] 對台股 ETF 是「元(TWD)」而非 USD。
     #   證據 1: etf_fetch.py fetch_etf_info() 缺 totalAssets 時直接填 MoneyDJ 的 aum_twd(億 × 1e8 = 元)
+    #          （#1208 PR2 起此補位已移除，AUM 僅來自 yfinance；幣別結論不變）
     #   證據 2: shared/signal_thresholds.py ETF_AUM_LOW_YI / ETF_AUM_FAIR_YI 的 docstring 明寫「億 TWD」
     #   證據 3: src/compute/etf/etf_quality.py 註「# AUM in TWD」，score_aum docstring 寫「AUM (元)」
     #   原顯示讓 0050(≈2.28 兆 TWD) 印成「2283.7B USD」(≈2.28 兆美元)，且與本頁下方品質評等卡的
@@ -367,7 +371,8 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                     delta=f'🟡 未滿 {ETF_INCEPTION_YEARS_MIN:.0f} 年（選舊不選新）', delta_color='inverse')
     st.caption(
         '⚠️ 配息來源「**平準金佔比**」需 ETF 公開說明書揭露，本系統暫無穩定 API 來源故不顯示。'
-        '**手動查法**：投信官網「基金月報 / 公開說明書」或 MoneyDJ 個別 ETF「收益分配」頁。'
+        # #1208 PR2 文案（待 ChatGPT 定稿）：刪除「或 MoneyDJ 收益分配頁」（AI 總管推薦）
+        '**手動查法**：投信官網「基金月報 / 公開說明書」。'
         '判讀：平準金佔比過高（如 >30%）代表配息有相當比例來自本金回吐（拿自己的錢配給自己），需留意「賺息賠本」。'
         '\n\n💡 **判讀標準**：4 項指標若有 ≥ 2 項 🔴/🟡 警示 → 建議汰弱換強。'
     )
@@ -524,9 +529,10 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
                 print(f'[etf_tab_single] NAV PROXY secrets 讀取失敗:{type(_e_sec2).__name__}')
         _prem_color  = '#8b949e'
         _prem_action = 'ℹ️ 無 NAV 資料'
-        _prem_reason = ('FinMind／goodinfo／TWSE／MoneyDJ 皆未回傳淨值（可能為新上市或當日尚未公告）。'
+        # #1208 PR2 文案（待 ChatGPT 定稿）：拿掉 MoneyDJ
+        _prem_reason = ('FinMind／goodinfo／TWSE 皆未回傳淨值（可能為新上市或當日尚未公告）。'
                         if _hp else
-                        'MoneyDJ／TWSE 封鎖海外 IP 且未設定 PROXY_URL，故抓不到淨值/折溢價；'
+                        'TWSE 封鎖海外 IP 且未設定 PROXY_URL，故抓不到淨值/折溢價；'
                         '請於本 App 的 Streamlit secrets 設定 PROXY_URL（家用 NAS）即可解鎖。')
 
     st.markdown(
@@ -823,7 +829,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
 
     # ── 存入 session_state 供 Tab⑨ 使用 ─────────────────────
     # 海外 ETF 偵測：ticker 非 4-6 碼台灣代號（如 VOO/SCHD/QQQ）→ 本系統 NAV/費用率
-    # 5 源僅限台灣 ETF（SITCA / FinMind / TWSE / goodinfo / MoneyDJ），標 ⚪ 非異常
+    # 4 源僅限台灣 ETF（SITCA / FinMind / TWSE / goodinfo；#1208 PR2 移除 MoneyDJ），標 ⚪ 非異常
     # 末位字母後綴允許：A=Active 主動式 / L=Leveraged / R=Reverse / B=Bond / U/F=Futures
     import re as _re_etf
     _is_overseas = not bool(_re_etf.match(r'^\d{4,6}[A-Z]?\.(TW|TWO)$', ticker))
@@ -838,11 +844,13 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         _is_active = False
     _restricted = _likely_private or _is_active
     _err_expense = None if (expense or _is_overseas or _restricted) else (
-        'SITCA + MoneyDJ + yfinance.info[expenseRatio] 3 源全失敗'
+        # #1208 PR2 文案（待 ChatGPT 定稿）
+        'SITCA + 元大(主動式) + yfinance.info[expenseRatio] 3 源全失敗'
         '（私募 / 已下市可能）'
     )
     _err_nav = None if (_nav_value is not None or _is_overseas or _restricted) else (
-        'FinMind ETF NAV + goodinfo + TWSE OpenAPI + MoneyDJ + yfinance 5 源全失敗'
+        # #1208 PR2 文案（待 ChatGPT 定稿）
+        'FinMind ETF NAV + goodinfo + TWSE OpenAPI + yfinance 4 源全失敗'
     )
     st.session_state['etf_single_data'] = {
         'ticker': ticker, 'name': etf_name,

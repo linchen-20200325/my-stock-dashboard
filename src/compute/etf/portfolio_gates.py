@@ -379,7 +379,7 @@ def holdings_coverage_pct(holdings) -> float:
 def holdings_namespace(holdings) -> str:
     """成分股「名稱命名空間」→ `'zh' | 'en' | 'mixed' | 'empty'`。純函式。
 
-    台股來源（台灣 Yahoo / MoneyDJ）回中文股名「台積電」；
+    台股來源（台灣 Yahoo；#1208 PR2 前另有 MoneyDJ）回中文股名「台積電」；
     海外來源（yfinance funds_data）回英文「Taiwan Semiconductor Manufacturing Co Ltd」。
     兩者永遠對不上 —— 這不是「重疊 0%」，是「根本沒比到」。
     """

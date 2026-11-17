@@ -2313,6 +2313,10 @@ def dec074_restore_edu_text(mp) -> None:
     mp.setitem(DR.EDU_GUIDE, "CPILFESL", dict(DR.EDU_GUIDE["CPILFESL"], pair_with=list(_CPI_PAIR_PRE_DEC075)))
     mp.setitem(DR.EDU_GUIDE, "XTEXVA01TWM664S",
                dict(DR.EDU_GUIDE["XTEXVA01TWM664S"], meaning=_EXPORT_MEANING_PRE_DEC075))
+    # 📌 #1208 PR2（DEC-189，2026-11-17；有意識的接鏈，⛔ 不是漏改）：教學地圖 TW PMI 來源欄 8→7 源、去 MoneyDJ；
+    #   同理暫時換回修前原文（現行內容由 tests/test_issue1208_pr2_revert_chain.py 釘住）。
+    from tests.test_issue1208_pr2_revert_chain import i1208pr2_restore_edu_text
+    i1208pr2_restore_edu_text(mp)
 
 
 def _rel(file_path) -> str:
