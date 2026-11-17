@@ -527,6 +527,9 @@ def test_snapshot_requires_exactly_value_or_error():
 # ════════════════════════════════════════════════════════════════════
 #: 殼允許寫入的 session key（純 UI 控制；明列）。其餘任何 key 的寫入＝失敗。
 ALLOWED_UI2_WRITES = frozenset({"ui2_page", "ui2_scenario", "ui2_account", "ui2_feed", "ui2_target_mode"})
+#: #1110 D-T2：session_state **存在的 key** 另允許資料頁「檢查連線」按鈕的 widget 狀態 `ui2_diag_run`＋點擊後的安全枚舉報告
+#: `ui2_diag_report`（本測試不點擊故後者不會出現）。**程式寫入紀錄（ALLOWED_UI2_WRITES）不放寬**。
+ALLOWED_UI2_STATE_KEYS = ALLOWED_UI2_WRITES | {"ui2_diag_run", "ui2_diag_report"}
 
 
 @pytest.fixture
@@ -566,7 +569,7 @@ def test_runtime_real_mode_writes_no_session_state_beyond_listed_ui2_keys(sessio
             at.radio(key="ui2_target_mode").set_value("lookup").run(timeout=60)
             assert not at.exception
     assert session_write_log == [], f"Real 模式期間出現 session 寫入：{session_write_log}"
-    assert set(at.session_state.filtered_state) <= ALLOWED_UI2_WRITES
+    assert set(at.session_state.filtered_state) <= ALLOWED_UI2_STATE_KEYS
 
 
 def test_runtime_recorder_has_teeth(session_write_log):

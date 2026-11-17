@@ -234,5 +234,10 @@ CSS = """
   background:rgba(128,128,128,.14)}
 .st-key-ui2_target_mode_box [role="radiogroup"]>label:has(input:checked) p::before{content:"● ";font-size:.7em}
 .st-key-ui2_target_mode_box [role="radiogroup"]>label:has(input:focus-visible){outline:2px solid currentColor;outline-offset:2px}
+/* 🗂 資料頁「🔌 連線診斷」（#1110 D-T2）：單欄，標籤左／狀態右；不依賴顏色（chip 帶文字＋符號） */
+.ui2-diag__note,.ui2-diag__reason{font-size:.8rem;opacity:.8;margin:2px 0}
+.ui2-diag__row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)}
+.ui2-diag__row--sub{padding-left:14px}
+.ui2-diag__group{font-size:.8rem;opacity:.75;padding:6px 0 0 0}
 </style>
 """

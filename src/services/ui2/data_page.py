@@ -9,7 +9,7 @@ from __future__ import annotations
 from shared.ui2_contract.pages import P4_DATA, PAGE_LABELS
 from shared.ui2_contract.text import TEXT_NOT_PROVIDED
 
-R_DATA_NOT_WIRED = "資料健康度尚未開放；這裡不顯示任何來源狀態與資料日"
+R_DATA_NOT_WIRED = "完整資料健康度尚未開放；本區僅檢查連線，不代表資料已更新"
 
 
 def _np(key: str, label: str, reason: str) -> dict:
