@@ -1011,3 +1011,124 @@ def test_dec137_evidence_freshness_guard_has_teeth():
     assert check_evidence_fresh(meta) == []
     assert check_evidence_fresh({**meta, "source_hash": "0" * 64})
     assert check_evidence_fresh({k: v for k, v in meta.items() if k != "source_hash"})
+
+
+# ════════════════════════════════════════════════════════════════════
+# Issue #1202：fail-closed 回歸（as_of 驗證／G1 殼降級／🎯 位階壞 snapshot／12 組 stale×upstream 整表）
+# 以下結論為自跑，未經第二組驗證。
+# ════════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("bad_as_of", ["not-a-date", "2026-02-30", "2026/01/02", "20260102", "2026-1-2", "", " 2026-01-02",
+                                        "2026-13-01", "0000-01-01", 20260102,
+                                        "2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
+def test_1202_twii_ok_with_invalid_as_of_is_a_contract_violation(monkeypatch, capsys, bad_as_of):
+    """ok=True 但 as_of 不是真實存在的 ISO 日期 → 讀取期 fail-closed（沿用 CONTRACT_ERROR 固定句，值不顯示）。"""
+    snap = _feed(monkeypatch, twii=_twii_view(as_of=bad_as_of))
+    assert snap.twii is None and snap.twii_error == RC.CONTRACT_ERROR
+    f = _twii_field(snap)
+    assert f.state is FieldState.UNAVAILABLE and f.value_text is None and "資料格式異常" in f.detail
+    assert "RealFeedContractError" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("bad_as_of", ["not-a-date", "2026-02-30", "2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
+def test_1202_pure_validator_raises_on_invalid_as_of(bad_as_of):
+    fact = TwiiFact(True, (100.0,), bad_as_of, False, "", 1, False, "", False, "s")
+    with pytest.raises(RC.RealFeedContractError):
+        RC.validate_twii_fact(fact)
+
+
+@pytest.mark.parametrize("as_of", ["2026-01-02", "2024-02-29", None])
+def test_1202_valid_iso_or_missing_as_of_does_not_raise(as_of):
+    """合法 ISO 與 None（資料日未提供，誠實呈現）都不 raise。"""
+    RC.validate_twii_fact(TwiiFact(True, (100.0,), as_of, False, "", 1, False, "", False, "s"))
+
+
+def test_1202_not_ok_fact_does_not_validate_as_of():
+    """ok=False 沒有值可顯示，as_of 不驗（維持現狀，只在 ok=True 才驗）。"""
+    RC.validate_twii_fact(TwiiFact(False, (), "not-a-date", None, "", None, False, "", False, "s"))
+
+
+def test_1202_known_gap_future_as_of_cannot_be_checked_without_a_clock():
+    """已知邊界（未修）：services/ui2 禁時鐘（G2），純函式無法判斷「as_of 晚於今日」；未來日仍靠 L3
+    （age_days<0 → age_days=None＋既有 #1140 C2）。本測試把現況釘住，避免被誤讀成已防護。"""
+    RC.validate_twii_fact(TwiiFact(True, (100.0,), "2099-01-01", True, "", None, False, "", False, "s"))
+
+
+_UP = ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED")
+
+
+@pytest.mark.parametrize("is_stale", [False, True, None])
+@pytest.mark.parametrize("up", _UP)
+def test_1202_twii_card_spec_full_table_stale_by_upstream(is_stale, up):
+    """12 組 is_stale×upstream_state：state／stale_days／reason 字樣整表釘住；值恆為最新收盤（原樣）。"""
+    from shared.upstream_state import (UPSTREAM_TEXT_FETCH_FAILED, UPSTREAM_TEXT_NO_NEW_DATA,
+                                       UPSTREAM_TEXT_UNDETERMINED)
+    up_text = {"": "", "NO_NEW_DATA": UPSTREAM_TEXT_NO_NEW_DATA, "FETCH_FAILED": UPSTREAM_TEXT_FETCH_FAILED,
+               "UNDETERMINED": UPSTREAM_TEXT_UNDETERMINED}[up]
+    fact = TwiiFact(True, (100.5,), "2026-01-02", is_stale, "", 3 if is_stale else None, up == "FETCH_FAILED", "",
+                    False, "s", upstream_state=up)
+    spec = RC.twii_card_spec(RealFeedSnapshot(twii=fact, twii_error="", regime=None, regime_error="x"))
+    assert spec["value"] == "100.50"
+    if is_stale is False:
+        assert "state" not in spec and spec["reason"] == (up_text or None)
+    elif is_stale is True:
+        assert spec["state"] == "stale" and spec["stale_days"] == 3 and spec["reason"] == (up_text or None)
+    else:
+        assert spec["state"] == "stale" and spec["stale_days"] is None
+        assert spec["reason"] == "；".join(["新鮮度未判定", *([up_text] if up_text else [])])
+
+
+@pytest.mark.parametrize("page", PAGE_IDS)
+def test_1202_bad_regime_snapshot_is_unavailable_everywhere(page):
+    """regime=None＋regime_error（含 🎯「市場環境」「市場位階」）→ 紅 Unavailable、無位階字（Real 模式）。"""
+    snap = RealFeedSnapshot(twii=None, twii_error="OSError", regime=None, regime_error="OSError")
+    vm = get_real_page_vm(page, snap)
+    labels = set(REGIME_LABEL.values())
+    fields = [f for f in _all_fields(vm) if f.label in ("市場環境", "市場位階", "位階說明") or "位階" in (f.label or "")]
+    if page in (P4_MARKET, P4_TARGET):
+        assert fields
+    for f in fields:
+        if f.label in ("市場環境", "市場位階"):
+            assert f.state is FieldState.UNAVAILABLE, (page, f.label, f.state)
+        assert f.value_text is None or f.value_text not in labels
+    if page == P4_MARKET:
+        assert vm.context.first_screen.current_state.state is FieldState.UNAVAILABLE
+    if page == P4_TARGET:
+        m, t, d = _regime_triplet({**{p: get_real_page_vm(p, snap) for p in (P4_MARKET, P4_TARGET)}})
+        for f in (m, t, d):
+            assert f.state is FieldState.UNAVAILABLE and f.value_text is None
+
+
+@pytest.mark.xfail(strict=True, reason="待 ChatGPT 定稿降級畫面；#1202")
+def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch):
+    """G1（已知缺陷，未修）：`src/ui2/shell/app.py::run` 無 try/except，`read_real_snapshot` 丟例外 → 整頁以未捕捉例外崩潰
+    （現況：`at.exception` 非空，Streamlit 預設錯誤頁可能帶出例外訊息）。
+    預期（待定稿）：畫面不洩漏例外訊息（"secret-token"）、不顯示任何數值、不崩潰。
+    降級畫面的版面／文案屬設計權限（ChatGPT），本批不修；strict xfail：一旦被修好，本測試轉 XPASS 紅燈提醒移除標記。"""
+    from src.ui2.shell import app as shell
+
+    def boom():
+        raise RuntimeError("secret-token")
+    monkeypatch.setattr(shell, "read_real_snapshot", boom)
+    at = _at(dev=True)
+    at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+    blob = _blob(at)
+    assert "secret-token" not in blob
+    assert "23,456" not in blob
+    assert not at.exception
+
+
+def _kbar_fact_xs(xs):  # as_of 取末根日期，隔離「末根≠as_of」旁路，使 xs 格式檢查獨立受測
+    return RC.TwiiKbarFact(ok=True, failed=False, error_type="", ohlc_ok=True, ohlc_reason="", xs=xs,
+                           opens=(100.0,), highs=(110.0,), lows=(95.0,), closes=(105.0,), as_of=xs[-1],
+                           is_stale=False, age_days=0, stale_reason="", upstream_state="", has_upstream_error=False,
+                           source="s")
+
+
+def test_1202_kbar_valid_xs_control_passes():
+    RC.validate_twii_kbar_fact(_kbar_fact_xs(("2026-01-02",)))
+
+
+@pytest.mark.parametrize("bad_x", ["2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
+def test_1202_kbar_xs_rejects_newline_and_fullwidth_dates(bad_x):
+    with pytest.raises(RC.RealFeedContractError):
+        RC.validate_twii_kbar_fact(_kbar_fact_xs((bad_x,)))
