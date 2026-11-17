@@ -503,6 +503,7 @@ class TestGptFinalCopy:
     def test_portfolio_and_render_exact(self):
         assert "（成分股資料不足，無法判定重疊度）" in _str_consts("src/ui/etf/etf_tab_portfolio.py")
         _r = "\n".join(_str_consts("src/ui/render/etf_render.py"))
-        assert "上游成分股資料暫時無法取得" in _r
-        assert "端點變動" not in _r and "MoneyDJ" not in _r
+        # PR #1210 留言 6963995185 簽核：括號內只留定稿句，刪「海外 IP 受限或」
+        assert "）。" in _r and "（上游成分股資料暫時無法取得）。" in _r
+        assert "端點變動" not in _r and "MoneyDJ" not in _r and "海外 IP 受限" not in _r
         assert "MoneyDJ" not in "\n".join(_str_consts("src/ui/etf/etf_tab_portfolio.py"))

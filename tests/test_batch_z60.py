@@ -925,7 +925,10 @@ class TestOldFilesUntouched:
     #   只動 `src/ui/etf/etf_tab_single.py`（刪全域 PROXY 警示；`_prem_reason`／NAV 說明改固定缺值句；`_err_expense`／`_err_nav`
     #   改定稿句並依實際嘗試路徑選句）、`src/ui/etf/etf_tab_portfolio.py`、`src/ui/render/etf_render.py`、`src/ui/pages/health_inspector.py`、
     #   `src/ui/tabs/tab_edu.py`（`_TW_PMI_SOURCE_MAP_TEXT`）。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
-    _BASE_DIGEST = "57a5e5f48ff6989309c516b2380d8468f4073a0b44cbb198c13d7610340ab354"
+    # ~~"57a5e5f48ff6989309c516b2380d8468f4073a0b44cbb198c13d7610340ab354"~~（GPT 定稿回修 5a479259）
+    # 📌 #1208 PR2 ChatGPT 簽核（PR #1210 留言 6963995185；核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/render/etf_render.py`
+    #   成分股缺值說明括號內刪「海外 IP 受限或」，只留「上游成分股資料暫時無法取得」。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "11900ebe795a66a29f9412ab434315c6d90ef908b492ea33c5bc33fc90e6324b"
 
     def test_no_diff_against_base(self):
         import hashlib
