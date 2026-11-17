@@ -1018,7 +1018,8 @@ def test_dec137_evidence_freshness_guard_has_teeth():
 # 以下結論為自跑，未經第二組驗證。
 # ════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("bad_as_of", ["not-a-date", "2026-02-30", "2026/01/02", "20260102", "2026-1-2", "", " 2026-01-02",
-                                        "2026-13-01", "0000-01-01", 20260102])
+                                        "2026-13-01", "0000-01-01", 20260102,
+                                        "2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
 def test_1202_twii_ok_with_invalid_as_of_is_a_contract_violation(monkeypatch, capsys, bad_as_of):
     """ok=True 但 as_of 不是真實存在的 ISO 日期 → 讀取期 fail-closed（沿用 CONTRACT_ERROR 固定句，值不顯示）。"""
     snap = _feed(monkeypatch, twii=_twii_view(as_of=bad_as_of))
@@ -1028,7 +1029,7 @@ def test_1202_twii_ok_with_invalid_as_of_is_a_contract_violation(monkeypatch, ca
     assert "RealFeedContractError" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("bad_as_of", ["not-a-date", "2026-02-30"])
+@pytest.mark.parametrize("bad_as_of", ["not-a-date", "2026-02-30", "2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
 def test_1202_pure_validator_raises_on_invalid_as_of(bad_as_of):
     fact = TwiiFact(True, (100.0,), bad_as_of, False, "", 1, False, "", False, "s")
     with pytest.raises(RC.RealFeedContractError):
@@ -1114,3 +1115,20 @@ def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch):
     assert "secret-token" not in blob
     assert "23,456" not in blob
     assert not at.exception
+
+
+def _kbar_fact_xs(xs):  # as_of 取末根日期，隔離「末根≠as_of」旁路，使 xs 格式檢查獨立受測
+    return RC.TwiiKbarFact(ok=True, failed=False, error_type="", ohlc_ok=True, ohlc_reason="", xs=xs,
+                           opens=(100.0,), highs=(110.0,), lows=(95.0,), closes=(105.0,), as_of=xs[-1],
+                           is_stale=False, age_days=0, stale_reason="", upstream_state="", has_upstream_error=False,
+                           source="s")
+
+
+def test_1202_kbar_valid_xs_control_passes():
+    RC.validate_twii_kbar_fact(_kbar_fact_xs(("2026-01-02",)))
+
+
+@pytest.mark.parametrize("bad_x", ["2026-01-02\n", "２０２６-０１-０２", "2026-01-02 ", "\n2026-01-02"])
+def test_1202_kbar_xs_rejects_newline_and_fullwidth_dates(bad_x):
+    with pytest.raises(RC.RealFeedContractError):
+        RC.validate_twii_kbar_fact(_kbar_fact_xs((bad_x,)))

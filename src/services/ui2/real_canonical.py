@@ -150,7 +150,7 @@ class RegimeFact:
 #: （feed 不得自本檔 import 新名稱〔G2F 精確白名單〕，故兩處各一份，由 tests/test_ui2_twii_kbar.py 釘相等）。
 KBAR_VISIBLE_BARS = 20
 _UPSTREAM_STATES = ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED")
-_ISO_DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DATE_RX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")  # ASCII 數字＋fullmatch（擋結尾換行／全形數字）
 
 
 @dataclass(frozen=True)
@@ -225,7 +225,7 @@ def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
         raise RealFeedContractError(f"台股日 K：根數 {n} 不在 1..{KBAR_VISIBLE_BARS}")
     if not (len(k.opens) == len(k.highs) == len(k.lows) == len(k.closes) == n):
         raise RealFeedContractError("台股日 K：日期／開高低收長度不一致")
-    if not all(isinstance(d, str) and _ISO_DATE_RX.match(d) for d in k.xs):
+    if not all(isinstance(d, str) and _ISO_DATE_RX.fullmatch(d) for d in k.xs):
         raise RealFeedContractError("台股日 K：日期不是 YYYY-MM-DD")
     if any(a >= b for a, b in zip(k.xs, k.xs[1:])):
         raise RealFeedContractError("台股日 K：日期未嚴格升序或重複")
@@ -332,14 +332,14 @@ def validate_regime_fact(f: RegimeFact) -> None:
         raise RealFeedContractError(f"市場位階契約矛盾：is_loaded=False 但 source={f.source!r} 屬已載入分支")
 
 
-_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+_ISO_DATE_RE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})")  # ASCII 數字＋fullmatch（擋結尾換行／全形數字）
 
 
 def _is_valid_iso_date(v: object) -> bool:
     """純字串＋曆法檢查（不碰時鐘）：`YYYY-MM-DD` 且該年月日存在（2026-02-30 → False）。"""
     if not isinstance(v, str):
         return False
-    m = _ISO_DATE_RE.match(v)
+    m = _ISO_DATE_RE.fullmatch(v)
     if not m:
         return False
     y, mo, d = (int(g) for g in m.groups())
