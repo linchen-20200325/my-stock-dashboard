@@ -21,10 +21,10 @@ from shared.ui2_contract.pages import (
     P4_DATA, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
 )
 from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
-from src.services.ui2.real_canonical import get_real_page_vm
+from src.services.ui2.real_canonical import RealFeedSnapshot, get_real_page_vm
 from src.services.ui2.real_feed import read_real_snapshot
-from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_PREVIEW_BANNER_NOTE
-from src.ui2.components.html import top_status_row_html
+from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_FEED_DEGRADED_TEXT, REAL_PREVIEW_BANNER_NOTE
+from src.ui2.components.html import degraded_notice_html, top_status_row_html
 from src.ui2.shell.css import CSS
 from src.ui2.views import VIEWS
 
@@ -86,9 +86,15 @@ def run(diag_check=None) -> None:
     if KEY_FEED not in st.session_state:
         st.session_state[KEY_FEED] = FEED_FAKE
     real = st.session_state[KEY_FEED] == FEED_REAL
+    degraded = False     # Real 讀取整體失敗（#1204）；僅此當次 render
     if real:
         # 每 rerun 只讀一次；只建目前頁的 VM（四頁共用同一個 snapshot 函式與轉換，位階三處同一次呼叫結果）。
-        vm = get_real_page_vm(st.session_state[KEY_PAGE], read_real_snapshot(),
+        try:
+            snap = read_real_snapshot()
+        except Exception:   # noqa: BLE001 — 僅此邊界、僅 Exception（#1204 G1）；⛔ 不留例外原文／traceback（固定分類 "Exception"）
+            degraded = True
+            snap = RealFeedSnapshot.of(None, "Exception", None, "Exception", kbar_error="Exception")
+        vm = get_real_page_vm(st.session_state[KEY_PAGE], snap,
                               mode=st.session_state.get(KEY_TARGET_MODE))
     else:
         vm = get_preview_page_vm(st.session_state[KEY_PAGE], st.session_state[KEY_SCENARIO],
@@ -97,6 +103,8 @@ def run(diag_check=None) -> None:
     # 頂部兩列導覽（fixed；DOM 順序＝Tab 順序最先）。第一列含資料模式標示（FAKE＝示意資料、Real＝Real-data Preview（非正式 production default））。
     _render_nav(vm)
     page = st.session_state[KEY_PAGE]
+    if degraded:         # 導覽之後、第一屏內容之前；五頁相同
+        st.markdown(degraded_notice_html(REAL_FEED_DEGRADED_TEXT), unsafe_allow_html=True)
     if page == P4_DATA:      # 🔌 連線診斷：唯一注入點（只傳給資料頁；其他頁 render 簽名不變）
         VIEWS[page](vm, diag_check=diag_check)
     else:

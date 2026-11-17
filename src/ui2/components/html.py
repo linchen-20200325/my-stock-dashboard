@@ -161,6 +161,11 @@ def banner_html(text: str, note: str, *, note_hidden_on_mobile: bool = False) ->
     return f'<div class="ui2-banner" role="note"><strong>{escape(text)}</strong>{tail}</div>'
 
 
+def degraded_notice_html(text: str) -> str:
+    """Real 讀取整體失敗的一條固定警示（#1204）：重用既有 DANGER chip（文字可讀，不只靠顏色），不新增 CSS。"""
+    return f'<div role="status" data-ui2-degraded="1">{chip_html(text, ChipTone.DANGER)}</div>'
+
+
 def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> str:
     """第一屏一列：欄位 label／value／狀態 chip／原因。緊湊單列，手機優先。
 
