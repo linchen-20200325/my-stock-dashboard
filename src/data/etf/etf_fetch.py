@@ -7,9 +7,9 @@ S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.sessio
 真 UI 呼叫。原 4 處 violation:
 - L147 / L1581:`st.error/st.warning` → 改 `print()` log,caller 自行偵測 empty DataFrame
 - L1024 / L1747:`st.session_state.setdefault('_etf_*_last_err', {})` 側通道錯誤儲存
-  → 改 module-level `_ETF_MANAGER_LAST_ERR` / `_ETF_INDEX_LAST_ERR` dict +
-    `get_etf_manager_last_err()` / `get_etf_index_last_err()` accessor,
-    UI(`health_inspector.py`)讀取改用 accessor。
+  → 改 module-level `_ETF_MANAGER_LAST_ERR` / `_ETF_INDEX_LAST_ERR` dict。
+    (Issue #1208:`_ETF_MANAGER_LAST_ERR` 與其 accessor `get_etf_manager_last_err()`
+    已隨 ETF 經理人換手策略取消移除;`get_etf_index_last_err()` 從未實作,此處不再宣稱。)
 """
 
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
@@ -53,7 +53,7 @@ from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO
 
 # v18.352 PR-Q2 — S-PROV-1 phase 19 helper
 # 7 fetcher (sitca_expense / moneydj_expense / yahoo_tw_holdings /
-# etf_holdings / sitca_manager / etf_zh_name / etf_underlying_index)
+# etf_holdings / sitca_manager(#1208 已移除) / etf_zh_name / etf_underlying_index)
 # 共用一個 stderr audit trail。介面 0 改:fetcher return 不動。
 # P2-1 v18.380:_prov_log 統一收攏至 src/data/core/provenance.py(原 3 處同名異簽名)
 from src.data.core.provenance import prov_log as _prov_log_unified
@@ -84,14 +84,7 @@ def _norm_tw_suffix(ticker) -> str:
 
 
 # S-H3 v18.244:diagnostic 錯誤儲存從 st.session_state 下移至 module-level dict
-# UI 讀取走 get_etf_manager_last_err() / get_etf_index_last_err() accessor。
-_ETF_MANAGER_LAST_ERR: dict = {}
 _ETF_INDEX_LAST_ERR: dict = {}
-
-
-def get_etf_manager_last_err() -> dict:
-    """Diagnostic 面板 accessor:回最近一次 ETF manager fetch 失敗原因(by ticker)。"""
-    return dict(_ETF_MANAGER_LAST_ERR)
 
 
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
@@ -998,7 +991,7 @@ def fetch_etf_holdings(ticker: str):
 
 
 # ══════════════════════════════════════════════════════════════
-# 主動式 ETF 判別 + 經理人查詢（PR — claude/etf-weakness-manager）
+# 主動式 ETF 判別（PR — claude/etf-weakness-manager；經理人查詢已隨 #1208 移除）
 # ══════════════════════════════════════════════════════════════
 # 主動式台股 ETF 白名單（代號末多帶字母 A/D/T；2024-2026 元大/復華/野村等募集）
 # 補：純數字代號的主動式 ETF（如未來新版）需手動加進來
@@ -1168,391 +1161,13 @@ def _html_kv_pairs(html_text: str) -> dict:
     return _kv
 
 
-@st.cache_data(ttl=TTL_7DAY, show_spinner=False)
-def fetch_etf_manager(ticker: str):
-    """從 MoneyDJ ETF 抓「現任經理人 + 任期起始日」。
-
-    抓取策略
-    --------
-    多 URL 嘗試（同 proxy，不同 endpoint）：
-      1. Basic0001.xdjhtm — 基本資料（傳統入口）
-      2. Basic0006.xdjhtm — 基金概觀（基金資訊類，新 ETF 可能在此）
-      3. Basic0011.xdjhtm — 基金特色（少見但部分基金有）
-    每 URL 內：proxy_helper 主源 → curl_cffi fallback。
-
-    Regex 寬鬆策略
-    --------------
-    名字：「經理人」「基金經理人」「現任經理人」(中間可有 HTML/whitespace) 後接中文 2-8 字
-    任期：「到職日」「上任日」「任期」「管理基金日」「派任日」其中之一 + 日期
-
-    Returns
-    -------
-    dict | None
-        成功：{'name': '張三', 'since': '2024-04-15', 'tenure_days': 400}
-        失敗：None;失敗原因寫入 _ETF_MANAGER_LAST_ERR[ticker]
-              (UI 透過 get_etf_manager_last_err() accessor 讀,S-H3 v18.244)
-    """
-    import re as _re_mg
-    from datetime import date as _date_mg
-    _t = _norm_tw_suffix(ticker)
-    if not _t:
-        return None
-    if '.' not in _t:
-        _t = f'{_t}.TW'
-
-    # Basic0004(簡介頁)就有「經理人」欄(fetch_etf_meta_moneydj 抓的同一頁)，擺第一優先。
-    _urls = [
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0006.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0011.xdjhtm?etfid={_t}',
-    ]
-    _err_trace: list[str] = []
-    _best = None   # 名字已抓到但缺到職日時暫存；續查其他頁是否有任期再決定
-
-    for _url in _urls:
-        _txt = None
-        _endpoint = _url.split('/')[-1].split('?')[0]
-        # ── 1. proxy_helper（NAS Squid 台灣 IP）主源 ─────────────
-        try:
-            from src.data.proxy import fetch_url as _fu_mg
-            _r = _fu_mg(_url, timeout=12, attempts=2)
-            if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
-                _r.encoding = 'utf-8'
-                _txt = _r.text
-            else:
-                _code = _r.status_code if _r is not None else 'None'
-                _ln = len(_r.text or '') if _r is not None else 0
-                _err_trace.append(f'proxy {_endpoint}: HTTP {_code} len={_ln}')
-                print(f'[MDJ/manager] proxy {_t} {_endpoint}: HTTP {_code} len={_ln}')
-        except Exception as _ep:
-            _err_trace.append(f'proxy {_endpoint}: {type(_ep).__name__}')
-            print(f'[MDJ/manager] proxy 異常 {_t} {_endpoint}: {type(_ep).__name__}: {_ep}')
-
-        # ── 2. curl_cffi fallback ────────────────────────────────
-        if _txt is None:
-            try:
-                from curl_cffi import requests as _cffi_mg
-                _r2 = _cffi_mg.get(_url, impersonate='chrome124', timeout=12)
-                if _r2.status_code == 200 and len(_r2.text or '') > 500:
-                    _txt = _r2.text
-                else:
-                    _err_trace.append(f'cffi {_endpoint}: HTTP {_r2.status_code}')
-                    print(f'[MDJ/manager] curl_cffi {_t} {_endpoint}: HTTP {_r2.status_code}')
-            except Exception as _ec:
-                _err_trace.append(f'cffi {_endpoint}: {type(_ec).__name__}')
-                print(f'[MDJ/manager] curl_cffi 異常 {_t} {_endpoint}: {type(_ec).__name__}: {_ec}')
-
-        if _txt is None:
-            continue
-
-        # ── 3a. KV 儲存格解析（穩健，優先 regex）：經理人/到職日常在表格相鄰格 ──
-        try:
-            _kv_mg = _html_kv_pairs(_txt)
-            _nm_raw = ''
-            for _k in ('基金經理人', '現任經理人', '經理人'):
-                if _k in _kv_mg:
-                    _nm_raw = _kv_mg[_k]
-                    break
-            if not _nm_raw:
-                for _k, _v in _kv_mg.items():
-                    if '經理' in _k:
-                        _nm_raw = _v
-                        break
-            _nm_m2 = _re_mg.search(r'[一-鿿]{2,8}', _nm_raw)  # 取第一段中文（避開「、」多人）
-            if _nm_m2:
-                _name = _nm_m2.group(0)
-                _since, _days = None, None
-                _dt_raw = ''
-                for _k in ('到職日', '上任日', '派任日', '起聘日', '管理基金日', '任期'):
-                    if _k in _kv_mg:
-                        _dt_raw = _kv_mg[_k]
-                        break
-                _dm2 = _re_mg.search(r'(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})', _dt_raw)
-                if _dm2:
-                    try:
-                        _dtv = _date_mg(int(_dm2.group(1)), int(_dm2.group(2)), int(_dm2.group(3)))
-                        _since = _dtv.strftime('%Y-%m-%d')
-                        _days = (_date_mg.today() - _dtv).days
-                    except ValueError:
-                        pass
-                if _since:
-                    print(f'[MDJ/manager] ✅(KV) {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-                    # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
-                    return {'name': _name, 'since': _since, 'tenure_days': _days,
-                            'source': f'MoneyDJ:{_endpoint}:KV',
-                            'fetched_at': pd.Timestamp.now('UTC').isoformat()}
-                if _best is None:   # 名字有、到職日缺 → 暫存，續查其他頁
-                    _best = {'name': _name, 'since': None, 'tenure_days': None,
-                             'source': f'MoneyDJ:{_endpoint}:KV',
-                             'fetched_at': pd.Timestamp.now('UTC').isoformat()}
-                    print(f'[MDJ/manager] (KV) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
-        except Exception as _ekv:
-            print(f'[MDJ/manager] KV parse 略過 {_endpoint}: {type(_ekv).__name__}')
-
-        # ── 3. 寬鬆 regex 嘗試解析 ────────────────────────────────
-        try:
-            # 名字：經理人 / 基金經理人 / 現任經理人 ... 中文 2-8 字
-            _name_m = _re_mg.search(
-                r'(?:基金|現任)?\s*經理人[^<>]{0,50}?>\s*([一-鿿]{2,8})\s*[<\(]',
-                _txt,
-            )
-            # 寬鬆 fallback：經理人後直接接中文（無 > 標籤）
-            if not _name_m:
-                _name_m = _re_mg.search(
-                    r'(?:基金|現任)?\s*經理人[^一-鿿\d]{0,30}?([一-鿿]{2,8})',
-                    _txt,
-                )
-            _date_m = _re_mg.search(
-                r'(?:到職日|上任日|任期|管理基金日|派任日|起聘日)[^\d]{0,30}?(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})',
-                _txt,
-            )
-            if not _name_m:
-                _err_trace.append(f'{_endpoint}: 200 但 regex 無經理人')
-                print(f'[MDJ/manager] ⚠️ {_t} {_endpoint}: 200 但 regex 無經理人')
-                continue
-            _name = _name_m.group(1).strip()
-            _since, _days = None, None
-            if _date_m:
-                _y, _mo, _d = (int(_date_m.group(i)) for i in (1, 2, 3))
-                try:
-                    _dt = _date_mg(_y, _mo, _d)
-                    _since = _dt.strftime('%Y-%m-%d')
-                    _days = (_date_mg.today() - _dt).days
-                except ValueError:
-                    pass
-            if _since:
-                print(f'[MDJ/manager] ✅ {_t} = {_name} via {_endpoint} (since={_since}, days={_days})')
-                # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
-                return {'name': _name, 'since': _since, 'tenure_days': _days,
-                        'source': f'MoneyDJ:{_endpoint}:regex',
-                        'fetched_at': pd.Timestamp.now('UTC').isoformat()}
-            if _best is None:
-                _best = {'name': _name, 'since': None, 'tenure_days': None,
-                         'source': f'MoneyDJ:{_endpoint}:regex',
-                         'fetched_at': pd.Timestamp.now('UTC').isoformat()}
-                print(f'[MDJ/manager] (regex) {_t} = {_name} via {_endpoint}，無到職日，續查其他頁')
-        except Exception as _e:
-            _err_trace.append(f'{_endpoint}: regex 例外 {type(_e).__name__}')
-            print(f'[MDJ/manager] ❌ regex parse {_t} {_endpoint}: {type(_e).__name__}: {_e}')
-
-    # MoneyDJ 各頁掃完：有名字但全無到職日 → 回名字（任期 UI 顯示「未揭露」屬實）
-    if _best is not None:
-        print(f'[MDJ/manager] ▶ {_t} = {_best["name"]}（MoneyDJ 各頁皆無到職日）')
-        return _best
-
-    # ── 4. SITCA fallback — 與費用率同 proxy 路徑（已證可走）────────
-    from shared.etf_codes import bare_etf_code as _bare4
-    if _bare4(_t).isdigit():
-        _sitca = _fetch_sitca_manager(_t)
-        if _sitca and _sitca.get('name'):
-            print(f'[SITCA/manager] ✅ {_t} = {_sitca["name"]}')
-            # S-PROV-1 phase 11 v18.257 — provenance(schema-additive)
-            _sitca.setdefault('source', 'SITCA:fund-manager-table')
-            _sitca.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
-            return _sitca
-        else:
-            _err_trace.append('sitca: 多 URL/多 column 比對全失敗')
-
-    # ── 5. Yuanta 官網 fallback — 主動式 ETF 專屬（v1.1）─────────────
-    _yu = _fetch_yuanta_active_etf_meta(_t)
-    if _yu and _yu.get('manager'):
-        print(f'[Yuanta/manager] ✅ {_t} = {_yu["manager"]}')
-        # S-PROV-1 phase 11 v18.257 — provenance(schema-additive,既有 'source' 保留)
-        return {'name': _yu['manager'], 'since': None, 'tenure_days': None,
-                'source': 'Yuanta:official',
-                'fetched_at': pd.Timestamp.now('UTC').isoformat()}
-    elif _yu is not None:
-        _err_trace.append('yuanta: 200 但 regex 無經理人')
-    else:
-        if is_active_etf(_t):
-            _err_trace.append('yuanta: 3 URL 全 fail')
-
-    # S-H3 v18.244:全部失敗 — 寫 module-level dict 給診斷面板讀(原 st.session_state)
-    _ETF_MANAGER_LAST_ERR[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
-    return None
-
-
-import os as _os_mg
-import json as _json_mg
-
-_MGR_HISTORY_PATH = _os_mg.path.join('/tmp/st_cache', 'etf_manager_history.json')
-# 持久檔：由 update_etf_managers.py（GitHub Actions 每週）維護並 commit 進 repo，
-# 跨 Streamlit Cloud 容器重啟仍存活（解決 /tmp 清空導致紅框不跳的問題）。
-_ETF_MANAGERS_REPO_PATH = _os_mg.path.join(
-    _os_mg.path.dirname(_os_mg.path.abspath(__file__)), 'etf_managers.json')
-_RECENT_CHANGE_DAYS = 180   # 換手偵測日後多久內仍在 UI 亮紅框
-
-
-def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
-    """比對 ETF 經理人異動（ETF 表現與經理人相關，換手須提醒）。
-
-    換手基準與歷史的主來源 = `etf_managers.json`（Actions 維護、commit 進 repo，
-    跨容器重啟存活）；`/tmp` 為次要（兩次 Actions 之間 app 自行即時偵測 + 雲端
-    唯讀時的備援）。回傳 UI 用字典:
-      {'changed': bool, 'prev': str|None, 'detected_at': 'YYYY-MM-DD'|None,
-       'is_new': bool, 'tenure_days': int|None}
-    changed：持久檔近 180 天有換手紀錄，或 live 名字與基準不同。
-    is_new：到職日推算任期 < 180 天（半年內新任,表現待觀察）。
-    """
-    import datetime as _dt_mg
-    _name = (manager or {}).get('name') or None
-    _tenure = (manager or {}).get('tenure_days')
-    _is_new = isinstance(_tenure, int) and _tenure < 180
-    _out = {'changed': False, 'prev': None, 'detected_at': None,
-            'is_new': _is_new, 'tenure_days': _tenure}
-    if not _name:
-        return _out
-    _key = _norm_tw_suffix(ticker)
-    _today_d = _dt_mg.date.today()
-    _today = _today_d.isoformat()
-
-    # ── 1. 持久檔（repo）：跨容器存活的換手基準 + 歷史 ──────────────
-    _repo_rec = {}
-    try:
-        if _os_mg.path.exists(_ETF_MANAGERS_REPO_PATH):
-            with open(_ETF_MANAGERS_REPO_PATH, 'r', encoding='utf-8') as _f:
-                _repo_db = _json_mg.load(_f) or {}
-            _repo_rec = (_repo_db.get('managers') or {}).get(_key) or {}
-    except Exception as _e_repo:
-        print(f'[ETF Manager] 讀持久檔略過: {_e_repo}')
-
-    # 1a. 持久 history 近 180 天的換手 → 即使容器重啟仍亮紅框
-    for _h in reversed(_repo_rec.get('history') or []):
-        _da = _h.get('detected_at')
-        try:
-            _dd = _dt_mg.date.fromisoformat(_da) if _da else None
-        except ValueError:
-            _dd = None
-        if _dd and (_today_d - _dd).days <= _RECENT_CHANGE_DAYS:
-            _out.update({'changed': True, 'prev': _h.get('from'), 'detected_at': _da})
-            break
-
-    # 1c. 任期 fallback：live tenure_days 缺 → 用持久檔 first_seen 推算近似值
-    #     （MoneyDJ 不揭露到職日的 ETF 適用；標 'approx' 讓 UI 知道是估算）
-    if _out['tenure_days'] is None and _repo_rec.get('first_seen'):
-        try:
-            _fs = _dt_mg.date.fromisoformat(_repo_rec['first_seen'])
-            _approx_days = (_today_d - _fs).days
-            if _approx_days >= 0:
-                _out['tenure_days'] = _approx_days
-                _out['tenure_approx'] = True   # UI 提示「至少 X 天」而非確切
-                # 重新評估 is_new（用近似 tenure）
-                _out['is_new'] = _approx_days < 180
-        except ValueError:
-            pass
-
-    # 1b. live 名字 vs 持久基準不同 → 兩次 Actions 之間也能即時偵測
-    _repo_name = _repo_rec.get('name')
-    if not _out['changed'] and _repo_name and _repo_name != _name:
-        _out.update({'changed': True, 'prev': _repo_name, 'detected_at': _today})
-
-    # ── 2. /tmp 即時檔（次要：session 內 + 持久檔不可寫時備援）──────
-    try:
-        _os_mg.makedirs('/tmp/st_cache', exist_ok=True)
-        _db = {}
-        if _os_mg.path.exists(_MGR_HISTORY_PATH):
-            with open(_MGR_HISTORY_PATH, 'r', encoding='utf-8') as _f:
-                _db = _json_mg.load(_f) or {}
-        _rec = _db.get(_key) or {}
-        _prev = _rec.get('name')
-        if _prev and _prev != _name and not _out['changed']:
-            _out.update({'changed': True, 'prev': _prev, 'detected_at': _today})
-            _hist = _rec.get('history') or []
-            _hist.append({'from': _prev, 'to': _name, 'detected_at': _today,
-                          'since': (manager or {}).get('since')})
-            _rec['history'] = _hist[-10:]
-            # 換手 → first_seen 重設為今天（新任期起點）
-            _rec['first_seen'] = _today
-        _rec.update({'name': _name, 'since': (manager or {}).get('since'),
-                     'last_seen': _today})
-        # 首次紀錄此 ticker 時設 first_seen：優先用持久檔的值，避免容器重啟後
-        # tenure 歸零導致全部顯示「新任」；只有持久檔也沒有時才設為今天。
-        _rec.setdefault('first_seen', _repo_rec.get('first_seen') or _today)
-        _rec.setdefault('history', _rec.get('history', []))
-        _db[_key] = _rec
-
-        # 若持久檔沒 first_seen 但 /tmp 有 → 補回 out 推算 tenure
-        if _out['tenure_days'] is None and _rec.get('first_seen'):
-            try:
-                _fs2 = _dt_mg.date.fromisoformat(_rec['first_seen'])
-                _ad2 = (_today_d - _fs2).days
-                if _ad2 >= 0:
-                    _out['tenure_days'] = _ad2
-                    _out['tenure_approx'] = True
-                    _out['is_new'] = _ad2 < 180
-            except ValueError:
-                pass
-        with open(_MGR_HISTORY_PATH, 'w', encoding='utf-8') as _f:
-            _json_mg.dump(_db, _f, ensure_ascii=False, indent=2)
-    except Exception as _e_mg:
-        print(f'[ETF Manager] 異動追蹤略過（無法存檔）: {_e_mg}')
-    return _out
-
-
-@st.cache_data(ttl=TTL_7DAY, show_spinner=False)
-def _fetch_sitca_manager(ticker: str):
-    """SITCA fallback：投信投顧公會基金經理人查詢。
-
-    跟 fetch_sitca_expense_ratio 同 proxy 路徑（已驗證可走）；pd.read_html 後動態
-    掃描所有表格找「代號／基金代碼」+「經理人／基金經理人」雙欄。
-
-    Returns
-    -------
-    dict | None  {'name': ..., 'since': None, 'tenure_days': None}（任期 SITCA 通常不揭露）
-    """
-    from src.data.proxy import fetch_url as _fu_sm
-    import pandas as _pd_sm
-    from shared.etf_codes import bare_etf_code as _bare
-    _t = _bare(ticker)
-    if not _t or not _t.isdigit():
-        return None
-    _tn = _t.lstrip('0') or '0'
-
-    _urls = [
-        'https://www.sitca.org.tw/ROC/Industry/IN2401.aspx?pid=IN2401_01',
-        'https://www.sitca.org.tw/ROC/Industry/IN2421.aspx?pid=IN2421_01',
-        'https://www.sitca.org.tw/ROC/Industry/IN2422.aspx?pid=IN2422_01',
-        'https://www.sitca.org.tw/ROC/Industry/IN2411.aspx?pid=IN2411_01',
-    ]
-    for _url in _urls:
-        try:
-            r = _fu_sm(_url, timeout=15, attempts=2)
-            if r is None or r.status_code != 200 or len(r.text or '') < 500:
-                continue
-            r.encoding = 'utf-8'
-            try:
-                tables = _pd_sm.read_html(r.text)
-            except ValueError:
-                continue
-            for tbl in tables:
-                code_col = next((c for c in tbl.columns
-                                 if any(k in str(c) for k in
-                                        ('代號', '代碼', '基金統編', '統一編號', 'Code'))), None)
-                mgr_col = next((c for c in tbl.columns
-                                if any(k in str(c) for k in
-                                       ('經理人', '基金經理', '現任經理'))), None)
-                if code_col is None or mgr_col is None:
-                    continue
-                _digits = tbl[code_col].astype(str).str.replace(r'\D', '', regex=True)
-                row = tbl[_digits.where(_digits != '', '0').str.lstrip('0').replace('', '0') == _tn]
-                if row.empty:
-                    continue
-                _raw = str(row[mgr_col].iloc[0]).strip()
-                if not _raw or _raw.lower() == 'nan' or _raw.isdigit():
-                    continue
-                # 多人共同經理用「、」「,」分隔；可能附括號註記，取首位淨化
-                _name = _raw.split('、')[0].split(',')[0].split('(')[0].split('（')[0].strip()
-                if 2 <= len(_name) <= 8:
-                    print(f'[SITCA/manager] ✅ {_t} = {_name} (url={_url[-30:]})')
-                    _prov_log('_fetch_sitca_manager', f'SITCA:{_url[-30:]}',
-                              _t, f'dict:name={_name}')
-                    return {'name': _name, 'since': None, 'tenure_days': None}
-        except Exception as e:
-            print(f'[SITCA/manager] {_t} {_url[-30:]}: {type(e).__name__}: {e}')
-            continue
-    _prov_log('_fetch_sitca_manager', 'SITCA:4-urls-all-fail', _t, 'None:no-match')
-    return None
+# Issue #1208（2026-11-17 客戶取消 ETF 經理人換手策略）：`fetch_etf_manager`（MoneyDJ/SITCA/
+# Yuanta 經理人＋任期）、`_fetch_sitca_manager`、`track_etf_manager_change`（repo
+# etf_managers.json ＋ /tmp/st_cache/etf_manager_history.json 換手偵測）與
+# `get_etf_manager_last_err` 已整組移除。caller 矩陣：唯一 consumer 為換手／任期顯示
+# （etf_tab_single 經理人卡、compute_etf_weakness_row 經理人／任期欄與新經理人例外、
+# health_inspector 經理人診斷列）均已同批移除，無其他合法 consumer。
+# 反向守衛：tests/test_issue1208_manager_strategy_removed.py。
 
 
 def get_etf_expense_ratio_safe(ticker: str):
@@ -2329,7 +1944,7 @@ def fetch_etf_zh_name(ticker: str):
 def fetch_etf_underlying_index(ticker: str):
     """從 MoneyDJ 抓 ETF 追蹤指數名稱（yfinance 沒有此欄）。
 
-    抓取策略：複用 fetch_etf_manager 的 proxy 通路（NAS Squid 主源 + curl_cffi fallback）。
+    抓取策略：MoneyDJ proxy 通路（NAS Squid 主源 + curl_cffi fallback）。
     優先順序：Basic0001（基本資料，最常見）→ Basic0006（基金概觀）→ Basic0007（持股明細，部分有）。
 
     Regex 三層寬鬆策略：

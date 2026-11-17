@@ -186,8 +186,8 @@ _DIRECT = [
     ("src/ui/pages/calibration_ui.py", "匯入校準模組失敗", "_e", {}),
     ("src/ui/pages/calibration_ui.py", "抓 ^TWII 異常", "_e", {}),
     ("src/ui/pages/calibration_ui.py", "回測異常", "_e", {}),
-    ("src/ui/pages/health_inspector.py", "proxy_helper 例外", "_ep_d", {}),
-    ("src/ui/pages/health_inspector.py", "curl_cffi 例外", "_ec_d", {}),
+    # Issue #1208:health_inspector 的「proxy_helper 例外」「curl_cffi 例外」兩個出口屬
+    # ETF 經理人 regex 深度診斷(直打 MoneyDJ),已隨換手策略取消整段移除 → 條目一併移除。
     ("src/ui/tabs/macro/helpers.py", "風險雷達模組載入失敗", "_e_imp", {}),
     ("src/ui/tabs/macro/helpers.py", "風險雷達抓取失敗", "_e_rd", {}),
     ("src/ui/tabs/macro/helpers.py", "中國拖累 China Drag:⚠️ 取數失敗", "_e", {}),

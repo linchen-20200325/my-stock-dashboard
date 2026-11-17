@@ -410,14 +410,15 @@ def _render_weakness_table(rows) -> None:
     """主動 ETF 弱勢度檢測表格（Gemini「淘汰不適任經理人」邏輯）
 
     rows: List[dict] from etf_calc.compute_etf_weakness_row()
-    顯示欄位：代號 / 名稱 / 主被動 / 經理人 / 任期 / 大跌弱勢率% / 反彈弱勢率% /
+    顯示欄位：代號 / 名稱 / 主被動 / 大跌弱勢率% / 反彈弱勢率% /
               連敗季數 / TE% / 燈號 / 動作建議
+    （Issue #1208：經理人／任期欄已隨換手策略取消移除）
     """
     if not rows:
         st.info('無資料可顯示')
         return
     df = pd.DataFrame(rows)
-    _display_cols = ['代號', '名稱', '主被動', '經理人', '任期',
+    _display_cols = ['代號', '名稱', '主被動',
                      '大跌弱勢率%', '反彈弱勢率%', '連敗季數', 'TE%',
                      '燈號', '動作建議']
     _cols = [c for c in _display_cols if c in df.columns]

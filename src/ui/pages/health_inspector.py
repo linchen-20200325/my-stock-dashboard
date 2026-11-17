@@ -12,7 +12,7 @@ import datetime as _dt
 from typing import Optional
 
 import streamlit as st
-from shared.secret_md import scrub_md, scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
+from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 from shared.secret_scrub import scrub_secrets  # SEC-3：診斷表 error_msg 欄（表格，不走 Markdown）
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.data_freshness import (
@@ -1275,28 +1275,6 @@ def render_data_health_raw():
                              source='FinMind / TWSE OpenAPI',
                              endpoint='TaiwanETFNetAssetValue / opendata',
                              proxy=True))
-            # 基金經理人（ETF 表現與經理人相關，換手須提醒）
-            try:
-                from src.data.etf import fetch_etf_manager as _fem_r
-                _mgr_r = _fem_r(tk)
-            except Exception:
-                _mgr_r = None
-            _mgr_name = (_mgr_r or {}).get('name')
-            # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
-            _mgr_last_err = None
-            if not _mgr_name:
-                try:
-                    from src.data.etf.etf_fetch import get_etf_manager_last_err as _get_mgr_err
-                    _mgr_last_err = _get_mgr_err().get(tk.replace('.tw', '.TW'))
-                except Exception:
-                    pass
-            rows.append(_row('基金經理人',
-                             str(_dt_r.date.today()) if _mgr_name else None, 'static',
-                             optional=True,
-                             error_msg=_mgr_last_err,
-                             source='MoneyDJ / SITCA / Yuanta',
-                             endpoint='Basic0004/0001/0006/0011 → SITCA → 官網',
-                             proxy=True))
             _all_section_rows.extend(rows)
             _tbl(rows)
             st.caption('⚠️ 殖利率、追蹤誤差、CAGR、Sharpe、折溢價率為計算值，不顯示於此。')
@@ -1348,95 +1326,26 @@ def render_data_health_raw():
             _tbl(_port_diag_rows)
             st.caption('💡 配息「🔵 該股本期為 0」可能為成長型 ETF（不配息）或新上市未滿 1 年；「⚪ 不適用」為海外 ETF。')
 
-            # ────── 主動 ETF 經理人 / 持股探測 ──────
+            # ────── ETF 持股探測 ──────
+            # Issue #1208（2026-11-17 客戶取消 ETF 經理人換手策略）：經理人探測列、
+            # 經理人 regex 深度診斷（直打 MoneyDJ）一併移除；持股探測保留。
             try:
-                from src.data.etf import is_active_etf, fetch_etf_manager, fetch_etf_holdings
+                from src.data.etf import fetch_etf_holdings
             except ImportError:
-                is_active_etf = fetch_etf_manager = fetch_etf_holdings = None
+                fetch_etf_holdings = None
 
-            if is_active_etf is not None and fetch_etf_manager is not None:
+            if fetch_etf_holdings is not None:
                 st.markdown('---')
-                _h1, _h2, _h3 = st.columns([4, 1, 1])
-                _h1.markdown('**🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測**')
-                if _h2.button('🗑️ 清快取重試', key='_etf_mgr_clear',
+                _h1, _h2 = st.columns([5, 1])
+                _h1.markdown('**🏃 ETF 持股探測**')
+                if _h2.button('🗑️ 清快取重試', key='_etf_hold_clear',
                                use_container_width=True,
-                               help='清掉 fetch_etf_manager + fetch_etf_holdings 的 None 快取，重新走 proxy 抓'):
-                    try:
-                        fetch_etf_manager.clear()
-                    except Exception:
-                        pass
+                               help='清掉 fetch_etf_holdings 的 None 快取，重新走 proxy 抓'):
                     try:
                         fetch_etf_holdings.clear()
                     except Exception:
                         pass
                     st.rerun()
-                _do_deep = _h3.button('🔬 深度診斷', key='_etf_mgr_deep',
-                                       use_container_width=True,
-                                       help='挑首檔主動式 ETF，直接打 MoneyDJ 不走快取，逐源顯示 HTTP status / regex match')
-                st.caption('診斷「弱勢度檢測」表格「經理人」「任期」全空的根因：'
-                           'MoneyDJ 反爬擋海外 IP，需走 proxy_helper（NAS Squid 台灣 IP）。'
-                           '若清完仍 ❌ 但 proxy 連線狀態🟢 → 按「🔬 深度診斷」看 MoneyDJ 是否擋 NAS IP / regex 漏抓。')
-
-                # ────── 🔬 深度診斷：不走快取 raw probe ──────
-                if _do_deep:
-                    _active_tks = [_pr.get('ticker', '') for _pr in _ep_rows
-                                   if is_active_etf(_pr.get('ticker', ''))]
-                    if not _active_tks:
-                        st.warning('組合內無主動式 ETF（被動式不需查經理人）')
-                    else:
-                        _tk_probe = _active_tks[0]
-                        _url_probe = (
-                            'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm'
-                            f'?etfid={_tk_probe}')
-                        st.markdown(f'**🎯 探測對象：`{_tk_probe}`** → `{_url_probe}`')
-                        # 源 1：proxy_helper.fetch_url
-                        try:
-                            from src.data.proxy import fetch_url as _fu_d
-                            _r_p = _fu_d(_url_probe, timeout=12, attempts=2)
-                            if _r_p is None:
-                                st.error('❌ **proxy_helper.fetch_url** 回 None（proxy 全失敗或 403×2 後降級也失敗）')
-                            else:
-                                _len_p = len(_r_p.text) if _r_p.text else 0
-                                _msg = f'**proxy_helper.fetch_url** → HTTP `{_r_p.status_code}` · 長度 `{_len_p}` chars'
-                                if _r_p.status_code == 200 and _len_p > 1000:
-                                    st.success(f'✅ {_msg}')
-                                    _r_p.encoding = 'utf-8'
-                                    import re as _re_d
-                                    _txt = _r_p.text
-                                    _nm_m = _re_d.search(r'經理人[^<>\d]{0,30}?>?\s*([一-鿿]{2,8})\s*<', _txt)
-                                    _dt_m = _re_d.search(
-                                        r'(?:到職日|上任日|任期|管理基金日)[^\d]{0,30}?(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})',
-                                        _txt)
-                                    if _nm_m:
-                                        st.success(f'✅ regex 經理人：`{_nm_m.group(1)}`')
-                                    else:
-                                        st.warning('⚠️ regex 沒抓到「經理人」欄位 — MoneyDJ HTML 結構可能改版')
-                                    if _dt_m:
-                                        st.success(f'✅ regex 到職日：`{_dt_m.group(1)}-{_dt_m.group(2)}-{_dt_m.group(3)}`')
-                                    else:
-                                        st.info('ℹ️ regex 沒抓到「到職日 / 上任日」（只有經理人沒任期也算部分成功）')
-                                    # 預覽含「經理人」字眼附近 200 字
-                                    _pos = _txt.find('經理人')
-                                    if _pos >= 0:
-                                        st.code(_txt[max(0, _pos - 50):_pos + 250], language='html')
-                                    else:
-                                        st.warning('⚠️ 整篇文章連「經理人」這三字都沒有 — 可能是錯誤頁面 / 反爬干擾頁')
-                                else:
-                                    st.error(f'❌ {_msg} — MoneyDJ 擋了 NAS IP 或回了空頁')
-                        except Exception as _ep_d:
-                            st.error(f'❌ proxy_helper 例外：{type(_ep_d).__name__}: {scrub_md(_ep_d)}')
-                        # 源 2：curl_cffi 直連
-                        try:
-                            from curl_cffi import requests as _cffi_d
-                            _r_c = _cffi_d.get(_url_probe, impersonate='chrome124', timeout=12)
-                            _len_c = len(_r_c.text) if _r_c.text else 0
-                            _msg = f'**curl_cffi 直連** → HTTP `{_r_c.status_code}` · 長度 `{_len_c}` chars'
-                            if _r_c.status_code == 200 and _len_c > 1000:
-                                st.success(f'✅ {_msg}（fallback 可用）')
-                            else:
-                                st.warning(f'⚠️ {_msg}（fallback 也失敗，預期 — 海外 IP 被擋）')
-                        except Exception as _ec_d:
-                            st.warning(f'⚠️ curl_cffi 例外：{type(_ec_d).__name__}: {scrub_md(_ec_d)}')
 
                 _probe_rows = []
                 _tk_seen: set[str] = set()
@@ -1445,53 +1354,9 @@ def render_data_health_raw():
                     if not _tk_p or _tk_p in _tk_seen:
                         continue
                     _tk_seen.add(_tk_p)
-                    _active = is_active_etf(_tk_p)
-                    # 經理人探測
-                    if not _active:
-                        _probe_rows.append(_row(
-                            f'{_tk_p} 經理人', None, 'static',
-                            optional=True, probe_status='na',
-                            source='MoneyDJ', endpoint='Basic0001.xdjhtm',
-                            proxy=True))
-                    else:
-                        try:
-                            _mgr = fetch_etf_manager(_tk_p)
-                        except Exception as _emgr:
-                            _mgr = None
-                            print(f'[diag/manager] {_tk_p}: {type(_emgr).__name__}: {_emgr}')
-                        if _mgr and _mgr.get('name'):
-                            _nm_mgr = _mgr['name']
-                            _tn = _mgr.get('tenure_days')
-                            _label = f'{_nm_mgr}' + (f'（任期 {_tn} 天）' if _tn else '（任期未抓到）')
-                            _probe_rows.append(_row(
-                                f'{_tk_p} 經理人 = {_label}',
-                                _mgr.get('since') or _today_ep, 'static',
-                                source='MoneyDJ', endpoint='Basic0001.xdjhtm',
-                                proxy=True))
-                        else:
-                            # S-H3 v18.244:讀 module-level accessor(原 st.session_state)
-                            try:
-                                from src.data.etf.etf_fetch import get_etf_manager_last_err as _gele
-                                _last_err = _gele().get(_tk_p)
-                            except Exception:
-                                _last_err = None
-                            # v1.1：主動式 ETF Yuanta 也失敗 → 黃燈 na（公開資料受限）
-                            _err_str = (
-                                '主動式 ETF — 公開資料受限'
-                                f'（trace: {_last_err}）' if _last_err
-                                else '主動式 ETF — 公開資料受限'
-                            )
-                            _probe_rows.append(_row(
-                                f'{_tk_p} 經理人',
-                                None, 'static',
-                                probe_status='na',
-                                error_msg=_err_str,
-                                source='MoneyDJ + SITCA + Yuanta',
-                                endpoint='Basic0001/0006/0011 + SITCA IN24XX + yuantaetfs',
-                                proxy=True))
                     # 持股探測（簡版：有 / 無）
                     try:
-                        _hd = fetch_etf_holdings(_tk_p) if fetch_etf_holdings else None
+                        _hd = fetch_etf_holdings(_tk_p)
                     except Exception as _ehd:
                         _hd = None
                         print(f'[diag/holdings] {_tk_p}: {type(_ehd).__name__}: {_ehd}')
@@ -1518,7 +1383,6 @@ def render_data_health_raw():
                             proxy=True))
                 _all_section_rows.extend(_probe_rows)
                 _tbl(_probe_rows)
-                st.caption('💡 經理人「⚪ 不適用」= 被動式 ETF 無需查；「❌ 抓取失敗」= 主動式但 proxy/regex 異常。')
 
     # ══════════════════════════════════════════════════════════════
     # ⚠️ 資料異常清單（最下方一覽，獨立於上方總表/抽查）

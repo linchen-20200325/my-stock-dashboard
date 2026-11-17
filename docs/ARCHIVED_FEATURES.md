@@ -62,3 +62,26 @@ macro_validation 前例處理。刪除前逐一 grep 驗證 0 production caller 
 - **保留(仍 LIVE)**:`src/services/rs_leader_service.py`(app.py 仍用)、
   `rs_leader_screener`(L2)、`test_rs_leader_service` / `test_rs_leader_screener`。RS 功能未死。
 - **還原**:git history。
+
+---
+
+## 2026-11-17 — ETF 經理人換手策略(Issue #1208;客戶取消,整組真刪)
+
+客戶原文:「那換手策略就不考慮了 這個方式移除」。經理人不再當投資因子,不新增替代建議、不改其餘 ETF 分數／公式。
+
+- **刪除**:
+  - L1 `src/data/etf/etf_fetch.py`:`fetch_etf_manager`、`_fetch_sitca_manager`、`track_etf_manager_change`
+    (repo JSON ＋ `/tmp/st_cache/etf_manager_history.json`、first_seen／180 天 recent／is_new)、
+    `get_etf_manager_last_err`／`_ETF_MANAGER_LAST_ERR`。
+  - L0 `shared/signal_thresholds.py::ETF_MANAGER_TENURE_NEW_DAYS`。
+  - L2 `asset_lag.classify_lag_verdict` 的 `is_etf`／`tenure_days` 參數與「新經理人 <6 月 → 再給時間」例外;
+    `etf_calc.compute_etf_weakness_row` 的經理人／任期欄與經理人抓取。
+  - UI:`etf_tab_single` 經理人／任期／🔁異動／🆕新任卡;`etf_tab_portfolio` 新經理人提示;
+    `etf_render._render_weakness_table` 經理人／任期欄;`health_inspector` 基金經理人診斷列、經理人探測列、
+    經理人 regex 深度診斷(直打 MoneyDJ Basic0001)。
+  - 資料生產:`.github/workflows/update_etf_managers.yml`、`scripts/update_etf_managers.py`、`src/data/etf/etf_managers.json`、`src/data/etf/etf_manager_watchlist.json`、`tests/test_etf_managers_data_pr.py`;`scripts/publish_data_pr.py` 的 etf_managers.json 揮發鍵登記。
+- **保留(仍 LIVE)**:`is_active_etf`、`_fetch_yuanta_active_etf_meta`(主動式 ETF 費用率備援仍用)、
+  `_html_kv_pairs`、ETF 價格／配息／AUM／Beta／費用率／持股／品質評等、弱勢度燈號(價格績效)、持股探測、
+  `publish_data_pr` 其他三個 job。
+- **反向守衛**:`tests/test_issue1208_manager_strategy_removed.py`。
+- **還原**:`git show efa0e015:<path>`(本批前 main)。⚠️ 復活前須先過 MoneyDJ 來源權利 Gate(#1116／#1207)。

@@ -22,7 +22,6 @@ from src.compute.etf.etf_calc import (
 )
 from src.compute.etf.etf_helpers import bare_etf_code, normalize_etf_ticker
 from src.compute.etf.asset_lag import (
-    ASSET_ETF,
     classify_asset_kind,
     classify_lag_verdict,
     pick_benchmark,
@@ -120,8 +119,8 @@ def evaluate_one(ticker: str, *, period: str = "1y") -> dict:
         row["燈號"] = f"⚪ 抓取失敗：{type(_e).__name__}"
         return row
 
-    # MVP:tenure_days=None(不抓經理人;新經理人特例僅影響 ETF streak 動作文案,之後可補)
-    _verdict = classify_lag_verdict(_m, is_etf=(kind == ASSET_ETF), tenure_days=None)
+    # Issue #1208:經理人任期例外已移除,燈號只由價格績效指標決定(ETF/個股同一份 SSOT)。
+    _verdict = classify_lag_verdict(_m)
     row["燈號"] = _verdict["燈號"]
     row["動作建議"] = _verdict["動作建議"]
     return row

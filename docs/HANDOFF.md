@@ -1533,3 +1533,10 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 台北牆鐘語意：**僅是 UI「資料日期可顯示性」基準**，⛔ 不是官方 `published_at`、交易日公布判準、歷史可得性／PIT 證據。副作用（明示）：未注入 `today` 時，L1 新鮮度基準由 host 本地日改為台北日（舊 UI `_market_blocks` 亦同；僅在 host≠台北日的時窗有差，消除了卡片與日 K 判準錯位）。
 - 測試：新 `tests/test_issue1202_future_as_of.py`（55 項：+1／+3、=基準／基準-1、`>` 邊界、stale 10 天、基準缺失／as_of 缺失或無法解析、fresh／STALE／FAULT／FAKE 控制組、台北日與 host 日不同時 L1／卡片／日 K 同基準、每次呼叫僅取一次時鐘、feed 逐欄拷貝、其他 CONTRACT_ERROR 文案不變、新字串單一定義單一使用）；`test_1202_known_gap_future_as_of_cannot_be_checked_without_a_clock` 改釘新行為（名稱保留，註明已解）；`test_b2_consumer_consistency` 的 loader stub 改 `lambda **_k`（L3 現在恆明確傳 `today=`）。突變 10 組（移除比對、`>`→`>=`、卡片／日 K 分支 today 改回 None、日 K 驗證重取時鐘、validate 不 raise、spec 不轉 unavailable、新字串套泛用 CONTRACT_ERROR、子類代碼塌縮、feed 不拷貝）全數轉紅，驗後復原。
 - 維持登記不動：#1202 (2) `field_from_spec` 空字串／NaN、(3) `validate_ohlc_window(as_of=None)`——Real 路徑不可達。#1201、#1197、NAS/Secrets、Cloud/工作流刪除不變，未混入。
+
+## 2026-11-17 Issue #1208 ETF 經理人換手策略完整移除（append-only；自跑，未經第二組驗證）
+- 狀態：**IMPLEMENTED（本地 commit，未 push／未開 PR）**；下一步＝推分支開 PR → 非作者 QA → 同 head 五項原生 CI → merge → main push CI → 更新／關閉 #1208。
+- 已移除：經理人抓取與換手偵測（L1）、任期門檻常數（L0）、`classify_lag_verdict` 任期例外（現只收 `metrics`）、弱勢度列經理人／任期欄、單檔 ETF 經理人卡、組合頁新經理人提示、health_inspector 經理人診斷／探測／MoneyDJ 經理人深度診斷；刪除 `update_etf_managers.yml`（schedule 與 workflow_dispatch 皆不存在）、`scripts/update_etf_managers.py`、兩個 etf_manager*.json。
+- 保留：持股探測、主動式 ETF 判別、Yuanta 費用率備援、其他 ETF 指標；`publish_data_pr` 其他三 job。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 未動（DEC-137 hash 不受影響）。
+- #1201 已 CLOSED／未合併；#1207 CLOSED／NOT_PLANNED；其他 MoneyDJ 權利盤點另案。決策見 DEC-188。
+- 舊鏈守衛同步（有意識，非放寬）：`tests/test_batch_z60.py` 舊 UI 指紋依其 docstring 慣例更新並註明 #1208；`shared/signal_thresholds.py` 被 DEC-074 等還原鏈管 ⇒ 新增鏈頭節 `tests/test_issue1208_revert_chain.py`（基底＝efa0e015 sha），由 `twii_ohlc_revert_for` 開頭先呼叫。本地 fast lane（`pytest`，同 pr-check.yml）＝40035 passed／38 skipped／3 xfailed／0 failed。

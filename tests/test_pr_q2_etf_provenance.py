@@ -5,7 +5,7 @@
 - fetch_moneydj_expense_ratio
 - _fetch_holdings_yahoo_tw
 - fetch_etf_holdings
-- _fetch_sitca_manager
+- ~~_fetch_sitca_manager~~(Issue #1208:隨 ETF 經理人換手策略取消刪除)
 - fetch_etf_zh_name
 - fetch_etf_underlying_index
 
@@ -46,8 +46,7 @@ class TestEtfFetchProvenanceMarkers(unittest.TestCase):
         self.assertIn("'yfinance:funds_data:top_holdings'", self.src)
         self.assertIn("'all-sources-failed'", self.src)
 
-    def test_sitca_manager_logged(self):
-        self.assertIn("_prov_log('_fetch_sitca_manager'", self.src)
+    # test_sitca_manager_logged 已移除:_fetch_sitca_manager 隨 Issue #1208 刪除。
 
     def test_zh_name_logged(self):
         self.assertIn("_prov_log('fetch_etf_zh_name'", self.src)
@@ -72,7 +71,6 @@ class TestInterfaceUnchanged(unittest.TestCase):
             ('fetch_moneydj_expense_ratio', 'ticker'),
             ('_fetch_holdings_yahoo_tw', 'symbol_yf'),
             ('fetch_etf_holdings', 'ticker'),
-            ('_fetch_sitca_manager', 'ticker'),
             ('fetch_etf_zh_name', 'ticker'),
             ('fetch_etf_underlying_index', 'ticker'),
         ]:

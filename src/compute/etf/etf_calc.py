@@ -52,7 +52,7 @@ from shared.signal_thresholds import (
     ETF_AVG_VOL_20D_LOW_LOTS,
     # v18.335 PR-H3:ETF_QUICK_SIGMA_* 5 個由 classify_etf_quick_sigma 內部消費,移除 etf_calc 直引
     ETF_SHARPE_RF_FALLBACK_PCT,  # v19.106 ⑨:夏普 rf fallback(原 inline 5.33)
-    # ETF_UP_DOWN_DAYS_THRESHOLD / ETF_MANAGER_TENURE_NEW_DAYS 已隨燈號判定下沉
+    # ETF_UP_DOWN_DAYS_THRESHOLD 已隨燈號判定下沉
     # asset_lag.classify_lag_verdict(§3.3 SSOT 去重),etf_calc 不再直引。
     ETF_VCP_MIN_DAYS,
     TRADING_DAYS_PER_YEAR,
@@ -1087,10 +1087,13 @@ def _auto_bench_for_etf(ticker: str) -> str:
 def compute_etf_weakness_row(ticker: str, name: str = '',
                               bench_ticker: str | None = None,
                               period: str = '1y') -> dict:
-    """高階組裝：抓 ETF / benchmark 價格 → 算 returns → 呼叫 calc_weakness_metrics
-    + 抓經理人。回傳給 UI 使用的整列 dict。
+    """高階組裝：抓 ETF / benchmark 價格 → 算 returns → 呼叫 calc_weakness_metrics。
+    回傳給 UI 使用的整列 dict。
+
+    Issue #1208（2026-11-17 客戶取消 ETF 經理人換手策略）：不再抓經理人、不再帶任期,
+    燈號只由價格績效指標決定。
     """
-    from src.data.etf import is_active_etf, fetch_etf_manager
+    from src.data.etf import is_active_etf
     _bench = bench_ticker or _auto_bench_for_etf(ticker)
     _is_act = is_active_etf(ticker)
 
@@ -1098,7 +1101,6 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         '代號': ticker, '名稱': name or ticker,
         '主被動': '主動式' if _is_act else '被動式',
         'benchmark': _bench,
-        '經理人': '—', '任期': '—',
         '大跌弱勢率%': None, '反彈弱勢率%': None,
         '連敗季數': None, 'TE%': None, '樣本日': 0,
         '燈號': '⚪ 未檢測', '動作建議': '—',
@@ -1129,25 +1131,11 @@ def compute_etf_weakness_row(ticker: str, name: str = '',
         _row['燈號'] = f'⚪ 抓取失敗：{type(_e).__name__}'
         return _row
 
-    _tenure_days = None
-    # 經理人/任期：所有台股 ETF 都抓（ETF 表現與經理人相關；被動式換手也值得知道）。
-    # 海外 ETF（如 BND）MoneyDJ 無資料 → 自然留「—」，故只對台股代號發 proxy 請求。
-    if ticker.endswith(('.TW', '.TWO')):
-        _mg = fetch_etf_manager(ticker)
-        if _mg:
-            _row['經理人'] = _mg.get('name', '—')
-            _tenure_days = _mg.get('tenure_days')
-            if _tenure_days is not None:
-                _row['任期'] = (f'{_tenure_days // 30} 個月' if _tenure_days < 365
-                              else f'{_tenure_days / 365:.1f} 年')
-            elif _mg.get('since'):
-                _row['任期'] = f'自 {_mg["since"]}'
-
     if _is_act:
         # 燈號/動作建議走 asset_lag.classify_lag_verdict SSOT(原此處 inline 判定已抽出,
         # 與組合體檢共用同一份;§3.3 消除兩份真相)。行為不變:同指標→同燈號。
         from src.compute.etf.asset_lag import classify_lag_verdict
-        _verdict = classify_lag_verdict(_m, is_etf=True, tenure_days=_tenure_days)
+        _verdict = classify_lag_verdict(_m)
         _row['燈號'] = _verdict['燈號']
         _row['動作建議'] = _verdict['動作建議']
 

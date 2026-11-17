@@ -23,7 +23,7 @@ from src.data.etf import (  # noqa: F401
     fetch_sitca_expense_ratio, fetch_moneydj_expense_ratio,
     get_etf_expense_ratio_safe,
     fetch_etf_holdings,
-    is_active_etf, fetch_etf_manager,
+    is_active_etf,
     _NAV_MIN, _NAV_MAX, _safe_float,
     fetch_etf_nav_history, _fetch_sector_returns,
 )

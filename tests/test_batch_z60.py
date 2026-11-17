@@ -905,7 +905,14 @@ class TestOldFilesUntouched:
     #   `_get_proxy_config_quiet` 改為鎖住「換 stderr → 呼叫 → 還原」（`threading.Lock`＋`finally` 還原當初存下的物件，不再用
     #   `contextlib.redirect_stderr`）、`get_proxy_config` 丟例外時不外洩原文（頁面顯示固定文字）；「沒有任何 secrets 檔」時未設定的 key
     #   顯示「未設定」而非「解析失敗」。請求語意不變；其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
-    _BASE_DIGEST = "e7a38cc858135e8187b1af7a00926543de55693ec1ba51a97914d3c966332907"
+    # ~~"e7a38cc858135e8187b1af7a00926543de55693ec1ba51a97914d3c966332907"~~（D6 QA M1 回修後，至 efa0e015 仍成立）
+    # 📌 #1208 ETF 經理人換手策略移除（2026-11-17，客戶裁示「那換手策略就不考慮了 這個方式移除」，見 docs/DECISIONS.md DEC-188；
+    #   核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/etf/etf_tab_single.py`（刪經理人／任期／換手／新任卡＋PROXY 提示移除「基金經理人」字樣）、
+    #   `src/ui/etf/etf_tab_portfolio.py`（刪新經理人提示與經理人／任期文字）、`src/ui/etf/etf_dashboard.py`（re-export 去 fetch_etf_manager）、
+    #   `src/ui/render/etf_render.py`（弱勢度表去經理人／任期欄）、`src/ui/pages/health_inspector.py`（刪經理人診斷列／探測／MoneyDJ 經理人深度診斷，
+    #   持股探測保留）。其餘 86 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）；反向守衛見
+    #   `tests/test_issue1208_manager_strategy_removed.py`。
+    _BASE_DIGEST = "60ee86c17f2affad00f48d87d580202793ebfe18adc95b844b2c59012ab538c3"
 
     def test_no_diff_against_base(self):
         import hashlib

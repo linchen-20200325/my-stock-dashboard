@@ -3,7 +3,7 @@
 8 fetcher 各 1 個檔(每檔小量 edit):
 - macro_snapshot.fetch_vix_block (dict)
 - chip_radar.fetch_chip_concentration (dict stderr)
-- update_etf_managers.fetch_manager (dict stderr)
+- ~~update_etf_managers.fetch_manager~~(Issue #1208 2026-11-17 客戶取消 ETF 經理人換手策略,腳本已刪)
 - market_strategy.fetch_market_data (dict source/fetched_at)
 - hot_money.fetch_foreign_flow_series (DataFrame attrs)
 - risk_radar._fetch_cboe_csv (Series attrs)
@@ -35,11 +35,9 @@ class TestQ5cMarkers(unittest.TestCase):
         self.assertIn('[fetch_chip_concentration]', src)
         self.assertIn('norway.twsthr.info', src)
 
-    def test_update_etf_managers(self):
-        # v18.359 F-2 update_etf_managers.py 已搬入 scripts/
-        src = self._read('scripts/update_etf_managers.py')
-        self.assertIn('[fetch_manager]', src)
-        self.assertIn('MoneyDJ:Basic(multi-page)', src)
+    # test_update_etf_managers(source marker)已移除:scripts/update_etf_managers.py
+    # 隨 Issue #1208(客戶取消 ETF 經理人換手策略)刪除;反向守衛見
+    # tests/test_issue1208_manager_strategy_removed.py。
 
     def test_market_strategy(self):
         src = self._read('src/services/market_strategy.py')
@@ -72,8 +70,7 @@ class TestImports(unittest.TestCase):
     def test_chip_radar(self):
         from src.ui.tabs import chip_radar  # noqa
 
-    def test_update_etf_managers(self):
-        from scripts import update_etf_managers  # noqa
+    # test_update_etf_managers(import)已移除:腳本隨 Issue #1208 刪除。
 
     def test_market_strategy(self):
         from src.services import market_strategy  # noqa

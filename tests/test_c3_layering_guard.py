@@ -610,7 +610,8 @@ for _f, _m in (
     # ── L5 UI Pages ──
     ("src/ui/pages/api_diagnostic.py", "src.data.proxy"),
     ("src/ui/pages/health_inspector.py", "src.data.etf"),
-    ("src/ui/pages/health_inspector.py", "src.data.etf.etf_fetch"),
+    # Issue #1208:health_inspector 經理人診斷列(讀 etf_fetch.get_etf_manager_last_err)已移除 →
+    # 不再 import src.data.etf.etf_fetch,條目移除(否則反向守衛判過期)。
     ("src/ui/pages/health_inspector.py", "src.data.macro"),
     ("src/ui/pages/health_inspector.py", "src.data.proxy"),
     # ── L4 Render lazy fallback ──

@@ -5,7 +5,7 @@ test_active_etf_fallback.py — 主動式 ETF Yuanta fallback + 異常分級
 1. _fetch_yuanta_active_etf_meta 對非主動式 ETF 直接 return None（不浪費網路）
 2. 對主動式 ETF + proxy 全失敗 return None
 3. 對主動式 ETF + proxy 成功 + HTML 含經理人 regex 命中 → 回 dict
-4. fetch_etf_manager 對主動式 ETF + 前 3 段失敗時走 Yuanta fallback
+4. ~~fetch_etf_manager 走 Yuanta fallback~~(Issue #1208:fetch_etf_manager 已隨換手策略取消刪除)
 5. get_etf_expense_ratio_safe 對主動式 ETF 串接 Yuanta
 """
 from __future__ import annotations
@@ -80,48 +80,9 @@ def test_yuanta_fetcher_parses_multi_managers(monkeypatch):
     assert '張三' in r['manager'] and '李四' in r['manager']
 
 
-# ════════════════════════════════════════════════════════════
-# 整合：fetch_etf_manager 串接 Yuanta
-# ════════════════════════════════════════════════════════════
-
-def test_fetch_etf_manager_falls_back_to_yuanta(monkeypatch):
-    """MoneyDJ 3 端點 + SITCA 全失敗時，主動式 ETF 應走 Yuanta。"""
-    # MoneyDJ 全部 fail
-    from src.data.proxy import proxy_helper
-    _resp_fail = MagicMock()
-    _resp_fail.status_code = 200
-    _resp_fail.text = 'x' * 600  # 200 但無經理人 regex 不命中
-    _resp_fail.encoding = 'utf-8'
-    _yuanta_resp = MagicMock()
-    _yuanta_resp.status_code = 200
-    _yuanta_resp.text = '經理人：王五' + ('x' * 600)
-    _yuanta_resp.encoding = 'utf-8'
-
-    _calls = []
-    def _fake_fetch(url, **kw):
-        _calls.append(url)
-        if 'yuantaetfs' in url:
-            return _yuanta_resp
-        return _resp_fail
-
-    monkeypatch.setattr(proxy_helper, 'fetch_url', _fake_fetch)
-    # SITCA fallback 也回 None
-    monkeypatch.setattr(etf_fetch, '_fetch_sitca_manager', lambda t: None)
-    # 跳過 curl_cffi fallback（在沙箱跑可能無此模組或實際 network）
-    import sys
-    if 'curl_cffi' not in sys.modules:
-        _stub = MagicMock()
-        _stub.requests.get = lambda *a, **kw: MagicMock(status_code=500, text='')
-        sys.modules['curl_cffi'] = _stub
-
-    # 清 st.cache_data
-    etf_fetch.fetch_etf_manager.clear()
-    r = etf_fetch.fetch_etf_manager('00980A.TW')
-    assert r is not None, f'Yuanta fallback 失敗 — calls: {_calls}'
-    assert r['name'] == '王五'
-    # v18.257 S-PROV-1 phase 11:fetch_etf_manager 的 source 升級為 Provenance
-    # 慣例 'Provider:Dataset'(對齊 'FRED:<sid>' / 'Yahoo:^VIX'),etf_fetch.py:1085。
-    assert r.get('source') == 'Yuanta:official'
+# 整合測試 test_fetch_etf_manager_falls_back_to_yuanta 已移除:Issue #1208(2026-11-17 客戶取消
+# ETF 經理人換手策略)刪除 fetch_etf_manager / _fetch_sitca_manager。Yuanta meta fetcher 本身仍是
+# get_etf_expense_ratio_safe 的主動式 ETF 費用率備援,上方單元測試與下方費用率整合測試保留。
 
 
 # ════════════════════════════════════════════════════════════
