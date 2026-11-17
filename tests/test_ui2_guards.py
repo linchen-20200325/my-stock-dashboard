@@ -1453,3 +1453,27 @@ def test_dec130_ui2_dev_guard_allows_flag_that_only_gates_the_dev_surface():
           "def shell():\n    if dev_surface_enabled():\n        render_preview_controls()\n"
           "def controls():\n    st.selectbox('帳戶', ['a'], key='ui2_account')\n")
     assert check_ui2_dev_not_auth(ok) == []
+
+
+# ════════════════════════════════════════════════════════════════════
+# Issue #1202 G2：`vm_common._banner_for` 的 Real／FAKE 兩軸混用必須 fail loud（以下為自跑，未經第二組驗證）
+# ════════════════════════════════════════════════════════════════════
+def test_1202_banner_for_rejects_fake_canonical_with_real_scenario():
+    from shared.ui2_contract.pages import SCENARIO_REAL
+    with pytest.raises(ValueError, match="FAKE canonical 不得使用 real 場景 id"):
+        vm_common._banner_for({"is_fake": True, "scenario": SCENARIO_REAL})
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_IDS)
+def test_1202_banner_for_rejects_non_fake_canonical_with_fake_scenario(scenario):
+    with pytest.raises(ValueError, match="非 FAKE canonical 不得使用 FAKE 場景 id"):
+        vm_common._banner_for({"is_fake": False, "scenario": scenario})
+    with pytest.raises(ValueError):                    # is_fake 缺省＝False，同樣擋
+        vm_common._banner_for({"scenario": scenario})
+
+
+def test_1202_banner_for_accepts_the_two_legal_axes():
+    from shared.ui2_contract.pages import SCENARIO_REAL
+    assert vm_common._banner_for({"is_fake": True, "scenario": SCENARIO_IDS[0]}) == T.PREVIEW_BANNER_TEXT
+    assert vm_common._banner_for({"is_fake": False, "scenario": SCENARIO_REAL}) == T.REAL_PREVIEW_BANNER_TEXT
+    assert vm_common._banner_for({"is_fake": False, "scenario": None}) is None

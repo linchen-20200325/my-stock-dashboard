@@ -1511,3 +1511,11 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **狀態**：IMPLEMENTATION COMPLETE，待非作者 QA／同 head 原生 CI／merge（作者單組自跑，非 QA PASS）。Cloud runtime（NAS／Secrets／deployment SHA）NOT VERIFIED；#1197 DG-LIC／DG-PIT HOLD 不變。
 - **範圍**：🗂資料頁「🔌 連線診斷」（按鈕觸發、固定 allowlist、`verify=True`、全進程鎖＋20 秒 cooldown）。守衛例外僅 `app_ui2.py` 一條 AST 精確 import；`real_feed` 無新來源。明細見 BACKLOG 檔尾同日段。
 - **探測範圍現況**：FinMind／TWSE 端點已移除、固定「尚未檢查」（FinMind 無 token 為「未設定」）；NAS 代理無可探測目標（無設定「未設定」／有設定「尚未檢查」），待 GPT 若指定代理探測端點再處理；只有 Yahoo 首頁與 NAS 中繼站發請求。viewport 證據 realfeed 兩份除資料頁外，p2 chart_state 因資料日 2026-11-09 距量測日超過 7 天由 ok 變 stale、高度值隨之變動，屬日期漂移非程式改動；meta git_sha 為 main 4cdc1494。
+
+
+## 2026-11-17 Issue #1202 UI2 降級回歸測試結果（append-only；自跑，未經第二組驗證）
+- 已補測試：`test_ui2_real_feed.py`（as_of 反例、12 組 is_stale×upstream_state 的 twii_card_spec 整表、五頁壞 regime snapshot 皆 Unavailable、G1 殼）、`test_ui2_guards.py`（`vm_common._banner_for` 兩個 ValueError 分支）。日 K 尾 20 根、volume NaN、16:59/17:00 邊界既有 `test_twii_ohlc_contract.py` 已釘，未重複；tz-aware index 未另補。
+- 最小修補：`real_canonical.validate_twii_fact` 在 ok=True 時，as_of 非 None 必須是存在的 ISO `YYYY-MM-DD`，否則 RealFeedContractError（沿用 CONTRACT_ERROR，無新文案）；as_of=None 維持「資料日未提供」。還原修補則 12 個新測試轉紅。
+- 未修（已知邊界）：as_of 為未來日無法在 services/ui2 驗（G2 禁時鐘），仍靠 L3 age_days<0 -> None（#1140 C2），測試釘住現況。
+- G1 現況：`read_real_snapshot` 丟例外時 `src/ui2/shell/app.py::run` 無 try/except，整頁崩潰（at.exception 帶出例外訊息）；測試為 strict xfail，降級畫面待 ChatGPT 定稿，本批不修。
+- 仍登記待 Gate：D1 `field_from_spec`、D2 `validate_ohlc_window` as_of=None 邊界。#1201（DATA_QA_NOT_VERIFIED）與 Cloud runtime 狀態不變。

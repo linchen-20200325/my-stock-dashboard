@@ -45,6 +45,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 """
 from __future__ import annotations
 
+import calendar
 import math
 import re
 from dataclasses import dataclass
@@ -331,6 +332,20 @@ def validate_regime_fact(f: RegimeFact) -> None:
         raise RealFeedContractError(f"市場位階契約矛盾：is_loaded=False 但 source={f.source!r} 屬已載入分支")
 
 
+_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def _is_valid_iso_date(v: object) -> bool:
+    """純字串＋曆法檢查（不碰時鐘）：`YYYY-MM-DD` 且該年月日存在（2026-02-30 → False）。"""
+    if not isinstance(v, str):
+        return False
+    m = _ISO_DATE_RE.match(v)
+    if not m:
+        return False
+    y, mo, d = (int(g) for g in m.groups())
+    return 1 <= y and 1 <= mo <= 12 and 1 <= d <= calendar.monthrange(y, mo)[1]
+
+
 def validate_twii_fact(t: TwiiFact) -> None:
     """台股契約自洽檢查（純）。違反 → `RealFeedContractError`。"""
     # 身分比較（⛔ `in (True, False, None)`：`1`／`1.0`／`np.True_` 會被 `==` 當成 True 而漏網；複驗 P2-1）
@@ -351,6 +366,10 @@ def validate_twii_fact(t: TwiiFact) -> None:
         for c in t.close:
             if not isinstance(c, (int, float)) or isinstance(c, bool) or OC.price_problem(c) is not None:
                 raise RealFeedContractError(f"台股：收盤值不是有限正值 {c!r}")
+    # Issue #1202：ok=True 時 as_of（若有）必須是真實存在的 ISO `YYYY-MM-DD`；None 維持「資料日未提供」誠實呈現。
+    # ⛔ 「不晚於今日」無法在此驗：services/ui2 禁時鐘（G2）；未來日由 L3 轉 age_days=None＋is_stale=True（L1 權威）。
+    if t.ok and t.as_of is not None and not _is_valid_iso_date(t.as_of):
+        raise RealFeedContractError("台股：as_of 不是有效的 ISO 日期（YYYY-MM-DD）")
     # Issue #1140 C2：age_days 為負＝資料日在未來；L3 已改 None，這裡 fail loud 擋「過期 -N 天」再度流入。
     if t.age_days is not None and t.age_days < 0:
         raise RealFeedContractError(f"台股：age_days 為負（資料日在未來）{t.age_days!r}")
