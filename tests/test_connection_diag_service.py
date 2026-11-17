@@ -87,8 +87,8 @@ def test_nothing_configured_runs_only_direct_probes_for_yahoo_twse(monkeypatch):
     assert rep.nas_relay.status is D.DiagStatus.NOT_CONFIGURED
     assert rep.nas_proxy.status is D.DiagStatus.NOT_CONFIGURED
     assert rep.finmind.status is D.DiagStatus.NOT_CONFIGURED
-    assert rep.yahoo.status is D.DiagStatus.SUCCESS and rep.twse.status is D.DiagStatus.SUCCESS
-    assert [u for u, _ in log] == [S.YAHOO_PROBE_URL, S.TWSE_PROBE_URL]
+    assert rep.yahoo.status is D.DiagStatus.SUCCESS and rep.twse.status is D.DiagStatus.NOT_CHECKED
+    assert [u for u, _ in log] == [S.YAHOO_PROBE_URL]
     assert all(kw["proxies"] == {"http": None, "https": None} for _, kw in log)
 
 
@@ -168,34 +168,33 @@ def test_status_codes_map_to_fixed_reasons(monkeypatch, code, expect):
     assert S._http_probe(S.YAHOO_PROBE_URL) == expect
 
 
-def test_squid_proxy_407_is_failed_proxy_auth_and_uses_proxies_dict(monkeypatch):
+def test_squid_finmind_twse_send_no_request_and_are_not_checked(monkeypatch):
+    """GPT 定稿：無核准低副作用健康端點者不得探測、不得自行更換 → 固定『尚未檢查』（無設定者仍『未設定』）。"""
     cfg = {"http": "http://user:pass@squid-host:3128", "https": "http://user:pass@squid-host:3128"}
-    log = _setup(monkeypatch, proxy=cfg, responder=lambda u, kw: 407)
-    assert S._probe_nas_proxy() == D.ProbeResult(D.DiagStatus.FAILED, D.DiagReason.PROXY_AUTH)
-    assert log[0][0] == S.TWSE_PROBE_URL and log[0][1]["proxies"] == cfg
+    log = _setup(monkeypatch, proxy=cfg, token=SECRET_TOKEN, responder=lambda u, kw: 200)
+    assert S._probe_nas_proxy() == D.ProbeResult(D.DiagStatus.NOT_CHECKED)
+    assert S._probe_finmind() == D.ProbeResult(D.DiagStatus.NOT_CHECKED)
+    rep = S.run_connection_check()
+    assert rep.twse == D.ProbeResult(D.DiagStatus.NOT_CHECKED) and rep.finmind.status is D.DiagStatus.NOT_CHECKED
+    assert rep.nas_proxy.status is D.DiagStatus.NOT_CHECKED
+    assert [u for u, _ in log] == [S.YAHOO_PROBE_URL]            # 唯一請求＝Yahoo；token／proxy 認證不外送
+    assert not any("Authorization" in (kw.get("headers") or {}) for _, kw in log)
+    log2 = _setup(monkeypatch, proxy=None, token="", responder=lambda u, kw: 200)
+    assert S._probe_nas_proxy().status is D.DiagStatus.NOT_CONFIGURED
+    assert S._probe_finmind().status is D.DiagStatus.NOT_CONFIGURED and log2 == []
 
 
-def test_squid_proxy_success_and_proxyerror(monkeypatch):
-    cfg = {"http": "http://p:3128", "https": "http://p:3128"}
-    _setup(monkeypatch, proxy=cfg, responder=lambda u, kw: 200)
-    assert S._probe_nas_proxy().status is D.DiagStatus.SUCCESS
-    _setup(monkeypatch, proxy=cfg, responder=lambda u, kw: requests.exceptions.ProxyError("secret"))
-    assert S._probe_nas_proxy() == D.ProbeResult(D.DiagStatus.FAILED, D.DiagReason.PROXY)
-
-
-def test_finmind_token_bearer_only_and_not_configured_without_token(monkeypatch):
-    log = _setup(monkeypatch, token=SECRET_TOKEN, responder=lambda u, kw: 200)
-    assert S._probe_finmind().status is D.DiagStatus.SUCCESS
-    assert log[0][1]["headers"] == {"Authorization": f"Bearer {SECRET_TOKEN}"} and SECRET_TOKEN not in log[0][0]
-    log = _setup(monkeypatch, token="", responder=lambda u, kw: 200)
-    assert S._probe_finmind() == D.ProbeResult(D.DiagStatus.NOT_CONFIGURED) and log == []
+def test_removed_data_endpoints_are_gone_from_service_source():
+    assert not hasattr(S, "TWSE_PROBE_URL") and not hasattr(S, "FINMIND_PROBE_URL")
+    for bad in ("twse.com.tw", "finmindtrade", "STOCK_DAY_AVG_ALL", "TaiwanStockInfo"):
+        assert bad not in SERVICE_SRC, bad
 
 
 def test_every_request_is_https_verified_bounded_no_redirect(monkeypatch):
     log = _setup(monkeypatch, nas=(f"https://{NAS_HOST}", SECRET_KEY), proxy={"https": "http://p:1"},
                  token=SECRET_TOKEN, responder=_nas_responder())
     S.run_connection_check()
-    assert 0 < len(log) <= S.MAX_REQUESTS
+    assert 0 < len(log) <= S.MAX_REQUESTS <= 7 and len(log) == 4      # NAS 3 ＋ Yahoo 1
     for url, kw in log:
         assert url.startswith("https://")
         assert kw["verify"] is True and kw["allow_redirects"] is False and kw["stream"] is True

@@ -1510,4 +1510,4 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 - **狀態**：IMPLEMENTATION COMPLETE，待非作者 QA／同 head 原生 CI／merge（作者單組自跑，非 QA PASS）。Cloud runtime（NAS／Secrets／deployment SHA）NOT VERIFIED；#1197 DG-LIC／DG-PIT HOLD 不變。
 - **範圍**：🗂資料頁「🔌 連線診斷」（按鈕觸發、固定 allowlist、`verify=True`、全進程鎖＋20 秒 cooldown）。守衛例外僅 `app_ui2.py` 一條 AST 精確 import；`real_feed` 無新來源。明細見 BACKLOG 檔尾同日段。
-- **待確認**：Yahoo／FinMind／TWSE 探測端點是否即為核准端點（UI 設計與文案不得由專案 AI 自行更動）。
+- **探測範圍現況**：FinMind／TWSE 端點已移除、固定「尚未檢查」（FinMind 無 token 為「未設定」）；NAS 代理無可探測目標（無設定「未設定」／有設定「尚未檢查」），待 GPT 若指定代理探測端點再處理；只有 Yahoo 首頁與 NAS 中繼站發請求。viewport 證據 realfeed 兩份除資料頁外，p2 chart_state 因資料日 2026-11-09 距量測日超過 7 天由 ok 變 stale、高度值隨之變動，屬日期漂移非程式改動；meta git_sha 為 main 4cdc1494。

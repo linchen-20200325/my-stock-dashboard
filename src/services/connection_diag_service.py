@@ -20,17 +20,15 @@ from shared.ui2_contract.diag import (
     INITIAL_REPORT, DiagNotice, DiagReason, DiagReport, DiagStatus, ProbeResult,
 )
 
-#: 固定探測端點（⛔ 變數／外部輸入）。TWSE 沿用 `api_diagnostic` 的常數；Yahoo／FinMind 僅主機或中繼資料級端點，不取 OHLC。
-FINMIND_PROBE_URL = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&data_id=2330"
+#: 固定探測端點（⛔ 變數／外部輸入）。僅 Yahoo 首頁；FinMind／TWSE／NAS 代理沒有 GPT 核准的低副作用健康端點 → 不發請求、固定「尚未檢查」。
 YAHOO_PROBE_URL = "https://finance.yahoo.com/"
-TWSE_PROBE_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL"
 NAS_ROOT_PATH = "/"
 NAS_PROXY_PATH = "/proxy"          # 不帶 url 參數：只用來判斷是否強制認證，不會代抓任何資料
 
 CONNECT_TIMEOUT_S = 3
 READ_TIMEOUT_S = 5
 COOLDOWN_S = 20.0
-MAX_REQUESTS = 7
+MAX_REQUESTS = 5          # NAS 中繼站 3 ＋ Yahoo 1（其餘不發請求）；上限仍 ≤ 7
 
 _NO_PROXY = {"http": None, "https": None}      # 直連：忽略環境 proxy
 
@@ -76,14 +74,11 @@ def _get(url: str, *, headers: dict | None = None, proxies: dict | None = None) 
     return code
 
 
-def _http_probe(url: str, *, headers: dict | None = None, proxies: dict | None = None,
-                proxy_407: bool = False) -> ProbeResult:
+def _http_probe(url: str, *, headers: dict | None = None, proxies: dict | None = None) -> ProbeResult:
     try:
         code = _get(url, headers=headers, proxies=proxies)
     except Exception as e:   # noqa: BLE001 — 只取型別分類；不保留例外原文
         return ProbeResult(DiagStatus.FAILED, _classify_exception(e))
-    if proxy_407 and code == 407:
-        return ProbeResult(DiagStatus.FAILED, DiagReason.PROXY_AUTH)
     cat = _classify_status(code)
     return ProbeResult(DiagStatus.SUCCESS) if cat is None else ProbeResult(DiagStatus.FAILED, cat)
 
@@ -132,18 +127,17 @@ def _probe_nas_proxy() -> ProbeResult:
         return ProbeResult(DiagStatus.FAILED, DiagReason.OTHER)
     if not cfg:
         return ProbeResult(DiagStatus.NOT_CONFIGURED)
-    return _http_probe(TWSE_PROBE_URL, proxies=cfg, proxy_407=True)
+    return ProbeResult(DiagStatus.NOT_CHECKED)      # 無核准的健康端點 → 不發請求
 
 
 def _probe_finmind() -> ProbeResult:
+    """FinMind 只有資料類端點、未被核准為健康端點 → 不發請求；無 token＝未設定，有 token 也維持尚未檢查。"""
     from src.config import get_finmind_token
     try:
         token = get_finmind_token()
     except Exception:   # noqa: BLE001
         token = ""
-    if not token:
-        return ProbeResult(DiagStatus.NOT_CONFIGURED)
-    return _http_probe(FINMIND_PROBE_URL, headers={"Authorization": f"Bearer {token}"}, proxies=_NO_PROXY)
+    return ProbeResult(DiagStatus.NOT_CONFIGURED if not token else DiagStatus.NOT_CHECKED)
 
 
 def _safe(fn) -> ProbeResult:
@@ -159,7 +153,7 @@ def _probe_all() -> DiagReport:
         nas_proxy=_safe(_probe_nas_proxy),
         finmind=_safe(_probe_finmind),
         yahoo=_safe(lambda: _http_probe(YAHOO_PROBE_URL, proxies=_NO_PROXY)),
-        twse=_safe(lambda: _http_probe(TWSE_PROBE_URL, proxies=_NO_PROXY)),
+        twse=ProbeResult(DiagStatus.NOT_CHECKED),      # 無核准的健康端點 → 不發請求
     )
 
 

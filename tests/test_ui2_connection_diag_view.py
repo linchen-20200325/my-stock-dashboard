@@ -119,13 +119,14 @@ def test_click_runs_check_once_and_stores_only_safe_enum_report(net):
     at = _data_page(_app())
     at.button(key="ui2_diag_run").click().run(timeout=60)
     assert not at.exception
-    assert len(calls) == 2                                           # Yahoo＋TWSE 直連（其餘未設定）
+    assert len(calls) == 1 and calls[0] == S.YAHOO_PROBE_URL         # 只有 Yahoo 首頁；TWSE／FinMind／代理不連網
     rep = at.session_state["ui2_diag_report"]
     assert isinstance(rep, D.DiagReport) and rep.yahoo.status is D.DiagStatus.SUCCESS
     blk = _diag_block(at)
     def chips(txt):          # 只數狀態 chip（固定說明句本身含「連線成功」字樣）
         return len(re.findall(r'<span class="ui2-chip[^>]*>[^<]*' + txt, blk))
-    assert chips(D.DiagStatus.SUCCESS.value) == 2 and chips(D.DiagStatus.NOT_CONFIGURED.value) == 3
+    assert chips(D.DiagStatus.SUCCESS.value) == 1 and chips(D.DiagStatus.NOT_CONFIGURED.value) == 3
+    assert chips(D.DiagStatus.NOT_CHECKED.value) == 1                # 臺灣證交所：不探測，維持尚未檢查
     # session_state 不得保存 callable／URL／文字例外
     for k, v in at.session_state.filtered_state.items():
         assert not callable(v), k
@@ -133,7 +134,7 @@ def test_click_runs_check_once_and_stores_only_safe_enum_report(net):
             assert "http" not in v.lower() and "Traceback" not in v, k
     # 其後無點擊的 rerun 不再探測
     at.run(timeout=60)
-    assert len(calls) == 2
+    assert len(calls) == 1
 
 
 def test_second_click_within_cooldown_is_blocked_and_shows_wait(net):
