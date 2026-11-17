@@ -10658,3 +10658,8 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **刻意不改**：`shared/input_provenance_policy.PMI_SECONDARY_SOURCE_LABELS` 的 "MoneyDJ"（DEC-080 資料契約；舊快取可能帶 `stale-cache(MoneyDJ)`）；`curl-cffi` 套件（yfinance 用）；data_cache 歷史；NAS／Proxy／`fetch_url` 全域行為／User-Agent；`src/ui2/**`、`app_ui2.py`；Risk Cap／OneBrain 公式；其他 workflow。
 - **邊界**：替代來源（SITCA、FinMind、yfinance、台灣 Yahoo、goodinfo、TWSE、元大）各自的使用權利屬 DG-LIC，**NOT VERIFIED**，不得把「仍在用」讀成「已授權」。使用者可見文案（「建議（事實版）」欄）**待 ChatGPT 定稿**。
 - **守衛**：`tests/test_issue1208_moneydj_zero_requests.py`（transport 錄音機＋靜態掃描＋正向對照）。第二個 PR 未合併前不得宣稱「MoneyDJ 零請求 DONE」。
+
+#### DEC-189 補記｜使用者可見文案已由 ChatGPT 定稿（2026-11-17T17:05Z，#1208 留言 6955097932；只追加）
+- 上方 DEC-189 寫的「使用者可見文案待 ChatGPT 定稿」自本補記起**不再成立**：15 項文字依 GPT 定稿表逐字施工（取代 15:37Z 設計表的「建議（事實版）」欄）。
+- 定稿重點：刪 `etf_tab_single` 全域 PROXY 警示（不另加卡）；缺值句只列實際嘗試過的來源（被動式 ETF 不列元大投信；淨值無逐路嘗試證據 ⇒「目前沒有可用淨值資料，暫時無法顯示。」）；`data_registry` PMI 列 `pingable=False、ping_url=None`（退役 macromicro 清掉）；AI 問答 provenance 改為候選來源說明、`as_of=None`。
+- 非作者 QA 退回原因僅為文案未依定稿；零請求程式碼部分 QA 已通過、未再改動。

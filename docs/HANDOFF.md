@@ -1547,3 +1547,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 守衛：`tests/test_issue1208_moneydj_zero_requests.py`（transport 層 0 請求＋靜態掃描）、`tests/test_issue1208_pr2_revert_chain.py`（舊還原鏈頭節）。
 - 待辦：使用者可見文案待 ChatGPT 定稿（程式內標 `#1208 PR2 文案（待 ChatGPT 定稿）`）；PMI 列 macromicro `ping_url` 未改；PR1 QA low findings 見 BACKLOG 同日段。`push_holdings_daily` 完整 `main()` 需 Google Sheet 憑證未實跑，僅測 `fetch_metrics` ETF 腿與 `resolve_holding_names`。
 - 本地 fast lane（`pytest`，同 pr-check.yml）＝40056 passed／38 skipped／3 xfailed／0 failed（改前同 lane 首輪 20 failed 皆為舊還原鏈／指紋守衛，已依慣例接鏈，未放寬任何斷言）。
+
+## 2026-11-17 Issue #1208 PR2｜文案依 ChatGPT 定稿回修（append-only）
+- 15 項使用者／LLM 可見文字已依 GPT 17:05Z 定稿（#1208 留言 6955097932）施工，不再「待定稿」；`etf_tab_single` 全域 PROXY 警示已刪；PMI registry 列 `pingable=False, ping_url=None`。零請求程式碼未再改動。
+- 待 GPT 判斷的非表列殘句與 QA M3（`_likely_private` 誤判風險）見 BACKLOG 同日「文案依 ChatGPT 定稿回修」段。
+- 回修後本地 fast lane＝40064 passed／38 skipped／3 xfailed／0 failed。

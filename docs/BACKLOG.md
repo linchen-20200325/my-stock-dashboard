@@ -2886,3 +2886,11 @@
 - 未做／登記：`data_registry` 台灣 PMI 列的 `ping_url` 仍指向 v19.113 已拔的 macromicro（endpoint 文字也仍列 macromicro.me）——超出本批範圍，未改。替代來源（SITCA、FinMind、yfinance、台灣 Yahoo、goodinfo、TWSE、元大）權利屬 DG-LIC，NOT VERIFIED。Cloud 執行環境既有 MoneyDJ-derived 快取 NOT VERIFIED（repo 追蹤的 data_cache／cache 內 grep 無 moneydj）。
 - **PR1（#1209）QA low findings（未修，登記）**：① `shared/ttls.py:18` 模組 docstring「TTL_7DAY 超靜態（經理人 / 中文名稱）」殘留「經理人」；② `src/ui/render/etf_render.py:410` `_render_weakness_table` docstring「淘汰不適任經理人」殘留；③ `src/ui/etf/etf_tab_ai.py:235` AI prompt 框架句「主動型 ETF 弱勢度 / 換股訊號（基金經理人選股有沒有變差、要不要換掉）」仍以經理人措辭（prompt 文案 owner＝ChatGPT）；④ Cloud 殘留 `/tmp/st_cache/etf_manager_history.json` 是否存在＝**NOT VERIFIED**。
 - 本地 fast lane（`pytest`，同 pr-check.yml）＝40056 passed／38 skipped／3 xfailed／0 failed（改前同 lane 首輪 20 failed 皆為舊還原鏈／指紋守衛，已依慣例接鏈，未放寬任何斷言）。
+
+## 2026-11-17 Issue #1208 PR2｜文案依 ChatGPT 定稿（17:05Z，留言 6955097932）回修（append-only；自跑，未經第二組驗證）
+- 上一段「🔴 使用者可見文案待 ChatGPT 定稿」**已解除**：15 項依 GPT 定稿逐字施工，程式內標記改為 `#1208 GPT 2026-11-17 定稿`；`data_registry` PMI 列退役 macromicro `ping_url` 已清（`pingable=False, ping_url=None`），上一段「ping_url 未改」不再成立。
+- 依定稿條件選句：費用率缺值句只對主動式列「元大投信」（被動式只列 SITCA、yfinance）；淨值缺值無逐路嘗試證據 ⇒ 用保守句。另將折溢價 metric 的說明（原「檢查 PROXY_URL…」）改用同一缺 NAV 定稿句（同情境沿用，非新文案）。
+- 仍在畫面上、**不在 15 項內**、留給 ChatGPT 判斷（未改）：`etf_render` 句首「海外 IP 受限或」（只依定稿替換後半）；`etf_tab_single` AUM 說明「…或 yfinance .info 海外 IP 受限」；`health_inspector` 持股探測缺值錯誤句改為「yfinance／台灣 Yahoo 均未取得可用成分股資料」（定稿只給來源欄，錯誤句為去除原因臆測的最小改寫）。
+- **QA M3 風險揭露（未改邏輯；owner ChatGPT／量化審閱）**：`etf_tab_single._likely_private`（台股代號且 AUM、費用率、NAV 三者皆缺 ⇒ 視為私募／受限 ETF、診斷改走不適用分支）在 AUM 只剩 yfinance 後，誤判機率可能上升（yfinance 缺 AUM＋另兩項暫時抓不到時，會把公開 ETF 當成私募並隱藏缺值錯誤）。邏輯本批未動。
+- 另修 `ARCHITECTURE.md` 主動 ETF 持股探測列的刪除線巢狀錯誤（原文保留，單層刪除線＋註記）。
+- 回修後本地 fast lane＝40064 passed／38 skipped／3 xfailed／0 failed。
