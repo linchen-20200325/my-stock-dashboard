@@ -552,7 +552,7 @@ def test_teeth_row1_clipping_is_detected(browser, url):
 
 
 # ════════════════════════════════════════════════════════════════════
-# A11Y 三項最小修（DEC-195；GPT §B）：disabled CTA 游標／標題語意／第一個 Tab 停駐點焦點框
+# A11Y 三項最小修（DEC-197；GPT §B）：disabled CTA 游標／標題語意／第一個 Tab 停駐點焦點框
 # a11y 一律以 CDP `Accessibility.getFullAXTree` 驗（⛔ aria_snapshot()）。
 # ════════════════════════════════════════════════════════════════════
 _CTA_JS = """() => [...document.querySelectorAll('.ui2-cta--disabled')].map(e => ({
@@ -598,7 +598,7 @@ def check_first_tab_stop_focus_ring(ui: Ui) -> list[str]:
     ui.pg.evaluate("() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); }")
     has = ui.pg.evaluate("() => { const e = document.querySelector('[data-testid=stMain]'); return !!e && e.hasAttribute('tabindex'); }")
     if not has:
-        return []        # 該版本 stMain 不是 Tab 停駐點 → 規則無對象、無害（DEC-195 實測 1.56.0／1.59.2 皆有 tabindex）
+        return []        # 該版本 stMain 不是 Tab 停駐點 → 規則無對象、無害（DEC-197 實測 1.56.0／1.59.2 皆有 tabindex）
     ui.pg.keyboard.press("Tab")
     r = ui.pg.evaluate("""() => { const a = document.activeElement; if (!a || a.getAttribute('data-testid') !== 'stMain') return {on: false};
       const c = getComputedStyle(a); return {on: true, st: c.outlineStyle, w: c.outlineWidth, col: c.outlineColor, off: c.outlineOffset}; }""")

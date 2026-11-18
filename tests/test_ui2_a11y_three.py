@@ -1,4 +1,4 @@
-"""New UI2 a11y 三項最小修（DEC-195；GPT §B）離線守衛：解析 `css.py::CSS` 與標題 renderer 原始碼，不需瀏覽器。
+"""New UI2 a11y 三項最小修（DEC-197；GPT §B）離線守衛：解析 `css.py::CSS` 與標題 renderer 原始碼，不需瀏覽器。
 
 - D1：disabled CTA 游標——`.ui2-ctawrap .ui2-cta.ui2-cta--disabled{cursor:not-allowed}` 存在，且 specificity 嚴格大於
   單一 class 規則（才壓得過 Streamlit 的 `button:not(:disabled)` pointer 規則）。

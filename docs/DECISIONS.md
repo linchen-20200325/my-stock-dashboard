@@ -10712,7 +10712,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
 - **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。
 
-### DEC-195｜New UI2 a11y 三項最小修（disabled CTA 游標／標題語意／stMain 焦點框；GPT §B 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
+### DEC-197｜New UI2 a11y 三項最小修（disabled CTA 游標／標題語意／stMain 焦點框；GPT §B 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
 - **裁示來源**：GPT §B（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6978992482）：在凍結 UI 契約內做最小修正；不改版面凍結、不新增區塊、不新增文案、不動資料／Auth／Sheet／production。
 - **D1**：`src/ui2/shell/css.py` 新增 `.ui2-ctawrap .ui2-cta.ui2-cta--disabled{cursor:not-allowed}`（specificity (0,3,0)，壓過 Streamlit `button:not(:disabled)` 的 pointer）。行為不變（無點擊效果、`aria-disabled="true"`、仍非 `<button>`）。五頁（含 👤 的 5 顆 CTA）實測 computed cursor 皆 `not-allowed`。
 - **D2**：頁標題（`views/_page.py::render_title`、`components/html.py::page_title_html`，兩者仍逐字相同）加 `role="heading" aria-level="1"`；區塊標題 7 處（`html.py` 5、`_page.py` 1、`views/data.py` 1）加 `role="heading" aria-level="2"`。屬性放在 `class` **之前**（`tests/test_ui2_p3_evidence_preservation.py` 以子字串 `ui2-section-title">{t}<` 比對，未改該測試、未重生基準）。CDP AX tree 驗證：五頁各恰 1 個 level-1 heading（= 頁標題），所有區塊標題皆為 level-2 heading；FAKE 六場景／Real／Real-degraded × 390×844／1440×900。
@@ -10721,4 +10721,4 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變，已依文件程序重跑 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0，`--shots none`）。FAKE（batch3b）兩版本與舊證據逐值零差異（82 態全過）；Real（realfeed）13 態全過，與舊證據的差異來自 main 在證據生成後的文案變更（C1 拿掉「，每日更新」）與時鐘（過期 8→9 天），**不是**本批：以未改動的 origin/main 當日重量，與本批證據逐值零差異。
 - **未動**：版面凍結、區塊、文案、門檻、資料／Auth／Sheet／production、`.streamlit/config.toml`。
 - **已重現但本批不含（需 ChatGPT 簽核）**：見 BACKLOG `A11Y-F1`～`A11Y-F4`。
-- **編號**：另一 PR（OneBrain）可能也取 DEC-195／§72；合併時視需要重編號（`src/ui2` 註解刻意不寫 DEC 編號，重編號不會改 `source_hash`）。
+- **編號**：#1216（OneBrain）用 DEC-195／§72、#1217 用 DEC-196／§73，故本批為 DEC-197／§74（`src/ui2` 註解不含 DEC 編號，重編號不影響 `source_hash`）。
