@@ -10668,3 +10668,13 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **更正**：上方補記「15 項依 GPT 定稿表逐字施工」**言過其實**。正確為：**14 項逐字**；被動式 ETF 的費用率缺值句是依 GPT「未實際嘗試的候選不可假稱失敗」規則**推導**而來（「SITCA、yfinance 均未取得可用費用率，暫時無法顯示。」）——GPT 原句（含元大投信）在現行碼**不可達**，因 `_restricted` 已排除主動式 ETF。
 - **簽核**：ChatGPT 於 PR #1210 留言 6963995185 核准 N1（被動式 `_err_expense` 推導句）、N2（淨值／折溢價固定句）、N3（持股探測錯誤句）原樣；(e) `etf_render` 括號定稿為「（上游成分股資料暫時無法取得）」，刪「海外 IP 受限或」（本補記同批施工）。
 - **補充**：`macro_snapshot` 的「本次 7 個來源均未取得可用的 PMI 資料。」只是預設值；production 全敗時回傳的是 `macro_core` 的技術錯誤字串（各源失敗 token 串接），該定稿句實際上通常不會出現。
+
+### DEC-190｜客戶核准 DEC-177 首屏方案 C＋Q1=A＋D-5（GPT 定稿；2026-11-18；只追加；非 QA PASS）
+- **裁示來源**：客戶 2026-11-18 核准方案 C、Q1=A、D-5（https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-6964576511），依 GPT 最終設計（https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-6964559744）。
+- **WIRED_PATHS 四個精確 tuple**：`(P4_DATA, "first/context_rows/0")`、`(P4_DATA, "first/context_rows/1")`、`(P4_DATA, "first/context_rows/2")`、`(P4_DATA, "first/context_rows/3")`。
+- **D-5**：`tests/test_ui2_real_feed.py::regime_label_residue(blob, page)`，僅對 `P4_DATA` 剪掉第 4 列核准整串文案後再查位階字。測試 ID：正向 `tests/test_ui2_data_freshness_overview.py::test_d5_positive_data_page_row4_wording_is_excepted`；反向注入 `test_d5_reverse_injection_everything_else_still_fails`（8 組）。
+- **Q3 文案**與本變更同批出貨。**D-3** `TEXT_DIAG_NOTE` 未動。
+- **正式碼範圍**：僅 `src/services/ui2/data_page.py`、`src/services/ui2/real_canonical.py`；`src/ui2/**` 零 diff。
+- **作者環境結果**（非 CI／非非作者 QA）：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（streamlit 1.59.2、1.56.0）；measure_viewport fake 82／82、real 13／13。
+- **仍 NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+- **延後（不在本 PR）**：TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」（C 線獨立項）；第二階段細節；位階契約無 `as_of`，若日後新增，載入→「資料未備」歸類須重審。

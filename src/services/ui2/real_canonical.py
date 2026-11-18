@@ -64,7 +64,10 @@ from shared.ui2_contract.text import (
     RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
-from src.services.ui2.data_page import data_page_canonical
+from src.services.ui2.data_page import (
+    S_IN_RULE, S_MISSING, S_NOT_EVALUATED, S_STALE, S_UNAVAILABLE, S_UNDETERMINABLE, counts_from_states,
+    data_page_canonical,
+)
 from src.services.ui2.market_vm import build_market_page_vm
 from src.services.ui2.skeleton_vm import build_skeleton_page_vm
 
@@ -700,9 +703,37 @@ def _me() -> dict:
     }
 
 
-def _data() -> dict:
-    """🗂 資料頁：固定誠實空殼（與 FAKE 軸同一份內容；全為 Capability `⬜ 尚未提供`，⛔ 讀取任何 snapshot 欄位）。"""
-    return data_page_canonical()
+def item_state_of_spec(spec: dict) -> str:
+    """一個**既有 spec**（台股卡／位階）→ 🗂 總覽的項目狀態（純；DEC-177 Q4=B／Q5=A）。⛔ 重算新鮮度規則／讀時鐘：
+    狀態只來自 spec 已決定的結果，所以 #1206 的「未來資料日 → Unavailable」「契約違反 → Unavailable」自動沿用。
+    unavailable→來源不可用；not_evaluated→尚未評估；undeterminable→無法判定（另計）；stale→過期；
+    無值→資料未備；有值但沒有資料日→資料未備（⛔ 不寫「資料日在規則內」）；有值且有資料日→資料日在規則內。"""
+    st = spec.get("state")
+    if st == "unavailable":
+        return S_UNAVAILABLE
+    if st == "not_evaluated":
+        return S_NOT_EVALUATED
+    if st == "undeterminable":
+        return S_UNDETERMINABLE
+    if st == "stale":
+        return S_STALE
+    if st is not None:
+        raise ValueError(f"🗂 總覽：未知 spec state {st!r}（⛔ 默默落成某一態）")
+    if spec.get("value") is None or spec.get("as_of") is None:
+        return S_MISSING
+    return S_IN_RULE
+
+
+def freshness_states(snap: RealFeedSnapshot) -> dict[str, str]:
+    """已接入項目（台股加權指數、市場位階）→ 狀態；吃**同一份 snapshot** 與**同一組 spec 函式**（跨頁一致）。
+    key 必須恰等於 `data_page.WIRED_ITEM_KEYS`（`counts_from_states` 雙向驗證）。"""
+    return {"twii": item_state_of_spec(twii_card_spec(snap)),
+            "regime": item_state_of_spec(regime_spec(snap, "regime", "市場位階"))}
+
+
+def _data(snap: RealFeedSnapshot) -> dict:
+    """🗂 資料頁：既有空殼＋DEC-177「資料新鮮度總覽」計數（由 snapshot 導出；示意軸不走這裡）。"""
+    return data_page_canonical(counts_from_states(freshness_states(snap)))
 
 
 def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
@@ -712,7 +743,7 @@ def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     if not isinstance(snap, RealFeedSnapshot):
         raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap)!r}")
     c = {P4_MARKET: lambda: _market(snap), P4_TARGET: lambda: _target(snap),
-         P4_HOLD: _hold, P4_ME: _me, P4_DATA: _data}[page_id]()
+         P4_HOLD: _hold, P4_ME: _me, P4_DATA: lambda: _data(snap)}[page_id]()
     c["scenario"] = SCENARIO_REAL
     c["is_fake"] = False
     return c

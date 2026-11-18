@@ -8419,7 +8419,60 @@
  },
  "real/p4_data/contract_error": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "d983426ba450b6ce90d09e1c088aa12d120fadf1",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "b439255607f4187186f6c5dc38d145c20cd93df1",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8430,7 +8483,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8456,7 +8509,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8474,7 +8527,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8487,7 +8540,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8513,7 +8566,60 @@
  },
  "real/p4_data/loaded": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "94e61e01a07d2b487872b3f67e06e8bbbd366a33",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "ebdf24a848bff99b0b2d907cc1ebe598c2a1c895",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8524,7 +8630,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8550,7 +8656,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8568,7 +8674,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8581,7 +8687,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8607,7 +8713,60 @@
  },
  "real/p4_data/missing": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "a7add0c33aaa1ad5b389b0a080325b02ce0f00c4",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "45f5226da7230b1fd4f6af48518b2b6823972afe",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8618,7 +8777,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8644,7 +8803,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8662,7 +8821,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8675,7 +8834,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8701,7 +8860,60 @@
  },
  "real/p4_data/stale": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "0d1763279fc9e04599f1a78dc15e9b1a5e8e7137",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "45f5226da7230b1fd4f6af48518b2b6823972afe",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8712,7 +8924,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8738,7 +8950,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8756,7 +8968,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8769,7 +8981,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8795,7 +9007,60 @@
  },
  "real/p4_data/stale_unknown": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "0d1763279fc9e04599f1a78dc15e9b1a5e8e7137",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "45f5226da7230b1fd4f6af48518b2b6823972afe",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8806,7 +9071,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8832,7 +9097,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8850,7 +9115,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8863,7 +9128,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8889,7 +9154,60 @@
  },
  "real/p4_data/unavailable": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "d983426ba450b6ce90d09e1c088aa12d120fadf1",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "b439255607f4187186f6c5dc38d145c20cd93df1",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8900,7 +9218,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -8926,7 +9244,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -8944,7 +9262,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8957,7 +9275,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -8983,7 +9301,60 @@
  },
  "real/p4_data/unevaluated": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "f6ee93f7ede6045e0dfc47ef24aa1f5e4098c052",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "9ff6f398228a6263944f1e7a66b761a85edc1826",
+    "ebdf24a848bff99b0b2d907cc1ebe598c2a1c895",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -8994,7 +9365,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -9020,7 +9391,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -9038,7 +9409,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -9051,7 +9422,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -9077,7 +9448,60 @@
  },
  "real/p4_data/unloaded": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "f6ee93f7ede6045e0dfc47ef24aa1f5e4098c052",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "45f5226da7230b1fd4f6af48518b2b6823972afe",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -9088,7 +9512,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -9114,7 +9538,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -9132,7 +9556,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -9145,7 +9569,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -9171,7 +9595,60 @@
  },
  "real/p4_data/upstream_error": {
   "cards": [],
-  "context_rows": [],
+  "context_rows": [
+   [
+    "資料新鮮度總覽",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "7c79b2d85ed0ca01fc62bd1144519c8058af8a11",
+    null
+   ],
+   [
+    "接入狀態",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "bb64d731cd06a1cfda60678b9ac6914c2ba5df17",
+    null
+   ],
+   [
+    "新鮮度",
+    "data",
+    "ok",
+    false,
+    true,
+    null,
+    null,
+    null,
+    null,
+    "f6ee93f7ede6045e0dfc47ef24aa1f5e4098c052",
+    null
+   ],
+   [
+    "其他狀態",
+    "data",
+    "ok",
+    true,
+    true,
+    null,
+    null,
+    null,
+    "67d55ce3ff6e60f3785fc94721c228b137610f92",
+    "45f5226da7230b1fd4f6af48518b2b6823972afe",
+    null
+   ]
+  ],
   "first_screen": [
    [
     "資料健康度",
@@ -9182,7 +9659,7 @@
     null,
     null,
     null,
-    "1c8e3f198a790ada03c90252e3b95ad966178548",
+    "89b0b798fecf3108d4644edf71b105f9c458e5bb",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ],
@@ -9208,7 +9685,7 @@
     null,
     null,
     null,
-    "0995a9152bb96f10d2ab8fac377e6bdfab90d650",
+    "9514a451bd25db1255e5a71e239c3ed91a69609f",
     null,
     "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
    ]
@@ -9226,7 +9703,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],
@@ -9239,7 +9716,7 @@
       null,
       null,
       null,
-      "1c8e3f198a790ada03c90252e3b95ad966178548",
+      "4d33ee055271ec1f4eae7dc03500d3746fd66c6a",
       null,
       "9ff52d3aba9006f1ea7e4c8d1b24189fb1a6c5f0"
      ],

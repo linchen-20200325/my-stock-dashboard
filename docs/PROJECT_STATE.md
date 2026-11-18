@@ -1429,3 +1429,7 @@
 
 ### 70.29 Issue #1208 PR2 ChatGPT 簽核後（2026-11-17；只追加；非 QA PASS）
 - 70.28「15 項依定稿完成」更正：14 項逐字＋被動式費用率缺值句依 GPT 規則推導；N1–N3 與 etf_render 成分股缺值句已由 ChatGPT 於 PR #1210 留言 6963995185 簽核。
+
+### 70.30 DEC-177 首屏方案 C 合併 main 後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
+- 🗂 資料頁首屏採方案 C（`first/context_rows` 四列），決策 DEC-190；細節見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §6.1。
+- 作者環境：fast lane 40209 passed／0 failed；ui2_browser 43 passed（streamlit 1.59.2／1.56.0）。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。

@@ -34,7 +34,7 @@ from shared.allocation_decision import REGIME_LABEL
 from shared.ui2_contract import text as T
 from shared.ui2_contract.models import CapabilityState, FieldState, FieldVM, JudgementState, PageVM
 from shared.ui2_contract.pages import (
-    FEED_IDS, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE_IDS, SCENARIO_IDS, SCENARIO_REAL,
+    FEED_IDS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE_IDS, SCENARIO_IDS, SCENARIO_REAL,
 )
 from src.services import allocation_service, market_twii_view_service as TWS
 from src.services.market_twii_view_service import TWII_SOURCE_TEXT, TwiiTrendView
@@ -788,6 +788,10 @@ def test_real_me_evaluator_rejects_a_pretend_account():
 WIRED_PATHS = frozenset({
     (P4_MARKET, "cards/twii"), (P4_MARKET, "first/current_state"), (P4_MARKET, "sections/why/0"),
     (P4_TARGET, "first/context_rows/0"), (P4_TARGET, "lookup/snapshot/5"),
+    # DEC-177 Q1=A（使用者 2026-11-18 明示核准方案 C）：🗂 資料新鮮度總覽的四個純文字計數列——精確 tuple，非前綴、非 wildcard、非其他頁。
+    # 列內容的嚴格形狀／算式／僅 Real 由 tests/test_ui2_data_freshness_overview.py 補償鎖定（本檢查器對 allowlist 內路徑整個放行）。
+    (P4_DATA, "first/context_rows/0"), (P4_DATA, "first/context_rows/1"),
+    (P4_DATA, "first/context_rows/2"), (P4_DATA, "first/context_rows/3"),
 })
 #: 契約固定欄（位置 → 期望態／字樣）；無值、無 source／as_of。
 FIXED_PATHS: dict[tuple[str, str], tuple[object, str]] = {
@@ -1116,6 +1120,18 @@ def _boom_shell(monkeypatch, exc_factory=lambda: RuntimeError("secret-token")):
     monkeypatch.setattr(shell, "read_real_snapshot", boom)
 
 
+def regime_label_residue(blob: str, page: str) -> list[str]:
+    """降級頁不得殘留任何位階顯示字（`REGIME_LABEL` 值）。DEC-177 D-5 唯一例外：🗂 資料頁第 4 列的核准計數文案
+    「🔴 來源目前不可用或資料異常 d 項｜⬜ 尚未評估 e 項」內含子字串「未評估」（＝ `REGIME_LABEL['unknown']`，不是位階顯示）。
+    例外只作用於 `page == P4_DATA`，且只先剪掉**該整串核准文案**（降級頁兩事實皆不可用＝ d=2、e=0）；
+    該串之外的任何「未評估」（含同頁其他位置）、其餘位階字、其餘四頁一律照舊判違規。"""
+    if page == P4_DATA:
+        from src.services.ui2 import data_page as _DP
+        row4 = _DP.freshness_rows(_DP.counts_from_states({"twii": _DP.S_UNAVAILABLE, "regime": _DP.S_UNAVAILABLE}))[3]["value"]
+        blob = blob.replace(row4, "")
+    return [lbl for lbl in REGIME_LABEL.values() if lbl and lbl in blob]
+
+
 @pytest.mark.parametrize("page", PAGE_IDS)
 def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch, page):
     """#1204 G1：`read_real_snapshot` 整體拋 Exception → 五頁安全降級（固定警示＋既有 Unavailable 規則），不崩潰、不洩漏原文。"""
@@ -1129,7 +1145,7 @@ def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch, page):
     assert blob.count(T.REAL_FEED_DEGRADED_TEXT) == 1
     assert "secret-token" not in blob and "RuntimeError" not in blob and "Traceback" not in blob
     assert "23,456" not in blob
-    assert not any(lbl in blob for lbl in REGIME_LABEL.values() if lbl)          # 無位階字樣殘留
+    assert regime_label_residue(blob, page) == []                                # 無位階字樣殘留（🗂 第 4 列核准文案為唯一精確例外）
     assert "<svg" not in blob and "<rect" not in blob                            # 無日 K 圖（僅剩既有 Unavailable 說明）
     assert T.REAL_PREVIEW_BANNER_TEXT in blob and "FAKE" not in blob and T.PREVIEW_BANNER_TEXT not in blob
     # 警示位於導覽（橫幅）之後、本頁第一屏內容之前
