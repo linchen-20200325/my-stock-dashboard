@@ -1561,5 +1561,5 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 作者環境複驗：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（1.59.2／1.56.0）；measure 兩版本 fake 82／82、real 13／13；`tests/test_ui2_*`＋z60＋#1208 還原鏈 2260 passed。viewport 證據 JSON 未重生（source_hash 輸入未變）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI；Cloud 另案。延後項見 BACKLOG 同日段與 DEC-190。非 QA PASS。
 
-## 2026-11-18 融資來源字樣中性化（DEC-191；append-only）
+## 2026-11-18 融資來源字樣中性化（DEC-192；append-only）
 - 只改 `MARGIN_SOURCE_TEXT` 一個字串＋`tests/test_margin_fact_service.py` 三組斷言；無接線、無數值／單位／schema 變動。同類宣稱仍在 `shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`，provenance 衝突 OPEN。非接線核准；A／HOLD 不變。非 QA PASS。

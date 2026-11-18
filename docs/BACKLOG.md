@@ -2906,7 +2906,7 @@
 - **延後（不在本 PR）**：(1) TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」，另列 C 線獨立項；(2) 第二階段細節；(3) 位階契約無 `as_of`，若日後新增，「載入→資料未備」歸類須重審。
 - 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。Owner：專案 AI；觸發：非作者 QA 或 TWII 文案批。
 
-## 2026-11-18 I1140-MARGIN-SOURCE-TEXT／DEC174-GG1｜融資來源字樣改中性措辭（append-only；決策 DEC-191；非 QA PASS）
+## 2026-11-18 I1140-MARGIN-SOURCE-TEXT／DEC174-GG1｜融資來源字樣改中性措辭（append-only；決策 DEC-192；非 QA PASS）
 - `MARGIN_SOURCE_TEXT` 已改為「本地融資餘額歷史快取（市場範圍與來源待確認）」，僅文案；移除「全市場／FinMind／每日更新／元換算」宣稱。I1140-MARGIN-SOURCE-TEXT、DEC174-GG1 以中性措辭處理。
 - **同一「全市場」宣稱仍未動的來源**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`（`test_w1_r7_hit_source` 釘住）、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 **OPEN**。
 - **這不是接線核准**：DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 不變；實際運作維持 A／HOLD；UI2／real_feed 對融資仍 0 引用。Owner：專案 AI；觸發：融資接線批或上述來源被動到時。
