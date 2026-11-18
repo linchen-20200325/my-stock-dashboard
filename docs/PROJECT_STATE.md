@@ -1449,6 +1449,12 @@
 - OPEN（未修）：`_nav_ok` stale-NAV 偽綠燈（S3b）；`is_active_etf` 對 SPY／VOO／QQQ 回 True 導致海外 AUM 列顯示主動式宣稱；台股主動式依既有規則把真失敗藏在 ⚪。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 
+## 74. New UI2 a11y 三項最小修（2026-11-18；DEC-197；只追加；非 QA PASS；單組作者環境）
+- 已做（`src/ui2/**`，GPT §B）：disabled CTA `cursor:not-allowed`；頁標題 `role=heading aria-level=1`、區塊標題 `aria-level=2`；`[data-testid="stMain"]:focus-visible` 焦點框。版面／文案／資料未動。
+- 證據：FAKE 存證兩版本逐值零差異；Real 存證差異全來自 main 文案與時鐘（未改動 origin/main 當日重量零差異）；DEC-137 四份存證已重生，`test_dec137_evidence_meta_is_fresh` 綠。
+- 測試：`tests/test_ui2_a11y_three.py`（離線）＋ `tests/test_ui2_drawer_browser.py` 追加項（`ui2_browser`；Streamlit 1.56.0／1.59.2 皆跑）。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Streamlit Cloud、螢幕閱讀器實機（只驗 Chromium CDP AX tree）、iOS Safari／Firefox。
+- 已重現但未做：`A11Y-F1`～`A11Y-F4`（BACKLOG，待 ChatGPT 簽核）。
 ## 73. 舊 UI ETF 診斷三項最小安全修復（2026-11-18；DEC-196；只追加；非 QA PASS；單組作者環境）
 - 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04）。~~① NAV 列不再以 `date.today()` 冒充資料日，stale／日期不明不綠；~~（QA 更正見下）② 海外 AUM 缺值不再宣稱主動式／投信官網；③ 台股主動式有失敗證據時紅燈明示，無證據維持 ⚪。公式、評分、資料源、UI2 零改動。
 - 已揭露副作用：`data_coverage.py` 對台股主動式 NAV 缺值降級；無日期 NAV（路徑 A）由 🟢 改 🔴。

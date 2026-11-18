@@ -49,7 +49,7 @@ def _reasons(rep: D.DiagReport) -> str:
 
 def _block_html(rep: D.DiagReport) -> str:
     return (f'<div class="ui2-diag" role="group" aria-label="{escape(D.TEXT_DIAG_ARIA)}">'
-            f'<div class="ui2-section-title">{escape(D.TEXT_DIAG_TITLE)}</div>'
+            f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(D.TEXT_DIAG_TITLE)}</div>'
             f'<div class="ui2-diag__note">{escape(D.TEXT_DIAG_NOTE)}</div>'
             + _row(D.TEXT_DIAG_LABEL_NAS_RELAY, rep.nas_relay)
             + _row(D.TEXT_DIAG_LABEL_NAS_PROXY, rep.nas_proxy)

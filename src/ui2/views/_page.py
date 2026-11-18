@@ -28,7 +28,7 @@ def _md(html: str) -> None:
 def render_title(vm: PageVM, **attrs: str) -> None:
     # data-ui2-page／-scenario＝量測與測試錨點（tests/ui2_viewport），不影響呈現。
     extra = "".join(f' data-ui2-{k}="{escape(v)}"' for k, v in attrs.items())
-    _md(f'<div class="ui2-pagetitle" data-ui2-page="{escape(vm.page_id)}" '
+    _md(f'<div role="heading" aria-level="1" class="ui2-pagetitle" data-ui2-page="{escape(vm.page_id)}" '
         f'data-ui2-scenario="{escape(vm.scenario_id)}"{extra}>{escape(vm.title)}</div>')
 
 
@@ -65,7 +65,7 @@ def is_shown_fold(page_id: str, section_id: str) -> bool:
 def section_l1_html(sec) -> str:
     """一個 L1 區塊的 HTML（標題＋各欄位列）。供 `render_sections` 與需要自行安排位置的頁（📊 的 OneBrain）共用，內容一致。"""
     rows = "".join(field_row_html(f, hide_label=_label_repeats_title(sec, f)) for f in sec.fields)
-    return f'<div class="ui2-section-title">{escape(sec.title)}</div>' + rows
+    return f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(sec.title)}</div>' + rows
 
 
 def render_sections(vm: PageVM, *, mode: str | None = None, extra=(), skip: frozenset[str] | set[str] = frozenset()) -> None:
