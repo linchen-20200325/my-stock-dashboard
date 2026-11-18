@@ -222,4 +222,15 @@ def test_localized_copy_correction_is_minimal():
     assert R_DATA_NOT_WIRED == "完整資料健康度尚未開放；本區僅檢查連線，不代表資料已更新" == D.TEXT_DIAG_HEALTH_NOT_OPEN
     c = data_page_canonical()
     assert "不顯示任何來源狀態" not in str(c)
-    assert c["cta"]["disabled_reason"] == "資料健康度尚未開放"          # 其餘文案不動
+    assert c["cta"]["disabled_reason"] == "資料健康度尚未開放"          # 示意軸（FAKE）原文案不動
+    # DEC-177 Q3=A：Real 軸（與資料新鮮度總覽同一個變更）改為客戶定稿文案；示意軸不冒稱有摘要，維持原文。
+    from src.services.ui2 import data_page as DP
+    r = DP.data_page_canonical(DP.counts_from_states({"twii": DP.S_IN_RULE, "regime": DP.S_NOT_EVALUATED}))
+    assert r["cta"]["disabled_reason"] == "完整資料健康度尚未開放"
+    assert r["current_state"]["reason"] == "完整資料健康度尚未開放；本頁先顯示資料新鮮度摘要"
+    assert r["next_step"]["reason"] == "完整資料健康度開放後才可查看"
+    old_block = next(sec for sec in r["sections"] if sec["key"] == "data_overview")["fields"]
+    assert [f["reason"] for f in old_block[:2]] == ["完整資料健康度尚未開放；資料日與新鮮度請看『資料新鮮度總覽』"] * 2
+    assert old_block[2]["reason"] == "登入與 Sheet 尚未開放"
+    assert D.TEXT_DIAG_NOTE == "僅供檢查連線；連線成功不代表行情已更新。"       # 診斷區自己的說明不動
+    assert R_DATA_NOT_WIRED not in str(r)
