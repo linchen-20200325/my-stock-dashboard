@@ -1448,3 +1448,10 @@
 - 已揭露副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級。
 - OPEN（未修）：`_nav_ok` stale-NAV 偽綠燈（S3b）；`is_active_etf` 對 SPY／VOO／QQQ 回 True 導致海外 AUM 列顯示主動式宣稱；台股主動式依既有規則把真失敗藏在 ⚪。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+## 72. OneBrain OB-1 完全離線鷹架＋PIT 邊界測試（2026-11-18；DEC-195；只追加；非 QA PASS；單組作者環境）
+- 分支 `c-onebrain-offline-ob1`（基於 origin/main 897b3c04），未推送、未發 PR。來源：Issue #1199 GPT §C（comment 6978992482）。
+- **Delta 1（tests-only）**：`tests/test_decision_digest_evidence_matrix_guard.py` 新增兩種 stamp：`fetched_equals_generated`（fetched_at == generated_at，預期採用）與 `pit_as_of_after_fetched`（as_of 台北日晚於 fetched_at 台北日，預期 `pit_violation`），oracle 改為 `_PIT_PASSING_STAMPS`。變異驗證：`_pit_ok` 的 `>`→`>=` 變異與「移除 as_of_after_fetched 檢查」變異，先前整組 digest 測試存活，現各使矩陣測試轉紅。未改 src／shared。
+- **Delta 2（新增、可逆、純離線）**：`shared/onebrain_provider.py`（L0：`SummaryProvider` Protocol、`ProviderErrorKind`、`ProviderError`、凍結 `ProviderRequest`）、`src/services/onebrain_shadow.py`（L3：`run_shadow`→`ShadowOutcome`；`effective` 恆為 `build_rule_summary(digest)`）、`tests/onebrain_fake_provider.py`（測試專用 FakeProvider）、`tests/test_onebrain_offline_guard.py`（零 production import AST 守衛、無網路／SDK、Schema／欄位凍結、ShadowOutcome 無 action／Risk Cap 欄位、9 種失敗模式×2 份 Digest 回退、9 種偽造草稿被 grounding 拒收、封網執行）。
+- **不在本批**：生產 import、UI／LINE 接線、真 Provider／model／預算、Digest schema／vocabulary、AB-2b。Delta 3（摘要揭露被省略的 Top-N）需動詞彙／簽章，列 Gate-needed，見 BACKLOG。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。

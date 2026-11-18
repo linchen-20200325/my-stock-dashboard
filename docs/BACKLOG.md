@@ -2925,3 +2925,12 @@
 - **OPEN-2｜海外 ETF AUM 列的錯誤宣稱**：`is_active_etf('SPY'/'VOO'/'QQQ')` 為 True，AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，對海外 ETF 為不正確宣稱。本次依指示保持逐字不變。Owner：專案 AI；觸發：動 `is_active_etf` 或海外 ETF 顯示批。
 - **OPEN-3｜台股主動式 ETF 的真實失敗被 ⚪ 蓋住**：既有規則 `_restricted = 主動式` 把抓取失敗併入「不適用」。Owner：專案 AI；觸發：主動式 ETF 資料源批。
 - 副作用揭露：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈降級。
+
+### OB-1 離線鷹架進度（2026-11-18；DEC-195；只追加）
+- [x] Provider Protocol／錯誤分類／凍結 Request（`shared/onebrain_provider.py`，L0，零 SDK／網路／金鑰）
+- [x] 影子執行 `run_shadow`（`src/services/onebrain_shadow.py`，L3；effective 恆為規則式摘要）
+- [x] FakeProvider＋守衛測試（零 production import、封網、9 失敗模式、9 偽造草稿）
+- [x] PIT 邊界矩陣補強（`fetched_at == generated_at`、as_of 晚於 fetched）
+- [ ] 非作者 QA／exact-head CI／merge／main CI（本分支尚未推送）
+- **OB-1-D3｜Gate-needed：規則式摘要未揭露被省略的 Top-N 行動**。重現：以 `tests.test_decision_digest_assembly.full_kwargs(n)` 組 n=3 與 n=7 筆合格行動，`assemble_digest` 後 `coverage.actions_omitted_count`＞0（n=7 時）、`is_complete` 為 False，但 `build_rule_summary(a.digest)` 的行動段落文字不含「其餘／未顯示／省略」等字樣——摘要對被省略的行動沉默（coverage sidecar 有、摘要沒有）。修法需新增詞彙（`decision_digest_terms`）與句型／簽章變更（摘要需讀 coverage），屬 Digest 詞彙／簽章變更，**Gate-needed，不自行施工**。Owner：客戶裁示；觸發：任何要動摘要詞彙或簽章的批次。
+- **OB-2 介面差額（僅列清單，未施工）**：semantic fingerprint（Digest→穩定指紋，且不得成為第二套 cache key 體系）、trace 欄位（request id／model id／延遲，需不進 Digest v1）、budget／rate 計量介面、cache 讀寫介面（須重用既有 cache 層，禁第二套 Provider cache）、錯誤退避策略（對應 CLAUDE.md §1.A-3）。以上皆需跨模組 production contract 或 Schema 變動，列 Gate。

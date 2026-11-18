@@ -10711,3 +10711,10 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **已揭露副作用**：(1) `src/ui/pages/data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈由原本維持綠色改為降級（因為 `_err_nav` 現在非空）。(2) 非三缺的部分缺值情境（僅費用率／僅 NAV／費用率＋NAV 缺 AUM）燈號不變（🔴），但 AUM 列由無文字的「抓取失敗」改為顯示中性缺值句。(3) 三缺情境燈號由 ⚪ 變 🔴。
 - **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
 - **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-195｜OneBrain OB-1 完全離線鷹架＋PIT 邊界測試（GPT §C 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：Issue #1199 GPT §C（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6978992482）。核准範圍僅限 OB-1 純內部離線 Provider Protocol＋FakeProvider＋deterministic 測試鷹架；非 production cutover、非付費 Provider 授權。
+- **決定**：(1) 新增 `shared/onebrain_provider.py`（L0）、`src/services/onebrain_shadow.py`（L3）、測試專用 `tests/onebrain_fake_provider.py`；(2) `ShadowOutcome.effective` 恆為 `build_rule_summary(digest)`，Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，任何例外分類為 `error_kind` 並 log，不改 action／Risk Cap、不降為 SAFE／neutral；(3) **0 production import**（AST 守衛強制，含 app.py、app_ui2.py、src/ui*、src/ui2、src/services/ui2）；0 SDK、0 API key、0 網路、0 付費、0 Secrets；(4) Digest v1 schema 與 `DecisionDigest` 欄位集合不變；(5) tests-only 補 PIT 邊界：`fetched_at == generated_at`（採用）與 as_of 晚於 fetched（`pit_violation`）。
+- **未動**：validator、投資門檻、正式 caller、UI／LINE、`src/ui2`、`shared/ui2_contract`。
+- **仍待客戶／Gate 裁示（未授權）**：真 Provider／model／月預算／fallback；Stage F／G production；AB-2b（`ai_explained`／`ai_rejected`）；詞彙／Schema／semantic 變更（含 Delta 3「摘要揭露被省略 Top-N」）；System Action Aggregator／Risk Cap 權限；UI2 與 LINE 接線；OB-2 semantic fingerprint／cache／trace／budget 實作。
+- **測試**：`tests/test_onebrain_offline_guard.py` 38 例；矩陣測試新增 stamp 後 242 例。變異（`>=` 邊界、移除 as_of_after_fetched、`shadow_accepted` 恆真、吞例外改窄、effective 採 draft、app_ui2 注入 import）皆使守衛轉紅。作者環境自跑，未經非作者 QA。
