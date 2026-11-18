@@ -42,6 +42,7 @@ _likely_private = (
     and (_nav_value is None)   # FinMind + goodinfo + TWSE + MoneyDJ + yfinance 5 源皆空
 )
 ```
+> 📌 上方註解中的 ~~MoneyDJ~~ （#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留）：費用率現為 SITCA → 元大(主動式) → yfinance；NAV 現為 FinMind + goodinfo + TWSE + yfinance 4 源。
 
 **health_inspector 行為**：
 | 條件 | AUM | 費用率 | NAV |
@@ -69,7 +70,7 @@ _likely_private = (
 
 ---
 
-## §4 TW PMI 8 源並行賽跑 — 失敗追蹤格式
+## §4 TW PMI ~~8 源~~ 7 源並行賽跑 — 失敗追蹤格式（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留）
 
 > 來源：`macro_core.fetch_tw_pmi` + `PMI_SOURCE_REGISTRY`（SSOT）。失敗時回 `{'_err_pmi': str, 'value': None}`，`_err_pmi` 為各源失敗原因以 ` | ` 串接。
 > （v19.113 同步：本表原停在 v19.85 前的 9 段舊制 — 仍列已拔的 FinMind、缺 v19.85 新增的 CIER-EN。以下依現行 registry 重寫；MacroMicro 段與 CIER cid=21 URL 於 v19.113 依探針 run 29182317622 實錘拔除。）
@@ -83,7 +84,7 @@ _likely_private = (
 | 5 | StockFeel 搜尋頁 | `StockFeel:無回應` |
 | 6 | 鉅亨網 API | `Cnyes:無回應` |
 | 7 | CIER cid=8（PMI 專欄） | `CIER-cid8.news/list?cid=8:無回應` |
-| 8 | MoneyDJ 知識庫搜尋 | `MoneyDJ:無回應` |
+| ~~8~~ | ~~MoneyDJ 知識庫搜尋~~ | ~~`MoneyDJ:無回應`~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） |
 
 **設計原則**：每段失敗都必須寫入 `errs`，避免使用者只看到部分失敗訊息誤判系統。
 
@@ -101,7 +102,7 @@ etf_fetch  ←  etf_calc  ←  etf_render  ←  etf_dashboard (shim)
 
 | 層 | 模組 | 可放函式類型 | 禁止 |
 |---|---|---|---|
-| L1 純 I/O | `etf_fetch.py` | 對外 API 抓資料（yfinance / FinMind / SITCA / MoneyDJ / goodinfo / TWSE）、本地常數表（如 `_TW_ETF_LAUNCH_PRICE`）、檔位驗證 (`_safe_float` / `_NAV_MIN/MAX`) | 任何 `st.markdown` / `plotly` / 數值計算邏輯（除驗證外） |
+| L1 純 I/O | `etf_fetch.py` | 對外 API 抓資料（yfinance / FinMind / SITCA / ~~MoneyDJ~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） / goodinfo / TWSE）、本地常數表（如 `_TW_ETF_LAUNCH_PRICE`）、檔位驗證 (`_safe_float` / `_NAV_MIN/MAX`) | 任何 `st.markdown` / `plotly` / 數值計算邏輯（除驗證外） |
 | L2 純算 | `etf_calc.py` | 殖利率 / 總報酬 / 折溢價 / 風險指標 / 同儕排名 / 戰情室列；可呼叫 `etf_fetch.*` 取資料後計算 | 任何 `st.plotly_chart` / `st.markdown` UI 渲染 |
 | L3 UI | `etf_render.py` | Streamlit / Plotly 渲染 (`_plot_etf_chart` / `_render_bias` / `_render_monte_carlo` / `render_sector_heatmap`)；呼叫 `etf_fetch` 取輕量 I/O（news / sector returns）；`ui_widgets._to_strategy` 一律 late import | 重新發明 `etf_calc` 已有的數值邏輯；直接呼叫外部 API（請走 `etf_fetch`） |
 | L4 Shim | `etf_dashboard.py` | 純 re-export — 40 個 symbol + 4 個 tab 入口 | 新增任何邏輯（破壞 shim 純粹性）|

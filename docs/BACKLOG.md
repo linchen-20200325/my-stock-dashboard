@@ -2875,3 +2875,28 @@
 - 測試：新增 `tests/test_issue1208_manager_strategy_removed.py`（41 項，含 mutation 守衛；以 HEAD 版 asset_lag／etf_tab_single 回填驗證 25 項轉紅）；更新 `test_asset_lag`、`test_active_etf_fallback`、`test_pr_q2_etf_provenance`、`test_pr_q5c_singles`、`test_sec3_scrub_legacy_pages`、`test_c3_layering_guard`。
 - 未做（另案）：其他 MoneyDJ 呼叫入口（費用率／持股／中文名／追蹤指數、macro PMI fallback）的權利盤點維持獨立唯讀任務，**不因本批宣稱已獲授權**；#1119 workflow 清理、branch protection／Secrets／NAS／Proxy 不動；`src/ui2/**` 未動。
 - 舊鏈守衛同步（有意識，非放寬）：`tests/test_batch_z60.py` 舊 UI 指紋依其 docstring 慣例更新並註明 #1208；`shared/signal_thresholds.py` 被 DEC-074 等還原鏈管 ⇒ 新增鏈頭節 `tests/test_issue1208_revert_chain.py`（基底＝efa0e015 sha），由 `twii_ohlc_revert_for` 開頭先呼叫。本地 fast lane（`pytest`，同 pr-check.yml）＝40035 passed／38 skipped／3 xfailed／0 failed。
+
+## 2026-11-17 Issue #1208 PR2｜MoneyDJ 全入口零請求止血（append-only；自跑，未經第二組驗證）
+- 狀態：**IMPLEMENTED（本地 commit，未 push／未開 PR）**；待非作者 QA／同 head 五項原生 CI／merge／main push CI。第二個 PR 未合併前不得稱「MoneyDJ 零請求 DONE」。決策 DEC-189；依據 #1208 2026-11-17T15:23Z GPT 裁示＋15:37Z 設計。
+- 移除：P1 PMI 競速 MoneyDJ 段（8→7 源，race 計數改動態）；P2 `fetch_etf_meta_moneydj`；P3 `fetch_moneydj_expense_ratio`（＋`etf_dashboard` re-export）；`fetch_etf_info` MoneyDJ 補位（AUM 缺＝None，不補 0）；P4 持股 MoneyDJ 段（含 curl_cffi 模擬 chrome）；P5 NAV 第 4 段；P6 中文名 MoneyDJ 備援；P7 死碼 `fetch_etf_underlying_index`＋`_ETF_INDEX_LAST_ERR`（確認 0 caller）；0 caller 的 `_html_kv_pairs`；`data_registry` 兩筆 MoneyDJ 登錄與 PMI 列 endpoint 的 moneydj。
+- 費用率鏈：SITCA → 元大(主動式) → yfinance。AI 問答 `_tool_get_etf_quality` 來源字樣改為實際鏈（逐字測試）。
+- 不改：`input_provenance_policy.PMI_SECONDARY_SOURCE_LABELS` 的 "MoneyDJ"（DEC-080；c2a 測試加註）、`curl-cffi`、data_cache 歷史、NAS／Proxy／`fetch_url`／UA、`src/ui2/**`、`app_ui2.py`、`measure_viewport.py`、Risk Cap／OneBrain、其他 workflow。
+- 測試：新 `tests/test_issue1208_moneydj_zero_requests.py`（25 項：transport 錄音機 requests／curl_cffi／urllib／socket＋fetch_url／nas_relay spy、各入口 MoneyDJ 請求數＝0、靜態掃描 allowlist 空、正向對照含「塞回 MoneyDJ PMI 源必紅」）；改前 b06a7eca 實跑草稿 17 FAIL／7 PASS，改後全綠。新 `tests/test_issue1208_pr2_revert_chain.py`（還原鏈頭節，基底 b06a7eca，由 `i1208_revert_for` 開頭呼叫；`dec074_restore_edu_text` 尾端接 `i1208pr2_restore_edu_text`）；z60 舊 UI 指紋依慣例更新並註明。刪 `tests/test_etf_moneydj_nav_parse.py`；更新 `test_active_etf_fallback`、`test_etf_zh_name_and_beta`、`test_pr_q2_etf_provenance`、`test_review_fixes_v19_85`（7 源、無 MoneyDJ）、`test_c2a_input_provenance`、`test_w1_r7_hit_source`（R7-4「7 源」）、`test_b6a_edu_doc_parity`（退役名單加 MoneyDJ）。
+- 🔴 **使用者可見文案待 ChatGPT 定稿**：已依 15:37Z 設計表「建議（事實版）」欄施工並刪「或 MoneyDJ 收益分配頁」；每處程式內標 `#1208 PR2 文案（待 ChatGPT 定稿）`。
+- 未做／登記：`data_registry` 台灣 PMI 列的 `ping_url` 仍指向 v19.113 已拔的 macromicro（endpoint 文字也仍列 macromicro.me）——超出本批範圍，未改。替代來源（SITCA、FinMind、yfinance、台灣 Yahoo、goodinfo、TWSE、元大）權利屬 DG-LIC，NOT VERIFIED。Cloud 執行環境既有 MoneyDJ-derived 快取 NOT VERIFIED（repo 追蹤的 data_cache／cache 內 grep 無 moneydj）。
+- **PR1（#1209）QA low findings（未修，登記）**：① `shared/ttls.py:18` 模組 docstring「TTL_7DAY 超靜態（經理人 / 中文名稱）」殘留「經理人」；② `src/ui/render/etf_render.py:410` `_render_weakness_table` docstring「淘汰不適任經理人」殘留；③ `src/ui/etf/etf_tab_ai.py:235` AI prompt 框架句「主動型 ETF 弱勢度 / 換股訊號（基金經理人選股有沒有變差、要不要換掉）」仍以經理人措辭（prompt 文案 owner＝ChatGPT）；④ Cloud 殘留 `/tmp/st_cache/etf_manager_history.json` 是否存在＝**NOT VERIFIED**。
+- 本地 fast lane（`pytest`，同 pr-check.yml）＝40056 passed／38 skipped／3 xfailed／0 failed（改前同 lane 首輪 20 failed 皆為舊還原鏈／指紋守衛，已依慣例接鏈，未放寬任何斷言）。
+
+## 2026-11-17 Issue #1208 PR2｜文案依 ChatGPT 定稿（17:05Z，留言 6955097932）回修（append-only；自跑，未經第二組驗證）
+- 上一段「🔴 使用者可見文案待 ChatGPT 定稿」**已解除**：15 項依 GPT 定稿逐字施工，程式內標記改為 `#1208 GPT 2026-11-17 定稿`；`data_registry` PMI 列退役 macromicro `ping_url` 已清（`pingable=False, ping_url=None`），上一段「ping_url 未改」不再成立。
+- 依定稿條件選句：費用率缺值句只對主動式列「元大投信」（被動式只列 SITCA、yfinance）；淨值缺值無逐路嘗試證據 ⇒ 用保守句。另將折溢價 metric 的說明（原「檢查 PROXY_URL…」）改用同一缺 NAV 定稿句（同情境沿用，非新文案）。
+- 仍在畫面上、**不在 15 項內**、留給 ChatGPT 判斷（未改）：`etf_render` 句首「海外 IP 受限或」（只依定稿替換後半）；`etf_tab_single` AUM 說明「…或 yfinance .info 海外 IP 受限」；`health_inspector` 持股探測缺值錯誤句改為「yfinance／台灣 Yahoo 均未取得可用成分股資料」（定稿只給來源欄，錯誤句為去除原因臆測的最小改寫）。
+- **QA M3 風險揭露（未改邏輯；owner ChatGPT／量化審閱）**：`etf_tab_single._likely_private`（台股代號且 AUM、費用率、NAV 三者皆缺 ⇒ 視為私募／受限 ETF、診斷改走不適用分支）在 AUM 只剩 yfinance 後，誤判機率可能上升（yfinance 缺 AUM＋另兩項暫時抓不到時，會把公開 ETF 當成私募並隱藏缺值錯誤）。邏輯本批未動。
+- 另修 `ARCHITECTURE.md` 主動 ETF 持股探測列的刪除線巢狀錯誤（原文保留，單層刪除線＋註記）。
+- 回修後本地 fast lane＝40064 passed／38 skipped／3 xfailed／0 failed。
+
+## 2026-11-17 Issue #1208 PR2｜施工宣稱更正＋ChatGPT 簽核（PR #1210 留言 6963995185；append-only）
+- **更正前段宣稱**：「15 項依 GPT 定稿逐字施工」言過其實 → 實為 **14 項逐字**；被動式 ETF 費用率缺值句依 GPT「未實際嘗試的候選不可假稱失敗」規則推導（GPT 主動式原句不可達：`_restricted` 已排除主動式）。
+- ChatGPT 簽核 N1（被動式 `_err_expense`）、N2（淨值／折溢價句）、N3（持股探測錯誤句）原樣；(e) `src/ui/render/etf_render.py` 括號改為「（上游成分股資料暫時無法取得）」，前段登記的「etf_render 句首『海外 IP 受限或』」已刪除、該待辦結案。
+- 補註：`macro_snapshot._err_pmi` 定稿句僅為預設值；production 全敗時帶的是 `macro_core` 的技術錯誤字串。
+- **LOW（登記，不在本批清理）**：`etf_tab_single._ERR_NAV_ALL_TRIED` 常數（無 caller）與 `elif _is_active:` 分支（`_restricted` 已排除主動式，不可達）屬死碼，且被 `tests/test_issue1208_moneydj_zero_requests.py::TestGptFinalCopy` 的原始碼字串測試釘住；日後清理時須同步改測試。Owner：專案 AI；觸發：再動該檔時。

@@ -207,8 +207,11 @@ class TestL0Tables:
         known = (P.PMI_OFFICIAL_SOURCE_LABELS | P.PMI_SECONDARY_SOURCE_LABELS
                  | P.PMI_FAILURE_SOURCE_LABELS)
         assert lits <= known, lits - known
-        # 當期 8 源的實際字面值全部有登錄、且沒有多登（前月字樣除外）
-        assert known - lits == {"data.gov.tw:dataset:6100"}
+        # 當期各源的實際字面值全部有登錄、且沒有多登（前月字樣除外）
+        # #1208 PR2（2026-11-17）：MoneyDJ 已移出 PMI 競速，L1 不再產生 "MoneyDJ" 字面值；
+        # 但 L0 `PMI_SECONDARY_SOURCE_LABELS` 的 "MoneyDJ" 屬 DEC-080 資料契約**刻意保留**
+        # （舊 cache/durable 快照可能帶 `stale-cache(MoneyDJ)`，仍須判 secondary 而非 unknown）。
+        assert known - lits == {"data.gov.tw:dataset:6100", "MoneyDJ"}
         # stale-cache 包裝：唯一一個 f-string，前後綴等於 L0 常數
         assert len(fstrings) == 1
         parts = fstrings[0].values

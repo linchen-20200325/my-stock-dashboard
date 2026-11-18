@@ -812,7 +812,7 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
 
 @_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_tw_pmi_block() -> dict:
-    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 8 源並行賽跑)。
+    """台灣 PMI(CIER 中華經濟研究院,委派 macro_core.fetch_tw_pmi 多源並行賽跑;#1208 PR2 起 7 源)。
 
     session_state key 仍為 'ism_pmi' 維持向後相容(14 處讀取點不必動),
     內容是台灣 PMI;UI 顯示為「🇹🇼 台灣製造業 PMI」。
@@ -822,7 +822,7 @@ def fetch_tw_pmi_block() -> dict:
     _result = _ftp()
     if _result.get('value') is not None:
         return {'ism_pmi': _result}
-    return {'_err_pmi': _result.get('_err_pmi', '8 源並行全失敗')}
+    return {'_err_pmi': _result.get('_err_pmi', '本次 7 個來源均未取得可用的 PMI 資料。')}
 
 
 def _ndc_prev_month_keys(df, value_col: str, cur_date: str) -> dict:

@@ -90,13 +90,14 @@ def test_yuanta_fetcher_parses_multi_managers(monkeypatch):
 # ════════════════════════════════════════════════════════════
 
 def test_expense_ratio_uses_yuanta_for_active_etf(monkeypatch):
-    """SITCA + MDJ 都回 None，主動式 ETF 應拿 Yuanta 的費用率。"""
-    # get_etf_expense_ratio_safe 的 primary 是 fetch_etf_meta_moneydj(Basic0004),
-    # 必須一併 mock 回 None — 否則 CI(NAS proxy 可達)會抓到真資料 → 提早 return,
-    # 永遠走不到 Yuanta 分支(本機 proxy 不可達才會「碰巧」過)。網路相依改為確定性。
-    monkeypatch.setattr(etf_fetch, 'fetch_etf_meta_moneydj', lambda t: None)
+    """SITCA 回 None，主動式 ETF 應拿 Yuanta 的費用率。
+
+    #1208 PR2（2026-11-17）：費用率鏈改為 SITCA → 元大(主動式) → yfinance；
+    原 primary `fetch_etf_meta_moneydj` 與第三順位 `fetch_moneydj_expense_ratio` 已刪除。
+    """
+    assert not hasattr(etf_fetch, 'fetch_etf_meta_moneydj')
+    assert not hasattr(etf_fetch, 'fetch_moneydj_expense_ratio')
     monkeypatch.setattr(etf_fetch, 'fetch_sitca_expense_ratio', lambda t: None)
-    monkeypatch.setattr(etf_fetch, 'fetch_moneydj_expense_ratio', lambda t: None)
     monkeypatch.setattr(etf_fetch, '_fetch_yuanta_active_etf_meta',
                         lambda t: {'manager': None, 'expense': 0.0095,
                                    'nav_latest': None, 'nav_date': None,
@@ -108,7 +109,6 @@ def test_expense_ratio_uses_yuanta_for_active_etf(monkeypatch):
 def test_expense_ratio_skips_yuanta_for_passive_etf(monkeypatch):
     """被動式 ETF 不該走 Yuanta（節省網路）。"""
     monkeypatch.setattr(etf_fetch, 'fetch_sitca_expense_ratio', lambda t: None)
-    monkeypatch.setattr(etf_fetch, 'fetch_moneydj_expense_ratio', lambda t: None)
     _yuanta_called = []
     monkeypatch.setattr(etf_fetch, '_fetch_yuanta_active_etf_meta',
                         lambda t: _yuanta_called.append(t) or None)

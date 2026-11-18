@@ -31,6 +31,10 @@ def _rel(file_path) -> str:
 def i1208_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 #1208 之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # #1208 PR2（MoneyDJ 全入口零請求止血，DEC-189）在本節之後又改了一批檔 ⇒ 最新的那一批先換回
+    # （比照 twii_ohlc_revert_for 開頭先呼叫本節；有意識的接鏈，不是漏改）。
+    from tests.test_issue1208_pr2_revert_chain import i1208pr2_revert_for
+    code = i1208pr2_revert_for(rel, code)
     pairs = I1208_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code

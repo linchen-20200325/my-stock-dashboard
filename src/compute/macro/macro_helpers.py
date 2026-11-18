@@ -1933,7 +1933,7 @@ def compute_five_bucket_summary(
         "health":        _traced("health", f"計算值：旌旗指數（上漲佔比 5 日均）{HEALTH_WEIGHT_JQ * 100:g}% ＋ 大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%", _g(warroom_summary, "health_score"), warroom_summary),
         "ndc_signal":    _traced("ndc_signal", "國發會景氣對策信號，依序：FinMind（國發會官方鏡像）→ data.gov.tw 官方「景氣指標及燈號」→ StockFeel 股感 → MacroMicro 財經 M 平方", _g(macro_info, "ndc_signal", "score"), macro_info),
         "m1b_m2_gap":    _traced("m1b_m2_gap", "M1B 年增率減 M2 年增率，依序：央行公開 JSON → 央行 EF15M01 → FRED → IMF → 大盤動能代理估算", _g(m1b_m2_info, "gap"), m1b_m2_info),
-        "ism_pmi":       _traced("ism_pmi", "台灣製造業 PMI（中華經濟研究院 CIER 等 8 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）", _g(macro_info, "ism_pmi", "value"), macro_info),
+        "ism_pmi":       _traced("ism_pmi", "台灣製造業 PMI（中華經濟研究院 CIER 等 7 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）", _g(macro_info, "ism_pmi", "value"), macro_info),
         "us_core_cpi":   _traced("us_core_cpi", "美國核心 CPI 年增率，依序：FRED 公開檔（無需 key）→ FRED API → BLS 備援", _g(macro_info, "us_core_cpi", "yoy"), macro_info),
         "tw_export":     _traced("tw_export", "財政部海關出口金額年增率，依序：中華民國統計資訊網 → FRED（OECD）→ 海關出口統計 → FRED → 財政部進出口統計", _g(macro_info, "tw_export", "yoy"), macro_info),
         # ⚠️ H2 2026-08 揭露 → I2 2026-08-10 接線（**判定仍不變**）：

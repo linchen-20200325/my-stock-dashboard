@@ -3149,7 +3149,7 @@ def _prod_smoke() -> None:
         # 讀起來像「不知道」,無法回答驗收要問的那一句「這次到底走 live 還是快照」。
         # 故改為在此判定並印**明確二值 + 一行結論**(§1:不確定就講清楚,不要讓人猜)。
         _stale_flag = bool(_r.get('is_stale'))
-        _verdict = ('🟡 STALE — 8 段全失敗,回的是 90 天內的舊快照' if _stale_flag
+        _verdict = ('🟡 STALE — 全段失敗,回的是 90 天內的舊快照' if _stale_flag
                     else ('🟢 LIVE — 本次命中即時來源,非快照' if _r.get('value') is not None
                           else '🔴 無值 — 既沒命中 live,也沒有可用快照'))
         print(f'🎯 fetch_tw_pmi() → value={_r.get("value")} date={_r.get("date")} '

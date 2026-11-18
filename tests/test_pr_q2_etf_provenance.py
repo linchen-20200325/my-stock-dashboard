@@ -2,12 +2,12 @@
 
 7 個 fetcher 補 §2.2 audit trail(stderr log,介面 0 改):
 - fetch_sitca_expense_ratio
-- fetch_moneydj_expense_ratio
+- ~~fetch_moneydj_expense_ratio~~(Issue #1208 PR2:MoneyDJ 全入口零請求止血刪除)
 - _fetch_holdings_yahoo_tw
 - fetch_etf_holdings
 - ~~_fetch_sitca_manager~~(Issue #1208:隨 ETF 經理人換手策略取消刪除)
 - fetch_etf_zh_name
-- fetch_etf_underlying_index
+- ~~fetch_etf_underlying_index~~(Issue #1208 PR2:MoneyDJ-only 死碼刪除)
 
 共用 module 級 _prov_log() helper(L20 區間)避免重複實作。
 """
@@ -32,9 +32,8 @@ class TestEtfFetchProvenanceMarkers(unittest.TestCase):
         self.assertIn("_prov_log('fetch_sitca_expense_ratio'", self.src)
         self.assertIn("'SITCA:IN2222_01'", self.src)
 
-    def test_moneydj_expense_logged(self):
-        self.assertIn("_prov_log('fetch_moneydj_expense_ratio'", self.src)
-        self.assertIn("'MoneyDJ:Basic0004", self.src)
+    # test_moneydj_expense_logged 已移除:fetch_moneydj_expense_ratio 隨 Issue #1208 PR2 刪除。
+    # 反向守衛:tests/test_issue1208_moneydj_zero_requests.py。
 
     def test_yahoo_tw_holdings_logged(self):
         self.assertIn("_prov_log('_fetch_holdings_yahoo_tw'", self.src)
@@ -42,7 +41,7 @@ class TestEtfFetchProvenanceMarkers(unittest.TestCase):
 
     def test_etf_holdings_logged(self):
         self.assertIn("_prov_log('fetch_etf_holdings'", self.src)
-        # 至少有 3 個 source 標籤(yf / Yahoo / MoneyDJ / all-fail)
+        # source 標籤(yf / Yahoo / all-fail;#1208 PR2 已移除 MoneyDJ)
         self.assertIn("'yfinance:funds_data:top_holdings'", self.src)
         self.assertIn("'all-sources-failed'", self.src)
 
@@ -51,8 +50,7 @@ class TestEtfFetchProvenanceMarkers(unittest.TestCase):
     def test_zh_name_logged(self):
         self.assertIn("_prov_log('fetch_etf_zh_name'", self.src)
 
-    def test_underlying_index_logged(self):
-        self.assertIn("_prov_log('fetch_etf_underlying_index'", self.src)
+    # test_underlying_index_logged 已移除:fetch_etf_underlying_index 隨 Issue #1208 PR2 刪除。
 
 
 class TestInterfaceUnchanged(unittest.TestCase):
@@ -68,11 +66,9 @@ class TestInterfaceUnchanged(unittest.TestCase):
         # 各函式至少有第一個位置參數(其餘 caller 沒檢驗,因 kwargs 多變)
         for _name, _arg0 in [
             ('fetch_sitca_expense_ratio', 'ticker'),
-            ('fetch_moneydj_expense_ratio', 'ticker'),
             ('_fetch_holdings_yahoo_tw', 'symbol_yf'),
             ('fetch_etf_holdings', 'ticker'),
             ('fetch_etf_zh_name', 'ticker'),
-            ('fetch_etf_underlying_index', 'ticker'),
         ]:
             fn = self.fns.get(_name)
             self.assertIsNotNone(fn, f'{_name} 應存在')

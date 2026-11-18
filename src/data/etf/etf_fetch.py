@@ -9,7 +9,16 @@ S-H3 v18.244(CLAUDE.md §8.2 修正):L1 不得用 `st.error/st.warning/st.sessio
 - L1024 / L1747:`st.session_state.setdefault('_etf_*_last_err', {})` 側通道錯誤儲存
   → 改 module-level `_ETF_MANAGER_LAST_ERR` / `_ETF_INDEX_LAST_ERR` dict。
     (Issue #1208:`_ETF_MANAGER_LAST_ERR` 與其 accessor `get_etf_manager_last_err()`
-    已隨 ETF 經理人換手策略取消移除;`get_etf_index_last_err()` 從未實作,此處不再宣稱。)
+    已隨 ETF 經理人換手策略取消移除;`get_etf_index_last_err()` 從未實作,此處不再宣稱。
+    Issue #1208 PR2:`_ETF_INDEX_LAST_ERR` 隨 MoneyDJ-only 死碼 `fetch_etf_underlying_index`
+    一併移除。)
+
+Issue #1208 PR2（2026-11-17 GPT 裁示：MoneyDJ 全入口零請求止血）：本檔所有對
+MoneyDJ 的請求路徑已移除 —— `fetch_etf_meta_moneydj`（Basic0004）、
+`fetch_moneydj_expense_ratio`、`fetch_etf_holdings` 的 MoneyDJ 段（含 curl_cffi 模擬 chrome
+直連）、`fetch_etf_nav_history` 第 4 段、`fetch_etf_zh_name` 的 MoneyDJ 備援、死碼
+`fetch_etf_underlying_index`，以及因此 0 caller 的 `_html_kv_pairs`。缺值照實回 None／空表
+（不補 0）。守衛：tests/test_issue1208_moneydj_zero_requests.py。
 """
 
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
@@ -42,8 +51,8 @@ from shared.sector_heatmap import (
     yf_download_window as _sector_yf_download_window,
 )
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
-# 價格歷史抓取走 NAS proxy(同本檔 metadata fetcher):yfinance 在 Streamlit Cloud
-# 常被 Yahoo 海外 IP 封鎖/rate-limit(見 fetch_etf_meta_moneydj 註)。複用 yf_proxy 的
+# 價格歷史抓取走 NAS proxy:yfinance 在 Streamlit Cloud
+# 常被 Yahoo 海外 IP 封鎖/rate-limit。複用 yf_proxy 的
 # _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
 # src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
 from src.data.proxy.yf_proxy import _proxy_env
@@ -52,8 +61,8 @@ from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO
 
 
 # v18.352 PR-Q2 — S-PROV-1 phase 19 helper
-# 7 fetcher (sitca_expense / moneydj_expense / yahoo_tw_holdings /
-# etf_holdings / sitca_manager(#1208 已移除) / etf_zh_name / etf_underlying_index)
+# fetcher (sitca_expense / yahoo_tw_holdings / etf_holdings / etf_zh_name)
+# (#1208:sitca_manager 已移除;#1208 PR2:moneydj_expense / etf_underlying_index 已移除)
 # 共用一個 stderr audit trail。介面 0 改:fetcher return 不動。
 # P2-1 v18.380:_prov_log 統一收攏至 src/data/core/provenance.py(原 3 處同名異簽名)
 from src.data.core.provenance import prov_log as _prov_log_unified
@@ -81,10 +90,6 @@ def _norm_tw_suffix(ticker) -> str:
     """
     _t = (ticker or '').strip()
     return _TW_SUFFIX_RE.sub(lambda m: '.' + m.group(1).upper(), _t)
-
-
-# S-H3 v18.244:diagnostic 錯誤儲存從 st.session_state 下移至 module-level dict
-_ETF_INDEX_LAST_ERR: dict = {}
 
 
 def _fetch_news_for(ticker: str, name: str = "", n: int = 4) -> str:
@@ -463,144 +468,13 @@ def _failed_dividends(msg: str) -> pd.Series:
     return _empty
 
 
-@st.cache_data(ttl=TTL_1HOUR, max_entries=300, show_spinner=False)
-def fetch_etf_meta_moneydj(ticker: str) -> dict:
-    """從 MoneyDJ Basic0004 一次取得台股 ETF metadata（走 NAS Squid + 中繼站）。
-
-    為何需要：yfinance.info 在 Streamlit Cloud 經常被 Yahoo 海外 IP 封鎖
-    或 rate limit；MoneyDJ Basic0004 走 NAS 中繼站（家用台灣 IP）可穩定取得
-    台股 ETF 的 AUM / 費用率（經理費 + 保管費）/ 標的指數 / 中文名。
-
-    Returns
-    -------
-    dict  欄位缺漏為 None；全失敗回 {}
-        keys: zh_name / aum_twd / expense / manager_fee /
-              custodian_fee / underlying_index
-    """
-    import re as _re_meta
-    _t = _norm_tw_suffix(ticker)
-    if not _t:
-        return {}
-    if '.' not in _t:
-        _t = f'{_t}.TW'
-
-    _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
-    try:
-        from src.data.proxy import fetch_url as _fu_meta
-        _r = _fu_meta(_url, headers={'Referer': 'https://www.moneydj.com/'},
-                      timeout=12, attempts=2)
-        if _r is None or _r.status_code != 200:
-            _code = _r.status_code if _r is not None else 'None'
-            print(f'[MDJ/meta] {_t}: HTTP {_code}（含 NAS 中繼皆失敗）')
-            return {}
-        _r.encoding = 'utf-8'
-        _txt = _r.text
-    except Exception as _e:
-        print(f'[MDJ/meta] {_t}: {type(_e).__name__}: {_e}')
-        return {}
-
-    _out: dict = {}
-
-    # 1. 中文名（從 <title> 擷取首段）
-    _m = _re_meta.search(
-        r'<title>\s*([^<\-]{2,30}?)\s*-\s*[0-9]{4,5}[A-Z]?\.TW\s*-', _txt)
-    if _m:
-        _name = _m.group(1).strip()
-        if any('一' <= _c <= '鿿' for _c in _name):
-            _out['zh_name'] = _name
-
-    # 2. 基金規模（億 → 元）
-    _m = _re_meta.search(
-        r'(?:基金規模|資產規模|淨資產)[^\d]{0,30}?'
-        r'(\d{1,5}(?:,\d{3})*(?:\.\d+)?)\s*億', _txt)
-    if _m:
-        try:
-            _out['aum_twd'] = float(_m.group(1).replace(',', '')) * 1e8
-        except ValueError:
-            pass
-
-    # 3-4. 經理費 / 保管費（% → 比例）
-    # MoneyDJ 標籤多為「經理費(%)」(值格無 %)，純 regex 會被標籤內 % 破壞，
-    # 故以 _html_kv_pairs 儲存格配對為主（同經理人解析法）、regex 為輔。
-    _kv_meta = _html_kv_pairs(_txt)
-
-    def _pct_ratio(_raw):
-        """字串取數字並轉比例（1.00 → 0.01）；無數字回 None。"""
-        _mm = _re_meta.search(r'(\d+(?:\.\d+)?)', str(_raw).replace(',', ''))
-        if not _mm:
-            return None
-        try:
-            return float(_mm.group(1)) / 100.0
-        except ValueError:
-            return None
-
-    for _labels, _key in ((('經理費', '管理費'), 'manager_fee'),
-                          (('保管費',), 'custodian_fee')):
-        _v = None
-        for _k, _vv in _kv_meta.items():               # KV 主路徑
-            if any(_lb in _k for _lb in _labels):
-                _v = _pct_ratio(_vv)
-                if _v is not None:
-                    break
-        if _v is None:                                  # regex 兜底
-            for _lb in _labels:
-                _m = _re_meta.search(rf'{_lb}[^\d%]{{0,30}}?(\d+(?:\.\d+)?)\s*%', _txt)
-                if _m:
-                    _v = _pct_ratio(_m.group(1))
-                    break
-        if _v is not None:
-            _out[_key] = _v
-
-    # 5. 合計總費用率（經理 + 保管）；若僅一項則退而求其次
-    if 'manager_fee' in _out and 'custodian_fee' in _out:
-        _out['expense'] = round(_out['manager_fee'] + _out['custodian_fee'], 6)
-    elif 'manager_fee' in _out:
-        _out['expense'] = _out['manager_fee']
-    else:
-        # 兜底：找「總費用率/內扣費用率」單一欄位（KV 優先 → regex）
-        for _k, _vv in _kv_meta.items():
-            if any(_lb in _k for _lb in ('總費用率', '內扣費用率', '內含費用率', '費用率')):
-                _ev = _pct_ratio(_vv)
-                if _ev is not None:
-                    _out['expense'] = _ev
-                    break
-        if 'expense' not in _out:
-            _m = _re_meta.search(
-                r'(?:總費用率|內扣費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%',
-                _txt)
-            if _m:
-                _ev = _pct_ratio(_m.group(1))
-                if _ev is not None:
-                    _out['expense'] = _ev
-
-    # 6. 追蹤指數（與 fetch_etf_underlying_index 同 regex 風格，HTML entity 預清洗）
-    _txt_c = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
-                  .replace('&amp;', '&').replace('　', ' '))
-    _m = _re_meta.search(
-        r'(?:追蹤|標的|對應)\s*指數[^一-鿿A-Za-z\d]{0,40}?'
-        r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})', _txt_c)
-    if _m:
-        _idx = _m.group(1).strip().rstrip('，,。.、 ')
-        if 4 <= len(_idx) <= 80 and not any(b in _idx for b in (
-                '追蹤誤差', '指數股票型', '指數型基金', 'nbsp', 'amp;')):
-            _out['underlying_index'] = _idx
-
-    if _out:
-        print(f'[MDJ/meta] OK {_t} = {list(_out.keys())}')
-        # S-PROV-1 phase 12 v18.258 — provenance(schema-additive)
-        _out['source'] = 'MoneyDJ:Basic0004'
-        _out['fetched_at'] = pd.Timestamp.now('UTC').isoformat()
-    else:
-        print(f'[MDJ/meta] {_t}: 200 但無欄位匹配')
-    return _out
-
-
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
 def fetch_etf_info(ticker: str) -> dict:
     """取得 ETF 基本資訊（費用率 / Beta / AUM）。
 
-    yfinance.info 主源（含 Beta、海外 ETF 必要）→ MoneyDJ Basic0004 補齊
-    AUM/expense（yfinance 海外 IP 經常被擋時自動補位，台股 ETF only）。
+    唯一來源：yfinance.info（Beta／AUM／費用率）。缺欄照實缺（None），不補 0。
+    （Issue #1208 PR2:原 MoneyDJ Basic0004 補位已移除。費用率完整備援鏈見
+    `get_etf_expense_ratio_safe`：SITCA → 元大(主動式) → yfinance。）
 
     S-PROV-1 v18.253:回傳 dict 含 source + fetched_at 兩個 key(§2.2)。
     """
@@ -613,25 +487,8 @@ def fetch_etf_info(ticker: str) -> dict:
         _info = {}
         _src = f"Yahoo:{ticker}:info:failed"
 
-    # 補齊：yfinance.info 空或缺 AUM/expense 時，從 MoneyDJ Basic0004 fetch
-    _t = (ticker or '').upper()
-    _is_tw = _t.endswith('.TW') or _t.endswith('.TWO')
-    if _is_tw and (not _info.get('totalAssets') or not _info.get('expenseRatio')):
-        _meta = fetch_etf_meta_moneydj(ticker)
-        if _meta:
-            if not _info.get('totalAssets') and _meta.get('aum_twd'):
-                _info['totalAssets'] = _meta['aum_twd']
-            if not _info.get('expenseRatio') and _meta.get('expense'):
-                _info['expenseRatio'] = _meta['expense']
-            if not _info.get('annualReportExpenseRatio') and _meta.get('expense'):
-                _info['annualReportExpenseRatio'] = _meta['expense']
-            # longName 補中文名（yfinance 多為英文）
-            if _meta.get('zh_name') and not any(
-                    '一' <= _c <= '鿿' for _c in str(_info.get('longName', ''))):
-                _info['longName'] = _meta['zh_name']
-            # 若靠 MoneyDJ 補了東西,更新 source 表示 hybrid
-            if not _src.endswith(':failed') and (_meta.get('aum_twd') or _meta.get('expense')):
-                _src = f"Yahoo:{ticker}:info+MoneyDJ:Basic0004"
+    # Issue #1208 PR2:原「缺 AUM／費用率時以 MoneyDJ Basic0004 補位」已移除。
+    # AUM／費用率只來自 yfinance.info;缺值照實缺（不補 0、不猜值）,由 caller 顯示 N/A。
     # S-PROV-1 v18.253:provenance
     _info['source'] = _src
     _info['fetched_at'] = _fetched_at
@@ -698,62 +555,8 @@ def fetch_sitca_expense_ratio(ticker: str, *, attempts: int = 1):
         return None
 
 
-def fetch_moneydj_expense_ratio(ticker: str):
-    """從 MoneyDJ ETF Basic0004 頁面抓「經理費 + 保管費」總費用率（私募/已下市 ETF 備援）。
-
-    URL: https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=XXXX.TW
-
-    Returns
-    -------
-    float | None  比例形式（0.0036 = 0.36%）；找不到或抓取失敗回 None。
-    """
-    import re as _re_mdje
-    _t = _norm_tw_suffix(ticker)
-    if not _t:
-        return None
-    # MoneyDJ etfid 通常吃 '0050.TW' 格式；純數字補 .TW
-    if _t.isdigit():
-        _t = f'{_t}.TW'
-    _url = f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}'
-    try:
-        # 走 fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback，PR #100）
-        from src.data.proxy import fetch_url as _fu_mdje
-        _r = _fu_mdje(_url, headers={'Referer': 'https://www.moneydj.com/'},
-                      timeout=12, attempts=2)
-        if _r is None or _r.status_code != 200:
-            _code = _r.status_code if _r is not None else 'None'
-            print(f'[MoneyDJ/expense] {_t}: HTTP {_code}（含 NAS 中繼皆失敗）')
-            return None
-        _txt = _r.text
-        # 直掃「經理費 X.XX%」與「保管費 X.XX%」合計；MoneyDJ Basic0004 表格常以 td 緊鄰呈現
-        _mng = _re_mdje.search(r'經理費[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
-        _cus = _re_mdje.search(r'保管費[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
-        if _mng and _cus:
-            _total = float(_mng.group(1)) + float(_cus.group(1))
-            print(f'[MoneyDJ/expense] ✅ {_t} = {_total}% (mng={_mng.group(1)}+cus={_cus.group(1)})')
-            _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004:mng+cus',
-                      _t, f'{_total/100.0:.6f}')
-            return _total / 100.0
-        # Fallback：找「總費用率 / 內含費用率」單一欄位
-        _tot = _re_mdje.search(r'(?:總費用率|內含費用率|費用率)[^\d%]{0,30}?(\d+(?:\.\d+)?)\s*%', _txt)
-        if _tot:
-            _v = float(_tot.group(1))
-            print(f'[MoneyDJ/expense] ✅ {_t} = {_v}% (總費用率欄位)')
-            _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004:total',
-                      _t, f'{_v/100.0:.6f}')
-            return _v / 100.0
-        print(f'[MoneyDJ/expense] ⚠️ {_t} 頁面無「經理費/保管費/總費用率」欄位')
-        _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004', _t, 'None:no-match')
-        return None
-    except Exception as _e:
-        print(f'[MoneyDJ/expense] ❌ {_t}: {type(_e).__name__}: {_e}')
-        _prov_log('fetch_moneydj_expense_ratio', 'MoneyDJ:Basic0004',
-                  _t, f'None:exc:{type(_e).__name__}')
-        return None
-
-
 def _fetch_holdings_yahoo_tw(symbol_yf: str):
-    """台灣 Yahoo 股市 ETF 持股頁（國內版 Yahoo，海外 IP 可直連、繞過 MoneyDJ 403）。
+    """台灣 Yahoo 股市 ETF 持股頁（國內版 Yahoo，海外 IP 可直連）。
 
     URL：https://tw.stock.yahoo.com/quote/{symbol}/holding
     symbol_yf：yfinance 格式代號（如 '00980A.TW' / '0050.TW'）。
@@ -863,11 +666,9 @@ def fetch_etf_holdings(ticker: str):
     多段備援（按順序嘗試，任一成功即返回）：
       1. yfinance `.funds_data.top_holdings` — 海外 ETF 主源；台股通常 None
       1.5 台灣 Yahoo 股市 /quote/{sym}/holding — 台股 ETF 主源（海外 IP 可直連）
-      2. MoneyDJ 三條 URL 並掃（備源，海外 IP 需 NAS proxy）：
-         - Basic0007.xdjhtm（持股明細）
-         - Basic0008.xdjhtm（投資配置）
-         - RankA0001.xdjhtm（持股排名）
-      3. 全失敗回 None（UI 端標 ⚪ N/A）
+      2. 全失敗回 None（UI 端標 ⚪ N/A）
+      （Issue #1208 PR2:原 MoneyDJ Basic0007/0008/RankA0001 備源（含 curl_cffi 模擬
+      chrome 直連）已移除。）
 
     Returns
     -------
@@ -879,12 +680,10 @@ def fetch_etf_holdings(ticker: str):
     -----
     TTL 86400 秒（1 日），因 ETF 成份股月度才更新。
     """
-    import re as _re_h
     _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     _t_yf = _t if '.' in _t else (f'{_t}.TW' if _t.isdigit() else _t)
-    _t_mdj = _t_yf  # MoneyDJ etfid 同 yfinance ticker
 
     # ── 1. yfinance funds_data（海外 ETF 主源）──────────────────
     try:
@@ -918,74 +717,14 @@ def fetch_etf_holdings(ticker: str):
         print(f'[Holdings/yf] {_t_yf}: {type(_ey).__name__}: {_ey}')
 
     # ── 1.5 台灣 Yahoo 股市（國內版 Yahoo，台股 ETF 主源）────────
-    # Yahoo CDN 海外 IP 可直連，繞過 MoneyDJ 對海外 IP 的 403 封鎖
+    # Yahoo CDN 海外 IP 可直連
     _yh = _fetch_holdings_yahoo_tw(_t_yf)
     if _yh:
         _prov_log('fetch_etf_holdings', 'Yahoo:tw:holding(via _fetch_holdings_yahoo_tw)',
                   _t_yf, f'dict:{len(_yh)}items')
         return _yh
 
-    # ── 2. MoneyDJ 三條 URL 嘗試（台股 ETF 備源）────────────────
-    # 走 proxy_helper（NAS Squid 台灣 IP）為主源 — MoneyDJ 反爬擋海外 IP 回 403；
-    # curl_cffi 留作 fallback（本機開發或 proxy 掛掉時）
-    _urls = [
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0007.xdjhtm?etfid={_t_mdj}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0008.xdjhtm?etfid={_t_mdj}',
-        f'https://www.moneydj.com/ETF/X/Basic/RankA0001.xdjhtm?etfid={_t_mdj}',
-    ]
-    for _url in _urls:
-        _txt = None
-        # ── 2a. proxy_helper 主源 ───
-        try:
-            from src.data.proxy import fetch_url as _fu_h
-            _r = _fu_h(_url, timeout=15, attempts=2)
-            if _r is not None and _r.status_code == 200:
-                _r.encoding = 'utf-8'
-                _txt = _r.text
-        except Exception as _eph:
-            print(f'[Holdings/MDJ] proxy 異常 {_t_mdj}: {type(_eph).__name__}: {_eph}')
-        # ── 2b. curl_cffi fallback ─
-        if _txt is None:
-            try:
-                from curl_cffi import requests as _cffi_h
-                _r2 = _cffi_h.get(_url, impersonate='chrome124', timeout=15)
-                if _r2.status_code == 200:
-                    _txt = _r2.text
-                else:
-                    print(f'[Holdings/MDJ] curl_cffi {_t_mdj} {_url[-30:]}: HTTP {_r2.status_code}')
-            except Exception as _eh:
-                print(f'[Holdings/MDJ] curl_cffi 異常 {_t_mdj} {_url[-30:]}: {type(_eh).__name__}: {_eh}')
-        if _txt is None:
-            continue
-        # ── 寬鬆 regex 擷取：個股名（中文/英數）+ 後續百分比 ──
-        try:
-            _stocks = {}
-            for _m in _re_h.finditer(
-                r'>([一-鿿 A-Z0-9&\.\-]{2,30})</[^>]+>[^<]*<[^>]+>\s*(\d{1,2}\.\d{1,3})\s*%',
-                _txt
-            ):
-                _nm = _m.group(1).strip()
-                if (_nm and not _nm.isdigit() and not _nm.replace('.', '').isdigit()
-                        and _nm not in ('持股比例', '比例', '持股比重', '權重', '個股名稱', '名稱')
-                        and len(_nm) >= 2):
-                    try:
-                        _w = float(_m.group(2))
-                        if 0 < _w <= 100 and _nm not in _stocks:
-                            _stocks[_nm] = _w
-                    except ValueError:
-                        continue
-                if len(_stocks) >= 50:
-                    break
-            if _stocks:
-                print(f'[Holdings/MDJ] ✅ {_t_mdj} {len(_stocks)} 檔 ({_url[-30:]})')
-                _prov_log('fetch_etf_holdings', f'MoneyDJ:{_url[-30:]}',
-                          _t_mdj, f'dict:{len(_stocks)}items')
-                return _stocks
-        except Exception as _eh2:
-            print(f'[Holdings/MDJ] regex 異常 {_t_mdj} {_url[-30:]}: {type(_eh2).__name__}: {_eh2}')
-            continue
-
-    print(f'[Holdings] ❌ {_t} — yf/MoneyDJ 三條 URL 全失敗')
+    print(f'[Holdings] ❌ {_t} — yfinance／台灣 Yahoo 皆無持股')
     _prov_log('fetch_etf_holdings', 'all-sources-failed', _t, 'None:all-fail')
     return None
 
@@ -1036,8 +775,8 @@ def is_active_etf(ticker: str) -> bool:
 def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
     """元大投信官網 fallback — 抓主動式 ETF 經理人 / 費用率 / NAV。
 
-    為何需要：MoneyDJ Basic0001/0006/0011 / SITCA 對主動式 ETF（00980A 等）
-    無經理人欄位，元大投信官網才是源頭。多 URL 嘗試，HTML regex 解析。
+    為何需要：主動式 ETF（00980A 等）於 SITCA 查無費用率時的補位來源（元大投信官網）。
+    多 URL 嘗試，HTML regex 解析。
 
     Returns
     -------
@@ -1121,44 +860,8 @@ def _fetch_yuanta_active_etf_meta(ticker: str) -> dict | None:
     return None
 
 
-def _html_kv_pairs(html_text: str) -> dict:
-    """把 HTML 表格 td/th 相鄰儲存格配成 {欄位名: 值}（沿用新聞專案解析法）。
-
-    MoneyDJ 標籤(如「經理人」「經理費(%)」)的值在相鄰儲存格,純 regex 易被
-    標籤內 % 或 HTML 干擾;改用儲存格配對更穩健。只在『前格像欄位名(含中文、
-    ≤12字)』時配對,濾掉報價頁雜訊。
-    """
-    import re as _re_kv
-    from html.parser import HTMLParser as _HP_kv
-
-    class _Cells(_HP_kv):
-        def __init__(self):
-            super().__init__()
-            self.cells, self._buf = [], None
-        def handle_starttag(self, tag, attrs):
-            if tag in ('td', 'th'):
-                self._buf = []
-        def handle_data(self, data):
-            if self._buf is not None:
-                self._buf.append(data)
-        def handle_endtag(self, tag):
-            if tag in ('td', 'th') and self._buf is not None:
-                self.cells.append(_re_kv.sub(r'\s+', ' ', ''.join(self._buf)).strip())
-                self._buf = None
-
-    _p = _Cells()
-    try:
-        _p.feed(html_text or '')
-    except Exception:
-        return {}
-    _cells = [c for c in _p.cells if c]
-    _kv: dict = {}
-    for _i in range(len(_cells) - 1):
-        _key = _cells[_i].rstrip(':： ').strip()
-        _val = _cells[_i + 1].strip()
-        if _val and _key and _key not in _kv and len(_key) <= 12 and _re_kv.search(r'[一-鿿]', _key):
-            _kv[_key] = _val
-    return _kv
+# Issue #1208 PR2:`_html_kv_pairs`（MoneyDJ 表格儲存格配對）在移除 MoneyDJ 呼叫後
+# 0 caller,依收尾義務一併刪除。
 
 
 # Issue #1208（2026-11-17 客戶取消 ETF 經理人換手策略）：`fetch_etf_manager`（MoneyDJ/SITCA/
@@ -1171,22 +874,15 @@ def _html_kv_pairs(html_text: str) -> dict:
 
 
 def get_etf_expense_ratio_safe(ticker: str):
-    """安全讀取 ETF 費用率：MoneyDJ Basic0004 → SITCA → Yuanta → yfinance 四段備援。
+    """安全讀取 ETF 費用率：SITCA → 元大(主動式) → yfinance 三段備援。缺失回 None（不補 0）。
 
-    順序變更（v2）：MoneyDJ 改為 primary（走 NAS 中繼站穩定，繞 SITCA/yfinance
-    在 Streamlit Cloud 海外 IP 被封鎖時的單點失敗）。缺失回 None。
+    Issue #1208 PR2（2026-11-17 GPT 裁示）：原第一順位 MoneyDJ Basic0004 與第三順位
+    MoneyDJ 費用率頁已移除（MoneyDJ 全入口零請求止血）。
     """
-    # Primary：MoneyDJ Basic0004 一次取 metadata（含 expense），與 fetch_etf_info 共用 cache
-    _meta = fetch_etf_meta_moneydj(ticker)
-    if _meta and _meta.get('expense') is not None:
-        return _meta['expense']
     _sit = fetch_sitca_expense_ratio(ticker)
     if _sit is not None:
         return _sit
-    _mdj = fetch_moneydj_expense_ratio(ticker)
-    if _mdj is not None:
-        return _mdj
-    # v1.1：主動式 ETF 專屬，SITCA + MDJ 都失敗時補位
+    # v1.1：主動式 ETF 專屬，SITCA 失敗時補位
     if is_active_etf(ticker):
         _yu = _fetch_yuanta_active_etf_meta(ticker)
         if _yu and _yu.get('expense') is not None:
@@ -1386,13 +1082,14 @@ def fetch_etf_official_premium(ticker: str, ver: int = 6) -> dict | None:
 def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.DataFrame":
     """ETF 歷史淨值及折溢價（最近 N 個交易日）
 
-    資料來源優先順序（5 段備援 + 1 兜底）：
+    資料來源優先順序（4 段備援 + 1 兜底）：
       1. FinMind TaiwanETFNetAssetValue（批次，有/無 token 皆可）
       2. goodinfo.tw StockDetail（不受 TWSE IP 封鎖）
       3. TWSE OpenAPI（僅 NAS Proxy 環境）
-      4. MoneyDJ BeautifulSoup
       5. yfinance navPrice
-      *. 兜底：FinMind 過舊資料（前述 5 段全失敗時）
+      *. 兜底：FinMind 過舊資料（前述 4 段全失敗時）
+      （Issue #1208 PR2:原第 4 段 MoneyDJ Basic0001/0003 已移除；段號保留不重編，
+      以免與 log／既有文件對不上。）
 
     Args
     ----
@@ -1430,7 +1127,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
         except Exception:  # noqa: BLE001
             return _d
 
-    # 即時報價類來源（goodinfo/TWSE/MoneyDJ/yfinance）回的是「最後一筆已公告淨值」，
+    # 即時報價類來源（goodinfo/TWSE/yfinance）回的是「最後一筆已公告淨值」，
     # 但若硬戳 today，遇週末/假日會與 yfinance 收盤日（上一交易日）對不上而 inner-join 落空。
     # 故統一戳「最近交易日」：今天是工作日用今天，否則往前推到最後一個工作日。
     def _last_business_day(_d):
@@ -1591,116 +1288,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
         except Exception as _e2:
             print(f'[ETF NAV] TWSE {_op_id2} {code}: {_e2}')
 
-    # ── 4. MoneyDJ Basic0003 淨值表格（每日 NAV 歷史）─────────────────────
-    # 修正：原使用 Basic0004（基本資料頁，無 NAV 歷史）+ etfid 缺 .TW 後綴
-    # Basic0003 是專門的淨值表格，主動式 ETF（00982A.TW）也支援
-    try:
-        import re as _re_mdj
-        # etfid 需 .TW 後綴；主動式 ETF 'A' 保留（如 00982A.TW）
-        _etfid_mdj = ticker.upper() if ticker.upper().endswith(('.TW', '.TWO')) else f'{code}.TW'
-
-        # 4a. Basic0001 即時報價頁 — 直接含「淨值/市價/折溢價(%)」官方值，
-        #     不必用 yfinance Close 反推（杜絕跨來源日期錯位）。KV 解析較 regex 穩。
-        _url_q = f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_etfid_mdj}'
-        _r_q = _fu_etfnav(_url_q, headers={'Referer': 'https://www.moneydj.com/'},
-                          timeout=12, attempts=2)
-        if _r_q is not None and _r_q.status_code == 200:
-            _r_q.encoding = 'utf-8'
-            _kv_q = _html_kv_pairs(_r_q.text)
-
-            def _kv_num_q(_keys, _excl=()):
-                for _k, _v in _kv_q.items():
-                    if any(_kk in _k for _kk in _keys) and not any(_xx in _k for _xx in _excl):
-                        _m = _re_mdj.search(r'[-+]?\d+\.?\d*', _v.replace(',', ''))
-                        if _m:
-                            return _safe_float(_m.group(0))
-                return None
-
-            _nav_q   = _kv_num_q(['淨值'])
-            _price_q = _kv_num_q(['市價', '成交價'], _excl=['漲跌'])
-            _prem_q  = _kv_num_q(['折溢價'])
-            if _nav_q is not None and _NAV_MIN < _nav_q < _NAV_MAX:
-                _row_q = {'date': _last_bd, 'nav': _nav_q}
-                if _price_q is not None and _price_q > 0:
-                    _row_q['price'] = _price_q
-                if _prem_q is None and _price_q and _nav_q:
-                    _prem_q = round((_price_q - _nav_q) / _nav_q * 100, 2)
-                if _prem_q is not None:
-                    _row_q['premium_pct'] = _prem_q
-                print(f'[ETF NAV] MoneyDJ-Q(Basic0001) {_etfid_mdj}: '
-                      f'nav={_nav_q} price={_price_q} prem={_prem_q}%')
-                return _attach_prov(pd.DataFrame([_row_q]), 'MoneyDJ:Basic0001')
-            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: 200 但 KV 無淨值 '
-                  f'(keys={list(_kv_q)[:8]})')
-        else:
-            _cq = _r_q.status_code if _r_q is not None else 'None'
-            print(f'[ETF NAV] MoneyDJ-Q {_etfid_mdj}: HTTP {_cq}')
-
-        # 4b. Basic0003 淨值表格 — 補 NAV 歷史（4a 拿不到時的備援）
-        _url_mdj = f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_etfid_mdj}'
-        _r_mdj = _fu_etfnav(_url_mdj, headers={'Referer': 'https://www.moneydj.com/'},
-                            timeout=12, attempts=2)
-        if _r_mdj is not None and _r_mdj.status_code == 200:
-            _r_mdj.encoding = 'utf-8'
-            # v18.451 hotfix:原 regex 假設「日期後 40 字內接著數字」，但 user 提供實測
-            # HTML 證實這是**正規 <table>**(CSS class 分欄,如 <td class="col08">)，
-            # 日期/淨值中間隔了市價/折溢價等其他 <td>(遠超過 40 字)→ regex 從未真的
-            # 抓到過(production log「200 但 regex 無 date+nav pair」),一路 fallback 到
-            # yfinance 過時 navPrice,導致「近期淨值及折溢價」表格顯示錯位假折溢價。
-            #
-            # 改用 BeautifulSoup 逐 <tr> 解析,不依賴 class 名稱(user 提供的實測 HTML
-            # 顯示市價與折溢價欄位「共用」class="col09",class 名稱不可靠,故只依「同一列
-            # 恰有 4 個 <td>、第一格是日期格式」定位,以此為錨點)：
-            #   td[0]=日期 td[1]=淨值 td[2]=市價 td[3]=折溢價%(負值包 <span class="negative">,
-            #   get_text() 會自動取出內層文字,不受影響)。
-            # 同一列的 nav/price/premium_pct 同源同日,無跨欄位錯位風險 —— 比原本「NAV 走
-            # MoneyDJ、市價走 yfinance 再事後 inner-join」更根本,直接消除這整類 bug。
-            _records_mdj: list[dict] = []
-            try:
-                from bs4 import BeautifulSoup as _BS4_mdj
-                _soup_mdj = _BS4_mdj(_r_mdj.text, 'lxml')
-                _date_re_mdj = _re_mdj.compile(r'^\d{4}[/\-]\d{1,2}[/\-]\d{1,2}$')
-                for _tr_mdj in _soup_mdj.find_all('tr'):
-                    _tds_mdj = _tr_mdj.find_all('td')
-                    if len(_tds_mdj) != 4:
-                        continue
-                    _txt0_mdj = _tds_mdj[0].get_text(strip=True)
-                    if not _date_re_mdj.match(_txt0_mdj):
-                        continue
-                    _nav_v_mdj = _safe_float(_tds_mdj[1].get_text(strip=True))
-                    if _nav_v_mdj is None or not (_NAV_MIN < _nav_v_mdj < _NAV_MAX):
-                        continue
-                    try:
-                        _y_m, _m_m, _d_m = (int(x) for x in _txt0_mdj.replace('-', '/').split('/'))
-                        _date_v_mdj = _dt.date(_y_m, _m_m, _d_m)
-                    except (ValueError, IndexError):
-                        continue
-                    _rec_mdj = {'date': _date_v_mdj, 'nav': _nav_v_mdj}
-                    _price_v_mdj = _safe_float(_tds_mdj[2].get_text(strip=True))
-                    if _price_v_mdj is not None and _price_v_mdj > 0:
-                        _rec_mdj['price'] = _price_v_mdj
-                    _prem_v_mdj = _safe_float(_tds_mdj[3].get_text(strip=True))
-                    if _prem_v_mdj is not None:
-                        _rec_mdj['premium_pct'] = _prem_v_mdj
-                    _records_mdj.append(_rec_mdj)
-            except Exception as _e_bs_mdj:
-                print(f'[ETF NAV] MoneyDJ {_etfid_mdj} BS4 解析例外: '
-                      f'{type(_e_bs_mdj).__name__}: {_e_bs_mdj}')
-            if _records_mdj:
-                _records_mdj.sort(key=lambda r: r['date'])  # 升冪(對齊其他來源慣例)
-                _df_mdj = pd.DataFrame(_records_mdj)
-                _last_rec_mdj = _records_mdj[-1]
-                print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: {len(_df_mdj)} 筆(最新 '
-                      f'{_last_rec_mdj["date"]} nav={_last_rec_mdj["nav"]} '
-                      f'price={_last_rec_mdj.get("price")} '
-                      f'prem={_last_rec_mdj.get("premium_pct")}%)')
-                return _attach_prov(_df_mdj, 'MoneyDJ:Basic0003')
-            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: 200 但表格解析無有效列(頁面結構可能已變)')
-        else:
-            _code_st = _r_mdj.status_code if _r_mdj is not None else 'None'
-            print(f'[ETF NAV] MoneyDJ {_etfid_mdj}: HTTP {_code_st}')
-    except Exception as _e_mdj:
-        print(f'[ETF NAV] MoneyDJ {code}: {type(_e_mdj).__name__}: {_e_mdj}')
+    # ── 4.（Issue #1208 PR2 已移除：MoneyDJ Basic0001/0003 淨值段）────────────
 
     # ── 5. yfinance ETF info.navPrice（加限速 retry）──────────────────────
     import time as _t3
@@ -1725,7 +1313,7 @@ def fetch_etf_nav_history(ticker: str, days: int = 35, ver: int = 5) -> "pd.Data
                 print(f'[ETF NAV] yfinance {code}{_sfx3}: {_e3}')
                 break
 
-    # ── 最終兜底：FinMind 過舊資料（goodinfo/MoneyDJ/yfinance 全部失敗時）────
+    # ── 最終兜底：FinMind 過舊資料（goodinfo/TWSE/yfinance 全部失敗時）────
     if _df_stale is not None and not _df_stale.empty:
         print(f'[ETF NAV] {code} 最終兜底: FinMind過舊資料({_days_stale}d)，所有即時來源失敗')
         return _attach_prov(_df_stale, 'FinMind:fallback_stale')
@@ -1842,7 +1430,7 @@ def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
 
     stock_id 不帶 .TW/.TWO 後綴;stock_name 即官方中文名(0050→元大台灣50)。
     同 dataset 的 industry_category 早已在 fetch_industry_category 穩定運作。
-    失敗/非中文/查無 → None(呼叫端 fallback MoneyDJ)。
+    失敗/非中文/查無 → None(Issue #1208 PR2:原 MoneyDJ fallback 已移除,呼叫端自行 fallback)。
     """
     import os as _os_fn
     import re as _re_fn
@@ -1880,18 +1468,13 @@ def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
 def fetch_etf_zh_name(ticker: str):
     """取 ETF 中文名稱（yfinance 對台股 ETF 只有英文 longName/發行商名）。
 
-    v18.455 來源優先序:
-      1. FinMind TaiwanStockInfo.stock_name（官方結構化，最可靠）— PRIMARY
-      2. MoneyDJ Basic 系列 <title> regex（MoneyDJ 疑改版格式，原為唯一來源
-         但連 0050 都 FAIL，降為 fallback）
-
-    MoneyDJ <title> 格式（fallback 用）:「{中文名}-{代號}.TW-ETF{頁面類型} - MoneyDJ理財網」
+    來源：FinMind TaiwanStockInfo.stock_name（官方結構化）— 唯一來源。
+    （Issue #1208 PR2:原 MoneyDJ Basic 系列 <title> regex 備援已移除。）
 
     Returns
     -------
     str | None  中文名（2-30 字）；全敗回 None（呼叫端應 fallback 至 yfinance）
     """
-    import re as _re_zh
     _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
@@ -1906,152 +1489,13 @@ def fetch_etf_zh_name(ticker: str):
                   _t, f'str:{_fm_name}')
         return _fm_name
 
-    # ── fallback:MoneyDJ Basic0003（淨值表格）通常最快、最穩；再 fallback 0004/0001 ──
-    _urls = [
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0003.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
-    ]
-    for _url in _urls:
-        try:
-            from src.data.proxy import fetch_url as _fu_zh
-            _r = _fu_zh(_url, headers={'Referer': 'https://www.moneydj.com/'},
-                        timeout=12, attempts=2)  # v18.455: attempts=1 bug fix — 403 需連續2次才觸發直連降級
-            if _r is None or _r.status_code != 200:
-                continue
-            _r.encoding = 'utf-8'
-            # Title pattern：「{中文名}-{代號}.TW-...」首段 capture
-            _m = _re_zh.search(
-                r'<title>\s*([^<\-]{2,30}?)\s*-\s*[0-9]{4,5}[A-Z]?\.TW\s*-',
-                _r.text)
-            if _m:
-                _name = _m.group(1).strip()
-                # 排除：純數字、純英數（yfinance 也會回的英文名）
-                if (2 <= len(_name) <= 30 and not _name.isdigit()
-                        and any('一' <= _c <= '鿿' for _c in _name)):
-                    print(f'[MDJ/zhname] OK {_t} = {_name}')
-                    _prov_log('fetch_etf_zh_name', f'MoneyDJ:{_url[-30:]}',
-                              _t, f'str:{_name}')
-                    return _name
-        except Exception as _e:
-            print(f'[MDJ/zhname] {_t} {_url[-30:]}: {type(_e).__name__}: {_e}')
-    print(f'[zhname] FAIL {_t}（FinMind + MoneyDJ 皆無中文名）')
-    _prov_log('fetch_etf_zh_name', 'FinMind+MoneyDJ:all-fail', _t, 'None:no-match')
+    print(f'[zhname] FAIL {_t}（FinMind 無中文名）')
+    _prov_log('fetch_etf_zh_name', 'FinMind:all-fail', _t, 'None:no-match')
     return None
 
 
-@st.cache_data(ttl=TTL_7DAY, max_entries=200, show_spinner=False)
-def fetch_etf_underlying_index(ticker: str):
-    """從 MoneyDJ 抓 ETF 追蹤指數名稱（yfinance 沒有此欄）。
-
-    抓取策略：MoneyDJ proxy 通路（NAS Squid 主源 + curl_cffi fallback）。
-    優先順序：Basic0001（基本資料，最常見）→ Basic0006（基金概觀）→ Basic0007（持股明細，部分有）。
-
-    Regex 三層寬鬆策略：
-      1. 表頭 + 表格儲存格：>追蹤指數</…><td…>內容</td>
-      2. 冒號形式：追蹤指數：內容 / 標的指數：內容
-      3. 同義詞兜底：對應/標的/追蹤 指數 後接中英文/數字 4-80 字
-
-    Returns
-    -------
-    str | None
-        指數名稱（如 '臺灣加權股價報酬指數' / 'MSCI Taiwan ESG Index'），找不到回 None。
-    """
-    import re as _re_ui
-    _t = _norm_tw_suffix(ticker)
-    if not _t:
-        return None
-    if '.' not in _t:
-        _t = f'{_t}.TW'
-
-    _urls = [
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0006.xdjhtm?etfid={_t}',
-        f'https://www.moneydj.com/ETF/X/Basic/Basic0007.xdjhtm?etfid={_t}',
-    ]
-    _err_trace: list[str] = []
-
-    for _url in _urls:
-        _txt = None
-        _endpoint = _url.split('/')[-1].split('?')[0]
-        try:
-            from src.data.proxy import fetch_url as _fu_ui
-            _r = _fu_ui(_url, timeout=12, attempts=2)
-            if _r is not None and _r.status_code == 200 and len(_r.text or '') > 500:
-                _r.encoding = 'utf-8'
-                _txt = _r.text
-            else:
-                _code = _r.status_code if _r is not None else 'None'
-                _err_trace.append(f'proxy {_endpoint}: HTTP {_code}')
-        except Exception as _epu:
-            _err_trace.append(f'proxy {_endpoint}: {type(_epu).__name__}')
-
-        if _txt is None:
-            try:
-                from curl_cffi import requests as _cffi_ui
-                _r2 = _cffi_ui.get(_url, impersonate='chrome124', timeout=12)
-                if _r2.status_code == 200 and len(_r2.text or '') > 500:
-                    _txt = _r2.text
-                else:
-                    _err_trace.append(f'cffi {_endpoint}: HTTP {_r2.status_code}')
-            except Exception as _ecu:
-                _err_trace.append(f'cffi {_endpoint}: {type(_ecu).__name__}')
-
-        if _txt is None:
-            continue
-
-        # HTML entity 預清洗 — 避免 lazy regex 卡在 &nbsp;
-        _txt = (_txt.replace('&nbsp;', ' ').replace('&#160;', ' ')
-                    .replace('&amp;', '&').replace('　', ' '))
-
-        # 排除「追蹤誤差」「指數型基金」等假陽性詞
-        _idx = None
-        try:
-            # 1. 表頭 + 儲存格（最常見的 MoneyDJ 排版）
-            _m = _re_ui.search(
-                r'(?:追蹤|標的|對應)\s*指數\s*</[^>]+>\s*<[^>]+>\s*'
-                r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})\s*<',
-                _txt,
-            )
-            if not _m:
-                # 2. 冒號形式
-                _m = _re_ui.search(
-                    r'(?:追蹤|標的|對應)\s*指數\s*[：:]\s*'
-                    r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})',
-                    _txt,
-                )
-            if not _m:
-                # 3. 寬鬆兜底（含 HTML/whitespace 雜訊）
-                _m = _re_ui.search(
-                    r'(?:追蹤|標的|對應)\s*指數[^一-鿿A-Za-z\d]{0,40}?'
-                    r'([一-鿿A-Za-z0-9 &\.\-／/（）()]{4,80})',
-                    _txt,
-                )
-            if _m:
-                _cand = _m.group(1)
-                # HTML entity / 全形空白清洗 → 排除假陽性與長度不足
-                _cand = (_cand.replace('&nbsp;', ' ').replace('　', ' ')
-                              .replace('&amp;', '&').strip().rstrip('，,。.、 '))
-                _bad = ('追蹤誤差', '指數股票型', '指數型基金', '基金經理',
-                        '管理費', 'nbsp', 'amp;')
-                if len(_cand) >= 4 and not any(_b in _cand for _b in _bad):
-                    _idx = _cand
-        except Exception as _ex:
-            _err_trace.append(f'{_endpoint}: regex {type(_ex).__name__}')
-
-        if _idx:
-            print(f'[MDJ/index] OK {_t} = {_idx} via {_endpoint}')
-            _prov_log('fetch_etf_underlying_index', f'MoneyDJ:{_endpoint}',
-                      _t, f'str:{_idx}')
-            return _idx
-        _err_trace.append(f'{_endpoint}: 200 但 regex 無指數')
-
-    # S-H3 v18.244:寫 module-level dict 給診斷面板讀(原 st.session_state)
-    _ETF_INDEX_LAST_ERR[_t] = ' | '.join(_err_trace) if _err_trace else 'unknown'
-    print(f'[MDJ/index] FAIL {_t} — {_err_trace[-1] if _err_trace else "no trace"}')
-    _prov_log('fetch_etf_underlying_index', 'MoneyDJ:3-urls-all-fail',
-              _t, 'None:no-match')
-    return None
+# Issue #1208 PR2:`fetch_etf_underlying_index`（MoneyDJ Basic0001/0006/0007,含 curl_cffi
+# 模擬 chrome）0 production caller 的死碼,連同 `_ETF_INDEX_LAST_ERR` 一併刪除。
 
 
 # ═══════════════════════════════════════════════════════════════════════
