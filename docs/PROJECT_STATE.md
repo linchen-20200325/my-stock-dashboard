@@ -1442,3 +1442,9 @@
 
 ### 70.33 融資來源字樣中性化後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
 - `MARGIN_SOURCE_TEXT`＝「本地融資餘額歷史快取（市場範圍與來源待確認）」，決策 DEC-193。不代表接線核准；DG-LIC／DG-PIT／DG-COV／I1144-WIRING-GATE 不變，實際運作 A／HOLD。其餘「全市場」來源與 DATASTATION／finmind provenance 衝突仍 OPEN（見 BACKLOG 同日段）。
+
+## 71. ETF 身分「未知」：移除 `_likely_private`（2026-11-18；DEC-194；只追加；非 QA PASS；單組作者環境）
+- 分支 `a-likely-private-unknown`（基於 origin/main 1fe95b4d）。`etf_tab_single` 不再推斷私募；`health_inspector` ETF Raw Data 三缺顯示 🔴＋「ETF 類型無法確認；資料未取得不代表私募。」；stale NAV 顯示「淨值資料已過期，暫時無法顯示。」。海外與台股主動式逐字不變。句子單一來源 `shared/etf_missing_text.py`。
+- 已揭露副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級。
+- OPEN（未修）：`_nav_ok` stale-NAV 偽綠燈（S3b）；`is_active_etf` 對 SPY／VOO／QQQ 回 True 導致海外 AUM 列顯示主動式宣稱；台股主動式依既有規則把真失敗藏在 ⚪。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。

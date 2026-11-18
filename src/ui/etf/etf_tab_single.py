@@ -26,6 +26,9 @@ import streamlit as st
 from shared.allocation_decision import REGIME_LABEL as _REGIME_LABEL  # C1 v19.182
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.etf_missing_text import (
+    ETF_AUM_MISSING_TEXT, ETF_EXPENSE_MISSING_TEXT, ETF_NAV_STALE_TEXT,
+)
 from shared.thresholds import classify_yield_zone
 # Batch 9-2 v18.419:策略二「7% 存股估值」改 call classify_yield_zone SSOT。
 # 原 YIELD_HIGH/MID/LOW 直接 import 已不需要(SSOT 函式內部消費)。
@@ -56,6 +59,8 @@ _ERR_EXPENSE_ALL_TRIED_PASSIVE = 'SITCA、yfinance 均未取得可用費用率�
 _ERR_NAV_ALL_TRIED = 'FinMind、goodinfo、TWSE OpenAPI、yfinance 均未取得可用淨值，暫時無法顯示。'
 #: 缺任一路嘗試證據時的定稿句（現行使用）。
 _ERR_NAV_NO_ATTEMPT_EVIDENCE = '目前沒有可用淨值資料，暫時無法顯示。'
+#: NAV 有取到但被折溢價守門員判過期（stale_nav）且無可用值：不是網路失敗（句子單一來源 shared/etf_missing_text.py）。
+_ERR_NAV_STALE = ETF_NAV_STALE_TEXT
 
 def render_etf_single(gemini_fn=None, before_ai_hook=None):
     """before_ai_hook: 可選 callable，於「AI 白話總結」之前呼叫(用來把 smart 分析區塊
@@ -191,7 +196,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric('最新收盤', f'{df["Close"].iloc[-1]:.2f}')
     c2.metric('內扣費用率', f'{expense*100:.2f}%' if expense else 'N/A',
-              help=None if expense else '主動式/私募 ETF 投信未揭露，或抓取失敗（詳見資料診斷 Tab）')
+              help=None if expense else ETF_EXPENSE_MISSING_TEXT)
     c3.metric('Beta', f'{float(beta):.2f}' if beta else 'N/A',
               help=(f'資料來源：{_beta_src}（vs 基準日報酬回歸）' if beta and _beta_src != 'yfinance'
                     else (None if beta else 'yfinance .info 無資料，且價格重疊不足 60 交易日無法回歸估算')))
@@ -206,7 +211,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
               help=('新台幣計價（元 ÷ 1e8）。與下方「⭐ 品質評等」的 AUM 規模、'
                     '「📊 多檔比較」頁的 AUM(億) 同一口徑。'
                     if (aum and aum > 1e6)
-                    else '主動式/私募 ETF 規模未揭露，或 yfinance .info 海外 IP 受限'))
+                    else ETF_AUM_MISSING_TEXT))
 
     with st.expander('💡 這項數據代表什麼？（內扣費用率 · Beta · AUM）', expanded=False):
         st.markdown(
@@ -815,15 +820,14 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     import re as _re_etf
     _is_overseas = not bool(_re_etf.match(r'^\d{4,6}[A-Z]?\.(TW|TWO)$', ticker))
     _nav_value = (prem or {}).get('nav')
-    _likely_private = ((not _is_overseas) and (not aum)
-                      and (not expense) and (_nav_value is None))
     # v1.1：主動式 ETF Yuanta fallback 仍抓不到時 → 視為「公開資料受限」
     try:
         from src.data.etf import is_active_etf as _is_act_etf
         _is_active = _is_act_etf(ticker)
     except ImportError:
         _is_active = False
-    _restricted = _likely_private or _is_active
+    # 身分一律「未知」：程式內無可靠正向證據 ⇒ 不由三項缺值推斷私募（舊的私募推斷旗標已移除）。
+    _restricted = _is_active
     # #1208 GPT 2026-11-17 定稿：只把「實際嘗試過」的候選寫成失敗。
     #   費用率：get_etf_expense_ratio_safe 對台股 ETF 必走 SITCA 與 yfinance；元大投信只對主動式 ETF 查
     #   ⇒ 被動式不得列元大為失敗。（主動式此處走 `_restricted` 不適用分支，句子保留供完整性。）
@@ -834,7 +838,8 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         _err_expense = _ERR_EXPENSE_ALL_TRIED_ACTIVE
     else:
         _err_expense = _ERR_EXPENSE_ALL_TRIED_PASSIVE
-    _err_nav = None if (_nav_value is not None or _is_overseas or _restricted) else _ERR_NAV_NO_ATTEMPT_EVIDENCE
+    _err_nav = None if (_nav_value is not None or _is_overseas or _restricted) else (
+        _ERR_NAV_STALE if (prem or {}).get('stale_nav') else _ERR_NAV_NO_ATTEMPT_EVIDENCE)
     st.session_state['etf_single_data'] = {
         'ticker': ticker, 'name': etf_name,
         'cur_yield': cur_yield, 'avg_yield': avg_yield,
@@ -854,7 +859,6 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         'dead_cross':     (_ma20 is not None and _ma60_v is not None
                            and _ma20 < _ma60_v),
         '_is_overseas': _is_overseas,
-        '_likely_private': _likely_private,
         '_is_active_etf': _is_active,
         '_err_expense': _err_expense,
         '_err_nav':     _err_nav,
