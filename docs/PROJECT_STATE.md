@@ -1433,3 +1433,6 @@
 ### 70.30 DEC-177 首屏方案 C 合併 main 後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
 - 🗂 資料頁首屏採方案 C（`first/context_rows` 四列），決策 DEC-190；細節見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §6.1。
 - 作者環境：fast lane 40209 passed／0 failed；ui2_browser 43 passed（streamlit 1.59.2／1.56.0）。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+### 70.31 C2 D-5 例外守衛位置敏感化（2026-11-18；只追加；非 QA PASS；單組作者環境）
+- `regime_label_residue` 的 D-5 例外只作用於資料頁第 4 個 ctx 列 value 一次，其餘位置／重複／其他頁一律判違規；決策 DEC-191；正式碼零 diff。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI。

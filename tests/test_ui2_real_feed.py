@@ -1120,15 +1120,32 @@ def _boom_shell(monkeypatch, exc_factory=lambda: RuntimeError("secret-token")):
     monkeypatch.setattr(shell, "read_real_snapshot", boom)
 
 
+_CTX_ROW_OPEN = '<div class="ui2-qrow" data-ui2-q="ctx"'
+
+
+def _strip_d5_row4_value(blob: str) -> str:
+    """DEC-177 D-5（C2 位置敏感版）：只剪掉第一屏 `context_rows[3]` 那一個 DOM 元素的 value span 內文**一次**。
+    條件全數成立才剪（否則原樣返回＝照舊判違規）：整頁恰 4 個 ctx 列元素；第 4 個的 label＝`FRESHNESS_ROW_LABELS[3]`；
+    其 value span 內文＝核准文案（跳脫後）。其他位置（他列／他區塊／detail／重複）的同字串一律保留。"""
+    import html as _html
+    from src.services.ui2 import data_page as _DP
+    starts = [m.start() for m in re.finditer(re.escape(_CTX_ROW_OPEN), blob)]
+    if len(starts) != 4:
+        return blob
+    m = re.compile(r'<div class="ui2-qrow" data-ui2-q="ctx"[^>]*><span class="ui2-row__label">([^<]*)</span> '
+                   r'<span class="ui2-row__value">([^<]*)</span>').match(blob, starts[3])
+    if m is None or m.group(1) != _html.escape(_DP.FRESHNESS_ROW_LABELS[3]) or m.group(2) != _html.escape(_approved_row4_value()):
+        return blob
+    return blob[:m.start(2)] + blob[m.end(2):]
+
+
 def regime_label_residue(blob: str, page: str) -> list[str]:
-    """降級頁不得殘留任何位階顯示字（`REGIME_LABEL` 值）。DEC-177 D-5 唯一例外：🗂 資料頁第 4 列的核准計數文案
+    """降級頁不得殘留任何位階顯示字（`REGIME_LABEL` 值）。DEC-177 D-5 唯一例外：🗂 資料頁第 4 列（`first/context_rows/3`）的核准計數文案
     「🔴 來源目前不可用或資料異常 d 項｜⬜ 尚未評估 e 項」內含子字串「未評估」（＝ `REGIME_LABEL['unknown']`，不是位階顯示）。
-    例外只作用於 `page == P4_DATA`，且只先剪掉**該整串核准文案**（降級頁兩事實皆不可用＝ d=2、e=0）；
-    該串之外的任何「未評估」（含同頁其他位置）、其餘位階字、其餘四頁一律照舊判違規。"""
+    C2：例外**位置敏感**——只剪該列 DOM 元素的 value 內文一次（見 `_strip_d5_row4_value`）；同字串出現在別處／重複、
+    該列缺失或不同、其餘四頁、其餘位階字一律照舊判違規。"""
     if page == P4_DATA:
-        from src.services.ui2 import data_page as _DP
-        row4 = _DP.freshness_rows(_DP.counts_from_states({"twii": _DP.S_UNAVAILABLE, "regime": _DP.S_UNAVAILABLE}))[3]["value"]
-        blob = blob.replace(row4, "")
+        blob = _strip_d5_row4_value(blob)
     return [lbl for lbl in REGIME_LABEL.values() if lbl and lbl in blob]
 
 
@@ -1163,6 +1180,89 @@ def test_c2_gap_demo_legacy_guard_tolerates_approved_string_at_wrong_position():
     assert _legacy_whole_page_residue(blob, P4_DATA) == []                       # 正確位置：舊守衛放行（預期）
     assert _legacy_whole_page_residue(blob + f"<p>{row4}</p>", P4_DATA) == []    # 另一位置多放一份：舊守衛仍放行 ⇒ 缺口
     assert _legacy_whole_page_residue(blob + row4 + row4, P4_DATA) == []         # 重複：舊守衛仍放行 ⇒ 缺口
+
+
+@pytest.fixture(scope="module")
+def _d5_blob() -> str:
+    return _degraded_data_page_blob()
+
+
+def test_c2_d5_correct_row4_once_passes(_d5_blob):
+    assert _approved_row4_value() in _d5_blob and "未評估" in _d5_blob
+    assert regime_label_residue(_d5_blob, P4_DATA) == []
+
+
+def _swap_row4_value(blob: str, new_value: str) -> str:
+    v = _approved_row4_value()
+    assert blob.count(f'<span class="ui2-row__value">{v}</span>') == 1
+    return blob.replace(f'<span class="ui2-row__value">{v}</span>', f'<span class="ui2-row__value">{new_value}</span>')
+
+
+_APPROVED = "🔴 來源目前不可用或資料異常 2 項｜⬜ 尚未評估 0 項"
+
+
+@pytest.mark.parametrize("where", ["q2_row", "q3_row", "cta_reason", "ctx_row0_detail", "extra_section", "tail", "ctx_row2_value"])
+def test_c2_d5_approved_string_elsewhere_on_data_page_fails(_d5_blob, where):
+    """核准文案出現在資料頁其他位置（他列／他區塊／CTA／尾端）→ 必須判違規（第 4 列合法那份仍在，故多出的那份被抓）。"""
+    assert _approved_row4_value() == _APPROVED
+    b = _d5_blob
+    mut = {
+        "q2_row": lambda: b.replace("本頁不產生持股動作；動作權威＝💼 持股", "本頁不產生持股動作；動作權威＝💼 持股" + _APPROVED, 1),
+        "q3_row": lambda: b.replace("完整資料健康度開放後才可查看", _APPROVED, 1),
+        "cta_reason": lambda: b.replace("完整資料健康度尚未開放", "完整資料健康度尚未開放" + _APPROVED, 1),
+        "ctx_row0_detail": lambda: b.replace("固定清單 8 項</span>", f'固定清單 8 項</span><div class="ui2-row__detail">{_APPROVED}</div>', 1),
+        "extra_section": lambda: b.replace("🔌 連線診斷", "🔌 連線診斷" + _APPROVED, 1),
+        "tail": lambda: b + f"<p>{_APPROVED}</p>",
+        "ctx_row2_value": lambda: b.replace("資料日在規則內 0 項｜⚠ 過期或可能已過期 0 項｜⬜ 資料未備 0 項", _APPROVED, 1),
+    }[where]()
+    assert mut != b
+    assert regime_label_residue(mut, P4_DATA) == ["未評估"]
+    assert _legacy_whole_page_residue(mut, P4_DATA) == []                        # 對照：舊守衛會放行
+
+
+def test_c2_d5_duplicated_approved_string_fails(_d5_blob):
+    v = f'<span class="ui2-row__value">{_APPROVED}</span>'
+    assert regime_label_residue(_d5_blob.replace(v, v + _APPROVED, 1), P4_DATA) == ["未評估"]   # 同一列內重複
+    assert regime_label_residue(_d5_blob + _APPROVED, P4_DATA) == ["未評估"]
+    row4_detail_dup = _d5_blob.replace("不是買賣訊號。</div>", f"不是買賣訊號。{_APPROVED}</div>", 1)
+    assert regime_label_residue(row4_detail_dup, P4_DATA) == ["未評估"]                       # 第 4 列 detail 夾帶
+
+
+def test_c2_d5_row4_missing_or_different_fails(_d5_blob):
+    assert regime_label_residue(_swap_row4_value(_d5_blob, "🔴 來源目前不可用或資料異常 1 項｜⬜ 尚未評估 1 項"), P4_DATA) == ["未評估"]
+    assert regime_label_residue(_swap_row4_value(_d5_blob, "⬜ 尚未評估 0 項"), P4_DATA) == ["未評估"]
+    # 第 4 列整個移除、核准字串落在別處 → 抓
+    no_row4 = _d5_blob.replace(f'<span class="ui2-row__value">{_APPROVED}</span>', "", 1)
+    assert regime_label_residue(no_row4, P4_DATA) == []
+    assert regime_label_residue(no_row4 + _APPROVED, P4_DATA) == ["未評估"]
+    # label 不對（字串在 row4 位置但標籤被換）→ 不給例外
+    lbl = _d5_blob.replace('<span class="ui2-row__label">其他狀態</span>', '<span class="ui2-row__label">別的</span>', 1)
+    assert regime_label_residue(lbl, P4_DATA) == ["未評估"]
+
+
+def test_c2_d5_wrong_ctx_count_or_order_fails(_d5_blob):
+    # 多一個 ctx 列元素（5 列）→ 不給例外
+    five = _d5_blob.replace('<div class="ui2-qrow" data-ui2-q="q2"', f'{_CTX_ROW_OPEN} data-axis="data" data-state="ok"><span class="ui2-row__label">x</span> <span class="ui2-row__value">y</span></div><div class="ui2-qrow" data-ui2-q="q2"', 1)
+    assert five.count(_CTX_ROW_OPEN) == 5 and regime_label_residue(five, P4_DATA) == ["未評估"]
+    # 合法文案換到第 3 列（順序錯）→ 抓
+    r3, r4 = ("資料日在規則內 0 項｜⚠ 過期或可能已過期 0 項｜⬜ 資料未備 0 項", _APPROVED)
+    swapped = _d5_blob.replace(r3, "@@").replace(r4, r3).replace("@@", r4)
+    assert regime_label_residue(swapped, P4_DATA) == ["未評估"]
+
+
+@pytest.mark.parametrize("page", [p for p in PAGE_IDS if p != P4_DATA])
+def test_c2_d5_other_pages_get_no_exception(_d5_blob, page):
+    assert regime_label_residue(_d5_blob, page) == ["未評估"]
+    assert regime_label_residue(f"<p>{_APPROVED}</p>", page) == ["未評估"]
+
+
+def test_c2_d5_illegal_shapes_and_other_regime_labels_fail(_d5_blob):
+    for lbl in {v for v in REGIME_LABEL.values() if v}:
+        assert lbl in regime_label_residue(_d5_blob + f"<p>{lbl}</p>", P4_DATA)
+        assert lbl in regime_label_residue(_d5_blob.replace("固定清單 8 項", f"固定清單 8 項{lbl}", 1), P4_DATA)
+    assert regime_label_residue("", P4_DATA) == []
+    assert regime_label_residue(_APPROVED, P4_DATA) == ["未評估"]                # 無 DOM 結構的裸字串不得放行
+    assert regime_label_residue(f'<div class="ui2-qrow" data-ui2-q="ctx"><span class="ui2-row__value">{_APPROVED}</span></div>', P4_DATA) == ["未評估"]
 
 
 @pytest.mark.parametrize("page", PAGE_IDS)

@@ -10678,3 +10678,10 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **作者環境結果**（非 CI／非非作者 QA）：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（streamlit 1.59.2、1.56.0）；measure_viewport fake 82／82、real 13／13。
 - **仍 NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 - **延後（不在本 PR）**：TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」（C 線獨立項）；第二階段細節；位階契約無 `as_of`，若日後新增，載入→「資料未備」歸類須重審。
+
+### DEC-191｜C2 D-5 例外守衛改為位置敏感（2026-11-18；只追加；測試限定；非 QA PASS）
+- **來源**：GPT 核准 C2（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）。DEC-190 的 D-5 例外原以整頁 `blob.replace(row4, "")` 實作，位置不敏感：核准文案出現在資料頁任何位置或重複，皆被一併放行。使用者核准範圍僅限資料頁第 4 列（`first/context_rows/3`）一次。
+- **決定**：`tests/test_ui2_real_feed.py::regime_label_residue` 例外改為只剪第一屏第 4 個 ctx 列 DOM 元素的 value 內文一次（`_strip_d5_row4_value`）。條件全成立才剪：整頁恰 4 個 ctx 列；第 4 列 label＝`FRESHNESS_ROW_LABELS[3]`；value＝核准文案。任一不成立即不給例外（fail closed）。
+- **範圍**：測試限定。正式碼、`src/ui2/**`、`app_ui2.py`、`tests/ui2_viewport/**` 零 diff；D-4 形狀補償測試（`tests/test_ui2_data_freshness_overview.py`）未動；未新增任何白名單。
+- **測試**：缺口示範 `test_c2_gap_demo_legacy_guard_tolerates_approved_string_at_wrong_position`；新增 `test_c2_d5_*`（正向一次通過；他處／重複／缺失或不同／ctx 數量與順序錯／其他四頁／非法形狀與其他位階字皆須失敗）。還原守衛後 11 個 c2 測試轉紅。
+- 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。
