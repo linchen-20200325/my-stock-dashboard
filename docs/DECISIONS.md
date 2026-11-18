@@ -10754,3 +10754,11 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未動**：Digest v1、詞彙、Risk Cap、system action、真 Provider、G1～G6、`ALLOWED_CALLERS` 空集合、`OFFLINE_SHADOW_MODULES`、import 白名單；無新增 SDK／network／secret／production import。
 - **測試**：`tests/test_onebrain_offline_guard.py` 新增 3 組反例（RuntimeError property、ValueError property、`__getattr__` 拋 RuntimeError；修前 3 紅）＋ KeyboardInterrupt／SystemExit 不被吞 ＋ 規則層錯誤仍上傳；既有 8 種畸形（N2 等）續綠。突變：內層改窄為 `ZeroDivisionError` ⇒ 3 反例紅；改成 `BaseException` ⇒ KeyboardInterrupt／SystemExit 2 例紅。
 - **仍待裁示（未動）**：OB-1-D3 規則式摘要 Top-N omitted disclosure。
+
+### DEC-198｜ETF NAV 診斷：未來日期 fail-closed（#1217 NOTE-3；GPT 派工 #1199 comment 6988310131 A/P0；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **問題**：`health_inspector` NAV 列餵 `freshness_light` 的 `nav_date`／`data_date` 若晚於今天（如 +3 天），`max(0, age)` 使其變 🟢「今天」＝假綠燈（承 DEC-196 NOTE-3）。
+- **決定**：僅在 NAV 診斷 caller 判斷「日期 > `date.today()`（與 `freshness_light` 預設基準相同）」→ 不餵新鮮度，顯示新常數 `shared/etf_missing_text.ETF_NAV_DATE_FUTURE_TEXT`＝「NAV 資料日期不可信，暫不判定新鮮度。」，燈號 🔴（與「日期無法確認」同級，文字必搭配）。海外 ETF 仍為 ⚪ 不適用句。
+- **未動**：`freshness_light` 本體、NAV 計算／來源／Schema／評分、AUM／費用率／Beta 列。無法解析的日期維持原路徑（🔴 無法解析）。
+- **測試**：`tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`（被動式／主動式／海外；+1／+3／+30 天、今天、昨天、舊日期、無日期）；修前紅（🟢「今天」）、拿掉修復分支 8 例轉紅。
+- **AUM／費用率／Beta 列查證（唯讀）**：這三列在值存在時餵 `date.today()`，因 `etf_single_data` 的 `aum`／`expense`／`beta` 皆為純數值、payload 無任何來源日期欄，故無法判定其實際新鮮度；未來日期不可能發生，也無可重現的「錯誤日期」反例。結論：未證實為 bug，不改程式，只登 BACKLOG（`ETF-DIAG-ASOF-1`）。
+- **編號**：origin/main 已用至 DEC-197／§74，故本批 DEC-198／§75。

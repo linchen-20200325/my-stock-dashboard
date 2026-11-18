@@ -940,7 +940,10 @@ class TestOldFilesUntouched:
     # ~~"9721cbea3974e260c1f6f1d47a7e813f239182601f592e60b233b5082a501528"~~（DEC-196 初版，至 f828a9d6 仍成立）
     # 📌 DEC-196 QA 更正（2026-11-18，⛔ 不是漏改）：只再動 `src/ui/pages/health_inspector.py` NAV 列的
     #   `_nav_masked`／`_nav_na` 兩行（NAV 有值時不再顯示「公開資料受限」；海外 NAV 過期維持 ⚪ 不適用句）。其餘 90 檔未動。
-    _BASE_DIGEST = "d7a28bd7934e41bacc5bcfc77eafdeee4502b97722c1d58a9a2b92854aefcf4c"
+    # ~~"d7a28bd7934e41bacc5bcfc77eafdeee4502b97722c1d58a9a2b92854aefcf4c"~~（DEC-196 QA 更正後，至 cce44294 仍成立）
+    # 📌 DEC-198（2026-11-18，GPT 核准 A/P0，⛔ 不是漏改）：只再動 `src/ui/pages/health_inspector.py` NAV 列
+    #   （`_nav_future` 未來日期 fail-closed；import 兩處）。其餘 90 檔未動。反向守衛見 `tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`。
+    _BASE_DIGEST = "8fab017509eb8e5befb098ae5394035065a4df79597eadbb3cbb9bc080031e30"
 
     def test_no_diff_against_base(self):
         import hashlib

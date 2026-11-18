@@ -183,3 +183,70 @@ class TestNavPresentWordingTwActiveAndOverseas:
     def test_overseas_nav_present_stale_keeps_not_applicable_wording(self, monkeypatch, mut):
         r = _run(monkeypatch, {"ticker": "SPY", "input": "SPY", "aum": 5e11, "nav": "ok"}, mutate=mut)
         assert r["rows"][_NAV] == {"light": "⚪", "text": "⚪ " + OVERSEA_MSG}
+
+
+# ───────────────────── NOTE-3（#1217）：NAV 日期在未來 ⇒ fail-closed，不得 🟢「今天」─────────────────────
+NAV_FUTURE = "NAV 資料日期不可信，暫不判定新鮮度。"
+
+
+def _set_date(days):
+    def _m(p):
+        d = _dt.date.today() + _dt.timedelta(days=days)
+        p["premium"] = {**p["premium"], "nav_date": d, "data_date": d}
+    return _m
+
+
+_FUT_SPECS = {
+    "passive": {"ticker": "0050.TW", "input": "0050", "aum": 2e12, "expense": 0.0046, "nav": "ok"},
+    "active": _ACT,
+}
+
+
+class TestNavFutureDateFailClosed:
+    @pytest.mark.parametrize("kind", ["passive", "active"])
+    @pytest.mark.parametrize("days", [1, 3, 30])
+    def test_future_date_red_untrusted(self, monkeypatch, kind, days):
+        r = _run(monkeypatch, _FUT_SPECS[kind], mutate=_set_date(days))
+        row = r["rows"][_NAV]
+        assert row["light"] == "🔴", row
+        assert NAV_FUTURE in row["text"], row
+        assert "今天" not in row["text"] and "昨天" not in row["text"], row
+
+    @pytest.mark.parametrize("days", [1, 3])
+    def test_future_date_overseas_stays_not_applicable(self, monkeypatch, days):
+        r = _run(monkeypatch, {"ticker": "SPY", "input": "SPY", "aum": 5e11, "nav": "ok"},
+                 mutate=_set_date(days))
+        assert r["rows"][_NAV] == {"light": "⚪", "text": "⚪ " + OVERSEA_MSG}
+
+    @pytest.mark.parametrize("kind", ["passive", "active"])
+    def test_today_still_green(self, monkeypatch, kind):
+        r = _run(monkeypatch, _FUT_SPECS[kind], mutate=_set_date(0))
+        row = r["rows"][_NAV]
+        # 週末時 today 仍屬合法日期（非未來）⇒ 不得被誤擋為「不可信」
+        assert NAV_FUTURE not in row["text"], row
+        assert row["light"] in ("🟢", "🟡"), row
+
+    @pytest.mark.parametrize("kind", ["passive", "active"])
+    def test_yesterday_not_flagged_future(self, monkeypatch, kind):
+        r = _run(monkeypatch, _FUT_SPECS[kind], mutate=_set_date(-1))
+        assert NAV_FUTURE not in r["rows"][_NAV]["text"]
+        assert r["rows"][_NAV]["light"] != "🔴" or "天前" in r["rows"][_NAV]["text"]
+
+    @pytest.mark.parametrize("kind", ["passive", "active"])
+    def test_old_date_not_regressed(self, monkeypatch, kind):
+        r = _run(monkeypatch, _FUT_SPECS[kind], mutate=_old_date)
+        row = r["rows"][_NAV]
+        assert row["light"] != "🟢" and NAV_FUTURE not in row["text"], row
+
+    @pytest.mark.parametrize("kind", ["passive", "active"])
+    def test_no_date_keeps_unknown_sentence(self, monkeypatch, kind):
+        r = _run(monkeypatch, _FUT_SPECS[kind], mutate=_no_date)
+        row = r["rows"][_NAV]
+        assert row["light"] == "🔴" and NAV_DATE_UNKNOWN in row["text"], row
+        assert NAV_FUTURE not in row["text"]
+
+    def test_freshness_light_global_unchanged(self):
+        """不得全域改 freshness_light：未來日期於該函式仍是原行為（max(0,age)），修復只在 NAV caller。"""
+        from src.ui.pages.health_inspector import freshness_light
+        d = _dt.date.today() + _dt.timedelta(days=3)
+        assert freshness_light(str(d), "daily")[0] in ("🟢", "🟡", "🔴")   # 契約：不 raise、不改簽名

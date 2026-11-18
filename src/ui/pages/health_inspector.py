@@ -15,7 +15,8 @@ import streamlit as st
 from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 from shared.secret_scrub import scrub_secrets  # SEC-3：診斷表 error_msg 欄（表格，不走 Markdown）
 from shared.etf_missing_text import (
-    ETF_AUM_MISSING_TEXT, ETF_IDENTITY_UNKNOWN_NOTE, ETF_NAV_DATE_UNKNOWN_TEXT, ETF_NAV_STALE_TEXT,
+    ETF_AUM_MISSING_TEXT, ETF_IDENTITY_UNKNOWN_NOTE, ETF_NAV_DATE_FUTURE_TEXT,
+    ETF_NAV_DATE_UNKNOWN_TEXT, ETF_NAV_STALE_TEXT,
 )
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.data_freshness import (
@@ -23,7 +24,7 @@ from shared.data_freshness import (
     monthly_freshness_level,
     quarterly_freshness_level,
 )
-from shared.staleness import stale_days_threshold, staleness_days
+from shared.staleness import latest_date, stale_days_threshold, staleness_days
 from shared.ttls import TTL_1DAY
 
 
@@ -1282,7 +1283,13 @@ def render_data_health_raw():
             #   stale（含 nav 值被保留的 nav_value_stale）⇒ 紅燈＋過期句；有值但無日期 ⇒ 紅燈＋日期不明句。
             _nav_stale = bool(_prem.get('stale_nav'))
             _nav_date = _prem.get('nav_date') or _prem.get('data_date')
-            _nav_fresh_date = str(_nav_date) if (_nav_ok and not _nav_stale and _nav_date) else None
+            # #1217 NOTE-3：NAV 日期在未來（> 今日，基準與本檔 freshness_light 預設相同＝date.today()）⇒ 不可信，
+            #   fail-closed：不餵新鮮度（否則 freshness_light 的 max(0, age) 會把未來日期變 🟢「今天」）。
+            #   只擋本 NAV 列；不改 freshness_light／NAV 計算。無法解析的日期維持原路徑（🔴 無法解析）。
+            _nav_dt = latest_date(_nav_date) if _nav_date else None
+            _nav_future = bool(_nav_ok and _nav_dt is not None and _nav_dt > _dt_r.date.today())
+            _nav_fresh_date = (str(_nav_date) if (_nav_ok and not _nav_stale and _nav_date
+                                                  and not _nav_future) else None)
             # QA NOTE-1：NAV 有值時不是「資料受限」——過期／日期不明的證據在 premium 欄位本身（舊 session 亦同），
             #   故只有「NAV 真的沒有且無失敗證據」的台股主動式才維持 ⚪。
             # QA NOTE-2：海外 ETF 的 NAV 有值但過期／日期不明 ⇒ 仍是真不適用的 ⚪ 海外句（不可 ❌ 矛盾）。
@@ -1293,6 +1300,7 @@ def render_data_health_raw():
                              error_msg=(_oversea_msg if _is_oversea_etf
                                         else _active_msg if _nav_masked
                                         else ETF_NAV_STALE_TEXT if (_nav_ok and _nav_stale)
+                                        else ETF_NAV_DATE_FUTURE_TEXT if _nav_future
                                         else ETF_NAV_DATE_UNKNOWN_TEXT if _nav_ok
                                         else _e1.get('_err_nav')),
                              probe_status=('na' if _nav_na else None),
