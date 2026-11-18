@@ -2972,3 +2972,9 @@
 - `UI2-OFF-1`（登記，未施工）：`ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 若被舊 session 或外部寫入成未知值，`get_*_page_vm` raise ValueError（Fail Loud）。UI 路徑（radio 選項）無法產生，故不為此加降級畫面；若要「友善降級」屬新畫面，需 ChatGPT 簽核。
 - `UI2-OFF-2`（登記，未施工）：「檢查連線」理論最長約 32 秒（NAS 中繼站最多 3 請求＋Yahoo 1，各 connect 3s＋read 5s；未實測），期間區塊內無忙碌提示（僅 Streamlit 全域 Running）。加 `st.spinner`＝新增視覺元件，屬草稿先行 Gate。
 - 狀態：G-B1／G-B2 **IMPLEMENTED，待非作者 QA／exact-head CI／merge**；Cloud runtime **NOT VERIFIED**。
+
+## 2026-11-19 B 線 N2 結案＋N1／O1／O2 登記（DEC-201；append-only；非 QA PASS；單組作者環境）
+- ~~**N2｜📊 市場頁 Real feed：TWII 未來資料日時，卡片顯示「資料日期不可信」，日 K meta 行卻印「資料日 <未來日>」**（證據 #1199 comment 6990816116）~~ **已修（DEC-201，2026-11-19；有意識的更新，不是漏刪）**：`real_canonical.kbar_chart_spec` 在 `as_of_future is True` 或原因碼 `FUTURE_DATE` 時不帶 `as_of`，meta 行改顯示既有缺日期字樣；含遮蔽路徑（原因碼被較早列蓋掉）。測試 `tests/test_ui2_n2_future_kbar_meta.py`。待非作者 QA／exact-head CI／merge／main CI。
+- **DECISION GATE／HOLD｜N1 切頁後捲動位置未重置**：稽核重現步驟——viewport 390×844（手機），於某頁向下捲動後切換到另一頁，新頁 `scrollTop` 保留前頁位置，頁標題被捲出視窗之外。修法需前端 JS（捲動重置），屬新前端行為，依 #1199 comment 6990535956 只登記、不施工、不以 JS 注入繞過既有 contract。Owner：GPT 專案總管裁示；觸發：核准 JS 前端行為 Gate。
+- **OPEN（觀察，不施工）｜O1 FETCH_FAILED 與「資料新鮮度總覽」計數不一致**：稽核觀察到上游抓取狀態為 FETCH_FAILED 的項目，與 🗂 資料頁新鮮度總覽的計數口徑不一致。本批未重現、未查證根因。Owner：專案 AI；觸發：有任務動到新鮮度總覽或收到實際回報。
+- **OPEN（觀察，不施工）｜O2 regime 無 as_of 時顯示「資料未備」**：regime 事實不帶 as_of，畫面顯示「資料未備」字樣，是否為預期（誠實缺值）或誤導待判定。本批未查證。Owner：專案 AI；觸發：有任務動到 regime 呈現或 GPT 派工。
