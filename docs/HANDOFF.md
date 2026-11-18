@@ -1575,3 +1575,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 分支 `a-likely-private-unknown`（基於 origin/main 1fe95b4d），未推送、未發 PR。改 `src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`，新增 `shared/etf_missing_text.py`、`tests/test_a_likely_private_unknown.py`，SPEC §2／ARCHITECTURE 私募列以刪除線＋現行註記更新。
 - 副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級（先前維持綠）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。OPEN 發現三項見 DEC-194／BACKLOG，不在本次範圍。非 QA PASS。
+
+## 2026-11-18 New UI2 a11y 三項最小修（DEC-195；append-only；非 QA PASS）
+- 分支 `b-ui2-a11y-three`（基於 origin/main 897b3c04），未推送、未發 PR。改 `src/ui2/shell/css.py`、`src/ui2/components/html.py`、`src/ui2/views/_page.py`、`src/ui2/views/data.py`；新增 `tests/test_ui2_a11y_three.py`；`tests/test_ui2_drawer_browser.py` 追加 ui2_browser 測項；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（`--shots none`）。
+- 重生指令（照 DEC-137）：`python -m tests.ui2_viewport.measure_viewport --out docs/vnext/newui2_batch3b --shots none`（加 `--python <1.56.0 venv> --json-name viewport_measurements_streamlit156.json` 為 floor）；Real 加 `--feed real --out docs/vnext/newui2_realfeed`。
+- 下一手：非作者 QA → exact-head CI（含 ui2-browser 兩個 matrix）→ merge → main CI。若 DEC／§ 編號與 OneBrain PR 衝突，合併時重編號（src 註解不含編號）。
