@@ -47,7 +47,7 @@ from shared.signal_thresholds import MARGIN_BALANCE_SANITY_MAX_YI, MARGIN_BALANC
 from shared.ui2_contract.models import FieldState
 
 #: 資料來源說明（描述性；仿 `market_twii_view_service.TWII_SOURCE_TEXT`；⛔ 不宣稱列級 provenance）。
-MARGIN_SOURCE_TEXT: str = "本地融資餘額歷史快取（FinMind 全市場融資金額，元換算為億元；每日更新）"
+MARGIN_SOURCE_TEXT: str = "本地融資餘額歷史快取（市場範圍與來源待確認）"
 
 #: 單位字樣（L1 序列已是億元）。
 MARGIN_UNIT: str = "億元"

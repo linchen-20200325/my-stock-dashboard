@@ -10693,3 +10693,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **範圍**：測試限定。正式碼、`src/ui2/**`、`app_ui2.py`、`tests/ui2_viewport/**` 零 diff；D-4 形狀補償測試（`tests/test_ui2_data_freshness_overview.py`）未動；未新增任何白名單。
 - **測試**：缺口示範 `test_c2_gap_demo_legacy_guard_tolerates_approved_string_at_wrong_position`；新增 `test_c2_d5_*`（正向一次通過；他處／重複／缺失或不同／ctx 數量與順序錯／其他四頁／非法形狀與其他位階字皆須失敗）。還原守衛後 11 個 c2 測試轉紅。
 - 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。
+
+### DEC-193｜融資來源字樣 `MARGIN_SOURCE_TEXT` 改中性措辭（I1140-MARGIN-SOURCE-TEXT／DEC174-GG1；ChatGPT 定稿；2026-11-18；只追加；非 QA PASS；非接線核准）
+- **裁示來源**：ChatGPT 定稿（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）；獨立預查：0 production caller、無測試釘住舊字面。
+- **變更**：`src/services/margin_fact_service.py::MARGIN_SOURCE_TEXT` 由「本地融資餘額歷史快取（FinMind 全市場融資金額，元換算為億元；每日更新）」改為「本地融資餘額歷史快取（市場範圍與來源待確認）」。
+- **移除的宣稱**：「全市場」（範圍未證實）、「FinMind」（DATASTATION／finmind provenance 衝突仍 OPEN）、「每日更新」（更新頻率未證實）；另刪「元換算為億元」細節——單位已由 `MARGIN_UNIT`（億元）承載，不必在來源字樣重述。
+- **未動**：數值、單位換算（`TWD_PER_YI`、`MARGIN_UNIT`）、schema、FieldState、來源契約、`shared/margin_schema.py`、`macro_helpers.py`（`test_w1_r7_hit_source` 釘住）、`leading_indicators`、任何接線（UI2／real_feed 仍 0 引用）。
+- **同類「全市場」宣稱仍未處理**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 OPEN。
+- **明確聲明**：本項**不是接線核准**；DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 均不變；實際運作維持 A／HOLD。
+- **測試**：`tests/test_margin_fact_service.py` 新增字面釘住＋不含「全市場／每日更新／FinMind」；既有 scope guard 仍綠。作者環境自跑，未經非作者 QA。
