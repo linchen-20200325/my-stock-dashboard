@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "897b3c04d8f73ce433536f0ce7e874400ddc9e79",
-  "source_hash": "3b4c0955d0c8ab75d0de490ddf9afbac499d512af3bbacc8394582136ca5820c",
-  "generated_at": "2026-11-18T13:21:05+00:00",
+  "git_sha": "cce4429479c51635621cae0051f9bc5a75258a30",
+  "source_hash": "4a20739586ca9633758e2dd9e24547a9d9081f930a62a4ad31913fbc2397bdbb",
+  "generated_at": "2026-11-18T19:01:06+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.59.2",
@@ -330,7 +330,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 9 天 twii_ohlcv 最新資料日 2026-11-09,距今 9 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 10 天 twii_ohlcv 最新資料日 2026-11-09,距今 10 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1619,20 +1619,20 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 537.8,
+   "last_content_bottom": 538.3,
    "card_heights": [
-    208,
-    208,
-    208,
-    208,
-    208,
-    208
+    229,
+    229,
+    229,
+    229,
+    229,
+    229
    ],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1082.2,
-     "bottom": 1123.8,
+     "top": 1102.7,
+     "bottom": 1144.3,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -1641,10 +1641,10 @@
     "slot": null,
     "grid": {
      "top": 866.2,
-     "bottom": 1074.2,
+     "bottom": 1094.7,
      "left": 80,
      "right": 1360,
-     "height": 208.0,
+     "height": 228.5,
      "width": 1280
     },
     "slot_graphics": 0,
@@ -1664,7 +1664,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 9 天 twii_ohlcv 最新資料日 2026-11-09,距今 9 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 10 天 twii_ohlcv 最新資料日 2026-11-09,距今 10 天,超過 daily 門檻 7 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1689,7 +1689,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 505.7,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.5,
+    "scroll_end_bottom": 868.0,
     "nav_margin_after_risk": null
    },
    "failures": {},

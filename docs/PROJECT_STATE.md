@@ -1472,3 +1472,8 @@
 - 已揭露副作用：`data_coverage.py` 對台股主動式 NAV 缺值降級；無日期 NAV（路徑 A）由 🟢 改 🔴。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；真實 TWSE 直讀 payload 是否帶日期未在 Cloud 驗證。
 - **QA 更正（§73；只追加）**：① NAV 列不再以 `date.today()` 冒充資料日；NAV 有值時過期／日期不明一律 🔴 並顯示真實原因句（含台股主動式、舊 session payload；原誤顯示「公開資料受限」已修）；海外 NAV 有值但過期仍為 ⚪ 不適用句。OPEN：未來日期 NAV 仍 🟢（`freshness_light` 既有行為，未動）。
+
+## 77. New UI2 五頁「離線可用」收斂：🗂 連線診斷兩項最小修（2026-11-18；DEC-200；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-ui2-offline-usable-diag`（base cce44294）。改 `src/ui2/views/data.py`（`_valid_report` 深度驗證；冷卻提示僅當次顯示）；新增 `tests/test_ui2_offline_usable_diag.py`；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（僅 meta 與時鐘造成的差異）。
+- 五頁矩陣與登記項見 BACKLOG `UI2-OFFLINE-MATRIX-1118`。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud runtime；瀏覽器真點擊（本批互動以 AppTest 驗證，視覺零差異以 measure_viewport 同日 base 對照）。

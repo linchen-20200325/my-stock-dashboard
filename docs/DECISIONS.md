@@ -10746,3 +10746,14 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **測試**：新增 `tests/test_a_etf_diag_three_fixes.py`（先在 main 上失敗 8 項，修後全綠）；`tests/test_a_likely_private_unknown.py` 僅三處依有意識的行為變更改斷言（舊文以刪除線註記）並新增 `valuestale` fixture；`tests/test_batch_z60.py` `_BASE_DIGEST` 依慣例更新舊值加刪除線。反向注入證據見 PR 描述／HANDOFF。
 - **QA 更正（DEC-196 ① 措辭；2026-11-18；只追加；有意識的更正，原文保留）**：非作者 QA（#1217，PASS_WITH_NOTES）指出上述 ① 對「台股主動式 ETF＋NAV 有值」過度宣稱：診斷頁 `_nav_masked` 在 NAV 有值時恆為真，主動式句先於過期／日期不明句被選中，燈雖 🔴 但文字誤為「公開資料受限（投信官網有揭露…）」。**現行行為**：`_nav_masked` 加上 `not _nav_ok`；NAV 有值時（不論主動式、被動式、新舊 session payload）過期 ⇒ 🔴「淨值資料已過期，暫時無法顯示。」、日期不明 ⇒ 🔴「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」；過期證據在 `premium` 欄位本身，舊 payload 亦適用。只有「NAV 真的沒有、且 payload 無失敗證據」的台股主動式才維持 ⚪。NOTE-2：海外 ETF NAV 有值但過期／日期不明 ⇒ 維持真不適用的 ⚪ 海外句（原會顯示矛盾的「❌ 海外 ETF 不適用」🔴）。
 - **新 OPEN（NOTE-3；不在核准範圍，未動 `freshness_light`）**：未來日期的 NAV 日期（`nav_date`／`data_date` 晚於今天）仍被判 🟢「今天 …」。重現：`_run` 將 `premium.nav_date`／`data_date` 改為今天 +3 天 ⇒ NAV 列 🟢。既有 `freshness_light` 行為。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期回報。
+
+### DEC-200｜New UI2 五頁「離線可用」收斂：🗂 連線診斷兩個離線可重現阻礙的最小修（#1199 comment 6988310131 B/P1；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：#1199 comment 6988310131（B 線：先建矩陣，至多 3 個既有契約內小差額，優先安全互動／壞資料 fail-closed／錯誤導引；需正式 data feed／auth／Sheet／OneBrain UI／新布局／cutover 者標 Gate 不施工）。
+- **矩陣**：見 BACKLOG「UI2-OFFLINE-MATRIX-1118」。五頁在 FAKE 6 場景（5 頁×6＝30 態）與 Real 5 頁以 AppTest 全跑無例外、無 `None`／`nan`／`Traceback` 洩漏；唯二可重現阻礙都在 🗂 資料頁「🔌 連線診斷」。
+- **G-B1（錯誤導引）**：冷卻提示「請稍後再試」原本連同報告存進 `ui2_diag_report`，其後任何 rerun／換頁再回來仍掛著（冷卻早已過期）。現行：提示只在**產生它的那次點擊**顯示；session 只存 `notice=NONE` 的結果（上次檢查結果仍保留）。再按一次且仍在冷卻則再次顯示。
+- **G-B2（壞資料 fail-closed）**：`diag_check` 回傳的 `DiagReport` 只做 `isinstance(DiagReport)` 淺檢查；五欄不是 `ProbeResult(DiagStatus, DiagReason)` 或 notice 不是 `DiagNotice` 時，原樣存入 session，之後資料頁**每次 rerun 都 AttributeError**（換頁回來仍崩）。現行：深度驗證（`views/data.py::_valid_report`），形狀不對＝與「回傳非 DiagReport／丟例外」同一個固定結果（五項 `連線失敗／其他`）；session 內既有壞值讀取時視為 `INITIAL_REPORT`。
+- **測試**：新 `tests/test_ui2_offline_usable_diag.py`（11 項：提示當次顯示／plain rerun 與換頁不殘留／再按再現；5 種壞形狀＋已在 session 的壞值＋None／字串／例外＋合法混合報告不變）。突變（存回含 notice 的原報告、改回淺 isinstance）各自轉紅，驗後復原。既有 `tests/test_ui2_connection_diag_view.py` 全綠。
+- **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變，已用文件記載的 `measure_viewport --shots none` 重生 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0；13／82 態全過）。realfeed 與未改動 base 同日重量逐值相同（差異只有時鐘「過期 9→10 天」與其造成的折行高度，非本批）。
+- **未動**：版面、文案（無新增字串）、Schema／FieldState 語意、資料來源、診斷探測端點與冷卻策略、其他四頁。
+- **登記不施工**：UI2-OFF-1（stale/外來 session 值 `ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 會 raise ValueError，無 UI 路徑可達）、UI2-OFF-2（檢查連線理論最長約 32 秒無區塊內忙碌提示；加 spinner＝新視覺元件，草稿先行 Gate）。見 BACKLOG。
+- **編號**：#1220 用 DEC-198、#1219 用 DEC-199；本批 DEC-200／§77，合併時若被佔則順延（`src/ui2` 註解不含編號）。
