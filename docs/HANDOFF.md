@@ -1580,6 +1580,12 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 分支 `b-ui2-a11y-three`（基於 origin/main 897b3c04），未推送、未發 PR。改 `src/ui2/shell/css.py`、`src/ui2/components/html.py`、`src/ui2/views/_page.py`、`src/ui2/views/data.py`；新增 `tests/test_ui2_a11y_three.py`；`tests/test_ui2_drawer_browser.py` 追加 ui2_browser 測項；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（`--shots none`）。
 - 重生指令（照 DEC-137）：`python -m tests.ui2_viewport.measure_viewport --out docs/vnext/newui2_batch3b --shots none`（加 `--python <1.56.0 venv> --json-name viewport_measurements_streamlit156.json` 為 floor）；Real 加 `--feed real --out docs/vnext/newui2_realfeed`。
 - 下一手：非作者 QA → exact-head CI（含 ui2-browser 兩個 matrix）→ merge → main CI。若 DEC／§ 編號與 OneBrain PR 衝突，合併時重編號（src 註解不含編號）。
+
+## 2026-11-18｜C 線 OneBrain OB-1 離線鷹架（DEC-195；只追加；非 QA PASS）
+- 分支 `c-onebrain-offline-ob1`（base 897b3c04），未推送、未發 PR。新增 `shared/onebrain_provider.py`、`src/services/onebrain_shadow.py`、`tests/onebrain_fake_provider.py`、`tests/test_onebrain_offline_guard.py`；擴充 `tests/test_decision_digest_evidence_matrix_guard.py`（PIT 邊界兩種 stamp）。
+- 規則：新模組**零 production import**（守衛強制）；`ShadowOutcome.effective` 恆為規則式摘要；Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，不餵下游。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。Delta 3 與 OB-2 介面差額為 Gate 項，勿自行施工。非 QA PASS。
+
 ## 2026-11-18 舊 UI ETF 診斷三項最小安全修復（DEC-196；append-only）
 - 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04），**未推送、未發 PR**（作者交付當下紀錄）。改 `etf_tab_single.py`、`health_inspector.py`、`shared/etf_missing_text.py`；新增 `tests/test_a_etf_diag_three_fixes.py`。
 - 註：上方 DEC-194 段「未推送、未發 PR」是**當時點的紀錄**，DEC-194 其後已以 #1215 合併，不是現況。

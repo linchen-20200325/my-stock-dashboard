@@ -10722,6 +10722,20 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未動**：版面凍結、區塊、文案、門檻、資料／Auth／Sheet／production、`.streamlit/config.toml`。
 - **已重現但本批不含（需 ChatGPT 簽核）**：見 BACKLOG `A11Y-F1`～`A11Y-F4`。
 - **編號**：#1216（OneBrain）用 DEC-195／§72、#1217 用 DEC-196／§73，故本批為 DEC-197／§74（`src/ui2` 註解不含 DEC 編號，重編號不影響 `source_hash`）。
+
+### DEC-195｜OneBrain OB-1 完全離線鷹架＋PIT 邊界測試（GPT §C 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：Issue #1199 GPT §C（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6978992482）。核准範圍僅限 OB-1 純內部離線 Provider Protocol＋FakeProvider＋deterministic 測試鷹架；非 production cutover、非付費 Provider 授權。
+- **決定**：(1) 新增 `shared/onebrain_provider.py`（L0）、`src/services/onebrain_shadow.py`（L3）、測試專用 `tests/onebrain_fake_provider.py`；(2) `ShadowOutcome.effective` 恆為 `build_rule_summary(digest)`，Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，任何例外分類為 `error_kind` 並 log，不改 action／Risk Cap、不降為 SAFE／neutral；(3) **0 production import**（AST 守衛強制，含 app.py、app_ui2.py、src/ui*、src/ui2、src/services/ui2）；0 SDK、0 API key、0 網路、0 付費、0 Secrets；(4) Digest v1 schema 與 `DecisionDigest` 欄位集合不變；(5) tests-only 補 PIT 邊界：`fetched_at == generated_at`（採用）與 as_of 晚於 fetched（`pit_violation`）。
+- **未動**：validator、投資門檻、正式 caller、UI／LINE、`src/ui2`、`shared/ui2_contract`。
+- **既有守衛調整（唯一一處）**：`tests/test_decision_digest_invariants_guard.py` 新增獨立常數 `OFFLINE_SHADOW_CALLERS`（僅兩個新檔），C2 的「0 digest 家族 production caller」與「L0 importer」掃描對其放行；`ALLOWED_CALLERS`（Stage F Gate）仍為空並以新測試釘住。
+- **仍待客戶／Gate 裁示（未授權）**：真 Provider／model／月預算／fallback；Stage F／G production；AB-2b（`ai_explained`／`ai_rejected`）；詞彙／Schema／semantic 變更（含 Delta 3「摘要揭露被省略 Top-N」）；System Action Aggregator／Risk Cap 權限；UI2 與 LINE 接線；OB-2 semantic fingerprint／cache／trace／budget 實作。
+- **測試**：`tests/test_onebrain_offline_guard.py` 38 例；矩陣測試新增 stamp 後 242 例。變異（`>=` 邊界、移除 as_of_after_fetched、`shadow_accepted` 恆真、吞例外改窄、effective 採 draft、app_ui2 注入 import）皆使守衛轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-195 更正與補註（2026-11-18；只追加；獨立 QA PASS_WITH_NOTES 後）
+- ~~Delta 1「兩種變異先前皆存活」~~ **更正**：僅 `>`→`>=` 邊界變異真正存活；「停用 as_of_after_fetched」變異已被 `tests/test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺，矩陣測試只擴大覆蓋。BACKLOG／PROJECT_STATE §72 的對應敘述同此更正。
+- ~~C2 守衛對兩檔逐檔豁免~~ **更正**：改為逐模組（`OFFLINE_SHADOW_MODULES`：provider 只放 grounding；shadow 放 grounding＋summary），並在 `tests/test_onebrain_offline_guard.py` 加兩檔明確 import 白名單與反向測試。`ALLOWED_CALLERS` 仍為空。
+- 補註：「零 production import」AST 守衛屬縱深防禦、非窮舉；非常數動態 import（如 `__import__("src.services."+"onebrain_shadow")`）不會被抓到。
+
 ### DEC-196｜舊 UI ETF 診斷三項最小安全修復（NAV 日期誠實／海外 AUM 措辭／台股主動式真失敗不遮蔽）（GPT 核准 A 線 APPROVED_FOR_MINIMAL_SAFE_FIX，comment 6978992482 §A；2026-11-18；只追加；非 QA PASS；單組作者環境）
 - **來源**：DEC-194 OPEN-1／OPEN-2／OPEN-3（#1199 closure ledger 6977952186）。僅限舊 UI：`src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`、`shared/etf_missing_text.py`、直接測試。
 - **① NAV**：`health_inspector` NAV 列不再 `nav is not None → 今天 🟢`。資料日期只用 payload 內 `premium.nav_date`／`data_date`（既有新鮮度契約 `freshness_light`），**絕不用 `date.today()`**；~~`stale_nav`（含 nav 值被保留的 `nav_value_stale`，情境 S3b）⇒ 🔴＋「淨值資料已過期，暫時無法顯示。」（沿用 DEC-194 句）；~~（QA 更正：此句對台股主動式 ETF 不成立，見下方更正）有值但無任何可信日期（例如 TWSE 直讀路徑 A 的 payload）⇒ 🔴＋新句「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」（`ETF_NAV_DATE_UNKNOWN_TEXT`，唯一新增句）。

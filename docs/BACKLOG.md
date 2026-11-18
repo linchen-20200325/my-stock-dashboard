@@ -2932,6 +2932,18 @@
 - **A11Y-F3｜FAKE cold 文案指向已 disabled 的 CTA**：FAKE cold 場景多處顯示「⬜ 尚未載入，請按更新」（探查證據 `fake_cold.json`），但指向的「更新」CTA 是 `aria-disabled`（修前游標還是 pointer；D1 只修了游標，文案語意仍矛盾）。屬文案／契約問題（不得自行改字）。Owner：ChatGPT 簽核。
 - **A11Y-F4｜「尚未載入」vs「尚未評估」措辭不一致**：「尚未載入」（尚未按更新）與「尚未評估」（not_evaluated 場景）對使用者是否為同一種狀態未定義，兩者並存易混淆；是否統一需 ChatGPT 決定（探查只確認兩種字樣並存，未窮舉全站）。屬文案凍結範圍，不得自行統一。Owner：ChatGPT 簽核。
 - 以上來源為唯讀探查（作者環境單組重現）；證據腳本在作者 scratchpad，未入 repo。
+
+### OB-1 離線鷹架進度（2026-11-18；DEC-195；只追加）
+- [x] Provider Protocol／錯誤分類／凍結 Request（`shared/onebrain_provider.py`，L0，零 SDK／網路／金鑰）
+- [x] 影子執行 `run_shadow`（`src/services/onebrain_shadow.py`，L3；effective 恆為規則式摘要）
+- [x] FakeProvider＋守衛測試（零 production import、封網、9 失敗模式、9 偽造草稿）
+- [x] PIT 邊界矩陣補強（`fetched_at == generated_at`、as_of 晚於 fetched）
+- [ ] 非作者 QA／exact-head CI／merge／main CI（本分支尚未推送）
+- **OB-1-D3｜Gate-needed：規則式摘要未揭露被省略的 Top-N 行動**。重現：以 `tests.test_decision_digest_assembly.full_kwargs(n)` 組 n=3 與 n=7 筆合格行動，`assemble_digest` 後 `coverage.actions_omitted_count`＞0（n=7 時）、`is_complete` 為 False，但 `build_rule_summary(a.digest)` 的行動段落文字不含「其餘／未顯示／省略」等字樣——摘要對被省略的行動沉默（coverage sidecar 有、摘要沒有）。修法需新增詞彙（`decision_digest_terms`）與句型／簽章變更（摘要需讀 coverage），屬 Digest 詞彙／簽章變更，**Gate-needed，不自行施工**。Owner：客戶裁示；觸發：任何要動摘要詞彙或簽章的批次。
+- **OB-2 介面差額（僅列清單，未施工）**：semantic fingerprint（Digest→穩定指紋，且不得成為第二套 cache key 體系）、trace 欄位（request id／model id／延遲，需不進 Digest v1）、budget／rate 計量介面、cache 讀寫介面（須重用既有 cache 層，禁第二套 Provider cache）、錯誤退避策略（對應 CLAUDE.md §1.A-3）。以上皆需跨模組 production contract 或 Schema 變動，列 Gate。
+
+- 更正（2026-11-18；DEC-195）：上列 PIT 邊界項中，僅 `>`→`>=` 變異原本存活；「停用 as_of_after_fetched」變異 main 上已被 `test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺。
+
 ## 2026-11-18 DEC-194 OPEN-1／2／3 結案（DEC-196；append-only；非 QA PASS）
 - ~~OPEN-1 `_nav_ok` stale-NAV 偽綠燈~~ → 已修（NAV 列只用 payload 可信日期；stale／日期不明不綠）。~~OPEN-2 海外 AUM 主動式宣稱~~ → 已修（診斷措辭海外優先）。~~OPEN-3 台股主動式真失敗被 ⚪ 蓋住~~ → 已修（有證據才紅；無證據維持 ⚪）。以上待非作者 QA／CI。
 - 新 OPEN：AUM／費用率／Beta 列的資料日期仍用 `date.today()`（未核准，未動）；`data_coverage.py` 對台股主動式 NAV 缺值的降級為可見副作用。Owner：專案 AI；觸發：下一次動 ETF Raw Data。
