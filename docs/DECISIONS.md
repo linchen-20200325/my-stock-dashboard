@@ -10679,7 +10679,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **仍 NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 - **延後（不在本 PR）**：TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」（C 線獨立項）；第二階段細節；位階契約無 `as_of`，若日後新增，載入→「資料未備」歸類須重審。
 
-### DEC-192｜融資來源字樣 `MARGIN_SOURCE_TEXT` 改中性措辭（I1140-MARGIN-SOURCE-TEXT／DEC174-GG1；ChatGPT 定稿；2026-11-18；只追加；非 QA PASS；非接線核准）
+### DEC-193｜融資來源字樣 `MARGIN_SOURCE_TEXT` 改中性措辭（I1140-MARGIN-SOURCE-TEXT／DEC174-GG1；ChatGPT 定稿；2026-11-18；只追加；非 QA PASS；非接線核准）
 - **裁示來源**：ChatGPT 定稿（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）；獨立預查：0 production caller、無測試釘住舊字面。
 - **變更**：`src/services/margin_fact_service.py::MARGIN_SOURCE_TEXT` 由「本地融資餘額歷史快取（FinMind 全市場融資金額，元換算為億元；每日更新）」改為「本地融資餘額歷史快取（市場範圍與來源待確認）」。
 - **移除的宣稱**：「全市場」（範圍未證實）、「FinMind」（DATASTATION／finmind provenance 衝突仍 OPEN）、「每日更新」（更新頻率未證實）；另刪「元換算為億元」細節——單位已由 `MARGIN_UNIT`（億元）承載，不必在來源字樣重述。
