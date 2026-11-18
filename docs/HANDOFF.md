@@ -1560,3 +1560,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - HEAD c969ccd0（方案 C 實作＋合併 origin/main ca12825e）。正式碼只動 `src/services/ui2/data_page.py`、`real_canonical.py`；`src/ui2/**` 零 diff。
 - 作者環境複驗：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（1.59.2／1.56.0）；measure 兩版本 fake 82／82、real 13／13；`tests/test_ui2_*`＋z60＋#1208 還原鏈 2260 passed。viewport 證據 JSON 未重生（source_hash 輸入未變）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI；Cloud 另案。延後項見 BACKLOG 同日段與 DEC-190。非 QA PASS。
+
+## 2026-11-18 C1 TWII 來源字串（append-only；非 QA PASS）
+- 僅改 `src/services/market_twii_view_service.py` 常數＋新增 `tests/test_c1_twii_source_text.py`＋docs 追加（DEC-191）。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 零 diff；p3 baseline／`_P3_BASELINE_SHA256` 未動。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。
