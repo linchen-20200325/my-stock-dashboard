@@ -1592,3 +1592,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 下一手：非作者 QA → exact-head CI → merge → main CI。副作用：`data_coverage.py` 讀 `_err_nav`，台股主動式 NAV 缺值時覆蓋燈降級。非 QA PASS。
 
 - **2026-11-18 A 線 DEC-198／§75**：分支 `a-etf-future-nav-date`（基於 origin/main cce44294）。NAV 診斷未來日期 fail-closed（`health_inspector` NAV 列＋`shared/etf_missing_text.ETF_NAV_DATE_FUTURE_TEXT`）；測試 `tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`。AUM／費用率／Beta 僅查證，登 BACKLOG `ETF-DIAG-ASOF-1`。下一手：非作者 QA → exact-head CI → merge。非 QA PASS。
+
+## 2026-11-18 OneBrain NOTE-1 隔離（DEC-199；append-only）
+- 分支 `c-onebrain-provider-error-isolation`（基於 origin/main cce44294），Draft PR。只改 `onebrain_shadow.py` 一處＋測試。
+- 下一手：非作者 QA → exact-head CI → merge。OB-1-D3 仍待裁示。非 QA PASS。

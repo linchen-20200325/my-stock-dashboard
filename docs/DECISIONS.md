@@ -10747,6 +10747,14 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **QA 更正（DEC-196 ① 措辭；2026-11-18；只追加；有意識的更正，原文保留）**：非作者 QA（#1217，PASS_WITH_NOTES）指出上述 ① 對「台股主動式 ETF＋NAV 有值」過度宣稱：診斷頁 `_nav_masked` 在 NAV 有值時恆為真，主動式句先於過期／日期不明句被選中，燈雖 🔴 但文字誤為「公開資料受限（投信官網有揭露…）」。**現行行為**：`_nav_masked` 加上 `not _nav_ok`；NAV 有值時（不論主動式、被動式、新舊 session payload）過期 ⇒ 🔴「淨值資料已過期，暫時無法顯示。」、日期不明 ⇒ 🔴「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」；過期證據在 `premium` 欄位本身，舊 payload 亦適用。只有「NAV 真的沒有、且 payload 無失敗證據」的台股主動式才維持 ⚪。NOTE-2：海外 ETF NAV 有值但過期／日期不明 ⇒ 維持真不適用的 ⚪ 海外句（原會顯示矛盾的「❌ 海外 ETF 不適用」🔴）。
 - **新 OPEN（NOTE-3；不在核准範圍，未動 `freshness_light`）**：未來日期的 NAV 日期（`nav_date`／`data_date` 晚於今天）仍被判 🟢「今天 …」。重現：`_run` 將 `premium.nav_date`／`data_date` 改為今天 +3 天 ⇒ NAV 列 🟢。既有 `freshness_light` 行為。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期回報。
 
+### DEC-199｜OneBrain `run_shadow` 讀取 `ProviderError.kind` 的隔離（#1216 NOTE-1；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：#1199 comment 6988310131（C/P1）、#1216 QA NOTE-1。**編號**：DEC-197 已被 a11y 批佔用、DEC-198 保留給他線，故用 DEC-199／§76。
+- **問題**：`except ProviderError` 內 `getattr(e,"kind",None)` 若遇惡意 `kind` property（拋 RuntimeError／ValueError 等非 AttributeError）或對任何屬性拋錯的 `__getattr__`，例外會從 handler 內逃出 `run_shadow`（handler 內例外不被同層 `except Exception` 接住）。
+- **決定**：讀 `kind` 包內層 `try/except Exception`：失敗 ⇒ `kind=None` ⇒ 既有分支 ⇒ `INVALID_RESPONSE`，`logging.warning` 留型別名；`effective` 仍為 `build_rule_summary(digest)`，`shadow_accepted=False`、`grounding=None`。`KeyboardInterrupt`／`SystemExit`（BaseException）與規則式摘要自身例外維持 fail loud、照常上傳。
+- **未動**：Digest v1、詞彙、Risk Cap、system action、真 Provider、G1～G6、`ALLOWED_CALLERS` 空集合、`OFFLINE_SHADOW_MODULES`、import 白名單；無新增 SDK／network／secret／production import。
+- **測試**：`tests/test_onebrain_offline_guard.py` 新增 3 組反例（RuntimeError property、ValueError property、`__getattr__` 拋 RuntimeError；修前 3 紅）＋ KeyboardInterrupt／SystemExit 不被吞 ＋ 規則層錯誤仍上傳；既有 8 種畸形（N2 等）續綠。突變：內層改窄為 `ZeroDivisionError` ⇒ 3 反例紅；改成 `BaseException` ⇒ KeyboardInterrupt／SystemExit 2 例紅。
+- **仍待裁示（未動）**：OB-1-D3 規則式摘要 Top-N omitted disclosure。
+
 ### DEC-198｜ETF NAV 診斷：未來日期 fail-closed（#1217 NOTE-3；GPT 派工 #1199 comment 6988310131 A/P0；2026-11-18；只追加；非 QA PASS；單組作者環境）
 - **問題**：`health_inspector` NAV 列餵 `freshness_light` 的 `nav_date`／`data_date` 若晚於今天（如 +3 天），`max(0, age)` 使其變 🟢「今天」＝假綠燈（承 DEC-196 NOTE-3）。
 - **決定**：僅在 NAV 診斷 caller 判斷「日期 > `date.today()`（與 `freshness_light` 預設基準相同）」→ 不餵新鮮度，顯示新常數 `shared/etf_missing_text.ETF_NAV_DATE_FUTURE_TEXT`＝「NAV 資料日期不可信，暫不判定新鮮度。」，燈號 🔴（與「日期無法確認」同級，文字必搭配）。海外 ETF 仍為 ⚪ 不適用句。
