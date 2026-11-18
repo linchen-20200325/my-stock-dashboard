@@ -2918,3 +2918,10 @@
 - `MARGIN_SOURCE_TEXT` 已改為「本地融資餘額歷史快取（市場範圍與來源待確認）」，僅文案；移除「全市場／FinMind／每日更新／元換算」宣稱。I1140-MARGIN-SOURCE-TEXT、DEC174-GG1 以中性措辭處理。
 - **同一「全市場」宣稱仍未動的來源**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`（`test_w1_r7_hit_source` 釘住）、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 **OPEN**。
 - **這不是接線核准**：DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 不變；實際運作維持 A／HOLD；UI2／real_feed 對融資仍 0 引用。Owner：專案 AI；觸發：融資接線批或上述來源被動到時。
+
+## 2026-11-18 `_likely_private` 移除後續（DEC-194；append-only；非 QA PASS）
+- 已做：移除由三缺值推斷私募；ETF 身分一律未知；stale NAV 專用句；中性 tooltip。
+- **OPEN-1｜`health_inspector` `_nav_ok` 偽綠燈**：`_nav_ok = premium.nav is not None`；NAV 值過時但非 None（stale_nav 且有值，情境 S3b）仍亮 🟢。既有行為，本次刻意未動。Owner：專案 AI；觸發：下一次動 ETF Raw Data 或收到 stale NAV 回報。
+- **OPEN-2｜海外 ETF AUM 列的錯誤宣稱**：`is_active_etf('SPY'/'VOO'/'QQQ')` 為 True，AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，對海外 ETF 為不正確宣稱。本次依指示保持逐字不變。Owner：專案 AI；觸發：動 `is_active_etf` 或海外 ETF 顯示批。
+- **OPEN-3｜台股主動式 ETF 的真實失敗被 ⚪ 蓋住**：既有規則 `_restricted = 主動式` 把抓取失敗併入「不適用」。Owner：專案 AI；觸發：主動式 ETF 資料源批。
+- 副作用揭露：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈降級。

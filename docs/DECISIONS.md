@@ -10702,3 +10702,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **同類「全市場」宣稱仍未處理**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 OPEN。
 - **明確聲明**：本項**不是接線核准**；DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 均不變；實際運作維持 A／HOLD。
 - **測試**：`tests/test_margin_fact_service.py` 新增字面釘住＋不含「全市場／每日更新／FinMind」；既有 scope guard 仍綠。作者環境自跑，未經非作者 QA。
+
+### DEC-194｜移除 `_likely_private`：ETF 身分一律「未知」（GPT 核准 plan C+A 保守最小版；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：GPT 核准（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967695037），依獨立第二組驗證的原型與 AppTest harness 施作。
+- **問題**：`etf_tab_single._likely_private` 以「非海外且 AUM、費用率、NAV 全缺」推斷私募，於 health_inspector 顯示「私募/特殊 ETF — … 皆未揭露」並把三列壓成 ⚪。程式內**沒有任何可靠的正向身分證據**；三項缺值可能只是上游失敗，推斷私募等於捏造身分（§1）。
+- **設計**：身分一律「未知」。(A) `src/ui/etf/etf_tab_single.py`：刪除推斷；`_restricted = _is_active`；payload 不再存 `_likely_private`；`prem['stale_nav']` 真且 NAV 無值 → `_err_nav = _ERR_NAV_STALE`（「淨值資料已過期，暫時無法顯示。」），否則維持 `_ERR_NAV_NO_ATTEMPT_EVIDENCE`；費用率／AUM tooltip 改為中性缺值句。(B) `src/ui/pages/health_inspector.py` ETF Raw Data：移除 `_is_private_etf`／`_private_msg`；`_restricted = _is_active_etf_main`；費用率／NAV 直接走 payload `_err_expense`／`_err_nav`；AUM 缺值列顯示「目前沒有可用 ETF 規模資料，暫時無法顯示。」，且**僅在**非海外、非主動式、AUM＋費用率＋NAV 全缺時附「ETF 類型無法確認；資料未取得不代表私募。」。舊 session payload 的 `_likely_private` 鍵直接忽略。句子單一來源新檔 `shared/etf_missing_text.py`（L0，零 I/O）。
+- **未動**：公式、評分、品質、折溢價計算、新鮮度分級、`is_active_etf`、`_nav_ok`（含既有 stale-NAV 綠燈行為）、UI2、資料源、MoneyDJ 零請求守衛；不可達的 `elif _is_active` 死分支（測試釘住）；海外與台股主動式規則逐字不變（前後情境 S7／S7b／S8／S8b 輸出相同）。
+- **已揭露副作用**：(1) `src/ui/pages/data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈由原本維持綠色改為降級（因為 `_err_nav` 現在非空）。(2) 非三缺的部分缺值情境（僅費用率／僅 NAV／費用率＋NAV 缺 AUM）燈號不變（🔴），但 AUM 列由無文字的「抓取失敗」改為顯示中性缺值句。(3) 三缺情境燈號由 ⚪ 變 🔴。
+- **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
+- **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。

@@ -928,7 +928,12 @@ class TestOldFilesUntouched:
     # ~~"57a5e5f48ff6989309c516b2380d8468f4073a0b44cbb198c13d7610340ab354"~~（GPT 定稿回修 5a479259）
     # 📌 #1208 PR2 ChatGPT 簽核（PR #1210 留言 6963995185；核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/render/etf_render.py`
     #   成分股缺值說明括號內刪「海外 IP 受限或」，只留「上游成分股資料暫時無法取得」。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "11900ebe795a66a29f9412ab434315c6d90ef908b492ea33c5bc33fc90e6324b"
+    # ~~"11900ebe795a66a29f9412ab434315c6d90ef908b492ea33c5bc33fc90e6324b"~~（PR #1210 簽核後，至 1fe95b4d 仍成立）
+    # 📌 DEC-194 移除 `_likely_private`（2026-11-18，GPT 核准 plan C+A 保守版，見 docs/DECISIONS.md DEC-194；核准過的舊檔改動，⛔ 不是漏改）：
+    #   只動 `src/ui/etf/etf_tab_single.py`（刪三缺→私募推斷、payload 去 `_likely_private`、stale NAV 專用句、費用率／AUM tooltip 中性化）、
+    #   `src/ui/pages/health_inspector.py`（ETF Raw Data 去私募分支、AUM 缺值句與身分說明）。其餘檔一個字都沒動（檔數仍 91）。
+    #   指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）；反向守衛見 `tests/test_a_likely_private_unknown.py`。
+    _BASE_DIGEST = "3872f18f2b16cc1e2fa70437142db77d3de4464b0a9be40b9b8adc391ddd9ae9"
 
     def test_no_diff_against_base(self):
         import hashlib

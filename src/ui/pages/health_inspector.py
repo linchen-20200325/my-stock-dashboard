@@ -14,6 +14,7 @@ from typing import Optional
 import streamlit as st
 from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 from shared.secret_scrub import scrub_secrets  # SEC-3：診斷表 error_msg 欄（表格，不走 Markdown）
+from shared.etf_missing_text import ETF_AUM_MISSING_TEXT, ETF_IDENTITY_UNKNOWN_NOTE
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.data_freshness import (
     freshness_level,
@@ -1232,18 +1233,23 @@ def render_data_health_raw():
                              proxy=False))
             # AUM / Beta / 費用率：拆成個別行各自檢查
             _is_oversea_etf = bool(_e1.get('_is_overseas'))
-            _is_private_etf = bool(_e1.get('_likely_private'))
             _is_active_etf_main = bool(_e1.get('_is_active_etf'))
             _oversea_msg = '海外 ETF 不適用（本系統 5 源僅限台灣 ETF）'
-            _private_msg = '私募/特殊 ETF — AUM、費用率、NAV 主流資料源皆未揭露'
             _active_msg  = '主動式 ETF — 公開資料受限（投信官網有揭露但格式不一致，本系統暫無法穩定抓取）'
             # v1.1：主動式 ETF 失敗併入 na（黃燈），不再算入紅燈
-            _restricted = _is_private_etf or _is_active_etf_main
+            # 身分一律「未知」：不由三項缺值推斷私募；舊 session 殘留的私募旗標一律忽略。
+            _restricted = _is_active_etf_main
             _aum_na = _restricted and not _e1.get('aum')
+            _nav_ok0 = ((_e1.get('premium') or {}).get('nav')) is not None
+            _id_unknown3 = (not _is_oversea_etf and not _is_active_etf_main
+                            and not _e1.get('aum') and not _e1.get('expense') and not _nav_ok0)
+            _aum_missing_msg = (ETF_AUM_MISSING_TEXT
+                                + (' ' + ETF_IDENTITY_UNKNOWN_NOTE if _id_unknown3 else ''))
             rows.append(_row('ETF 規模 AUM',
                              str(_dt_r.date.today()) if _e1.get('aum') else None, 'daily',
-                             error_msg=((_active_msg if _is_active_etf_main else _private_msg)
-                                        if _aum_na else None),
+                             error_msg=(_active_msg if _aum_na
+                                        else None if (_e1.get('aum') or _is_oversea_etf)
+                                        else _aum_missing_msg),
                              probe_status=('na' if _aum_na else None),
                              source='yfinance', endpoint='.info[totalAssets]', proxy=False))
             rows.append(_row('ETF Beta',
@@ -1256,7 +1262,6 @@ def render_data_health_raw():
                              optional=False,
                              error_msg=(_oversea_msg if _is_oversea_etf
                                         else _active_msg if _is_active_etf_main
-                                        else _private_msg if _is_private_etf
                                         else _e1.get('_err_expense')),
                              probe_status=('na' if _exp_na else None),
                              # #1208 GPT 2026-11-17 定稿：候選查詢順序（實際命中以可回查結果為準）
@@ -1271,7 +1276,6 @@ def render_data_health_raw():
                              str(_dt_r.date.today()) if _nav_ok else None, 'daily',
                              error_msg=(_oversea_msg if _is_oversea_etf
                                         else _active_msg if _is_active_etf_main
-                                        else _private_msg if _is_private_etf
                                         else _e1.get('_err_nav')),
                              probe_status=('na' if _nav_na else None),
                              source='FinMind / TWSE OpenAPI',
