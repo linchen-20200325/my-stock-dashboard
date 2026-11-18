@@ -207,7 +207,7 @@ def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
 
 def page_title_html(page_id: str, scenario_id: str, title: str) -> str:
     """頁標題 div（與 `src/ui2/views/_page.py::render_title` 逐字相同；供需要把標題與第一屏放進同一個容器的頁使用）。"""
-    return (f'<div class="ui2-pagetitle" data-ui2-page="{escape(page_id)}" '
+    return (f'<div role="heading" aria-level="1" class="ui2-pagetitle" data-ui2-page="{escape(page_id)}" '
             f'data-ui2-scenario="{escape(scenario_id)}">{escape(title)}</div>')
 
 
@@ -274,7 +274,7 @@ def hold_table_html() -> str:
         '<th scope="col"' + ("" if mobile else ' class="ui2-ht__x"') + f">{escape(name)}</th>"
         for name, mobile in _T.HOLD_TABLE_COLS)
     return ('<div class="ui2-h-table" data-ui2-l1="hold_table" data-axis="capability" data-state="not_provided">'
-            f'<div class="ui2-section-title">{escape(_T.HOLD_TABLE_TITLE)}</div>'
+            f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(_T.HOLD_TABLE_TITLE)}</div>'
             f'<table class="ui2-ht" data-ui2-cols="{len(_T.HOLD_TABLE_COLS)}"><thead><tr>{ths}</tr></thead></table>'
             f'<div class="ui2-ht__more">{escape(_T.HOLD_TABLE_EXPAND_HINT)}</div>'
             f'<div class="ui2-ht__empty">{_hold_slot_chip()}'
@@ -289,12 +289,12 @@ def hold_body_html(onebrain_html: str = "") -> str:
     * 建議持股水位（Q5）：僅空槽；⛔ 讀 Risk Cap、⛔ 區間數字、⛔ 暗示已有上限。
     """
     cap = ('<div class="ui2-primary-slot ui2-h-cap" data-ui2-l1="hold_cap_slot" data-axis="capability" data-state="not_provided">'
-           f'<div class="ui2-section-title">{escape(_T.HOLD_CAP_TITLE)}</div>'
+           f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(_T.HOLD_CAP_TITLE)}</div>'
            f'<div class="ui2-primary-slot__body">{_hold_slot_chip()}'
            f'<span class="ui2-primary-slot__reason">{escape(_T.HOLD_CAP_REASON)}</span></div></div>')
     ob = f'<div class="ui2-m-onebrain ui2-h-ob" data-ui2-l1="onebrain">{onebrain_html}</div>' if onebrain_html else ""
     primary = ('<div class="ui2-primary-slot ui2-h-primary" data-ui2-l1="hold_primary_slot" data-axis="capability" data-state="not_provided">'
-               f'<div class="ui2-section-title">{escape(_T.HOLD_PRIMARY_TITLE)}</div>'
+               f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(_T.HOLD_PRIMARY_TITLE)}</div>'
                f'<div class="ui2-primary-slot__body">{_hold_slot_chip()}'
                f'<span class="ui2-primary-slot__reason">{escape(_T.HOLD_PRIMARY_REASON)}</span></div>'
                f'<div class="ui2-primary-slot__spec" data-ui2-spec="1">{escape(_T.HOLD_PRIMARY_SPEC)}</div></div>')
@@ -464,7 +464,7 @@ def primary_slot_html(twii_card: CardVM | None) -> str:
     fresh = twii_card.field.freshness if twii_card is not None else None
     chip = chip_html(TEXT_NOT_PROVIDED, ChipTone.NEUTRAL_INFO, axis="capability", state="not_provided")
     return ('<div class="ui2-primary-slot" data-ui2-l1="primary_slot" data-axis="capability" data-state="not_provided">'
-            f'<div class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>'
+            f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>'
             f'<div class="ui2-primary-slot__body">{chip}'
             f'<span class="ui2-primary-slot__reason">{escape(PRIMARY_SLOT_REASON)}</span></div>'
             f'<div class="ui2-primary-slot__spec" data-ui2-spec="1">{escape(spec_line_text(fresh))}</div></div>')
@@ -582,7 +582,7 @@ def kbar_chart_html(kbar: KbarChartVM) -> str:
         body = (_kbar_svg(kbar) + f'<div class="ui2-kbar__legend" data-ui2-kbar-legend="1">{legend}</div>' + notes)
     sub = f'<div class="ui2-kbar__sub">{escape(KBAR_SUBTITLE)}</div>' if has_bars else ""
     return (f'<div class="ui2-kbar" data-ui2-l1="primary_chart" data-axis="{f.layer}" data-state="{_state_attr(f)}">'
-            f'<div class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>{sub}{status}{body}'
+            f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(PRIMARY_SLOT_TITLE)}</div>{sub}{status}{body}'
             f'<div class="ui2-kbar__meta" data-ui2-kbar-meta="1">{escape(kbar_meta_text(f.freshness))}</div></div>')
 
 

@@ -549,3 +549,140 @@ def test_teeth_row1_clipping_is_detected(browser, url):
         assert ui.pg.evaluate("() => { const row = document.querySelector('.ui2-top1'); return row.scrollWidth > row.clientWidth + 1 || row.scrollHeight > row.clientHeight + 1; }")
     finally:
         ui.close()
+
+
+# ════════════════════════════════════════════════════════════════════
+# A11Y 三項最小修（DEC-195；GPT §B）：disabled CTA 游標／標題語意／第一個 Tab 停駐點焦點框
+# a11y 一律以 CDP `Accessibility.getFullAXTree` 驗（⛔ aria_snapshot()）。
+# ════════════════════════════════════════════════════════════════════
+_CTA_JS = """() => [...document.querySelectorAll('.ui2-cta--disabled')].map(e => ({
+  cursor: getComputedStyle(e).cursor, aria: e.getAttribute('aria-disabled'), role: e.getAttribute('role')}))"""
+
+
+def check_disabled_cta_cursor(ui: Ui, at_least: int = 1) -> list[str]:
+    ctas = ui.pg.evaluate(_CTA_JS)
+    bad = []
+    if len(ctas) < at_least:
+        bad.append(f"disabled CTA 只有 {len(ctas)} 顆（預期 ≥ {at_least}）")
+    bad += [f"disabled CTA 游標 {c['cursor']!r} ≠ not-allowed" for c in ctas if c["cursor"] != "not-allowed"]
+    bad += [f"disabled CTA 缺 aria-disabled=true：{c}" for c in ctas if c["aria"] != "true"]
+    return bad
+
+
+def _heading_levels(ui: Ui) -> list[tuple[str, int]]:
+    out = []
+    for n in ui.ax_nodes():
+        if n.get("ignored") or n["role"].get("value") != "heading":
+            continue
+        lv = [q["value"]["value"] for q in n.get("properties", []) if q["name"] == "level"]
+        out.append((n["name"].get("value", ""), lv[0] if lv else 0))
+    return out
+
+
+def check_headings(ui: Ui) -> list[str]:
+    """每頁恰 1 個 level-1（= 頁標題）；每個 `.ui2-section-title` 都在 AX tree 以 level-2 heading 出現。"""
+    hs = _heading_levels(ui)
+    title = ui.pg.evaluate("() => document.querySelector('.ui2-pagetitle').textContent.trim()")
+    bad = []
+    l1 = [h for h in hs if h[1] == 1]
+    if len(l1) != 1 or l1[0][0].strip() != title:
+        bad.append(f"level-1 heading 應恰 1 個且等於頁標題 {title!r}：{l1}")
+    sec = ui.pg.evaluate("() => [...document.querySelectorAll('.ui2-section-title')].map(e => e.textContent.trim())")
+    l2 = [h[0].strip() for h in hs if h[1] == 2]
+    bad += [f"區塊標題 {s!r} 不在 AX tree 的 level-2 heading" for s in sec if s not in l2]
+    return bad
+
+
+def check_first_tab_stop_focus_ring(ui: Ui) -> list[str]:
+    """fresh 頁面第一次 Tab 落在 `section[data-testid=stMain]`（若該 Streamlit 版本有 tabindex）→ 須有 2px solid 焦點框。"""
+    ui.pg.evaluate("() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); }")
+    has = ui.pg.evaluate("() => { const e = document.querySelector('[data-testid=stMain]'); return !!e && e.hasAttribute('tabindex'); }")
+    if not has:
+        return []        # 該版本 stMain 不是 Tab 停駐點 → 規則無對象、無害（DEC-195 實測 1.56.0／1.59.2 皆有 tabindex）
+    ui.pg.keyboard.press("Tab")
+    r = ui.pg.evaluate("""() => { const a = document.activeElement; if (!a || a.getAttribute('data-testid') !== 'stMain') return {on: false};
+      const c = getComputedStyle(a); return {on: true, st: c.outlineStyle, w: c.outlineWidth, col: c.outlineColor, off: c.outlineOffset}; }""")
+    if not r["on"]:
+        return ["第一次 Tab 不在 stMain（Streamlit 結構改變？請重新確認第一個停駐點）"]
+    if r["st"] != "solid" or r["w"] != "2px" or r["col"] != "rgb(230, 237, 243)" or r["off"] != "-2px":
+        return [f"stMain 焦點框不符：{r}"]
+    return []
+
+
+@pytest.mark.parametrize("which", ["mob", "desk"])
+def test_a11y_disabled_cta_cursor_on_every_page(request, which):
+    ui = request.getfixturevalue(which)
+    for label, pid in zip(PAGES, PAGE_IDS):
+        ui.click_page(label, pid)
+        # 👤：5 顆帳戶 CTA 全 disabled；其餘頁至少 1 顆主 CTA
+        assert check_disabled_cta_cursor(ui, at_least=5 if pid == "p4_me" else 1) == [], (which, pid)
+    assert ui.errs == []
+
+
+@pytest.mark.parametrize("which", ["mob", "desk"])
+def test_a11y_headings_every_page_every_fake_scenario(request, which):
+    from src.ui2.shell.app import _SCENARIO_LABELS
+    ui = request.getfixturevalue(which)
+    for scenario in ("cold", "loaded", "missing", "stale", "unavailable", "not_evaluated"):
+        MV._select_box(ui.pg, "場景", _SCENARIO_LABELS[scenario], f'[data-ui2-scenario="{scenario}"]')
+        for label, pid in zip(PAGES, PAGE_IDS):
+            ui.click_page(label, pid)
+            assert check_headings(ui) == [], (which, scenario, pid)
+            assert check_disabled_cta_cursor(ui) == [], (which, scenario, pid)
+    assert ui.errs == []
+
+
+@pytest.mark.parametrize("which", ["mob", "desk"])
+def test_a11y_headings_every_page_real_feed(request, which):
+    ui = request.getfixturevalue(which)
+    MV._select_box(ui.pg, "資料來源（feed）", "Real-data Preview（唯讀；只接 2 項真資料）", '[data-ui2-scenario="real"]')
+    ui.pg.wait_for_timeout(400)
+    for label, pid in zip(PAGES, PAGE_IDS):
+        ui.click_page(label, pid)
+        assert check_headings(ui) == [], (which, pid)
+        assert check_disabled_cta_cursor(ui) == [], (which, pid)
+
+
+@pytest.mark.parametrize("vp", [MOBILE, DESKTOP], ids=["mobile", "desktop"])
+def test_a11y_headings_every_page_real_degraded(browser, vp):
+    from tests.ui2_viewport import degraded as DG
+    proc, u = DG.start_degraded_server(ROOT)
+    ui = None
+    try:
+        ui = Ui(browser, u, vp, "", mobile=vp["width"] <= 768)
+        for label, pid in zip(PAGES, PAGE_IDS):
+            ui.click_page(label, pid)
+            assert check_headings(ui) == [], (vp, pid)
+            assert check_disabled_cta_cursor(ui) == [], (vp, pid)
+    finally:
+        if ui:
+            ui.close()
+        proc.kill()
+
+
+@pytest.mark.parametrize("which", ["mob", "desk"])
+def test_a11y_first_tab_stop_has_visible_focus_ring(request, which):
+    assert check_first_tab_stop_focus_ring(request.getfixturevalue(which)) == []
+
+
+def test_a11y_fixes_do_not_change_layout_boxes(mob):
+    """標題加 role／aria-level 與 CSS 新規則不得改版面：頁標題與區塊標題仍為 block、字級／字重不變。"""
+    r = mob.pg.evaluate("""() => { const t = document.querySelector('.ui2-pagetitle'); const c = getComputedStyle(t);
+      return {d: c.display, fs: c.fontSize, fw: c.fontWeight, role: t.getAttribute('role'), lv: t.getAttribute('aria-level')}; }""")
+    assert r["role"] == "heading" and r["lv"] == "1" and r["fw"] == "700" and r["fs"] in ("21.6px", "19.2px"), r
+
+
+@pytest.mark.parametrize("name,css,checker", [
+    ("disabled CTA 游標還原為 pointer", ".ui2-ctawrap .ui2-cta.ui2-cta--disabled{cursor:pointer !important}", check_disabled_cta_cursor),
+    ("stMain 焦點框移除", '[data-testid="stMain"]:focus-visible{outline:none !important}', check_first_tab_stop_focus_ring),
+])
+def test_teeth_a11y_css_fixes(mob, name, css, checker):
+    assert checker(mob) == [], "production 應為綠"
+    _mutate(mob, css)
+    assert checker(mob), f"沒抓到：{name}"
+
+
+def test_teeth_a11y_heading_semantics_removed(mob):
+    assert check_headings(mob) == [], "production 應為綠"
+    mob.pg.evaluate("""() => document.querySelectorAll('.ui2-pagetitle, .ui2-section-title').forEach(e => { e.removeAttribute('role'); e.removeAttribute('aria-level'); })""")
+    assert check_headings(mob), "拔掉 role=heading／aria-level 後應被判紅"
