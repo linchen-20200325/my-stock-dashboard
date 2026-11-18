@@ -59,6 +59,9 @@ def _nav_df(mode: str, pdf: pd.DataFrame) -> pd.DataFrame:
     if mode == "ok":
         return pd.DataFrame({"date": [last - pd.Timedelta(days=1), last],
                              "nav": [pdf.Close.iloc[-2] * .999, pdf.Close.iloc[-1] * .999]})
+    if mode == "valuestale":  # NAV 日期同日但值過時（偏離市價 ~11% ⇒ 守門員 nav_value_stale，nav 值被保留）
+        return pd.DataFrame({"date": [last - pd.Timedelta(days=1), last],
+                             "nav": [pdf.Close.iloc[-2] * .90, pdf.Close.iloc[-1] * .90]})
     if mode == "stale":       # 最新 NAV 落後 4 天 ⇒ 折溢價守門員判 stale_nav 且不給 nav 值
         nd = last - pd.Timedelta(days=4)
         return pd.DataFrame({"date": [nd - pd.Timedelta(days=1), nd], "nav": [99.0, 99.5]})
