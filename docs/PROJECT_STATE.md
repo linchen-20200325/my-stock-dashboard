@@ -1455,3 +1455,14 @@
 - 測試：`tests/test_ui2_a11y_three.py`（離線）＋ `tests/test_ui2_drawer_browser.py` 追加項（`ui2_browser`；Streamlit 1.56.0／1.59.2 皆跑）。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Streamlit Cloud、螢幕閱讀器實機（只驗 Chromium CDP AX tree）、iOS Safari／Firefox。
 - 已重現但未做：`A11Y-F1`～`A11Y-F4`（BACKLOG，待 ChatGPT 簽核）。
+
+## 72. OneBrain OB-1 完全離線鷹架＋PIT 邊界測試（2026-11-18；DEC-195；只追加；非 QA PASS；單組作者環境）
+- 分支 `c-onebrain-offline-ob1`（基於 origin/main 897b3c04），未推送、未發 PR。來源：Issue #1199 GPT §C（comment 6978992482）。
+- **Delta 1（tests-only）**：`tests/test_decision_digest_evidence_matrix_guard.py` 新增兩種 stamp：`fetched_equals_generated`（fetched_at == generated_at，預期採用）與 `pit_as_of_after_fetched`（as_of 台北日晚於 fetched_at 台北日，預期 `pit_violation`），oracle 改為 `_PIT_PASSING_STAMPS`。變異驗證：`_pit_ok` 的 `>`→`>=` 變異與「移除 as_of_after_fetched 檢查」變異，先前整組 digest 測試存活，現各使矩陣測試轉紅。未改 src／shared。
+- **Delta 2（新增、可逆、純離線）**：`shared/onebrain_provider.py`（L0：`SummaryProvider` Protocol、`ProviderErrorKind`、`ProviderError`、凍結 `ProviderRequest`）、`src/services/onebrain_shadow.py`（L3：`run_shadow`→`ShadowOutcome`；`effective` 恆為 `build_rule_summary(digest)`）、`tests/onebrain_fake_provider.py`（測試專用 FakeProvider）、`tests/test_onebrain_offline_guard.py`（零 production import AST 守衛、無網路／SDK、Schema／欄位凍結、ShadowOutcome 無 action／Risk Cap 欄位、9 種失敗模式×2 份 Digest 回退、9 種偽造草稿被 grounding 拒收、封網執行）。
+- **不在本批**：生產 import、UI／LINE 接線、真 Provider／model／預算、Digest schema／vocabulary、AB-2b。Delta 3（摘要揭露被省略的 Top-N）需動詞彙／簽章，列 Gate-needed，見 BACKLOG。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。
+
+### 72 更正（2026-11-18；DEC-195；只追加）
+- ~~變異驗證：`_pit_ok` 的 `>`→`>=` 變異與「移除 as_of_after_fetched 檢查」變異，先前整組 digest 測試存活~~ **更正**：獨立 QA 證實只有變異 1（`fetched_at > generated_at` 改 `>=`）真正存活；變異 2（停用 as_of 晚於 fetched 的檢查）在 main 上已被 `tests/test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺，矩陣新增 stamp 僅擴大其覆蓋。
+- N4 收斂：C2 守衛對 OB-1 兩檔的豁免由「逐檔」改為「逐檔×逐模組」（`OFFLINE_SHADOW_MODULES`），只放行 grounding／summary；assembly／builder／validator 等任何其他家族模組新增 import 即轉紅。N2：`run_shadow` 對畸形 `ProviderError`（缺 kind／kind 非列舉）改分類為 `invalid_response`。

@@ -9,7 +9,8 @@ DEC-160 裁示 2「stale／來源失敗／PIT 不合格的值不得當 fresh／e
 既有 `tests/test_decision_digest_assembly.py` 以**挑選過的樣本**（`_WITHHELD_CASES` 9 組＋若干 PIT 例）守這條規則；
 本檔補上**笛卡兒積全組合**，使任何「某一格被放行」的回歸都不能從樣本間隙溜過：
 
-    stamp {無, 正常, as_of 晚於 generated_at（台北日）, fetched_at 晚於 generated_at}
+    stamp {無, 正常, as_of 晚於 generated_at（台北日）, fetched_at 晚於 generated_at,
+            fetched_at 恰等於 generated_at（邊界，採用）, as_of 晚於 fetched_at（台北日）}
   × FreshnessStatus（全部成員＋None）
   × FetchOutcome（全部成員＋None）
   × {macro 側, station 側}
@@ -58,9 +59,13 @@ STAMP_KINDS = {
     "ok": lambda src: SourceStamp(src, D),
     "pit_as_of_after_generated": lambda src: SourceStamp(src, NOW.date() + timedelta(days=1)),
     "pit_fetched_after_generated": lambda src: SourceStamp(src, D, NOW + timedelta(hours=1)),
+    # 邊界：fetched_at 恰等於 generated_at → 規則是「晚於」才違規，等於須採用（擊殺 `>`→`>=` 變異）。
+    "fetched_equals_generated": lambda src: SourceStamp(src, D, NOW),
+    # as_of（台北日）晚於 fetched_at（台北日），但仍不晚於 generated_at 台北日 → 只有 as_of_after_fetched 能抓到。
+    "pit_as_of_after_fetched": lambda src: SourceStamp(src, NOW.date(), NOW - timedelta(days=1)),
 }
-#: 只有這個 stamp 種類同時「有 stamp」且「PIT 通過」。
-_PIT_PASSING_STAMP = "ok"
+#: 同時「有 stamp」且「PIT 通過」的 stamp 種類（oracle 直寫，不呼叫被測私有函式）。
+_PIT_PASSING_STAMPS = frozenset({"ok", "fetched_equals_generated"})
 FRESHNESS_AXIS = [*FreshnessStatus, None]
 UPSTREAM_AXIS = [*FetchOutcome, None]
 _BLOCKING_UPSTREAM = frozenset({FetchOutcome.FETCH_FAILED, FetchOutcome.UNDETERMINED})
@@ -76,7 +81,7 @@ _STATION_CODES = ("cut", "add", "pause_add", "take_profit_partial", "add")
 
 def _expected_used(stamp_kind: str, freshness, upstream) -> bool:
     """oracle：規則四條件的直寫（不呼叫被測模組的私有函式）。"""
-    return (stamp_kind == _PIT_PASSING_STAMP
+    return (stamp_kind in _PIT_PASSING_STAMPS
             and freshness is FreshnessStatus.FRESH
             and upstream not in _BLOCKING_UPSTREAM)
 
@@ -138,8 +143,8 @@ def test_matrix_axes_are_derived_from_enums_and_cover_every_member():
     assert set(UPSTREAM_AXIS) == set(FetchOutcome) | {None}
     assert len(CASES) == len(STAMP_KINDS) * (len(FreshnessStatus) + 1) * (len(FetchOutcome) + 1)
     used = [c for c in CASES if _expected_used(*c.values)]
-    # 採用格 ＝ 1（PIT 通過的 stamp）× 1（FRESH）×（upstream 中非阻擋者數）
-    assert len(used) == len([u for u in UPSTREAM_AXIS if u not in _BLOCKING_UPSTREAM])
+    # 採用格 ＝ len(_PIT_PASSING_STAMPS)（PIT 通過的 stamp）× 1（FRESH）×（upstream 中非阻擋者數）
+    assert len(used) == len(_PIT_PASSING_STAMPS) * len([u for u in UPSTREAM_AXIS if u not in _BLOCKING_UPSTREAM])
     assert 0 < len(used) < len(CASES)
 
 
