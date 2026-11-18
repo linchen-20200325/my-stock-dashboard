@@ -1596,3 +1596,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-18 OneBrain NOTE-1 隔離（DEC-199；append-only）
 - 分支 `c-onebrain-provider-error-isolation`（基於 origin/main cce44294），Draft PR。只改 `onebrain_shadow.py` 一處＋測試。
 - 下一手：非作者 QA → exact-head CI → merge。OB-1-D3 仍待裁示。非 QA PASS。
+
+## 2026-11-18 B 線 New UI2 五頁離線可用收斂（DEC-200；append-only；非 QA PASS）
+- 分支 `b-ui2-offline-usable-diag`（base cce44294）。五頁矩陣見 BACKLOG `UI2-OFFLINE-MATRIX-1118`：只有 🗂 連線診斷有兩個可重現阻礙（冷卻提示殘留、壞形狀報告使頁面每次 rerun 崩潰），已修（`src/ui2/views/data.py`＋`tests/test_ui2_offline_usable_diag.py`），4 份 DEC-137 存證已重生。
+- 下一手：非作者 QA → exact-head 五項 CI → merge → main CI。UI2-OFF-1／-2 為登記項，勿自行施工（後者需草稿先行）。編號 DEC-200／§77 若與 #1219／#1220 合併順序衝突則順延。非 QA PASS。

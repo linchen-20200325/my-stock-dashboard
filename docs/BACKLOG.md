@@ -2957,3 +2957,18 @@
 ## 2026-11-18 DEC-199 OneBrain NOTE-1 結案（append-only；非 QA PASS）
 - ~~#1216 NOTE-1：`run_shadow` 的 `getattr(e,"kind")` 可被惡意 property／`__getattr__` 讓例外逃出~~ **已修**（DEC-199，待非作者 QA）。
 - OB-1-D3（規則式摘要未揭露被省略的 Top-N 行動）**仍 OPEN／Gate-needed，本批不動**。
+
+## 2026-11-18 New UI2 五頁「離線可用」矩陣（`UI2-OFFLINE-MATRIX-1118`；append-only；單組作者環境，非 QA PASS）
+依據 #1199 comment 6988310131。方法：AppTest 全矩陣（FAKE 5 頁×6 場景、Real 5 頁、`?ui2_dev` 以外預設態）＋逐檔讀 `src/ui2/views/*`、`components/html.py`、`shared/ui2_contract/{models,diag}.py`、`src/services/ui2/{real_feed,data_page}.py`、`connection_diag_service.py`；既有 #1202/#1204 測試不重做。
+
+| 頁 | 現有可用 | 離線可測且未通過的阻礙（已重現） | 只能 Cloud／需新 Gate |
+|---|---|---|---|
+| 📊 市場 | 第一屏四問、Real 台股卡＋日 K（含 stale/未來日/降級 #1202/#1204）、灰紅分離 | 無 | 更新 CTA（disabled）、非 TWII 真資料、OneBrain Outlook 實值、Cloud runtime |
+| 🎯 標的 | 雙模式 radio、disabled 搜尋示意、誠實空態 | 無（見 UI2-OFF-1，僅壞 session 可達） | 真查詢／名稱搜尋（FUI-NAME-SEARCH）、精選候選、加入觀察（寫入） |
+| 💼 持股 | W-11 版面＋誠實空槽與原因句 | 無 | Auth/Sheet 讀持股、持股表資料、建議水位、產業曝險（DEC-141 僅版面） |
+| 👤 我的 | 帳戶 skeleton（FAKE 三態）、disabled 動作列 | 無 | Google OAuth、Sheet 讀寫、`NUI2-AUTH-CONTRACT-GATE` |
+| 🗂 資料 | 資料新鮮度總覽（Real）、連線診斷（Yahoo 單點探測、冷卻、固定原因類別） | **G-B1** 冷卻提示過期殘留；**G-B2** 壞形狀診斷報告使資料頁每次 rerun 崩潰（皆已修，DEC-200） | 完整資料健康度；FinMind／TWSE／NAS 代理無核准健康端點；Cloud 連線結果 |
+
+- `UI2-OFF-1`（登記，未施工）：`ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 若被舊 session 或外部寫入成未知值，`get_*_page_vm` raise ValueError（Fail Loud）。UI 路徑（radio 選項）無法產生，故不為此加降級畫面；若要「友善降級」屬新畫面，需 ChatGPT 簽核。
+- `UI2-OFF-2`（登記，未施工）：「檢查連線」理論最長約 32 秒（NAS 中繼站最多 3 請求＋Yahoo 1，各 connect 3s＋read 5s；未實測），期間區塊內無忙碌提示（僅 Streamlit 全域 Running）。加 `st.spinner`＝新增視覺元件，屬草稿先行 Gate。
+- 狀態：G-B1／G-B2 **IMPLEMENTED，待非作者 QA／exact-head CI／merge**；Cloud runtime **NOT VERIFIED**。

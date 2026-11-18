@@ -10762,3 +10762,14 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **測試**：`tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`（被動式／主動式／海外；+1／+3／+30 天、今天、昨天、舊日期、無日期）；修前紅（🟢「今天」）、拿掉修復分支 8 例轉紅。
 - **AUM／費用率／Beta 列查證（唯讀）**：這三列在值存在時餵 `date.today()`，因 `etf_single_data` 的 `aum`／`expense`／`beta` 皆為純數值、payload 無任何來源日期欄，故無法判定其實際新鮮度；未來日期不可能發生，也無可重現的「錯誤日期」反例。結論：未證實為 bug，不改程式，只登 BACKLOG（`ETF-DIAG-ASOF-1`）。
 - **編號**：origin/main 已用至 DEC-197／§74，故本批 DEC-198／§75。
+
+### DEC-200｜New UI2 五頁「離線可用」收斂：🗂 連線診斷兩個離線可重現阻礙的最小修（#1199 comment 6988310131 B/P1；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：#1199 comment 6988310131（B 線：先建矩陣，至多 3 個既有契約內小差額，優先安全互動／壞資料 fail-closed／錯誤導引；需正式 data feed／auth／Sheet／OneBrain UI／新布局／cutover 者標 Gate 不施工）。
+- **矩陣**：見 BACKLOG「UI2-OFFLINE-MATRIX-1118」。五頁在 FAKE 6 場景（5 頁×6＝30 態）與 Real 5 頁以 AppTest 全跑無例外、無 `None`／`nan`／`Traceback` 洩漏；唯二可重現阻礙都在 🗂 資料頁「🔌 連線診斷」。
+- **G-B1（錯誤導引）**：冷卻提示「請稍後再試」原本連同報告存進 `ui2_diag_report`，其後任何 rerun／換頁再回來仍掛著（冷卻早已過期）。現行：提示只在**產生它的那次點擊**顯示；session 只存 `notice=NONE` 的結果（上次檢查結果仍保留）。再按一次且仍在冷卻則再次顯示。
+- **G-B2（壞資料 fail-closed）**：`diag_check` 回傳的 `DiagReport` 只做 `isinstance(DiagReport)` 淺檢查；五欄不是 `ProbeResult(DiagStatus, DiagReason)` 或 notice 不是 `DiagNotice` 時，原樣存入 session，之後資料頁**每次 rerun 都 AttributeError**（換頁回來仍崩）。現行：深度驗證（`views/data.py::_valid_report`），形狀不對＝與「回傳非 DiagReport／丟例外」同一個固定結果（五項 `連線失敗／其他`）；session 內既有壞值讀取時視為 `INITIAL_REPORT`。
+- **測試**：新 `tests/test_ui2_offline_usable_diag.py`（11 項：提示當次顯示／plain rerun 與換頁不殘留／再按再現；5 種壞形狀＋已在 session 的壞值＋None／字串／例外＋合法混合報告不變）。突變（存回含 notice 的原報告、改回淺 isinstance）各自轉紅，驗後復原。既有 `tests/test_ui2_connection_diag_view.py` 全綠。
+- **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變，已用文件記載的 `measure_viewport --shots none` 重生 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0；13／82 態全過）。realfeed 與未改動 base 同日重量逐值相同（差異只有時鐘「過期 9→10 天」與其造成的折行高度，非本批）。
+- **未動**：版面、文案（無新增字串）、Schema／FieldState 語意、資料來源、診斷探測端點與冷卻策略、其他四頁。
+- **登記不施工**：UI2-OFF-1（stale/外來 session 值 `ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 會 raise ValueError，無 UI 路徑可達）、UI2-OFF-2（檢查連線理論最長約 32 秒無區塊內忙碌提示；加 spinner＝新視覺元件，草稿先行 Gate）。見 BACKLOG。
+- **編號**：#1220 用 DEC-198、#1219 用 DEC-199；本批 DEC-200／§77，合併時若被佔則順延（`src/ui2` 註解不含編號）。

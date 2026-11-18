@@ -1481,3 +1481,8 @@
 - 分支 `a-etf-future-nav-date`（基於 origin/main cce44294）。`health_inspector` NAV 列：日期 > 今日 ⇒ 🔴＋`ETF_NAV_DATE_FUTURE_TEXT`，不再 🟢「今天」。`freshness_light`、NAV 計算／來源、AUM／費用率／Beta 皆未動。
 - AUM／費用率／Beta：payload 無來源日期，僅唯讀查證、登 BACKLOG `ETF-DIAG-ASOF-1`。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+## 77. New UI2 五頁「離線可用」收斂：🗂 連線診斷兩項最小修（2026-11-18；DEC-200；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-ui2-offline-usable-diag`（base cce44294）。改 `src/ui2/views/data.py`（`_valid_report` 深度驗證；冷卻提示僅當次顯示）；新增 `tests/test_ui2_offline_usable_diag.py`；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（僅 meta 與時鐘造成的差異）。
+- 五頁矩陣與登記項見 BACKLOG `UI2-OFFLINE-MATRIX-1118`。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud runtime；瀏覽器真點擊（本批互動以 AppTest 驗證，視覺零差異以 measure_viewport 同日 base 對照）。

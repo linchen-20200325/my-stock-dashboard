@@ -8,6 +8,7 @@ DEC-146 第一批：可導航、誠實的「尚未提供／尚未接線」空殼
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from html import escape
 
 import streamlit as st
@@ -60,9 +61,18 @@ def _block_html(rep: D.DiagReport) -> str:
             + _row(D.TEXT_DIAG_LABEL_PUBLICATION, None) + '</div>')
 
 
+def _valid_report(rep: object) -> bool:
+    """深度驗證：五個探測結果都必須是 `ProbeResult(DiagStatus, DiagReason)`、notice 必須是 `DiagNotice`。
+    形狀不對的報告（producer bug／過期 session）不得進 session，否則資料頁每次 rerun 都會崩潰。"""
+    if not isinstance(rep, D.DiagReport) or not isinstance(rep.notice, D.DiagNotice):
+        return False
+    return all(isinstance(p, D.ProbeResult) and isinstance(p.status, D.DiagStatus) and isinstance(p.reason, D.DiagReason)
+               for p in (rep.nas_relay, rep.nas_proxy, rep.finmind, rep.yahoo, rep.twse))
+
+
 def _current_report() -> D.DiagReport:
     rep = st.session_state.get(KEY_DIAG_REPORT)
-    return rep if isinstance(rep, D.DiagReport) else D.INITIAL_REPORT
+    return rep if _valid_report(rep) else D.INITIAL_REPORT
 
 
 def render_diag(diag_check=None) -> None:
@@ -71,17 +81,21 @@ def render_diag(diag_check=None) -> None:
     rows_slot = st.empty()
     clicked = st.button(D.TEXT_DIAG_BUTTON, key=KEY_DIAG_RUN, width="stretch", disabled=diag_check is None)
     reasons_slot = st.empty()
+    notice = D.DiagNotice.NONE      # 冷卻／忙碌提示只屬於「這次點擊」，不跟著結果存進 session（其後 rerun／換頁再回來不再顯示）
     if clicked and diag_check is not None:
         try:
             result = diag_check()
         except Exception:   # noqa: BLE001 — 不顯示例外原文
             result = None
-        st.session_state[KEY_DIAG_REPORT] = (
-            result if isinstance(result, D.DiagReport)
-            else D.DiagReport(*(D.ProbeResult(D.DiagStatus.FAILED, D.DiagReason.OTHER),) * 5))
+        if _valid_report(result):
+            notice = result.notice
+            report = replace(result, notice=D.DiagNotice.NONE)
+        else:               # 非 DiagReport／形狀不對 → 與例外同一個固定結果（fail closed；⛔ 原樣存入 session）
+            report = D.DiagReport(*(D.ProbeResult(D.DiagStatus.FAILED, D.DiagReason.OTHER),) * 5)
+        st.session_state[KEY_DIAG_REPORT] = report
     rep = _current_report()
     rows_slot.markdown(_block_html(rep), unsafe_allow_html=True)
-    reasons_slot.markdown(_reasons(rep), unsafe_allow_html=True)
+    reasons_slot.markdown(_reasons(replace(rep, notice=notice)), unsafe_allow_html=True)
 
 
 def render(vm: PageVM, diag_check=None) -> None:
