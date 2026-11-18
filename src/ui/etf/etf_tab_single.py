@@ -827,19 +827,22 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
     except ImportError:
         _is_active = False
     # 身分一律「未知」：程式內無可靠正向證據 ⇒ 不由三項缺值推斷私募（舊的私募推斷旗標已移除）。
-    _restricted = _is_active
     # #1208 GPT 2026-11-17 定稿：只把「實際嘗試過」的候選寫成失敗。
     #   費用率：get_etf_expense_ratio_safe 對台股 ETF 必走 SITCA 與 yfinance；元大投信只對主動式 ETF 查
-    #   ⇒ 被動式不得列元大為失敗。（主動式此處走 `_restricted` 不適用分支，句子保留供完整性。）
+    #   ⇒ 被動式不得列元大為失敗。（主動式走 elif 分支；A 線修 ③ 起該分支生效。）
     #   淨值：TWSE OpenAPI 只在 NAS Proxy 環境才查，本頁沒有逐路嘗試證據 ⇒ 一律用 GPT 的保守句。
-    if expense or _is_overseas or _restricted:
+    # A 線修 ③（2026-11-18）：台股主動式不再一律遮蔽失敗證據（舊 `_restricted` 旗標已移除）。
+    #   get_etf_expense_ratio_safe 對主動式必走 SITCA→元大投信→yfinance（本檔 _ERR_EXPENSE_ALL_TRIED_ACTIVE 定稿句），
+    #   取不到即為「已嘗試仍無值」＝可驗證失敗；NAV／AUM 缺值亦寫入證據欄。海外 ETF 仍不適用（None）。
+    if expense or _is_overseas:
         _err_expense = None
     elif _is_active:
         _err_expense = _ERR_EXPENSE_ALL_TRIED_ACTIVE
     else:
         _err_expense = _ERR_EXPENSE_ALL_TRIED_PASSIVE
-    _err_nav = None if (_nav_value is not None or _is_overseas or _restricted) else (
+    _err_nav = None if (_nav_value is not None or _is_overseas) else (
         _ERR_NAV_STALE if (prem or {}).get('stale_nav') else _ERR_NAV_NO_ATTEMPT_EVIDENCE)
+    _err_aum = None if (aum or _is_overseas) else ETF_AUM_MISSING_TEXT
     st.session_state['etf_single_data'] = {
         'ticker': ticker, 'name': etf_name,
         'cur_yield': cur_yield, 'avg_yield': avg_yield,
@@ -862,6 +865,7 @@ def render_etf_single(gemini_fn=None, before_ai_hook=None):
         '_is_active_etf': _is_active,
         '_err_expense': _err_expense,
         '_err_nav':     _err_nav,
+        '_err_aum':     _err_aum,
     }
 
     # 版面:smart 分析區塊(標準差帶/分散度/3-3-3)插在 AI 之前 → AI 白話總結置底

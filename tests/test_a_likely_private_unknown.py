@@ -59,6 +59,9 @@ def _nav_df(mode: str, pdf: pd.DataFrame) -> pd.DataFrame:
     if mode == "ok":
         return pd.DataFrame({"date": [last - pd.Timedelta(days=1), last],
                              "nav": [pdf.Close.iloc[-2] * .999, pdf.Close.iloc[-1] * .999]})
+    if mode == "valuestale":  # NAV 日期同日但值過時（偏離市價 ~11% ⇒ 守門員 nav_value_stale，nav 值被保留）
+        return pd.DataFrame({"date": [last - pd.Timedelta(days=1), last],
+                             "nav": [pdf.Close.iloc[-2] * .90, pdf.Close.iloc[-1] * .90]})
     if mode == "stale":       # 最新 NAV 落後 4 天 ⇒ 折溢價守門員判 stale_nav 且不給 nav 值
         nd = last - pd.Timedelta(days=4)
         return pd.DataFrame({"date": [nd - pd.Timedelta(days=1), nd], "nav": [99.0, 99.5]})
@@ -215,21 +218,28 @@ class TestOverseasAndActiveUnchanged:
     def test_overseas_identical_to_before(self, monkeypatch, ticker):
         r = _run(monkeypatch, {"ticker": ticker, "input": ticker})
         rows = r["rows"]
-        # AUM 列：既有行為（is_active_etf 對 SPY/VOO 為 True ⇒ 顯示主動式句；屬另案 OPEN 發現 #2，不在本修範圍）
-        assert rows["ETF 規模 AUM"] == {"light": "⚪", "text": "⚪ " + ACTIVE_MSG[:55]}
+        # AUM 列：~~既有行為（is_active_etf 對 SPY/VOO 為 True ⇒ 顯示主動式句）~~
+        #   A 線修 ②（2026-11-18，有意識的行為變更）：海外身分優先 ⇒ 誠實缺值句，不再宣稱台灣主動式／投信官網。
+        assert rows["ETF 規模 AUM"] == {"light": "🔴", "text": "❌ " + AUM_MISSING}
         assert rows["ETF 費用率"] == {"light": "⚪", "text": "⚪ " + OVERSEA_MSG}
         assert rows["NAV 淨值"] == {"light": "⚪", "text": "⚪ " + OVERSEA_MSG}
         assert "私募" not in _all_text(r)
         assert IDENT_NOTE not in _all_text(r)
 
+    @staticmethod
+    def _strip_evidence(p):          # A 線修 ③：舊 session payload 無失敗證據欄 ⇒ 維持既有 ⚪
+        for k in ("_err_expense", "_err_nav", "_err_aum"):
+            p.pop(k, None)
+
     def test_tw_active_three_missing_identical_to_before(self, monkeypatch):
-        r = _run(monkeypatch, {"ticker": "00981A.TW", "input": "00981A"})
+        r = _run(monkeypatch, {"ticker": "00981A.TW", "input": "00981A"}, mutate=self._strip_evidence)
         for n in ("ETF 規模 AUM", "ETF 費用率", "NAV 淨值"):
             assert r["rows"][n] == {"light": "⚪", "text": "⚪ " + ACTIVE_MSG[:55]}, n
         assert IDENT_NOTE not in _all_text(r)
 
     def test_tw_active_only_aum_identical_to_before(self, monkeypatch):
-        r = _run(monkeypatch, {"ticker": "00981A.TW", "input": "00981A", "aum": 5e10})
+        r = _run(monkeypatch, {"ticker": "00981A.TW", "input": "00981A", "aum": 5e10},
+                 mutate=self._strip_evidence)
         assert r["rows"]["ETF 規模 AUM"]["light"] == "🟢"
         assert r["rows"]["ETF 費用率"] == {"light": "⚪", "text": "⚪ " + ACTIVE_MSG[:55]}
         assert r["rows"]["NAV 淨值"] == {"light": "⚪", "text": "⚪ " + ACTIVE_MSG[:55]}

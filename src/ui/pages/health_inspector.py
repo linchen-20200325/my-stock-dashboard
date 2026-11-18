@@ -14,7 +14,9 @@ from typing import Optional
 import streamlit as st
 from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 from shared.secret_scrub import scrub_secrets  # SEC-3：診斷表 error_msg 欄（表格，不走 Markdown）
-from shared.etf_missing_text import ETF_AUM_MISSING_TEXT, ETF_IDENTITY_UNKNOWN_NOTE
+from shared.etf_missing_text import (
+    ETF_AUM_MISSING_TEXT, ETF_IDENTITY_UNKNOWN_NOTE, ETF_NAV_DATE_UNKNOWN_TEXT, ETF_NAV_STALE_TEXT,
+)
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.data_freshness import (
     freshness_level,
@@ -1238,8 +1240,12 @@ def render_data_health_raw():
             _active_msg  = '主動式 ETF — 公開資料受限（投信官網有揭露但格式不一致，本系統暫無法穩定抓取）'
             # v1.1：主動式 ETF 失敗併入 na（黃燈），不再算入紅燈
             # 身分一律「未知」：不由三項缺值推斷私募；舊 session 殘留的私募旗標一律忽略。
-            _restricted = _is_active_etf_main
-            _aum_na = _restricted and not _e1.get('aum')
+            # A 線三修（2026-11-18）：
+            #   ② 海外身分優先（僅診斷措辭）：is_active_etf 對 SPY/VOO/QQQ 為 True，但海外 ETF 不是台灣主動式。
+            #   ③ 台股主動式：payload 帶失敗證據（_err_expense/_err_nav/_err_aum 有值）⇒ 紅燈明示；
+            #      無證據（舊 session）⇒ 維持既有 ⚪「公開資料受限」；未知不虛稱網路錯誤。
+            _tw_active = _is_active_etf_main and not _is_oversea_etf
+            _aum_na = _tw_active and not _e1.get('aum') and not _e1.get('_err_aum')
             _nav_ok0 = ((_e1.get('premium') or {}).get('nav')) is not None
             _id_unknown3 = (not _is_oversea_etf and not _is_active_etf_main
                             and not _e1.get('aum') and not _e1.get('expense') and not _nav_ok0)
@@ -1248,7 +1254,7 @@ def render_data_health_raw():
             rows.append(_row('ETF 規模 AUM',
                              str(_dt_r.date.today()) if _e1.get('aum') else None, 'daily',
                              error_msg=(_active_msg if _aum_na
-                                        else None if (_e1.get('aum') or _is_oversea_etf)
+                                        else None if _e1.get('aum')
                                         else _aum_missing_msg),
                              probe_status=('na' if _aum_na else None),
                              source='yfinance', endpoint='.info[totalAssets]', proxy=False))
@@ -1256,12 +1262,13 @@ def render_data_health_raw():
                              str(_dt_r.date.today()) if _e1.get('beta') is not None else None,
                              'daily',
                              source='yfinance', endpoint='.info[beta]', proxy=False))
-            _exp_na = (_is_oversea_etf or _restricted) and not _e1.get('expense')
+            _exp_masked = _tw_active and not _e1.get('_err_expense')    # 無失敗證據的台股主動式才灰
+            _exp_na = (_is_oversea_etf or _exp_masked) and not _e1.get('expense')
             rows.append(_row('ETF 費用率',
                              str(_dt_r.date.today()) if _e1.get('expense') else None, 'daily',
                              optional=False,
                              error_msg=(_oversea_msg if _is_oversea_etf
-                                        else _active_msg if _is_active_etf_main
+                                        else _active_msg if _exp_masked
                                         else _e1.get('_err_expense')),
                              probe_status=('na' if _exp_na else None),
                              # #1208 GPT 2026-11-17 定稿：候選查詢順序（實際命中以可回查結果為準）
@@ -1271,11 +1278,22 @@ def render_data_health_raw():
             # NAV 淨值
             _prem = _e1.get('premium') or {}
             _nav_ok = _prem.get('nav') is not None
-            _nav_na = (_is_oversea_etf or _restricted) and not _nav_ok
+            # A 線修 ①：資料日期只用 payload 內可信的 NAV 日期（nav_date／data_date），絕不用 date.today()；
+            #   stale（含 nav 值被保留的 nav_value_stale）⇒ 紅燈＋過期句；有值但無日期 ⇒ 紅燈＋日期不明句。
+            _nav_stale = bool(_prem.get('stale_nav'))
+            _nav_date = _prem.get('nav_date') or _prem.get('data_date')
+            _nav_fresh_date = str(_nav_date) if (_nav_ok and not _nav_stale and _nav_date) else None
+            # QA NOTE-1：NAV 有值時不是「資料受限」——過期／日期不明的證據在 premium 欄位本身（舊 session 亦同），
+            #   故只有「NAV 真的沒有且無失敗證據」的台股主動式才維持 ⚪。
+            # QA NOTE-2：海外 ETF 的 NAV 有值但過期／日期不明 ⇒ 仍是真不適用的 ⚪ 海外句（不可 ❌ 矛盾）。
+            _nav_masked = _tw_active and not _e1.get('_err_nav') and not _nav_ok
+            _nav_na = (_is_oversea_etf and _nav_fresh_date is None) or _nav_masked
             rows.append(_row('NAV 淨值',
-                             str(_dt_r.date.today()) if _nav_ok else None, 'daily',
+                             _nav_fresh_date, 'daily',
                              error_msg=(_oversea_msg if _is_oversea_etf
-                                        else _active_msg if _is_active_etf_main
+                                        else _active_msg if _nav_masked
+                                        else ETF_NAV_STALE_TEXT if (_nav_ok and _nav_stale)
+                                        else ETF_NAV_DATE_UNKNOWN_TEXT if _nav_ok
                                         else _e1.get('_err_nav')),
                              probe_status=('na' if _nav_na else None),
                              source='FinMind / TWSE OpenAPI',

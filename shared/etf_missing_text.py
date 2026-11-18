@@ -16,3 +16,5 @@ ETF_AUM_MISSING_TEXT = '目前沒有可用 ETF 規模資料，暫時無法顯示
 ETF_NAV_STALE_TEXT = '淨值資料已過期，暫時無法顯示。'
 #: 身分說明：僅在「非海外、非主動式、AUM＋費用率＋NAV 全缺」時附在 AUM 列後。
 ETF_IDENTITY_UNKNOWN_NOTE = 'ETF 類型無法確認；資料未取得不代表私募。'
+#: NAV 有值但 payload 內沒有任何可信的 NAV 日期：不得套今天日期、不得判綠燈（只能說日期無法確認）。
+ETF_NAV_DATE_UNKNOWN_TEXT = 'NAV 已取得，但資料日期無法確認，暫不判定新鮮度。'

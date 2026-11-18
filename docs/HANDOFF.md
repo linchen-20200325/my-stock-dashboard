@@ -1585,3 +1585,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 分支 `c-onebrain-offline-ob1`（base 897b3c04），未推送、未發 PR。新增 `shared/onebrain_provider.py`、`src/services/onebrain_shadow.py`、`tests/onebrain_fake_provider.py`、`tests/test_onebrain_offline_guard.py`；擴充 `tests/test_decision_digest_evidence_matrix_guard.py`（PIT 邊界兩種 stamp）。
 - 規則：新模組**零 production import**（守衛強制）；`ShadowOutcome.effective` 恆為規則式摘要；Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，不餵下游。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。Delta 3 與 OB-2 介面差額為 Gate 項，勿自行施工。非 QA PASS。
+
+## 2026-11-18 舊 UI ETF 診斷三項最小安全修復（DEC-196；append-only）
+- 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04），**未推送、未發 PR**（作者交付當下紀錄）。改 `etf_tab_single.py`、`health_inspector.py`、`shared/etf_missing_text.py`；新增 `tests/test_a_etf_diag_three_fixes.py`。
+- 註：上方 DEC-194 段「未推送、未發 PR」是**當時點的紀錄**，DEC-194 其後已以 #1215 合併，不是現況。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。副作用：`data_coverage.py` 讀 `_err_nav`，台股主動式 NAV 缺值時覆蓋燈降級。非 QA PASS。
