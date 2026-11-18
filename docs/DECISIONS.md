@@ -10711,3 +10711,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **已揭露副作用**：(1) `src/ui/pages/data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈由原本維持綠色改為降級（因為 `_err_nav` 現在非空）。(2) 非三缺的部分缺值情境（僅費用率／僅 NAV／費用率＋NAV 缺 AUM）燈號不變（🔴），但 AUM 列由無文字的「抓取失敗」改為顯示中性缺值句。(3) 三缺情境燈號由 ⚪ 變 🔴。
 - **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
 - **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-195｜舊 UI ETF 診斷三項最小安全修復（NAV 日期誠實／海外 AUM 措辭／台股主動式真失敗不遮蔽）（GPT 核准 A 線 APPROVED_FOR_MINIMAL_SAFE_FIX，comment 6978992482 §A；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：DEC-194 OPEN-1／OPEN-2／OPEN-3（#1199 closure ledger 6977952186）。僅限舊 UI：`src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`、`shared/etf_missing_text.py`、直接測試。
+- **① NAV**：`health_inspector` NAV 列不再 `nav is not None → 今天 🟢`。資料日期只用 payload 內 `premium.nav_date`／`data_date`（既有新鮮度契約 `freshness_light`），**絕不用 `date.today()`**；`stale_nav`（含 nav 值被保留的 `nav_value_stale`，情境 S3b）⇒ 🔴＋「淨值資料已過期，暫時無法顯示。」（沿用 DEC-194 句）；有值但無任何可信日期（例如 TWSE 直讀路徑 A 的 payload）⇒ 🔴＋新句「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」（`ETF_NAV_DATE_UNKNOWN_TEXT`，唯一新增句）。
+- **② 海外 AUM**：診斷頁 AUM 列以海外身分優先（僅措辭；`is_active_etf` 全域不動）。海外 AUM 缺值 ⇒ 🔴＋「目前沒有可用 ETF 規模資料，暫時無法顯示。」，不再宣稱台灣主動式／投信官網。海外費用率／NAV 的真不適用 ⚪ 列保留。
+- **③ 台股主動式**：payload 新增 `_err_aum`（AUM 缺值時為缺值句），`_err_expense`／`_err_nav` 對台股主動式不再被 `_restricted` 一律壓成 None（原不可達的 `elif _is_active` 分支因此生效；其釘住字串 `elif _is_active:\n        _err_expense = _ERR_EXPENSE_ALL_TRIED_ACTIVE` 逐字仍在，`tests/test_issue1208_moneydj_zero_requests.py` 未改）。診斷頁：有失敗證據（上述欄位有值）⇒ 🔴＋明示句，且不虛稱網路錯誤；**無證據**（舊 session payload 缺這些欄）⇒ 維持 ⚪「主動式 ETF — 公開資料受限」；`_restricted` 旗標自 `etf_tab_single` 移除。
+- **未動**：評分、折溢價／NAV 公式、新鮮度分級帶、`is_active_etf`、`etf_calc`、資料源／網路、MoneyDJ 零請求守衛、New UI2；#1215 三態（三缺 🔴、身分未知、舊 `_likely_private` 忽略）。
+- **已揭露副作用**：(1) `data_coverage.py` 讀 `_err_nav`：台股主動式 NAV 缺值時覆蓋燈改為降級（原被壓成 None 維持綠）。(2) TWSE 直讀（路徑 A）等無日期的 NAV 值，診斷頁由 🟢 改 🔴（日期不明）。(3) 海外 AUM 缺值由 ⚪ 變 🔴（未取得）。(4) AUM／費用率／Beta 列的資料日期仍沿用既有 `date.today()` 顯示（本批僅核准 NAV 列，未動）。
+- **測試**：新增 `tests/test_a_etf_diag_three_fixes.py`（先在 main 上失敗 8 項，修後全綠）；`tests/test_a_likely_private_unknown.py` 僅三處依有意識的行為變更改斷言（舊文以刪除線註記）並新增 `valuestale` fixture；`tests/test_batch_z60.py` `_BASE_DIGEST` 依慣例更新舊值加刪除線。反向注入證據見 PR 描述／HANDOFF。

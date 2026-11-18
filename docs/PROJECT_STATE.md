@@ -1448,3 +1448,8 @@
 - 已揭露副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級。
 - OPEN（未修）：`_nav_ok` stale-NAV 偽綠燈（S3b）；`is_active_etf` 對 SPY／VOO／QQQ 回 True 導致海外 AUM 列顯示主動式宣稱；台股主動式依既有規則把真失敗藏在 ⚪。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+## 72. 舊 UI ETF 診斷三項最小安全修復（2026-11-18；DEC-195；只追加；非 QA PASS；單組作者環境）
+- 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04）。① NAV 列不再以 `date.today()` 冒充資料日，stale／日期不明不綠；② 海外 AUM 缺值不再宣稱主動式／投信官網；③ 台股主動式有失敗證據時紅燈明示，無證據維持 ⚪。公式、評分、資料源、UI2 零改動。
+- 已揭露副作用：`data_coverage.py` 對台股主動式 NAV 缺值降級；無日期 NAV（路徑 A）由 🟢 改 🔴。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；真實 TWSE 直讀 payload 是否帶日期未在 Cloud 驗證。
