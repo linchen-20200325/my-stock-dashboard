@@ -20,7 +20,10 @@ from dataclasses import dataclass
 
 #: 資料來源說明（給「查看依據」用；與 A 規格 §4.1.2 圖 A 來源列同一個說法）。
 # 內部對照：data_cache/twii_ohlcv.parquet（Yahoo:^TWII:chart，每日 cron 更新）；畫面上只寫白話。
-TWII_SOURCE_TEXT: str = "本地加權指數歷史快取（來源 Yahoo，每日更新）"
+# ~~"本地加權指數歷史快取（來源 Yahoo，每日更新）"~~（DEC-191 / C1 2026-11-18 有意識的文案變更，不是漏刪：
+# 固定字樣「每日更新」在資料停更時與實況不符〔K7／M-23〕；舊值仍成立的理由＝cron 本意為每日；被權衡掉＝常數不隨新鮮度變，不應承諾頻率。
+# 只拿掉「，每日更新」；來源／as_of／新鮮度判定／數值一律未動。）
+TWII_SOURCE_TEXT: str = "本地加權指數歷史快取（來源 Yahoo）"
 
 
 @dataclass(frozen=True)

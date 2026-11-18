@@ -1561,6 +1561,9 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 作者環境複驗：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（1.59.2／1.56.0）；measure 兩版本 fake 82／82、real 13／13；`tests/test_ui2_*`＋z60＋#1208 還原鏈 2260 passed。viewport 證據 JSON 未重生（source_hash 輸入未變）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI；Cloud 另案。延後項見 BACKLOG 同日段與 DEC-190。非 QA PASS。
 
+## 2026-11-18 C1 TWII 來源字串（append-only；非 QA PASS）
+- 僅改 `src/services/market_twii_view_service.py` 常數＋新增 `tests/test_c1_twii_source_text.py`＋docs 追加（DEC-191）。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 零 diff；p3 baseline／`_P3_BASELINE_SHA256` 未動。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。
 ### C2 D-5 守衛位置敏感化交接（2026-11-18；只追加；非 QA PASS）
-- 分支 `c2-d5-guard-hardening`（基於 origin/main 8f434fad），僅動 `tests/test_ui2_real_feed.py` 與三份 docs；決策 DEC-191。
-- 下一手：非作者 QA → exact-head CI → merge。與 C1（`src/services/market_twii_view_service.py`）檔案無重疊；DEC 號 191 若與 C1 撞號需於合併時重編。
+- 分支 `c2-d5-guard-hardening`（基於 origin/main 8f434fad，已合併 6cca6d07），僅動 `tests/test_ui2_real_feed.py` 與三份 docs；決策 DEC-192。
+- 下一手：非作者 QA → exact-head CI → merge。與 C1（`src/services/market_twii_view_service.py`）檔案無重疊；C1 已取 DEC-191，本項重編為 DEC-192。
