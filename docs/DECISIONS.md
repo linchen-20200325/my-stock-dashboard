@@ -10678,3 +10678,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **作者環境結果**（非 CI／非非作者 QA）：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（streamlit 1.59.2、1.56.0）；measure_viewport fake 82／82、real 13／13。
 - **仍 NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 - **延後（不在本 PR）**：TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」（C 線獨立項）；第二階段細節；位階契約無 `as_of`，若日後新增，載入→「資料未備」歸類須重審。
+
+### DEC-191｜融資來源字樣 `MARGIN_SOURCE_TEXT` 改中性措辭（I1140-MARGIN-SOURCE-TEXT／DEC174-GG1；ChatGPT 定稿；2026-11-18；只追加；非 QA PASS；非接線核准）
+- **裁示來源**：ChatGPT 定稿（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）；獨立預查：0 production caller、無測試釘住舊字面。
+- **變更**：`src/services/margin_fact_service.py::MARGIN_SOURCE_TEXT` 由「本地融資餘額歷史快取（FinMind 全市場融資金額，元換算為億元；每日更新）」改為「本地融資餘額歷史快取（市場範圍與來源待確認）」。
+- **移除的宣稱**：「全市場」（範圍未證實）、「FinMind」（DATASTATION／finmind provenance 衝突仍 OPEN）、「每日更新」（更新頻率未證實）；另刪「元換算為億元」細節——單位已由 `MARGIN_UNIT`（億元）承載，不必在來源字樣重述。
+- **未動**：數值、單位換算（`TWD_PER_YI`、`MARGIN_UNIT`）、schema、FieldState、來源契約、`shared/margin_schema.py`、`macro_helpers.py`（`test_w1_r7_hit_source` 釘住）、`leading_indicators`、任何接線（UI2／real_feed 仍 0 引用）。
+- **同類「全市場」宣稱仍未處理**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 OPEN。
+- **明確聲明**：本項**不是接線核准**；DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 均不變；實際運作維持 A／HOLD。
+- **測試**：`tests/test_margin_fact_service.py` 新增字面釘住＋不含「全市場／每日更新／FinMind」；既有 scope guard 仍綠。作者環境自跑，未經非作者 QA。

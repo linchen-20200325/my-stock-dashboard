@@ -479,6 +479,16 @@ def test_no_threshold_or_judgement_in_source():
     assert not ({500, 500.0, 10000, 10000.0} & nums)
 
 
+def test_source_text_neutral_wording_literal_pin():
+    # I1140-MARGIN-SOURCE-TEXT／DEC174-GG1：中性字樣；單位由 MARGIN_UNIT 承載，不在來源字樣內重述換算。
+    assert S.MARGIN_SOURCE_TEXT == "本地融資餘額歷史快取（市場範圍與來源待確認）"
+
+
+@pytest.mark.parametrize("banned", ["全市場", "每日更新", "FinMind"])
+def test_source_text_has_no_unverified_claims(banned):
+    assert banned not in S.MARGIN_SOURCE_TEXT
+
+
 def test_source_has_only_fixed_user_visible_strings():
     # 非 docstring 的中文字串只准：來源描述常數、單位字樣；其餘（detail 診斷）不得是名詞片語的使用者文案——
     # 以「模組層級常數字串」白名單核對。
