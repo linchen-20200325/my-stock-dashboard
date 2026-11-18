@@ -120,3 +120,66 @@ class TestTwActiveFailureNotMasked:
         r = _run(monkeypatch, {"ticker": "0050.TW", "input": "0050"})
         assert _lights(r) == ("🔴", "🔴", "🔴")
         assert EXP_PASSIVE in r["rows"][_EXP]["text"]
+
+
+# ───────────────────── QA NOTE-1／NOTE-2：NAV 有值時的措辭（台股主動式／海外）─────────────────────
+def _strip_evidence(p):
+    for k in ("_err_expense", "_err_nav", "_err_aum"):
+        p.pop(k, None)
+
+
+def _stale_keep_nav(p):
+    p["premium"] = {**p["premium"], "stale_nav": True, "stale_reason": "nav_value_stale"}
+
+
+def _no_date(p):
+    p["premium"] = {k: v for k, v in p["premium"].items() if k not in ("nav_date", "data_date")}
+
+
+def _old_date(p):
+    old = _dt.date.today() - _dt.timedelta(days=10)
+    p["premium"] = {**p["premium"], "nav_date": old, "data_date": old}
+
+
+_ACT = {"ticker": "00981A.TW", "input": "00981A", "aum": 5e10, "expense": 0.009, "nav": "ok"}
+
+
+class TestNavPresentWordingTwActiveAndOverseas:
+    """NAV 有值時，台股主動式（新／舊 payload 皆同）顯示真實原因，不得顯示「公開資料受限」。"""
+
+    @pytest.mark.parametrize("old_payload", [False, True])
+    @pytest.mark.parametrize("name,mut,sentence", [
+        ("stale", _stale_keep_nav, NAV_STALE),
+        ("nodate", _no_date, NAV_DATE_UNKNOWN),
+    ])
+    def test_active_nav_present_reason(self, monkeypatch, old_payload, name, mut, sentence):
+        def _m(p):
+            mut(p)
+            if old_payload:
+                _strip_evidence(p)
+        r = _run(monkeypatch, _ACT, mutate=_m)
+        row = r["rows"][_NAV]
+        assert row["light"] == "🔴", row
+        assert sentence in row["text"], row
+        assert "公開資料受限" not in row["text"] and "投信官網" not in row["text"], row
+
+    @pytest.mark.parametrize("old_payload", [False, True])
+    def test_active_nav_old_date_not_green_no_restricted_claim(self, monkeypatch, old_payload):
+        def _m(p):
+            _old_date(p)
+            if old_payload:
+                _strip_evidence(p)
+        r = _run(monkeypatch, _ACT, mutate=_m)
+        row = r["rows"][_NAV]
+        assert row["light"] != "🟢" and "公開資料受限" not in row["text"], row
+
+    def test_active_nav_genuinely_missing_old_payload_stays_grey(self, monkeypatch):
+        spec = {**_ACT}
+        spec.pop("nav")
+        r = _run(monkeypatch, spec, mutate=_strip_evidence)
+        assert r["rows"][_NAV] == {"light": "⚪", "text": "⚪ " + ACTIVE_MSG[:55]}
+
+    @pytest.mark.parametrize("mut", [_stale_keep_nav, _no_date])
+    def test_overseas_nav_present_stale_keeps_not_applicable_wording(self, monkeypatch, mut):
+        r = _run(monkeypatch, {"ticker": "SPY", "input": "SPY", "aum": 5e11, "nav": "ok"}, mutate=mut)
+        assert r["rows"][_NAV] == {"light": "⚪", "text": "⚪ " + OVERSEA_MSG}

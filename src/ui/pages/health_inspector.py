@@ -1283,8 +1283,11 @@ def render_data_health_raw():
             _nav_stale = bool(_prem.get('stale_nav'))
             _nav_date = _prem.get('nav_date') or _prem.get('data_date')
             _nav_fresh_date = str(_nav_date) if (_nav_ok and not _nav_stale and _nav_date) else None
-            _nav_masked = _tw_active and not _e1.get('_err_nav')
-            _nav_na = (_is_oversea_etf or _nav_masked) and not _nav_ok
+            # QA NOTE-1：NAV 有值時不是「資料受限」——過期／日期不明的證據在 premium 欄位本身（舊 session 亦同），
+            #   故只有「NAV 真的沒有且無失敗證據」的台股主動式才維持 ⚪。
+            # QA NOTE-2：海外 ETF 的 NAV 有值但過期／日期不明 ⇒ 仍是真不適用的 ⚪ 海外句（不可 ❌ 矛盾）。
+            _nav_masked = _tw_active and not _e1.get('_err_nav') and not _nav_ok
+            _nav_na = (_is_oversea_etf and _nav_fresh_date is None) or _nav_masked
             rows.append(_row('NAV 淨值',
                              _nav_fresh_date, 'daily',
                              error_msg=(_oversea_msg if _is_oversea_etf

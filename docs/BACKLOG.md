@@ -2929,3 +2929,7 @@
 ## 2026-11-18 DEC-194 OPEN-1／2／3 結案（DEC-196；append-only；非 QA PASS）
 - ~~OPEN-1 `_nav_ok` stale-NAV 偽綠燈~~ → 已修（NAV 列只用 payload 可信日期；stale／日期不明不綠）。~~OPEN-2 海外 AUM 主動式宣稱~~ → 已修（診斷措辭海外優先）。~~OPEN-3 台股主動式真失敗被 ⚪ 蓋住~~ → 已修（有證據才紅；無證據維持 ⚪）。以上待非作者 QA／CI。
 - 新 OPEN：AUM／費用率／Beta 列的資料日期仍用 `date.today()`（未核准，未動）；`data_coverage.py` 對台股主動式 NAV 缺值的降級為可見副作用。Owner：專案 AI；觸發：下一次動 ETF Raw Data。
+
+## 2026-11-18 DEC-196 QA 後續（append-only；非 QA PASS）
+- 已修 NOTE-1（台股主動式 NAV 有值時措辭）、NOTE-2（海外 NAV 有值過期的矛盾字樣）。
+- **OPEN｜NOTE-3 未來日期 NAV 仍 🟢**：`premium.nav_date`／`data_date` 晚於今天（例：今天 +3 天）時 `freshness_light` 仍判 🟢「今天」。既有行為，不在 A 線核准範圍，未動 `freshness_light`。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期 NAV 回報。

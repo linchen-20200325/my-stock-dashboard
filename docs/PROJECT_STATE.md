@@ -1450,6 +1450,7 @@
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 
 ## 73. 舊 UI ETF 診斷三項最小安全修復（2026-11-18；DEC-196；只追加；非 QA PASS；單組作者環境）
-- 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04）。① NAV 列不再以 `date.today()` 冒充資料日，stale／日期不明不綠；② 海外 AUM 缺值不再宣稱主動式／投信官網；③ 台股主動式有失敗證據時紅燈明示，無證據維持 ⚪。公式、評分、資料源、UI2 零改動。
+- 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04）。~~① NAV 列不再以 `date.today()` 冒充資料日，stale／日期不明不綠；~~（QA 更正見下）② 海外 AUM 缺值不再宣稱主動式／投信官網；③ 台股主動式有失敗證據時紅燈明示，無證據維持 ⚪。公式、評分、資料源、UI2 零改動。
 - 已揭露副作用：`data_coverage.py` 對台股主動式 NAV 缺值降級；無日期 NAV（路徑 A）由 🟢 改 🔴。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；真實 TWSE 直讀 payload 是否帶日期未在 Cloud 驗證。
+- **QA 更正（§73；只追加）**：① NAV 列不再以 `date.today()` 冒充資料日；NAV 有值時過期／日期不明一律 🔴 並顯示真實原因句（含台股主動式、舊 session payload；原誤顯示「公開資料受限」已修）；海外 NAV 有值但過期仍為 ⚪ 不適用句。OPEN：未來日期 NAV 仍 🟢（`freshness_light` 既有行為，未動）。
