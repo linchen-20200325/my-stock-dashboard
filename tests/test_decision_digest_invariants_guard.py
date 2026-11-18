@@ -284,6 +284,10 @@ TARGET_MODULES = frozenset({
 })
 # Stage F Gate 開啟時，核准的 production caller 加在這裡（repo 相對路徑，附核准依據）。現況：空。
 ALLOWED_CALLERS: frozenset = frozenset()
+# OneBrain OB-1 完全離線影子層（DEC-195；Issue #1199 GPT §C comment 6978992482）：**不是** Stage F production caller。
+# 兩檔只被 tests/ 與彼此引用（由 tests/test_onebrain_offline_guard.py 的 AST 守衛強制「0 production import」），
+# 不進 UI／LINE／決策。獨立於 ALLOWED_CALLERS（Stage F Gate 仍為空、仍未開啟）；新增項目須有同等級核准依據。
+OFFLINE_SHADOW_CALLERS: frozenset = frozenset({"shared/onebrain_provider.py", "src/services/onebrain_shadow.py"})
 # 僅 import L0 根契約 shared.decision_digest 的既有檔（不在 TARGET_MODULES 內，另由專屬測試鎖死）。
 L0_ROOT_IMPORTERS = frozenset({"shared/strategy_class_schema.py"})
 
@@ -407,8 +411,14 @@ def test_c2_family_whitelist_files_exist_and_cover_all_current_digest_files():
         "（有意識的 Gate 變更），否則它會被當成 caller 掃描。差集：" + repr(on_disk ^ set(FAMILY_FILES)))
 
 
+def test_c2_stage_f_gate_still_closed_and_offline_shadow_set_is_exactly_two_files():
+    assert ALLOWED_CALLERS == frozenset()            # Stage F production caller Gate 未開
+    assert OFFLINE_SHADOW_CALLERS == {"shared/onebrain_provider.py", "src/services/onebrain_shadow.py"}
+    assert not (OFFLINE_SHADOW_CALLERS & FAMILY_FILES)
+
+
 def test_c2_repo_has_zero_production_callers_of_digest_family():
-    hits = scan_digest_callers(REPO, allowed=ALLOWED_CALLERS)
+    hits = scan_digest_callers(REPO, allowed=ALLOWED_CALLERS | OFFLINE_SHADOW_CALLERS)
     assert hits == [], (
         "發現 digest 側車／規則模組的 production caller。這是 Stage F production caller Gate"
         "（Issue #1138、DEC-159／DEC-160）：Gate 未開啟前不得有 caller；"
@@ -517,8 +527,9 @@ def test_c2_l0_root_importers_are_exactly_the_whitelist():
         digest_family = {m for m in mods if "decision_digest" in m and m != "shared.decision_digest"
                          and not m.startswith("shared.decision_digest.")}
         # 家族外任何檔不得碰 root 以外的 digest 模組（含 `shared.decision_digest.<name>` 形式的 from-import 展開）
-        assert not (digest_family & TARGET_MODULES), rel
-    assert importers == set(L0_ROOT_IMPORTERS) | (importers & set(ALLOWED_CALLERS)), importers
+        if rel not in OFFLINE_SHADOW_CALLERS:        # OB-1 離線影子層刻意引用 grounding／summary（見上方常數說明）
+            assert not (digest_family & TARGET_MODULES), rel
+    assert importers == set(L0_ROOT_IMPORTERS) | (importers & set(ALLOWED_CALLERS | OFFLINE_SHADOW_CALLERS)), importers
 
 
 def test_c2_strategy_class_schema_imports_only_l0_root_of_digest_family():
