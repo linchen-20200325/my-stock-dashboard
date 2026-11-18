@@ -912,7 +912,23 @@ class TestOldFilesUntouched:
     #   `src/ui/render/etf_render.py`（弱勢度表去經理人／任期欄）、`src/ui/pages/health_inspector.py`（刪經理人診斷列／探測／MoneyDJ 經理人深度診斷，
     #   持股探測保留）。其餘 86 檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）；反向守衛見
     #   `tests/test_issue1208_manager_strategy_removed.py`。
-    _BASE_DIGEST = "60ee86c17f2affad00f48d87d580202793ebfe18adc95b844b2c59012ab538c3"
+    # ~~"60ee86c17f2affad00f48d87d580202793ebfe18adc95b844b2c59012ab538c3"~~（#1208 PR1 後，至 b06a7eca 仍成立）
+    # 📌 #1208 PR2 MoneyDJ 全入口零請求止血（2026-11-17，Issue #1208 GPT 裁示，見 docs/DECISIONS.md DEC-189；
+    #   核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/etf/etf_tab_single.py`（PROXY 警示／淨值缺值原因／費用率與 NAV 失敗來源字樣去 MoneyDJ、
+    #   刪「或 MoneyDJ 收益分配頁」手動查法）、`src/ui/etf/etf_tab_portfolio.py`（持股缺值提示去 MoneyDJ）、`src/ui/etf/etf_dashboard.py`
+    #   （re-export 去 fetch_moneydj_expense_ratio）、`src/ui/etf/etf_tab_grp_compare.py`（註解）、`src/ui/render/etf_render.py`（持股缺值提示去 MoneyDJ）、
+    #   `src/ui/pages/health_inspector.py`（PMI 7 段、費用率／持股來源字樣與實際鏈一致）、`src/ui/tabs/tab_edu.py`（教學地圖 TW PMI 列 7 源，
+    #   抽成模組常數 `_TW_PMI_SOURCE_MAP_TEXT`）、`app.py`（一行註解）。其餘 83 檔一個字都沒動。指紋依本 docstring 的指示同步更新
+    #   （⛔ 未回退該改動）；反向守衛見 `tests/test_issue1208_moneydj_zero_requests.py`。
+    # ~~"e88ebc7b9acd8a175154fffbf4962133632cfcadc6b5f4b60c6ac4dbf7b03987"~~（#1208 PR2 首版 78d7e9a3）
+    # 📌 #1208 PR2 文案依 GPT 2026-11-17 定稿（Issue #1208 留言 6955097932；非作者 QA 退回項，⛔ 不是漏改）：
+    #   只動 `src/ui/etf/etf_tab_single.py`（刪全域 PROXY 警示；`_prem_reason`／NAV 說明改固定缺值句；`_err_expense`／`_err_nav`
+    #   改定稿句並依實際嘗試路徑選句）、`src/ui/etf/etf_tab_portfolio.py`、`src/ui/render/etf_render.py`、`src/ui/pages/health_inspector.py`、
+    #   `src/ui/tabs/tab_edu.py`（`_TW_PMI_SOURCE_MAP_TEXT`）。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）。
+    # ~~"57a5e5f48ff6989309c516b2380d8468f4073a0b44cbb198c13d7610340ab354"~~（GPT 定稿回修 5a479259）
+    # 📌 #1208 PR2 ChatGPT 簽核（PR #1210 留言 6963995185；核准過的舊檔改動，⛔ 不是漏改）：只動 `src/ui/render/etf_render.py`
+    #   成分股缺值說明括號內刪「海外 IP 受限或」，只留「上游成分股資料暫時無法取得」。其餘檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "11900ebe795a66a29f9412ab434315c6d90ef908b492ea33c5bc33fc90e6324b"
 
     def test_no_diff_against_base(self):
         import hashlib

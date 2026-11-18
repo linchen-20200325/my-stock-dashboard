@@ -444,7 +444,11 @@ def _tool_get_etf_quality(etf_id: str) -> dict:
     return {"ok": True,
             "data": {"etf_id": ticker, **{k: q.get(k) for k in keys if k in q}},
             # 慢變基本面屬性,無單一 as_of(不套過期標記);coverage<1 表部分因子缺,AI 應提醒
-            "provenance": {"source": "ETF 品質(AUM規模/費用率/配息穩定度/beta;yfinance+SITCA)", "as_of": None}}
+            # #1208 GPT 2026-11-17 定稿（留言 6955097932）：候選來源說明，不冒稱命中（無逐因子 hit-level 證據）；
+            # as_of 維持 None（多個慢變因子無共同資料日）。
+            "provenance": {"source": "ETF 品質（AUM／Beta 候選：yfinance；費用率候選：SITCA→元大投信〔僅主動式 ETF〕"
+                                     "→yfinance；配息穩定度：既有配息資料；缺值不補）",
+                           "as_of": None}}
 
 
 REAL_TOOLS: dict = {

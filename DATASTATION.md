@@ -434,7 +434,7 @@ print(report)
 | 名稱 | 來源 | 識別 | 端點 | 頻率 | API Key | 狀態連動 | 用途 |
 |---|---|---|---|---|---|---|---|
 | 美國核心 CPI 年增率 (✓可測試) | FRED | `CPILFESL` | `fred.stlouisfed.org/graph/fredgraph.csv` | monthly | FRED_API_KEY | `macro_info.us_core_cpi.date` | 通膨判讀、Fed 升降息預測 |
-| ~~ISM 製造業 PMI~~ 台灣製造業 PMI（CIER；session key 沿用 `ism_pmi`） | ~~FRED~~ CIER／data.gov.tw 6100 等 8 源 | ~~`NAPM`~~ `cier-pmi` | ~~`fred.stlouisfed.org/graph/fredgraph.csv`~~ `macro_core.fetch_tw_pmi`（`PMI_SOURCE_REGISTRY` 順序賽跑） | monthly | — | `macro_info.ism_pmi.date` | ~~美國製造業景氣領先指標~~ 台灣製造業景氣領先指標 (>50 擴張) |
+| ~~ISM 製造業 PMI~~ 台灣製造業 PMI（CIER；session key 沿用 `ism_pmi`） | ~~FRED~~ CIER／data.gov.tw 6100 等 ~~8 源~~ 7 源（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） | ~~`NAPM`~~ `cier-pmi` | ~~`fred.stlouisfed.org/graph/fredgraph.csv`~~ `macro_core.fetch_tw_pmi`（`PMI_SOURCE_REGISTRY` 順序賽跑） | monthly | — | `macro_info.ism_pmi.date` | ~~美國製造業景氣領先指標~~ 台灣製造業景氣領先指標 (>50 擴張) |
 | BLS CPI 備援 | BLS | `CUUR0000SA0` | `api.bls.gov/publicAPI/v2/timeseries/data` | monthly | — | `—` | FRED CPI 失敗時的備援來源 |
 
 #### 🌐 國際金融
@@ -519,8 +519,8 @@ print(report)
 | ETF 規模/Beta/費用率 | yfinance | `Ticker.info` | `query1.finance.yahoo.com` | daily | — | `etf_single_data.aum` | ETF AUM、Beta、Expense Ratio |
 | ETF NAV 淨值 | FinMind | `TaiwanETFNetAssetValue` | `api.finmindtrade.com` | daily | FINMIND_TOKEN | `etf_single_data.premium` | ETF 折溢價計算 |
 | TWSE ETF API | TWSE OpenAPI | `ETF/v1` | `/v1/ETF/{op_id}` | daily | — | `—` | ETF NAV 備援 |
-| MoneyDJ ETF 基本資料 | MoneyDJ | `Basic0004` | `moneydj.com/ETF/X/Basic/Basic0004.xdjhtm` | event | — | `—` | ETF 成分股、追蹤指數 |
-| 基金淨值 | MoneyDJ | `YP010001` | `moneydj.com/funddj/yb/YP010001.djhtm` | daily | — | `—` | 基金淨值查詢 |
+| ~~MoneyDJ ETF 基本資料~~ | ~~MoneyDJ~~ | ~~`Basic0004`~~ | ~~`moneydj.com/ETF/X/Basic/Basic0004.xdjhtm`~~ | ~~event~~ | — | `—` | ~~ETF 成分股、追蹤指數~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） |
+| ~~基金淨值~~ | ~~MoneyDJ~~ | ~~`YP010001`~~ | ~~`moneydj.com/funddj/yb/YP010001.djhtm`~~ | ~~daily~~ | — | `—` | ~~基金淨值查詢~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） |
 
 #### 📰 新聞 RSS
 

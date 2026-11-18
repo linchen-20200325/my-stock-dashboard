@@ -414,7 +414,7 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '', *,
     try:
         if ticker:
             # ── 路徑 0(v18.443):NAS 中繼站(家用台灣 IP)抓 TWSE 官方同 snapshot 折溢價 ──
-            # 繞過 Streamlit Cloud 美國 IP 對 TWSE/goodinfo/MoneyDJ 的 geo-block;TWSE 折溢價
+            # 繞過 Streamlit Cloud 美國 IP 對 TWSE/goodinfo 的 geo-block;TWSE 折溢價
             # dataset 的 nav+市價+折溢價 同源一致(無跨來源日期錯位假溢價)。中繼站未設定
             # (NAS_BASE_URL 缺)→ 回 None → 自動 fallback 既有 5 段鏈(行為 0 改)。
             _off = fetch_etf_official_premium(ticker)
@@ -499,7 +499,7 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '', *,
                                 'premium_pct': _prem, 'warning': _prem > 1.0,
                                 'data_date': _nav_d_only}
                     else:
-                        # 假日/連假兜底：即時來源(goodinfo/TWSE/MoneyDJ)常只回一筆淨值，
+                        # 假日/連假兜底：即時來源(goodinfo/TWSE)常只回一筆淨值，
                         # 其日期與 yfinance 收盤日(上一交易日)對不上→同日 join 落空。
                         # 改用「最新淨值 vs 最新收盤」，但兩者日期需 ≤4 天(涵蓋連假)，
                         # 避免拿過時淨值硬配。此即「遇假日往前抓最後交易日淨值」。
@@ -883,7 +883,7 @@ def _canonical_holding_key(name) -> str:
 
     不同來源的成份股名稱格式不一：
       - yfinance（補中文後）：「台積電 (2330)」
-      - 台灣 Yahoo / MoneyDJ：「台積電」
+      - 台灣 Yahoo：「台積電」（#1208 PR2 前 MoneyDJ 亦同格式，已移除）
     若直接用原字串比對，同一支股票會被當成兩支 → overlap 誤判為 0%。
     這裡統一去掉「(代碼)」括號與所有空白、轉小寫，讓兩者對得上。
     """

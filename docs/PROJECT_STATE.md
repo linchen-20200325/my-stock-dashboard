@@ -1417,3 +1417,15 @@
 
 - **ETF**：經理人不再是投資因子。單檔 ETF 頁不顯示經理人／任期／換手／新任；弱勢度燈號只看價格績效（相同指標＝相同結論）；不再有每週 MoneyDJ 經理人抓取 workflow 或經理人資料 PR。其餘 ETF 指標（價格、配息、AUM、Beta、費用率、持股、品質評等）不變。
 - **狀態**：本地已實作待 PR／QA／CI／merge；決策 DEC-188；細節見 BACKLOG／HANDOFF 2026-11-17 #1208 段、`docs/ARCHIVED_FEATURES.md`。其他 MoneyDJ 來源權利仍未核准、另案追蹤。
+
+### 70.27 Issue #1208 PR2 MoneyDJ 全入口零請求止血後狀態（2026-11-17；只追加；不改既有節；非 QA PASS；單組撰寫，未經非作者獨立 QA）
+
+- **資料來源**：程式不再向 MoneyDJ 發任何請求（PMI、ETF 費用率／AUM／持股／淨值／中文名、AI 問答、舊 UI 診斷）。PMI 剩 7 源；AUM 只剩 yfinance，缺則 N/A；ETF 品質評等的 AUM 涵蓋率可能下降（不補 0）。
+- **權利**：屬止血，MoneyDJ 權利未解決；其餘替代來源權利（DG-LIC）NOT VERIFIED。使用者可見文案待 ChatGPT 定稿。
+- **狀態**：本地已實作待 PR／QA／CI／merge；決策 DEC-189；細節見 BACKLOG／HANDOFF 2026-11-17 #1208 PR2 段。
+
+### 70.28 Issue #1208 PR2 文案定稿後狀態（2026-11-17；只追加；非 QA PASS；單組撰寫）
+- 70.27「使用者可見文案待 ChatGPT 定稿」已解除：依 GPT 17:05Z 定稿（#1208 留言 6955097932）完成；單檔 ETF 頁不再有全域 PROXY 警示，缺值句只列實際嘗試過的來源。台灣 PMI 健康探測（退役 macromicro）已停用，PMI 新鮮度仍依實際資料日判定。
+
+### 70.29 Issue #1208 PR2 ChatGPT 簽核後（2026-11-17；只追加；非 QA PASS）
+- 70.28「15 項依定稿完成」更正：14 項逐字＋被動式費用率缺值句依 GPT 規則推導；N1–N3 與 etf_render 成分股缺值句已由 ChatGPT 於 PR #1210 留言 6963995185 簽核。

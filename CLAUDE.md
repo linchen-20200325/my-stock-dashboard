@@ -1143,13 +1143,13 @@ dummy 資料 / `except: pass` / 自己估一個合理值）**一項未減**。
 |---|---|---|---|
 | **T1** | 官方政府/央行 API | FRED, TWSE OpenAPI, TPEX OpenAPI, TAIFEX, CBC ms1.json, data.gov.tw, MOF, MOPS, BLS, IMF | macro_core.py:51-53, data_registry.py:125-156,228-275 |
 | **T2** | 商用聚合 API（帶 API key） | FinMind, DBnomics, Yahoo Finance query1 | data_registry.py:228-275, requirements.txt:16 |
-| **T3** | 第三方網站（HTML 抓） | CIER, NDC, StockFeel, MacroMicro, Goodinfo, HiStock/Wearn, MoneyDJ, Cnyes, ISM | macro_core.py:557-558,816,939-1041,1108,1222 |
+| **T3** | 第三方網站（HTML 抓） | CIER, NDC, StockFeel, MacroMicro, Goodinfo, HiStock/Wearn, ~~MoneyDJ~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留）, Cnyes, ISM | macro_core.py:557-558,816,939-1041,1108,1222 |
 | **T4** | News RSS（非數值,僅文本） | Google News, Reuters, Bloomberg, CNBC, Yahoo News | data_registry.py:398-425 |
 | **T5** | User config / AI | Google Sheets（portfolio）, Gemini API（synthesis only） | gsheet_portfolio.py, ai_engine.py |
 
 **關鍵衝突裁決**：
 - **M1B/M2**：CBC（TWD）主、IMF（USD）備 → **禁止跨幣別平均**,IMF 僅作 CBC 全敗 fallback（evidence: data_registry.py:345-350）
-- **TW PMI 多源**：依 `PMI_SOURCE_REGISTRY` 順序賽跑,取第一個命中（CIER-EN > data.gov.tw > NDC > CIER首頁 > StockFeel > Cnyes > CIER-cid8 > MoneyDJ,共 8 源）。**不平均**（evidence: macro_core.py PMI_SOURCE_REGISTRY, SPEC.md §4）。⚠️ v19.86 更正：原第 8 順位 FinMind 段（打 dataset `TaiwanEconomicIndicator`）已於 v19.85 拔除 — 該 dataset **不存在於 FinMind**（SDK 2.0.4 枚舉 + 官方文件皆無此名）。FinMind 無 PMI 資料集可替換。⚠️ v19.113 拔除 MacroMicro 段 + CIER cid=21 列表 URL — 探針 run 29182317622（美國 IP + NAS proxy）實錘兩者無回應（macromicro.me host 級攔截、cid21 頁下架）;CIER 段改僅掃首頁。
+- **TW PMI 多源**：依 `PMI_SOURCE_REGISTRY` 順序賽跑,取第一個命中（~~CIER-EN > data.gov.tw > NDC > CIER首頁 > StockFeel > Cnyes > CIER-cid8 > MoneyDJ,共 8 源~~ **現行**：CIER-EN > data.gov.tw > NDC > CIER首頁 > StockFeel > Cnyes > CIER-cid8,共 7 源（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留））。**不平均**（evidence: macro_core.py PMI_SOURCE_REGISTRY, SPEC.md §4）。⚠️ v19.86 更正：原第 8 順位 FinMind 段（打 dataset `TaiwanEconomicIndicator`）已於 v19.85 拔除 — 該 dataset **不存在於 FinMind**（SDK 2.0.4 枚舉 + 官方文件皆無此名）。FinMind 無 PMI 資料集可替換。⚠️ v19.113 拔除 MacroMicro 段 + CIER cid=21 列表 URL — 探針 run 29182317622（美國 IP + NAS proxy）實錘兩者無回應（macromicro.me host 級攔截、cid21 頁下架）;CIER 段改僅掃首頁。
 - **TW NDC 景氣燈號**：FinMind `TaiwanBusinessIndicator`（國發會官方鏡像,含 monitoring 分數 + monitoring_color 燈號 + leading 領先指標）為主 → StockFeel → MacroMicro 備援（v19.85；原「舊源全廢改抓第三方」中的 FinMind 判定為誤診,真名 TaiwanBusinessIndicator 一直可用）
 - **US PMI**：FRED（NAPM/ISPMANPMI）> DBnomics（ISM/pmi）> ISM 官網 > MacroMicro（evidence: macro_core.py:557-617）
 - **VIX**：Yahoo `^VIX` 主、CBOE CDN 備

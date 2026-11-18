@@ -1314,7 +1314,7 @@ with tab_tools:
                 expanded=False):
             # FIX(效能): st.expander(expanded=False) 只收合**視覺**,body 每次 rerun 仍會完整執行。
             #   原本 6 個 panel 無條件跑:render_data_registry_panel 每次組 50+ 筆 HTML、
-            #   render_data_health_raw 內另有未受 button 保護的 per-ETF 外抓(MoneyDJ/SITCA)。
+            #   render_data_health_raw 內另有未受 button 保護的 per-ETF 外抓(SITCA 等;#1208 PR2 起已無 MoneyDJ)。
             #   改為 checkbox gate —— 預設不執行,要看才載入。診斷內容一項未刪。
             if st.checkbox(
                     '載入進階診斷（較耗時，部分項目會實際打外部 API）',

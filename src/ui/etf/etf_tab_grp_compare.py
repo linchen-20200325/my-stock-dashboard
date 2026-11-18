@@ -26,7 +26,7 @@ from src.services.etf_grp_compare_service import (
     get_etf_dividends as fetch_etf_dividends,
     get_etf_info as fetch_etf_info,
 )
-# v18.452:中文名優先 MoneyDJ(fetch_etf_zh_name),與 etf_tab_single.py 同一 SSOT 抓法。
+# v18.452:中文名優先 fetch_etf_zh_name(#1208 PR2 起僅 FinMind,MoneyDJ 備援已移除),與 etf_tab_single.py 同一 SSOT 抓法。
 # 舊寫法只用 yfinance shortName/longName,對台股 ETF 常回發行商英文名(如 "Yuanta")
 # 而非商品名 —— production bug:00981A.TW 名稱欄顯示錯誤。
 from src.data.etf import fetch_etf_zh_name as _fetch_zh_n
@@ -78,7 +78,7 @@ def _fetch_one_etf(ticker: str) -> dict:
         else:
             _divs = fetch_etf_dividends(ticker)
             _info = fetch_etf_info(ticker) or {}
-            # 中文名優先 MoneyDJ(同 etf_tab_single.py SSOT)→ fallback yfinance → ticker
+            # 中文名優先 fetch_etf_zh_name(FinMind;同 etf_tab_single.py SSOT)→ fallback yfinance → ticker
             _zh_name = _fetch_zh_n(ticker)
             # compute_etf_quality 有 @st.cache_data — 線程內呼叫安全(Streamlit cache 自帶 lock)
             _quality = compute_etf_quality(ticker)

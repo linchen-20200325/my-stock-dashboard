@@ -551,7 +551,7 @@ my-stock-dashboard/
 |------|-----:|------|
 | `chart_plotter.py` | ~574 | Plotly 5 子圖（K 線 + 成交量 + 外資 + 投信 + 自營/融資）、月營收趨勢圖、季度財務圖 |
 | `etf_dashboard.py` | 49 | Phase 7C 後：純 re-export shim；維持 6 個下游 importer 既有 `from etf_dashboard import ...` 不變 |
-| `etf_fetch.py` | 572 | Phase 7C 新增 — 純 I/O 層：價格 / 配息 / 基本資訊 / 費用率 (SITCA/MoneyDJ) / NAV 5 源備援 / 類股漲跌 / 新聞 |
+| `etf_fetch.py` | 572 | Phase 7C 新增 — 純 I/O 層：價格 / 配息 / 基本資訊 / 費用率 (SITCA/~~MoneyDJ~~) / NAV ~~5~~ 4 源備援（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） / 類股漲跌 / 新聞 |
 | `etf_calc.py` | 465 | Phase 7C 新增 — 純計算層：殖利率 / 總報酬 / 折溢價 G1-G3 守門員 / 風險指標 (TE/MDD/CAGR/Sharpe) / 同儕排名 / 戰情室列 |
 | `etf_render.py` | 505 | Phase 7C 新增 — Streamlit UI 層：MACRO 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 |
 
@@ -698,7 +698,7 @@ my-stock-dashboard/
   （`scripts/update_macro_history.py`）+ workflow `git add -f data_cache/` 提交；runtime
   只讀。此層**補強**原 `cache/macro_snapshot/`（Streamlit Cloud ephemeral 磁碟，container
   recycle 即抹，撐不過重啟）。
-- **race budget（逾時前必回落）**：`fetch_tw_pmi` 8 源並行賽跑設 `_PMI_RACE_DEADLINE_S=45s`
+- **race budget（逾時前必回落）**：`fetch_tw_pmi` ~~8 源~~ 7 源（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留）並行賽跑設 `_PMI_RACE_DEADLINE_S=45s`
   硬上限（`as_completed(timeout=...)` + `shutdown(wait=False)`），**必須 < macro_trio
   orchestrator inner budget（70s）**，確保單源慢 timeout（dgtw 25s×2）不會拖到整個 block
   被 orchestrator cancel，durable 快照 fallback 才讀得到。出口鏈同精神收 timeout fit budget。
@@ -1413,7 +1413,7 @@ ETF 回測子頁（render_etf_backtest）額外流程：
 
 | 模組 | 行數 | 角色 | 依賴 |
 |---|---|---|---|
-| `etf_fetch.py` | 572 | 純 I/O：價格 / 配息 / 基本資訊 / 費用率 (SITCA→MoneyDJ→yfinance 3 源備援) / NAV (FinMind→goodinfo→TWSE→MoneyDJ→yfinance 5 源備援+stale fallback) / 類股漲跌 / 新聞 | streamlit + pandas + yfinance（**零內部依賴**） |
+| `etf_fetch.py` | 572 | 純 I/O：價格 / 配息 / 基本資訊 / 費用率 (~~SITCA→MoneyDJ→yfinance 3 源備援~~ 現行 SITCA→元大(主動式)→yfinance) / NAV (~~FinMind→goodinfo→TWSE→MoneyDJ→yfinance 5 源備援~~ 現行 FinMind→goodinfo→TWSE→yfinance 4 源備援+stale fallback)（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） / 類股漲跌 / 新聞 | streamlit + pandas + yfinance（**零內部依賴**） |
 | `etf_calc.py` | 465 | 純算：殖利率 / 總報酬 / 折溢價 G1-G3 守門員 / 風險指標 (TE/MDD/CAGR/Sharpe) / VCP / 同儕排名 / `_compute_etf_warroom_row` | `etf_fetch` |
 | `etf_render.py` | 505 | Streamlit UI：MACRO_ALLOC 配置橫幅 / 走勢圖 / BIAS / 蒙地卡羅 / 類股熱力圖 / `_strategy_conclusion` / `_check_sector_exposure` | `etf_fetch`（只取 `_fetch_news_for` / `_fetch_sector_returns`） |
 | `etf_dashboard.py` | 49 | Public API shim — re-export 40 個 symbol + 4 個 tab 入口 | 上述 3 檔 + 4 個 etf_tab_*.py |
@@ -2116,7 +2116,7 @@ with tab_edu:
 | **PMI 診斷** | 當「🇹🇼 台灣製造業 PMI」進入「資料異常清單」時，自動於下方加 `🔬 8 段備援源詳細診斷` expander；按鈕觸發 `macro_core.diagnose_tw_pmi_sources()` 逐源探測，輸出 {method, status (✅/⚠️/❌/⚪), detail, url} 表格（PR #53）。此外 `fetch_tw_pmi` 本身 8 段備援於 commit `8d3fb71` 補完每段 `errs` 追蹤（無回應 / HTTP 非 200），讓 `_err_pmi` 完整呈現所有源根因 |
 | **私募 ETF 判別** | `etf_tab_single._likely_private` 啟發式：台股 ETF 但 AUM + 費用率 + NAV 三主流源皆空 → 視為私募/特殊 ETF；health_inspector 將三列同步標記 `probe_status='na'`，訊息「私募/特殊 ETF — AUM、費用率、NAV 主流資料源皆未揭露」（commit `c3250d7`）|
 | **批次分析空 K 線** | `tab_stock_grp._fetch_single_t3` 當 yfinance + FinMind 雙源皆空時，於 result 帶入 `error` 訊息（供 `_fetch_err` → `error_msg` 顯示），且**跳過 4hr 快取**避免短期持續空轉（commit `26da8fb`）|
-| **主動 ETF ~~經理人/~~持股探測** | ETF Raw Data expander 內 ~~`🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測`（PR #22）：每檔主動式 ETF 顯示 `✅ 名字 + 任期天數` / `❌ 抓取失敗（403 / regex 漏 / proxy 掛掉）`；被動式 ETF 標 `⚪ 不適用`。~~經理人探測（#1208 / DEC-188 2026-11-17 使用者取消經理人換手策略，已刪除）；現為 `🏃 ETF 持股探測`。持股檔數同三態探測。診斷意義：MoneyDJ 反爬擋海外 IP，~~`fetch_etf_manager` +~~ `fetch_etf_holdings` 走 `proxy_helper.fetch_url`（NAS Squid 台灣 IP）為主、`curl_cffi` 為 fallback；此探測直接看 proxy 是否通 |
+| **主動 ETF ~~經理人/~~持股探測** | ETF Raw Data expander 內 ~~`🏃 主動 ETF 經理人 / 持股 MoneyDJ 探測`（PR #22）：每檔主動式 ETF 顯示 `✅ 名字 + 任期天數` / `❌ 抓取失敗（403 / regex 漏 / proxy 掛掉）`；被動式 ETF 標 `⚪ 不適用`。~~經理人探測（#1208 / DEC-188 2026-11-17 使用者取消經理人換手策略，已刪除）；現為 `🏃 ETF 持股探測`。持股檔數同三態探測。診斷意義：~~MoneyDJ 反爬擋海外 IP，`fetch_etf_manager` + `fetch_etf_holdings` 走 `proxy_helper.fetch_url`（NAS Squid 台灣 IP）為主、`curl_cffi` 為 fallback；此探測直接看 proxy 是否通~~（原文保留；`fetch_etf_manager` 已由 #1208 PR1／DEC-188 刪除，MoneyDJ 段與 `curl_cffi` fallback 已由 #1208 PR2／DEC-189 移除）。現行 `fetch_etf_holdings` 只走 yfinance → 台灣 Yahoo，無 curl_cffi 直連 |
 
 ---
 
@@ -2207,7 +2207,7 @@ with tab_edu:
 | `OAuthError` | 統一例外類別（HTTP 非 200 / JSON 缺欄）|
 
 **Sidebar Google 帳號區（app.py）**：已登入顯示 `🟢 已登入 + 🚪 登出`；OAuth Client 已設未登入顯示 `🔐 用 Google 登入` link_button；SA 模式顯示 `ℹ️ 使用 Service Account`；未設定顯示 `⚙️ OAuth 尚未設定 — 至「ETF 組合」Tab 展開「💾 雲端儲存」設定`。
-| 探測源 | ① data.gov.tw ② NDC ③ MacroMicro ④ CIER cid=21 ⑤ StockFeel ⑥ 鉅亨網 ⑦ FinMind（需 token）⑧ MoneyDJ |
+| 探測源 | ① data.gov.tw ② NDC ③ MacroMicro ④ CIER cid=21 ⑤ StockFeel ⑥ 鉅亨網 ⑦ FinMind（需 token）~~⑧ MoneyDJ~~（#1208 PR2／DEC-189 2026-11-17：MoneyDJ 全入口零請求止血，已移除；原文保留） |
 | 設計原則 | **不改 `fetch_tw_pmi`**（零 regression）；**lazy 載入**（只在使用者點按鈕才探測）；timeout=8s × 8 段 worst case ≤ 1 分鐘 |
 | 呼叫端 | `health_inspector.py` 異常清單 expander 內按鈕觸發 |
 

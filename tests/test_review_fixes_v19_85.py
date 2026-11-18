@@ -169,15 +169,17 @@ class TestFakeDatasetRemoval:
         src = (REPO / "src/data/macro/tw_macro.py").read_text(encoding="utf-8")
         assert "def fetch_pmi_history" not in src
 
-    def test_pmi_registry_is_eight_sources_no_dead(self):
+    def test_pmi_registry_is_seven_sources_no_dead(self):
         """v19.85 原鎖 9 源無 FinMind;v19.113 重釘 8 源 — MacroMicro 段依
         探針 run 29182317622(美國 IP + NAS)實錘 host 級無回應後拔除
-        (user 核准提案②)。FinMind 反捏造鎖與首位 CIER-EN 不變。"""
+        (user 核准提案②)。FinMind 反捏造鎖與首位 CIER-EN 不變。
+        #1208 PR2(2026-11-17 GPT 裁示):MoneyDJ 段移除(全入口零請求止血)→ 重釘 7 源。"""
         from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
         names = [n for n, _ in PMI_SOURCE_REGISTRY]
-        assert len(names) == 8, names
+        assert len(names) == 7, names
         assert "FinMind" not in names
         assert "MacroMicro" not in names, "死源不得回歸(v19.113)"
+        assert "MoneyDJ" not in names, "MoneyDJ 不得回歸(#1208 PR2)"
         assert names[0] == "CIER-EN", "優先序首位不變"
 
     def test_pmi_src_finmind_symbol_gone(self):

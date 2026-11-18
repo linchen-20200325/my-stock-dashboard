@@ -334,19 +334,20 @@ class TestPmiSourceListParity:
         """已拔除的來源不可再以「本系統的 TW PMI 來源」身分出現。
 
         v19.85 拔 FinMind（`TaiwanEconomicIndicator` 這個 dataset 根本不存在）、
-        v19.113 拔 MacroMicro（美國 IP + NAS proxy 實測 host 級攔截）。
+        v19.113 拔 MacroMicro（美國 IP + NAS proxy 實測 host 級攔截）、
+        #1208 PR2（2026-11-17）拔 MoneyDJ（GPT 裁示 MoneyDJ 全入口零請求止血）。
         注意：只檢查 PMI 章，**不檢查全站** —— MacroMicro 在「美國 PMI」的
         fallback 鏈裡仍是合法來源（CLAUDE.md §2.1），全站禁字會誤傷。
         """
         from src.data.macro.macro_core import PMI_SOURCE_REGISTRY
         _names = {_n for _n, _fn in PMI_SOURCE_REGISTRY}
-        for _dead in ('MacroMicro', 'FinMind'):
+        for _dead in ('MacroMicro', 'FinMind', 'MoneyDJ'):
             assert _dead not in _names, (
                 f'{_dead} 又回到 PMI_SOURCE_REGISTRY —— 若是刻意加回，'
                 f'請同步更新本測試與 CLAUDE.md §2.1。'
             )
         _title, _body = _pmi_chapter()
-        for _dead in ('MacroMicro', 'FinMind'):
+        for _dead in ('MacroMicro', 'FinMind', 'MoneyDJ'):
             assert _dead not in _body, (
                 f'PMI 章又把 {_dead} 寫成 TW PMI 來源（該源已拔除）。'
             )

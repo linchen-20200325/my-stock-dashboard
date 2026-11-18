@@ -113,7 +113,7 @@ def monitored(name: str, *, category: str = '', frequency: str = 'daily',
             key（供 find_orphans set-diff）;不確定就留 None（誠實跳過,不猜）。
         success_check: v19.118 選填 callable(result) -> bool。**預設 None = 舊行為**
             （不拋例外即記 'ok'）。給了就用它判定成敗——治「fetcher 不拋例外、但回
-            `value=None` 診斷 dict」的**假綠燈**（如 `fetch_tw_pmi` 8 源全敗仍回 dict
+            `value=None` 診斷 dict」的**假綠燈**（如 `fetch_tw_pmi` 全源全敗仍回 dict
             → 舊版恆綠，誤導 user 以為有值）。回 False → 記 'failed'（診斷亮 🔴）。
             check 本身拋例外 → 保守記 'ok'（不因判定器壞掉誤殺）。
     """
