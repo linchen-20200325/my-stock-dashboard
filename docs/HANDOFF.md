@@ -1555,3 +1555,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 ## 2026-11-17 Issue #1208 PR2｜ChatGPT 簽核（PR #1210 留言 6963995185）
 - 前段「15 項逐字」更正為 14 項逐字＋1 項（被動式費用率缺值句）依 GPT 規則推導；N1–N3 已簽核原樣；(e) etf_render 括號只留「上游成分股資料暫時無法取得」已施工。死碼 LOW 項見 BACKLOG 同日段。
+
+## 2026-11-18 DEC-177 首屏方案 C｜合併 main 後複驗（append-only）
+- HEAD c969ccd0（方案 C 實作＋合併 origin/main ca12825e）。正式碼只動 `src/services/ui2/data_page.py`、`real_canonical.py`；`src/ui2/**` 零 diff。
+- 作者環境複驗：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（1.59.2／1.56.0）；measure 兩版本 fake 82／82、real 13／13；`tests/test_ui2_*`＋z60＋#1208 還原鏈 2260 passed。viewport 證據 JSON 未重生（source_hash 輸入未變）。
+- 下一手：非作者 QA → exact-head CI → merge → main CI；Cloud 另案。延後項見 BACKLOG 同日段與 DEC-190。非 QA PASS。

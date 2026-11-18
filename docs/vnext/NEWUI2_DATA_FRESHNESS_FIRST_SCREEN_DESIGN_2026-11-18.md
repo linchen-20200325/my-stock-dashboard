@@ -91,6 +91,18 @@ OK 純文字（無狀態字樣、capability PROVIDED）＋四條固定正規式�
 
 **審視過的截圖**（`scratchpad/evidence/<ver>/*.png`；repo 外、易失）：`n_Real_m390.png` 確認四列、免責與 n 句分行清楚、四問與停用 CTA 可見、無截斷。
 
+### 6.1 合併 origin/main（ca12825e，#1210）後複驗（2026-11-18；FACT，**作者環境**；**非 CI、非非作者 QA**；只追加，§6 上表原文不改）
+| 項目 | 結果 |
+|---|---|
+| 全 fast lane，自 git 初始化的 `git archive` 匯出（有 git 索引，故 §6 的 21 個索引相依失敗不再出現） | **40209 passed／0 failed／38 skipped／3 xfailed** |
+| ui2_browser | streamlit **1.59.2**：43 passed；streamlit **1.56.0**：43 passed |
+| `measure_viewport.py` | 兩版本皆 fake 82／82、real 13／13，`failed=[]` |
+| `tests/test_ui2_*.py`＋z60＋#1208 兩條還原鏈 | 2260 passed |
+| 證據 JSON | `source_hash` 輸入未變 → viewport 證據 JSON **未重生** |
+| ui2_p3 baseline | 僅 real／p4_data 變動 |
+
+以上皆為作者環境結果；非作者 QA、exact-head 原生 CI、main CI、Cloud 仍 NOT VERIFIED。
+
 ## 7. 限制／NOT VERIFIED
 - 非作者 QA、exact-head 五項原生 CI、main push CI **均未做**；ui2_browser 與 measure 是用本沙箱 chromium 153（符號連結至 rev 1243 以滿足 playwright 1.64.1 的路徑，**CI 容器為官方 v1.64.1 映像，瀏覽器版本不同**）。
 - 全 repo 套件在匯出環境有 21 個與 git 索引相關的失敗（見 §6；已證明與本變更無關，但**CI 上實際結果未知**）。

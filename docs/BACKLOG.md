@@ -2900,3 +2900,8 @@
 - ChatGPT 簽核 N1（被動式 `_err_expense`）、N2（淨值／折溢價句）、N3（持股探測錯誤句）原樣；(e) `src/ui/render/etf_render.py` 括號改為「（上游成分股資料暫時無法取得）」，前段登記的「etf_render 句首『海外 IP 受限或』」已刪除、該待辦結案。
 - 補註：`macro_snapshot._err_pmi` 定稿句僅為預設值；production 全敗時帶的是 `macro_core` 的技術錯誤字串。
 - **LOW（登記，不在本批清理）**：`etf_tab_single._ERR_NAV_ALL_TRIED` 常數（無 caller）與 `elif _is_active:` 分支（`_restricted` 已排除主動式，不可達）屬死碼，且被 `tests/test_issue1208_moneydj_zero_requests.py::TestGptFinalCopy` 的原始碼字串測試釘住；日後清理時須同步改測試。Owner：專案 AI；觸發：再動該檔時。
+
+## 2026-11-18 DEC-177 首屏方案 C｜合併 main 後作者環境複驗與延後項（append-only；自跑，未經第二組驗證）
+- 作者環境：全 fast lane（git 初始化 `git archive` 匯出）40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（streamlit 1.59.2、1.56.0）；measure_viewport fake 82／82、real 13／13；詳見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §6.1。
+- **延後（不在本 PR）**：(1) TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」，另列 C 線獨立項；(2) 第二階段細節；(3) 位階契約無 `as_of`，若日後新增，「載入→資料未備」歸類須重審。
+- 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。Owner：專案 AI；觸發：非作者 QA 或 TWII 文案批。
