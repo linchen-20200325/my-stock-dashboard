@@ -43,8 +43,11 @@ def run_shadow(digest: DecisionDigest, provider: SummaryProvider) -> ShadowOutco
         draft = provider.propose_summary(ProviderRequest(digest=digest))
         report = check_summary(digest, draft)
     except ProviderError as e:
-        _log.warning("onebrain shadow: provider error %s", e.kind.value)
-        return ShadowOutcome(effective, e.kind, None, False)
+        kind = getattr(e, "kind", None)
+        if type(kind) is not ProviderErrorKind:          # 子類跳過 __init__ 或 kind 被改成 str：仍須分類，不得 AttributeError
+            kind = ProviderErrorKind.INVALID_RESPONSE
+        _log.warning("onebrain shadow: provider error %s", kind.value)
+        return ShadowOutcome(effective, kind, None, False)
     except Exception as e:  # noqa: BLE001 — 未分類例外一律視為 invalid_response，留 log、回到規則式摘要
         _log.warning("onebrain shadow: unclassified %s -> invalid_response", type(e).__name__)
         return ShadowOutcome(effective, ProviderErrorKind.INVALID_RESPONSE, None, False)

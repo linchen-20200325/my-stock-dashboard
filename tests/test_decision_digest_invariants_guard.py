@@ -287,7 +287,13 @@ ALLOWED_CALLERS: frozenset = frozenset()
 # OneBrain OB-1 完全離線影子層（DEC-195；Issue #1199 GPT §C comment 6978992482）：**不是** Stage F production caller。
 # 兩檔只被 tests/ 與彼此引用（由 tests/test_onebrain_offline_guard.py 的 AST 守衛強制「0 production import」），
 # 不進 UI／LINE／決策。獨立於 ALLOWED_CALLERS（Stage F Gate 仍為空、仍未開啟）；新增項目須有同等級核准依據。
-OFFLINE_SHADOW_CALLERS: frozenset = frozenset({"shared/onebrain_provider.py", "src/services/onebrain_shadow.py"})
+# 豁免是「逐檔 × 逐模組」：只放行該檔實際用到的 digest 家族模組（assembly／builder／validator 等一律不放行）。
+OFFLINE_SHADOW_MODULES: dict = {
+    "shared/onebrain_provider.py": frozenset({"shared.decision_digest_grounding"}),
+    "src/services/onebrain_shadow.py": frozenset({"shared.decision_digest_grounding",
+                                                  "src.services.decision_digest_summary"}),
+}
+OFFLINE_SHADOW_CALLERS: frozenset = frozenset(OFFLINE_SHADOW_MODULES)
 # 僅 import L0 根契約 shared.decision_digest 的既有檔（不在 TARGET_MODULES 內，另由專屬測試鎖死）。
 L0_ROOT_IMPORTERS = frozenset({"shared/strategy_class_schema.py"})
 
@@ -381,7 +387,7 @@ def _imported_modules(tree: ast.AST, rel: str) -> set:
     return found
 
 
-def scan_digest_callers(root: Path, *, allowed: frozenset = frozenset()) -> list:
+def scan_digest_callers(root: Path, *, allowed: frozenset = frozenset(), module_allow: dict | None = None) -> list:
     """掃 root 下所有 .py（排除頂層 tests/docs、家族白名單檔），回傳 [(相對路徑, 命中的模組)]。"""
     hits = []
     for path in _iter_py(root):
@@ -394,7 +400,8 @@ def scan_digest_callers(root: Path, *, allowed: frozenset = frozenset()) -> list
             hits.append((rel, f"UNPARSEABLE:{type(exc).__name__}"))
             continue
         found = _imported_modules(tree, rel)
-        for m in sorted(found & TARGET_MODULES):
+        ok_mods = (module_allow or {}).get(rel, frozenset())
+        for m in sorted((found & TARGET_MODULES) - ok_mods):
             hits.append((rel, m))
         if DYNAMIC_MARKER in found:
             hits.append((rel, DYNAMIC_MARKER))
@@ -415,10 +422,29 @@ def test_c2_stage_f_gate_still_closed_and_offline_shadow_set_is_exactly_two_file
     assert ALLOWED_CALLERS == frozenset()            # Stage F production caller Gate 未開
     assert OFFLINE_SHADOW_CALLERS == {"shared/onebrain_provider.py", "src/services/onebrain_shadow.py"}
     assert not (OFFLINE_SHADOW_CALLERS & FAMILY_FILES)
+    assert all(v <= TARGET_MODULES for v in OFFLINE_SHADOW_MODULES.values())
+    forbidden = {"src.services.decision_digest_assembly", "src.services.decision_digest_builder",
+                 "shared.decision_digest_validator", "shared.decision_digest_coverage",
+                 "shared.decision_digest_rules", "shared.decision_digest_terms"}
+    for v in OFFLINE_SHADOW_MODULES.values():
+        assert not (v & forbidden)
+
+
+@pytest.mark.parametrize("mod", sorted(TARGET_MODULES))
+@pytest.mark.parametrize("rel", sorted(OFFLINE_SHADOW_MODULES))
+def test_c2_offline_shadow_exemption_is_per_module(tmp_path, rel, mod):
+    """反向：影子檔若多 import 任何未列入的家族模組，守衛必須轉紅。"""
+    f = tmp_path / rel
+    f.parent.mkdir(parents=True)
+    pkg, _, name = mod.rpartition(".")
+    f.write_text(f"from {pkg} import {name}\n", encoding="utf-8")
+    hits = scan_digest_callers(tmp_path, module_allow=OFFLINE_SHADOW_MODULES)
+    expect = [] if mod in OFFLINE_SHADOW_MODULES[rel] else [(rel, mod)]
+    assert hits == expect
 
 
 def test_c2_repo_has_zero_production_callers_of_digest_family():
-    hits = scan_digest_callers(REPO, allowed=ALLOWED_CALLERS | OFFLINE_SHADOW_CALLERS)
+    hits = scan_digest_callers(REPO, allowed=ALLOWED_CALLERS, module_allow=OFFLINE_SHADOW_MODULES)
     assert hits == [], (
         "發現 digest 側車／規則模組的 production caller。這是 Stage F production caller Gate"
         "（Issue #1138、DEC-159／DEC-160）：Gate 未開啟前不得有 caller；"
@@ -527,8 +553,8 @@ def test_c2_l0_root_importers_are_exactly_the_whitelist():
         digest_family = {m for m in mods if "decision_digest" in m and m != "shared.decision_digest"
                          and not m.startswith("shared.decision_digest.")}
         # 家族外任何檔不得碰 root 以外的 digest 模組（含 `shared.decision_digest.<name>` 形式的 from-import 展開）
-        if rel not in OFFLINE_SHADOW_CALLERS:        # OB-1 離線影子層刻意引用 grounding／summary（見上方常數說明）
-            assert not (digest_family & TARGET_MODULES), rel
+        # OB-1 離線影子層只放行其清單內的家族模組（見 OFFLINE_SHADOW_MODULES）
+        assert not ((digest_family & TARGET_MODULES) - OFFLINE_SHADOW_MODULES.get(rel, frozenset())), rel
     assert importers == set(L0_ROOT_IMPORTERS) | (importers & set(ALLOWED_CALLERS | OFFLINE_SHADOW_CALLERS)), importers
 
 

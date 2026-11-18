@@ -304,3 +304,60 @@ def test_shadow_runs_with_network_blocked(monkeypatch):
 def test_fake_provider_rejects_unknown_mode():
     with pytest.raises(ValueError):
         FakeProvider("nope")
+
+
+# ── N2：畸形 ProviderError 子類也要被分類 ───────────────────────────────
+class _NoInitError(ProviderError):
+    def __init__(self):                                   # 刻意不呼叫 super().__init__
+        pass
+
+
+class _StrKindError(ProviderError):
+    def __init__(self):
+        super().__init__(ProviderErrorKind.TIMEOUT)
+        self.kind = "timeout"                              # type: ignore[assignment]
+
+
+@pytest.mark.parametrize("exc", [_NoInitError, _StrKindError])
+def test_malformed_provider_error_is_classified_not_attribute_error(exc):
+    class P:
+        def propose_summary(self, request):
+            raise exc()
+    d = make_digest()
+    o = run_shadow(d, P())
+    assert o.error_kind is ProviderErrorKind.INVALID_RESPONSE and o.shadow_accepted is False
+    assert o.effective == build_rule_summary(d)
+
+
+# ── N4：兩個新檔的 import 明確白名單（逐檔） ───────────────────────────
+_IMPORT_ALLOWLIST = {
+    "shared/onebrain_provider.py": {"__future__", "dataclasses", "enum", "typing", "shared.decision_digest",
+                                    "shared.decision_digest_grounding"},
+    "src/services/onebrain_shadow.py": {"__future__", "logging", "dataclasses", "typing", "shared.decision_digest",
+                                        "shared.decision_digest_grounding", "shared.onebrain_provider",
+                                        "src.services.decision_digest_summary"},
+}
+
+
+def _import_modules(source: str) -> set:
+    out = set()
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Import):
+            out |= {a.name for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            out.add(n.module or "")
+    return out
+
+
+def test_new_files_import_exactly_within_the_explicit_allowlist():
+    for rel, allowed in _IMPORT_ALLOWLIST.items():
+        assert _import_modules((ROOT / rel).read_text(encoding="utf-8")) <= allowed, rel
+
+
+@pytest.mark.parametrize("extra", ["src.services.decision_digest_assembly", "src.services.decision_digest_builder",
+                                   "shared.decision_digest_validator", "shared.decision_digest_coverage",
+                                   "shared.decision_digest_rules", "shared.decision_digest_terms", "json"])
+@pytest.mark.parametrize("rel", sorted(_IMPORT_ALLOWLIST))
+def test_allowlist_check_turns_red_when_an_extra_import_is_added(rel, extra):
+    src = (ROOT / rel).read_text(encoding="utf-8") + f"\nimport {extra}\n"
+    assert not (_import_modules(src) <= _IMPORT_ALLOWLIST[rel])

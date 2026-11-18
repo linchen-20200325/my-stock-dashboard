@@ -10719,3 +10719,8 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **既有守衛調整（唯一一處）**：`tests/test_decision_digest_invariants_guard.py` 新增獨立常數 `OFFLINE_SHADOW_CALLERS`（僅兩個新檔），C2 的「0 digest 家族 production caller」與「L0 importer」掃描對其放行；`ALLOWED_CALLERS`（Stage F Gate）仍為空並以新測試釘住。
 - **仍待客戶／Gate 裁示（未授權）**：真 Provider／model／月預算／fallback；Stage F／G production；AB-2b（`ai_explained`／`ai_rejected`）；詞彙／Schema／semantic 變更（含 Delta 3「摘要揭露被省略 Top-N」）；System Action Aggregator／Risk Cap 權限；UI2 與 LINE 接線；OB-2 semantic fingerprint／cache／trace／budget 實作。
 - **測試**：`tests/test_onebrain_offline_guard.py` 38 例；矩陣測試新增 stamp 後 242 例。變異（`>=` 邊界、移除 as_of_after_fetched、`shadow_accepted` 恆真、吞例外改窄、effective 採 draft、app_ui2 注入 import）皆使守衛轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-195 更正與補註（2026-11-18；只追加；獨立 QA PASS_WITH_NOTES 後）
+- ~~Delta 1「兩種變異先前皆存活」~~ **更正**：僅 `>`→`>=` 邊界變異真正存活；「停用 as_of_after_fetched」變異已被 `tests/test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺，矩陣測試只擴大覆蓋。BACKLOG／PROJECT_STATE §72 的對應敘述同此更正。
+- ~~C2 守衛對兩檔逐檔豁免~~ **更正**：改為逐模組（`OFFLINE_SHADOW_MODULES`：provider 只放 grounding；shadow 放 grounding＋summary），並在 `tests/test_onebrain_offline_guard.py` 加兩檔明確 import 白名單與反向測試。`ALLOWED_CALLERS` 仍為空。
+- 補註：「零 production import」AST 守衛屬縱深防禦、非窮舉；非常數動態 import（如 `__import__("src.services."+"onebrain_shadow")`）不會被抓到。

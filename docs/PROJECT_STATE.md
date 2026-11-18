@@ -1455,3 +1455,7 @@
 - **Delta 2（新增、可逆、純離線）**：`shared/onebrain_provider.py`（L0：`SummaryProvider` Protocol、`ProviderErrorKind`、`ProviderError`、凍結 `ProviderRequest`）、`src/services/onebrain_shadow.py`（L3：`run_shadow`→`ShadowOutcome`；`effective` 恆為 `build_rule_summary(digest)`）、`tests/onebrain_fake_provider.py`（測試專用 FakeProvider）、`tests/test_onebrain_offline_guard.py`（零 production import AST 守衛、無網路／SDK、Schema／欄位凍結、ShadowOutcome 無 action／Risk Cap 欄位、9 種失敗模式×2 份 Digest 回退、9 種偽造草稿被 grounding 拒收、封網執行）。
 - **不在本批**：生產 import、UI／LINE 接線、真 Provider／model／預算、Digest schema／vocabulary、AB-2b。Delta 3（摘要揭露被省略的 Top-N）需動詞彙／簽章，列 Gate-needed，見 BACKLOG。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。
+
+### 72 更正（2026-11-18；DEC-195；只追加）
+- ~~變異驗證：`_pit_ok` 的 `>`→`>=` 變異與「移除 as_of_after_fetched 檢查」變異，先前整組 digest 測試存活~~ **更正**：獨立 QA 證實只有變異 1（`fetched_at > generated_at` 改 `>=`）真正存活；變異 2（停用 as_of 晚於 fetched 的檢查）在 main 上已被 `tests/test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺，矩陣新增 stamp 僅擴大其覆蓋。
+- N4 收斂：C2 守衛對 OB-1 兩檔的豁免由「逐檔」改為「逐檔×逐模組」（`OFFLINE_SHADOW_MODULES`），只放行 grounding／summary；assembly／builder／validator 等任何其他家族模組新增 import 即轉紅。N2：`run_shadow` 對畸形 `ProviderError`（缺 kind／kind 非列舉）改分類為 `invalid_response`。

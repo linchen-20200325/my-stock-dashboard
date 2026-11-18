@@ -2934,3 +2934,5 @@
 - [ ] 非作者 QA／exact-head CI／merge／main CI（本分支尚未推送）
 - **OB-1-D3｜Gate-needed：規則式摘要未揭露被省略的 Top-N 行動**。重現：以 `tests.test_decision_digest_assembly.full_kwargs(n)` 組 n=3 與 n=7 筆合格行動，`assemble_digest` 後 `coverage.actions_omitted_count`＞0（n=7 時）、`is_complete` 為 False，但 `build_rule_summary(a.digest)` 的行動段落文字不含「其餘／未顯示／省略」等字樣——摘要對被省略的行動沉默（coverage sidecar 有、摘要沒有）。修法需新增詞彙（`decision_digest_terms`）與句型／簽章變更（摘要需讀 coverage），屬 Digest 詞彙／簽章變更，**Gate-needed，不自行施工**。Owner：客戶裁示；觸發：任何要動摘要詞彙或簽章的批次。
 - **OB-2 介面差額（僅列清單，未施工）**：semantic fingerprint（Digest→穩定指紋，且不得成為第二套 cache key 體系）、trace 欄位（request id／model id／延遲，需不進 Digest v1）、budget／rate 計量介面、cache 讀寫介面（須重用既有 cache 層，禁第二套 Provider cache）、錯誤退避策略（對應 CLAUDE.md §1.A-3）。以上皆需跨模組 production contract 或 Schema 變動，列 Gate。
+
+- 更正（2026-11-18；DEC-195）：上列 PIT 邊界項中，僅 `>`→`>=` 變異原本存活；「停用 as_of_after_fetched」變異 main 上已被 `test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺。
