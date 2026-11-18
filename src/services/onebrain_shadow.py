@@ -43,7 +43,11 @@ def run_shadow(digest: DecisionDigest, provider: SummaryProvider) -> ShadowOutco
         draft = provider.propose_summary(ProviderRequest(digest=digest))
         report = check_summary(digest, draft)
     except ProviderError as e:
-        kind = getattr(e, "kind", None)
+        try:
+            kind = getattr(e, "kind", None)
+        except Exception as read_err:  # noqa: BLE001 — 惡意 property／__getattr__：讀 kind 失敗也視為 invalid_response（BaseException 不在此列，照常上傳）
+            _log.warning("onebrain shadow: reading provider error kind raised %s", type(read_err).__name__)
+            kind = None
         if type(kind) is not ProviderErrorKind:          # 子類跳過 __init__ 或 kind 被改成 str：仍須分類，不得 AttributeError
             kind = ProviderErrorKind.INVALID_RESPONSE
         _log.warning("onebrain shadow: provider error %s", kind.value)

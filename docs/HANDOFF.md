@@ -1590,3 +1590,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04），**未推送、未發 PR**（作者交付當下紀錄）。改 `etf_tab_single.py`、`health_inspector.py`、`shared/etf_missing_text.py`；新增 `tests/test_a_etf_diag_three_fixes.py`。
 - 註：上方 DEC-194 段「未推送、未發 PR」是**當時點的紀錄**，DEC-194 其後已以 #1215 合併，不是現況。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。副作用：`data_coverage.py` 讀 `_err_nav`，台股主動式 NAV 缺值時覆蓋燈降級。非 QA PASS。
+
+## 2026-11-18 OneBrain NOTE-1 隔離（DEC-199；append-only）
+- 分支 `c-onebrain-provider-error-isolation`（基於 origin/main cce44294），Draft PR。只改 `onebrain_shadow.py` 一處＋測試。
+- 下一手：非作者 QA → exact-head CI → merge。OB-1-D3 仍待裁示。非 QA PASS。

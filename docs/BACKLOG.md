@@ -2951,3 +2951,7 @@
 ## 2026-11-18 DEC-196 QA 後續（append-only；非 QA PASS）
 - 已修 NOTE-1（台股主動式 NAV 有值時措辭）、NOTE-2（海外 NAV 有值過期的矛盾字樣）。
 - **OPEN｜NOTE-3 未來日期 NAV 仍 🟢**：`premium.nav_date`／`data_date` 晚於今天（例：今天 +3 天）時 `freshness_light` 仍判 🟢「今天」。既有行為，不在 A 線核准範圍，未動 `freshness_light`。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期 NAV 回報。
+
+## 2026-11-18 DEC-199 OneBrain NOTE-1 結案（append-only；非 QA PASS）
+- ~~#1216 NOTE-1：`run_shadow` 的 `getattr(e,"kind")` 可被惡意 property／`__getattr__` 讓例外逃出~~ **已修**（DEC-199，待非作者 QA）。
+- OB-1-D3（規則式摘要未揭露被省略的 Top-N 行動）**仍 OPEN／Gate-needed，本批不動**。
