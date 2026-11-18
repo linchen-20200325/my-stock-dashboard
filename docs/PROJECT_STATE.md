@@ -1473,6 +1473,15 @@
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；真實 TWSE 直讀 payload 是否帶日期未在 Cloud 驗證。
 - **QA 更正（§73；只追加）**：① NAV 列不再以 `date.today()` 冒充資料日；NAV 有值時過期／日期不明一律 🔴 並顯示真實原因句（含台股主動式、舊 session payload；原誤顯示「公開資料受限」已修）；海外 NAV 有值但過期仍為 ⚪ 不適用句。OPEN：未來日期 NAV 仍 🟢（`freshness_light` 既有行為，未動）。
 
+## 76. OneBrain run_shadow 讀取 ProviderError.kind 隔離（2026-11-18；DEC-199；只追加；非 QA PASS；單組作者環境）
+- 分支 `c-onebrain-provider-error-isolation`（基於 origin/main cce44294）。`src/services/onebrain_shadow.py`：讀 `kind` 加內層 `try/except Exception` ⇒ INVALID_RESPONSE；BaseException 與規則層錯誤維持上傳。#1216 NOTE-1 結案。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。OB-1-D3（Top-N omitted disclosure）仍待裁示、未動。
+
+## 75. ETF NAV 診斷未來日期 fail-closed（2026-11-18；DEC-198；只追加；非 QA PASS；單組作者環境）
+- 分支 `a-etf-future-nav-date`（基於 origin/main cce44294）。`health_inspector` NAV 列：日期 > 今日 ⇒ 🔴＋`ETF_NAV_DATE_FUTURE_TEXT`，不再 🟢「今天」。`freshness_light`、NAV 計算／來源、AUM／費用率／Beta 皆未動。
+- AUM／費用率／Beta：payload 無來源日期，僅唯讀查證、登 BACKLOG `ETF-DIAG-ASOF-1`。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
 ## 77. New UI2 五頁「離線可用」收斂：🗂 連線診斷兩項最小修（2026-11-18；DEC-200；只追加；非 QA PASS；單組作者環境）
 - 分支 `b-ui2-offline-usable-diag`（base cce44294）。改 `src/ui2/views/data.py`（`_valid_report` 深度驗證；冷卻提示僅當次顯示）；新增 `tests/test_ui2_offline_usable_diag.py`；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（僅 meta 與時鐘造成的差異）。
 - 五頁矩陣與登記項見 BACKLOG `UI2-OFFLINE-MATRIX-1118`。
