@@ -2926,6 +2926,13 @@
 - **OPEN-3｜台股主動式 ETF 的真實失敗被 ⚪ 蓋住**：既有規則 `_restricted = 主動式` 把抓取失敗併入「不適用」。Owner：專案 AI；觸發：主動式 ETF 資料源批。
 - 副作用揭露：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈降級。
 
+## 2026-11-18 New UI2 a11y 三項最小修後續（DEC-197；append-only；以下四項已重現、未修、皆需 ChatGPT 簽核後才能動）
+- **A11Y-F1｜導覽 radio 的 accessible name 為 `● `**：選中項的 `p::before{content:"● "}` 被計入 AX name，螢幕閱讀器念成「● 」而非頁名。修法牽涉導覽 CSS／符號載體（Freeze §4.1 要求選中不只靠顏色），屬 UI 契約內設計取捨。Owner：ChatGPT 簽核；觸發：下一次動導覽。
+- **A11Y-F2｜分段切換（🎯 模式 radio）高度 31–33px**（探查量到「即時查一檔」31px、「市場精選」33px）：低於 44px 觸控目標（頂部導覽已 ≥44px）。改高度會動版面，需線框草稿（v3 §03-2 ①）。Owner：ChatGPT 簽核。
+- **A11Y-F3｜FAKE cold 文案指向已 disabled 的 CTA**：FAKE cold 場景多處顯示「⬜ 尚未載入，請按更新」（探查證據 `fake_cold.json`），但指向的「更新」CTA 是 `aria-disabled`（修前游標還是 pointer；D1 只修了游標，文案語意仍矛盾）。屬文案／契約問題（不得自行改字）。Owner：ChatGPT 簽核。
+- **A11Y-F4｜「尚未載入」vs「尚未評估」措辭不一致**：「尚未載入」（尚未按更新）與「尚未評估」（not_evaluated 場景）對使用者是否為同一種狀態未定義，兩者並存易混淆；是否統一需 ChatGPT 決定（探查只確認兩種字樣並存，未窮舉全站）。屬文案凍結範圍，不得自行統一。Owner：ChatGPT 簽核。
+- 以上來源為唯讀探查（作者環境單組重現）；證據腳本在作者 scratchpad，未入 repo。
+
 ### OB-1 離線鷹架進度（2026-11-18；DEC-195；只追加）
 - [x] Provider Protocol／錯誤分類／凍結 Request（`shared/onebrain_provider.py`，L0，零 SDK／網路／金鑰）
 - [x] 影子執行 `run_shadow`（`src/services/onebrain_shadow.py`，L3；effective 恆為規則式摘要）
