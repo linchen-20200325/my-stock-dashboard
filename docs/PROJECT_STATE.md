@@ -1434,5 +1434,8 @@
 - 🗂 資料頁首屏採方案 C（`first/context_rows` 四列），決策 DEC-190；細節見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §6.1。
 - 作者環境：fast lane 40209 passed／0 failed；ui2_browser 43 passed（streamlit 1.59.2／1.56.0）。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 
-### 70.31 融資來源字樣中性化後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
+### 70.31 C1 TWII 來源字串拿掉「，每日更新」（2026-11-18；只追加；非 QA PASS；單組作者環境）
+- `TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo）」，決策 DEC-191。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+### 70.32 融資來源字樣中性化後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
 - `MARGIN_SOURCE_TEXT`＝「本地融資餘額歷史快取（市場範圍與來源待確認）」，決策 DEC-193。不代表接線核准；DG-LIC／DG-PIT／DG-COV／I1144-WIRING-GATE 不變，實際運作 A／HOLD。其餘「全市場」來源與 DATASTATION／finmind provenance 衝突仍 OPEN（見 BACKLOG 同日段）。

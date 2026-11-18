@@ -2906,6 +2906,11 @@
 - **延後（不在本 PR）**：(1) TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」，另列 C 線獨立項；(2) 第二階段細節；(3) 位階契約無 `as_of`，若日後新增，「載入→資料未備」歸類須重審。
 - 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。Owner：專案 AI；觸發：非作者 QA 或 TWII 文案批。
 
+## 2026-11-18 C1｜TWII 來源字串拿掉「，每日更新」（append-only；自跑，未經第二組驗證）
+- 完成 DEC-177/DEC-190 延後項(1)：`TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo）」，決策 DEC-191。測試 `tests/test_c1_twii_source_text.py`。
+- 殘留（歷史證據，不改）：`docs/vnext/newui2_realfeed|newui2_p2|phase4_market` 量測 JSON 與 `docs/vnext/*` 線框／稽核文件內仍有舊字樣；`tools/phase3_preview/gen.py` 示意稿為獨立示意字串（非本常數）；`MARGIN_SOURCE_TEXT` 含「每日更新」屬另案（`I1140-MARGIN-SOURCE-TEXT`）。
+- 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。
+
 ## 2026-11-18 I1140-MARGIN-SOURCE-TEXT／DEC174-GG1｜融資來源字樣改中性措辭（append-only；決策 DEC-193；非 QA PASS）
 - `MARGIN_SOURCE_TEXT` 已改為「本地融資餘額歷史快取（市場範圍與來源待確認）」，僅文案；移除「全市場／FinMind／每日更新／元換算」宣稱。I1140-MARGIN-SOURCE-TEXT、DEC174-GG1 以中性措辭處理。
 - **同一「全市場」宣稱仍未動的來源**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`（`test_w1_r7_hit_source` 釘住）、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 **OPEN**。
