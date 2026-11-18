@@ -329,6 +329,72 @@ def test_malformed_provider_error_is_classified_not_attribute_error(exc):
     assert o.effective == build_rule_summary(d)
 
 
+# ── NOTE-1（#1216）：讀取 kind 本身不得讓例外逃出 handler ───────────────
+class _PropRaisesRuntime(ProviderError):
+    def __init__(self):
+        pass
+
+    @property
+    def kind(self):                                        # type: ignore[override]
+        raise RuntimeError("evil kind property")
+
+
+class _PropRaisesValue(ProviderError):
+    def __init__(self):
+        pass
+
+    @property
+    def kind(self):                                        # type: ignore[override]
+        raise ValueError("evil kind property")
+
+
+class _GetattrRaises(ProviderError):
+    def __init__(self):
+        pass
+
+    def __getattr__(self, name):
+        raise RuntimeError("evil __getattr__")
+
+
+@pytest.mark.parametrize("exc", [_PropRaisesRuntime, _PropRaisesValue, _GetattrRaises])
+def test_kind_read_failure_is_contained_and_classified(exc):
+    class P:
+        def propose_summary(self, request):
+            raise exc()
+    d = make_digest()
+    o = run_shadow(d, P())
+    assert o.error_kind is ProviderErrorKind.INVALID_RESPONSE
+    assert o.shadow_accepted is False and o.grounding is None
+    assert o.effective == build_rule_summary(d)
+
+
+@pytest.mark.parametrize("bad", [KeyboardInterrupt, SystemExit])
+def test_kind_read_failure_does_not_swallow_baseexception(bad):
+    class E(ProviderError):
+        def __init__(self):
+            pass
+
+        @property
+        def kind(self):                                    # type: ignore[override]
+            raise bad()
+    class P:
+        def propose_summary(self, request):
+            raise E()
+    with pytest.raises(bad):
+        run_shadow(make_digest(), P())
+
+
+def test_rule_layer_error_still_propagates_with_kind_guard(monkeypatch):
+    def boom(_d):
+        raise ValueError("rule layer bug")
+    monkeypatch.setattr(onebrain_shadow, "build_rule_summary", boom)
+    class P:
+        def propose_summary(self, request):
+            raise AssertionError("must not reach provider")
+    with pytest.raises(ValueError):
+        run_shadow(make_digest(), P())
+
+
 # ── N4：兩個新檔的 import 明確白名單（逐檔） ───────────────────────────
 _IMPORT_ALLOWLIST = {
     "shared/onebrain_provider.py": {"__future__", "dataclasses", "enum", "typing", "shared.decision_digest",
