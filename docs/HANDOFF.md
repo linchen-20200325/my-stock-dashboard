@@ -1564,6 +1564,9 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-18 C1 TWII 來源字串（append-only；非 QA PASS）
 - 僅改 `src/services/market_twii_view_service.py` 常數＋新增 `tests/test_c1_twii_source_text.py`＋docs 追加（DEC-191）。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 零 diff；p3 baseline／`_P3_BASELINE_SHA256` 未動。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。
+### C2 D-5 守衛位置敏感化交接（2026-11-18；只追加；非 QA PASS）
+- 分支 `c2-d5-guard-hardening`（基於 origin/main 8f434fad，已合併 6cca6d07），僅動 `tests/test_ui2_real_feed.py` 與三份 docs；決策 DEC-192。
+- 下一手：非作者 QA → exact-head CI → merge。與 C1（`src/services/market_twii_view_service.py`）檔案無重疊；C1 已取 DEC-191，本項重編為 DEC-192。
 
 ## 2026-11-18 融資來源字樣中性化（DEC-193；append-only）
 - 只改 `MARGIN_SOURCE_TEXT` 一個字串＋`tests/test_margin_fact_service.py` 三組斷言；無接線、無數值／單位／schema 變動。同類宣稱仍在 `shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`，provenance 衝突 OPEN。非接線核准；A／HOLD 不變。非 QA PASS。

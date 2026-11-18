@@ -1437,5 +1437,8 @@
 ### 70.31 C1 TWII 來源字串拿掉「，每日更新」（2026-11-18；只追加；非 QA PASS；單組作者環境）
 - `TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo）」，決策 DEC-191。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 
-### 70.32 融資來源字樣中性化後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
+### 70.32 C2 D-5 例外守衛位置敏感化（2026-11-18；只追加；非 QA PASS；單組作者環境）
+- `regime_label_residue` 的 D-5 例外只作用於資料頁第 4 個 ctx 列 value 一次，其餘位置／重複／其他頁一律判違規；決策 DEC-192；正式碼零 diff。**NOT VERIFIED**：非作者 QA、exact-head CI、main CI。
+
+### 70.33 融資來源字樣中性化後狀態（2026-11-18；只追加；非 QA PASS；單組作者環境）
 - `MARGIN_SOURCE_TEXT`＝「本地融資餘額歷史快取（市場範圍與來源待確認）」，決策 DEC-193。不代表接線核准；DG-LIC／DG-PIT／DG-COV／I1144-WIRING-GATE 不變，實際運作 A／HOLD。其餘「全市場」來源與 DATASTATION／finmind provenance 衝突仍 OPEN（見 BACKLOG 同日段）。

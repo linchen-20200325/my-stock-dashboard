@@ -425,7 +425,8 @@ _DEG_ROW4 = DP.freshness_rows(DP.counts_from_states({"twii": DP.S_UNAVAILABLE, "
 
 def test_d5_positive_data_page_row4_wording_is_excepted():
     assert "未評估" in _DEG_ROW4
-    assert RF.regime_label_residue(f"<div>{_DEG_ROW4}</div>", P4_DATA) == []
+    # C2：例外位置敏感，需真實 DOM（第 4 個 ctx 列 value）；裸字串不再放行（見 test_ui2_real_feed.py::test_c2_d5_*）
+    assert RF.regime_label_residue(RF._degraded_data_page_blob(), P4_DATA) == []
 
 
 @pytest.mark.parametrize("what, page, blob", [

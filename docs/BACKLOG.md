@@ -2910,6 +2910,9 @@
 - 完成 DEC-177/DEC-190 延後項(1)：`TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo）」，決策 DEC-191。測試 `tests/test_c1_twii_source_text.py`。
 - 殘留（歷史證據，不改）：`docs/vnext/newui2_realfeed|newui2_p2|phase4_market` 量測 JSON 與 `docs/vnext/*` 線框／稽核文件內仍有舊字樣；`tools/phase3_preview/gen.py` 示意稿為獨立示意字串（非本常數）；`MARGIN_SOURCE_TEXT` 含「每日更新」屬另案（`I1140-MARGIN-SOURCE-TEXT`）。
 - 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。
+### C2 D-5 例外守衛位置敏感化（2026-11-18；只追加；非 QA PASS）
+- 已做（測試限定）：`regime_label_residue` 例外改為只剪第 4 個 ctx 列 value 一次，決策 DEC-192；缺口先以舊守衛凍結複本示範。
+- 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI。Owner：專案 AI；觸發：非作者 QA。
 
 ## 2026-11-18 I1140-MARGIN-SOURCE-TEXT／DEC174-GG1｜融資來源字樣改中性措辭（append-only；決策 DEC-193；非 QA PASS）
 - `MARGIN_SOURCE_TEXT` 已改為「本地融資餘額歷史快取（市場範圍與來源待確認）」，僅文案；移除「全市場／FinMind／每日更新／元換算」宣稱。I1140-MARGIN-SOURCE-TEXT、DEC174-GG1 以中性措辭處理。
