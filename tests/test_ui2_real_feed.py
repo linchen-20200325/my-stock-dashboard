@@ -1132,6 +1132,39 @@ def regime_label_residue(blob: str, page: str) -> list[str]:
     return [lbl for lbl in REGIME_LABEL.values() if lbl and lbl in blob]
 
 
+def _legacy_whole_page_residue(blob: str, page: str) -> list[str]:
+    """【C2 缺口示範專用，凍結 8f434fad 舊守衛原樣；⛔ 不得用於任何真實斷言】整頁 `blob.replace(row4, "")`＝位置不敏感。"""
+    if page == P4_DATA:
+        from src.services.ui2 import data_page as _DP
+        row4 = _DP.freshness_rows(_DP.counts_from_states({"twii": _DP.S_UNAVAILABLE, "regime": _DP.S_UNAVAILABLE}))[3]["value"]
+        blob = blob.replace(row4, "")
+    return [lbl for lbl in REGIME_LABEL.values() if lbl and lbl in blob]
+
+
+def _degraded_data_page_blob() -> str:
+    """真實降級路徑（`read_real_snapshot` 拋 Exception）下 🗂 資料頁的整頁 DOM blob。"""
+    with pytest.MonkeyPatch.context() as mp:
+        _boom_shell(mp)
+        at = _at(dev=True)
+        at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
+        at.radio(key="ui2_page").set_value(P4_DATA).run(timeout=60)
+        return _blob(at)
+
+
+def _approved_row4_value() -> str:
+    from src.services.ui2 import data_page as _DP
+    return _DP.freshness_rows(_DP.counts_from_states({"twii": _DP.S_UNAVAILABLE, "regime": _DP.S_UNAVAILABLE}))[3]["value"]
+
+
+def test_c2_gap_demo_legacy_guard_tolerates_approved_string_at_wrong_position():
+    """C2 缺口示範（舊守衛）：核准文案放在資料頁**任何位置**或**重複**都被整頁 replace 吞掉＝位置不敏感（本測試描述舊行為，非現行守衛）。"""
+    blob = _degraded_data_page_blob()
+    row4 = _approved_row4_value()
+    assert _legacy_whole_page_residue(blob, P4_DATA) == []                       # 正確位置：舊守衛放行（預期）
+    assert _legacy_whole_page_residue(blob + f"<p>{row4}</p>", P4_DATA) == []    # 另一位置多放一份：舊守衛仍放行 ⇒ 缺口
+    assert _legacy_whole_page_residue(blob + row4 + row4, P4_DATA) == []         # 重複：舊守衛仍放行 ⇒ 缺口
+
+
 @pytest.mark.parametrize("page", PAGE_IDS)
 def test_1202_g1_shell_survives_read_real_snapshot_raising(monkeypatch, page):
     """#1204 G1：`read_real_snapshot` 整體拋 Exception → 五頁安全降級（固定警示＋既有 Unavailable 規則），不崩潰、不洩漏原文。"""
