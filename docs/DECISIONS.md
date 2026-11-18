@@ -10773,3 +10773,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未動**：版面、文案（無新增字串）、Schema／FieldState 語意、資料來源、診斷探測端點與冷卻策略、其他四頁。
 - **登記不施工**：UI2-OFF-1（stale/外來 session 值 `ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 會 raise ValueError，無 UI 路徑可達）、UI2-OFF-2（檢查連線理論最長約 32 秒無區塊內忙碌提示；加 spinner＝新視覺元件，草稿先行 Gate）。見 BACKLOG。
 - **編號**：#1220 用 DEC-198、#1219 用 DEC-199；本批 DEC-200／§77，合併時若被佔則順延（`src/ui2` 註解不含編號）。
+
+### DEC-201｜New UI2 📊 市場頁：TWII 未來資料日時日 K meta 不再印出不可信日期（N2；#1199 comment 6990535956／6990840330 授權；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **問題（N2，證據 #1199 comment 6990816116）**：Real feed 下 TWII 資料日晚於台北基準日時，卡片顯示「資料日期不可信」，但日 K 圖下 meta 行印「資料日 <未來日>」，同頁自相矛盾。根因：`src/services/ui2/real_canonical.py::kbar_chart_spec` 在所有分支前 `base.update(source=..., as_of=k.as_of)`，undeterminable 分支也帶出未來 `as_of`；卡片 `twii_card_spec` 未來日分支則不帶日期。另有**遮蔽路徑**：`validate_ohlc_window` 逐列先遇先回，較早列的 `INCOMPLETE_BAR`／`FETCHED_AT_MISSING`／`NOT_FINITE` 會讓原因碼≠`FUTURE_DATE`，但 L3 `as_of_future=True`。
+- **決定（最小修，只改 `src/services/ui2/real_canonical.py`）**：`TwiiKbarFact` 加尾端欄位 `as_of_future: bool | None = None`（`from_view` 原樣拷貝 L3 判定，本檔不讀時鐘）；`kbar_chart_spec` 僅在 `not (as_of_future is True or ohlc_reason == FUTURE_DATE)` 時帶 `as_of`，`source` 照舊。加固：`validate_twii_kbar_fact` 拒收非 True／False／None 的 `as_of_future`（比照卡片端 `validate_twii_fact`）。meta 行改顯示既有缺日期字樣 `TEXT_ASOF_MISSING`；**無新文案**，未用 `TWII_FUTURE_AS_OF_TEXT`。
+- **未動**：`src/ui2/**`、`shared/ui2_contract` 語意、資料來源、Schema、卡片邏輯、stale／非未來不合格／讀取失敗／缺檔的顯示。
+- **測試**：新 `tests/test_ui2_n2_future_kbar_meta.py`（16 項）。修前：§1／§2 5 反例 FAIL、§3 6 對照 PASS。修後全綠。突變：整個還原 → 10 紅（5 反例＋5 項 §4 加固鎖）；只看原因碼 → 3 紅；只看 `as_of_future` → 1 紅；`from_view` 不拷貝 → 3 紅；拿掉驗證 → 4 紅；驗後復原。
+- **DEC-137**：`measure_viewport.source_hash` 只涵蓋 `src/ui2/**`、`app_ui2.py`、`measure_viewport.py`，不含 `src/services/ui2/**` → 4 份存證 JSON 不需重生（`tests/test_ui2_real_feed.py` source_hash 測試通過）。
+- **揭露**：根因與遮蔽路徑為 B 線單組結論，未經第二組驗證；須非作者 QA。
+- **編號**：origin/main（8d09c3d6）已用至 DEC-200／§77，本批 DEC-201／§78；合併時若被佔則順延（src 註解不含編號）。

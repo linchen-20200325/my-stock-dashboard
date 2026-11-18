@@ -200,6 +200,9 @@ class TwiiKbarFact:
     upstream_state: str
     has_upstream_error: bool
     source: str
+    #: N2：L3 以單一台北基準日比對的結果（同 `TwiiFact.as_of_future`，原樣拷貝；本檔不讀時鐘）。
+    #: True → 資料日不可信：`kbar_chart_spec` ⛔ 帶 `as_of`（與卡片未來日分支同規則）。加性尾欄。
+    as_of_future: bool | None = None
 
     def __post_init__(self) -> None:
         if self.error_type and not _ERR_CODE_RE.match(self.error_type):
@@ -213,7 +216,8 @@ class TwiiKbarFact:
             ohlc_reason=str(v.ohlc_error or ""), xs=tuple(v.xs), opens=tuple(v.open), highs=tuple(v.high),
             lows=tuple(v.low), closes=tuple(v.close), as_of=v.as_of, is_stale=v.is_stale, age_days=v.age_days,
             stale_reason=str(v.stale_reason or ""), upstream_state=v.upstream_state,
-            has_upstream_error=(v.upstream_state == "FETCH_FAILED"), source=str(v.source))
+            has_upstream_error=(v.upstream_state == "FETCH_FAILED"), source=str(v.source),
+            as_of_future=v.as_of_future)
 
 
 def _finite_positive(v: Any) -> bool:
@@ -224,6 +228,8 @@ def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
     """日 K 事實自洽檢查（純；**重驗** L0 契約的核心條件，⛔ 只信 `ohlc_ok`）。違反 → `RealFeedContractError`。"""
     if not (k.is_stale is True or k.is_stale is False or k.is_stale is None):
         raise RealFeedContractError(f"台股日 K：is_stale 不是 True／False／None：{k.is_stale!r}")
+    if not (k.as_of_future is True or k.as_of_future is False or k.as_of_future is None):   # N2：同 validate_twii_fact
+        raise RealFeedContractError(f"台股日 K：as_of_future 不是 True／False／None：{k.as_of_future!r}")
     if not (k.ohlc_ok is True or k.ohlc_ok is False):
         raise RealFeedContractError(f"台股日 K：有要求日 K 但 ohlc_ok 不是 True／False：{k.ohlc_ok!r}")
     if k.ok and k.failed:
@@ -502,7 +508,11 @@ def kbar_chart_spec(snap: RealFeedSnapshot) -> dict | None:
         return out({**base, "state": "unavailable", "reason": _error_text("台股日 K", snap.kbar_error)})
     k = snap.kbar
     validate_twii_kbar_fact(k)                  # 防呆：feed 已驗；直接餵壞 fact 仍 fail loud
-    base.update(source=k.source, as_of=k.as_of)
+    base.update(source=k.source)
+    # N2：資料日晚於台北基準日（as_of_future=True，或日 K 原因碼即 FUTURE_DATE）→ 日期不可信，⛔ 帶 as_of
+    # （與 twii_card_spec 未來日分支同規則；遮蔽情境：較早列原因碼先回，原因碼≠FUTURE_DATE 但 as_of_future=True）。
+    if not (k.as_of_future is True or k.ohlc_reason == OC.FUTURE_DATE):
+        base.update(as_of=k.as_of)
     if k.failed:
         return out({**base, "state": "unavailable", "reason": _error_text("台股日 K", k.error_type or "Exception")})
     if not k.ok:
