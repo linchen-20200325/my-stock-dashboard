@@ -934,7 +934,7 @@ class TestOldFilesUntouched:
     #   `src/ui/pages/health_inspector.py`（ETF Raw Data 去私募分支、AUM 缺值句與身分說明）。其餘檔一個字都沒動（檔數仍 91）。
     #   指紋依本 docstring 的指示同步更新（⛔ 未回退該改動）；反向守衛見 `tests/test_a_likely_private_unknown.py`。
     # ~~"3872f18f2b16cc1e2fa70437142db77d3de4464b0a9be40b9b8adc391ddd9ae9"~~（DEC-194 後，至 897b3c04 仍成立）
-    # 📌 DEC-195（2026-11-18，GPT 核准 A 線三項最小安全修復，⛔ 不是漏改）：只動 `src/ui/etf/etf_tab_single.py`
+    # 📌 DEC-196（2026-11-18，GPT 核准 A 線三項最小安全修復，⛔ 不是漏改）：只動 `src/ui/etf/etf_tab_single.py`
     #   （台股主動式不再一律遮蔽 `_err_*`、新增 `_err_aum`）與 `src/ui/pages/health_inspector.py`（NAV 列只用可信日期、
     #   海外 AUM 措辭、台股主動式有證據才紅）。其餘檔一個字都沒動（檔數仍 91）。反向守衛見 `tests/test_a_etf_diag_three_fixes.py`。
     _BASE_DIGEST = "9721cbea3974e260c1f6f1d47a7e813f239182601f592e60b233b5082a501528"

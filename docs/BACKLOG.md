@@ -2926,6 +2926,6 @@
 - **OPEN-3｜台股主動式 ETF 的真實失敗被 ⚪ 蓋住**：既有規則 `_restricted = 主動式` 把抓取失敗併入「不適用」。Owner：專案 AI；觸發：主動式 ETF 資料源批。
 - 副作用揭露：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈降級。
 
-## 2026-11-18 DEC-194 OPEN-1／2／3 結案（DEC-195；append-only；非 QA PASS）
+## 2026-11-18 DEC-194 OPEN-1／2／3 結案（DEC-196；append-only；非 QA PASS）
 - ~~OPEN-1 `_nav_ok` stale-NAV 偽綠燈~~ → 已修（NAV 列只用 payload 可信日期；stale／日期不明不綠）。~~OPEN-2 海外 AUM 主動式宣稱~~ → 已修（診斷措辭海外優先）。~~OPEN-3 台股主動式真失敗被 ⚪ 蓋住~~ → 已修（有證據才紅；無證據維持 ⚪）。以上待非作者 QA／CI。
 - 新 OPEN：AUM／費用率／Beta 列的資料日期仍用 `date.today()`（未核准，未動）；`data_coverage.py` 對台股主動式 NAV 缺值的降級為可見副作用。Owner：專案 AI；觸發：下一次動 ETF Raw Data。

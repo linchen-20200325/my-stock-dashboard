@@ -10712,7 +10712,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
 - **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。
 
-### DEC-195｜舊 UI ETF 診斷三項最小安全修復（NAV 日期誠實／海外 AUM 措辭／台股主動式真失敗不遮蔽）（GPT 核准 A 線 APPROVED_FOR_MINIMAL_SAFE_FIX，comment 6978992482 §A；2026-11-18；只追加；非 QA PASS；單組作者環境）
+### DEC-196｜舊 UI ETF 診斷三項最小安全修復（NAV 日期誠實／海外 AUM 措辭／台股主動式真失敗不遮蔽）（GPT 核准 A 線 APPROVED_FOR_MINIMAL_SAFE_FIX，comment 6978992482 §A；2026-11-18；只追加；非 QA PASS；單組作者環境）
 - **來源**：DEC-194 OPEN-1／OPEN-2／OPEN-3（#1199 closure ledger 6977952186）。僅限舊 UI：`src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`、`shared/etf_missing_text.py`、直接測試。
 - **① NAV**：`health_inspector` NAV 列不再 `nav is not None → 今天 🟢`。資料日期只用 payload 內 `premium.nav_date`／`data_date`（既有新鮮度契約 `freshness_light`），**絕不用 `date.today()`**；`stale_nav`（含 nav 值被保留的 `nav_value_stale`，情境 S3b）⇒ 🔴＋「淨值資料已過期，暫時無法顯示。」（沿用 DEC-194 句）；有值但無任何可信日期（例如 TWSE 直讀路徑 A 的 payload）⇒ 🔴＋新句「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」（`ETF_NAV_DATE_UNKNOWN_TEXT`，唯一新增句）。
 - **② 海外 AUM**：診斷頁 AUM 列以海外身分優先（僅措辭；`is_active_etf` 全域不動）。海外 AUM 缺值 ⇒ 🔴＋「目前沒有可用 ETF 規模資料，暫時無法顯示。」，不再宣稱台灣主動式／投信官網。海外費用率／NAV 的真不適用 ⚪ 列保留。
