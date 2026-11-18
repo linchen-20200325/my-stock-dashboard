@@ -105,6 +105,64 @@ def test_mixed_with_undeterminable_is_reported_separately():
     assert r[2].value_text == "資料日在規則內 0 項｜⚠ 過期或可能已過期 1 項｜⬜ 資料未備 0 項"
 
 
+# ── 免責句字面釘死（QA #1211：不得與 DP.FRESHNESS_DISCLAIMER 自比）──────
+_DISCLAIMER_LITERAL = "資料日在規則內只表示資料日未超過規則，不是買賣訊號。"
+_NSENTENCE_RE = re.compile(r"^　另有 ([1-9]\d*) 項判定結果為無法判定，不計入上列$")
+
+
+def _assert_row4_literal(s: RealFeedSnapshot) -> None:
+    n = counts(s).undeterminable
+    detail = rows(s)[3].detail
+    if n == 0:
+        assert detail == _DISCLAIMER_LITERAL
+        assert "另有" not in detail and "無法判定" not in detail
+    else:
+        assert detail == _DISCLAIMER_LITERAL + f"　另有 {n} 項判定結果為無法判定，不計入上列"
+
+
+def test_disclaimer_literal_is_row4_detail_of_real_page():
+    s = snap(twii(), "", regime("unloaded"))
+    assert counts(s).undeterminable == 0
+    assert rows(s)[3].detail == "資料日在規則內只表示資料日未超過規則，不是買賣訊號。"
+
+
+def test_n_sentence_literal_with_fullwidth_space_when_n_positive():
+    s = snap(twii(is_stale=True, age_days=3), "", regime("breadth"))
+    n = counts(s).undeterminable
+    assert n > 0
+    detail = rows(s)[3].detail
+    assert detail.startswith(_DISCLAIMER_LITERAL)
+    tail = detail[len(_DISCLAIMER_LITERAL):]
+    assert tail[0] == "\u3000" and " " not in _DISCLAIMER_LITERAL + tail[:1]
+    m = _NSENTENCE_RE.match(tail)
+    assert m and int(m.group(1)) == n
+    assert detail == f"資料日在規則內只表示資料日未超過規則，不是買賣訊號。　另有 {n} 項判定結果為無法判定，不計入上列"
+
+
+def test_n_sentence_absent_when_n_zero():
+    s = snap(twii(), "", regime("bull"))
+    assert counts(s).undeterminable == 0
+    assert rows(s)[3].detail == _DISCLAIMER_LITERAL
+
+
+@pytest.mark.parametrize("key", list(ALL_SNAPS))
+def test_row4_literal_holds_on_every_real_combination(key):
+    _assert_row4_literal(ALL_SNAPS[key])
+
+
+def test_rewording_the_constant_turns_the_literal_pin_red(monkeypatch):
+    s = snap(twii(is_stale=True, age_days=3), "", regime("breadth"))
+    _assert_row4_literal(s)  # baseline green
+    monkeypatch.setattr(DP, "FRESHNESS_DISCLAIMER", "資料日在規則內表示未超過規則，不是買賣訊號。")
+    with pytest.raises(AssertionError):
+        _assert_row4_literal(s)
+    with pytest.raises(AssertionError):
+        _assert_row4_literal(snap(twii(), "", regime("bull")))
+    monkeypatch.setattr(DP, "FRESHNESS_UNDETERMINABLE_FMT", "另有 {n} 項無法判定")
+    with pytest.raises(AssertionError):
+        _assert_row4_literal(s)
+
+
 def test_fake_axis_has_no_summary_and_keeps_honest_copy():
     for sc in ("cold", "loaded", "stale", "unavailable", "missing", "not_evaluated"):
         vm = get_preview_page_vm(P4_DATA, sc)
