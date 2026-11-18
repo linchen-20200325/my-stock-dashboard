@@ -1448,3 +1448,10 @@
 - 已揭露副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級。
 - OPEN（未修）：`_nav_ok` stale-NAV 偽綠燈（S3b）；`is_active_etf` 對 SPY／VOO／QQQ 回 True 導致海外 AUM 列顯示主動式宣稱；台股主動式依既有規則把真失敗藏在 ⚪。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
+
+## 74. New UI2 a11y 三項最小修（2026-11-18；DEC-197；只追加；非 QA PASS；單組作者環境）
+- 已做（`src/ui2/**`，GPT §B）：disabled CTA `cursor:not-allowed`；頁標題 `role=heading aria-level=1`、區塊標題 `aria-level=2`；`[data-testid="stMain"]:focus-visible` 焦點框。版面／文案／資料未動。
+- 證據：FAKE 存證兩版本逐值零差異；Real 存證差異全來自 main 文案與時鐘（未改動 origin/main 當日重量零差異）；DEC-137 四份存證已重生，`test_dec137_evidence_meta_is_fresh` 綠。
+- 測試：`tests/test_ui2_a11y_three.py`（離線）＋ `tests/test_ui2_drawer_browser.py` 追加項（`ui2_browser`；Streamlit 1.56.0／1.59.2 皆跑）。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Streamlit Cloud、螢幕閱讀器實機（只驗 Chromium CDP AX tree）、iOS Safari／Firefox。
+- 已重現但未做：`A11Y-F1`～`A11Y-F4`（BACKLOG，待 ChatGPT 簽核）。

@@ -56,6 +56,9 @@ CSS = """
 .ui2-ctawrap{margin:2px 0 0 0}
 .ui2-cta{display:inline-block;border:2px solid currentColor;border-radius:8px;padding:6px 14px;font-weight:700}
 .ui2-cta--disabled{opacity:.5;border-style:dashed}
+/* A11Y-D1（GPT §B 三項最小修）：disabled CTA 不得顯示可點擊的手形游標。Streamlit 對 `button:not(:disabled)` 設 cursor:pointer，
+   CTA 被包在 st.markdown 內仍繼承到；用 `.ui2-ctawrap .ui2-cta.ui2-cta--disabled`（3 class）壓過它。行為不變（仍無點擊效果、aria-disabled）。 */
+.ui2-ctawrap .ui2-cta.ui2-cta--disabled{cursor:not-allowed}
 .ui2-cta__reason{font-size:.78rem;opacity:.75;margin-top:2px}
 .ui2-section-title{font-weight:700;margin:12px 0 2px 0}
 @media (max-width:640px){.ui2-pagetitle{font-size:1.2rem}.ui2-card__value{font-size:1.1rem}}
@@ -239,5 +242,10 @@ CSS = """
 .ui2-diag__row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)}
 .ui2-diag__row--sub{padding-left:14px}
 .ui2-diag__group{font-size:.8rem;opacity:.75;padding:6px 0 0 0}
+/* A11Y-D3（GPT §B 三項最小修）：Streamlit 把 `<section data-testid="stMain" tabindex="0">` 做成第一個 Tab 停駐點，但無可見焦點框。
+   ⚠ 例外聲明：本檔原則上不依賴 Streamlit 內部 class；此處僅用其穩定的 `data-testid`（實測（見 docs/DECISIONS.md A11Y 三項最小修）1.56.0 與 1.59.2 皆有 tabindex="0"）；
+   無對應元素時此規則無害（不匹配）。本規則刻意放在檔尾、不在 DEC-146 導覽區段內（`test_w1_nav_css_does_not_depend_on_streamlit_internal_classes` 禁導覽 CSS 出現 stMain）。顏色重用既有 token（--ui2-nav-fg，定義於 :root）；offset -2px 使框畫在元素內側，不改版面。
+   由 tests/test_ui2_a11y_three.py 守衛（移除即紅）。 */
+[data-testid="stMain"]:focus-visible{outline:2px solid var(--ui2-nav-fg);outline-offset:-2px}
 </style>
 """
