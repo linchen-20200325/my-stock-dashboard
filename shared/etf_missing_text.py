@@ -18,3 +18,5 @@ ETF_NAV_STALE_TEXT = '淨值資料已過期，暫時無法顯示。'
 ETF_IDENTITY_UNKNOWN_NOTE = 'ETF 類型無法確認；資料未取得不代表私募。'
 #: NAV 有值但 payload 內沒有任何可信的 NAV 日期：不得套今天日期、不得判綠燈（只能說日期無法確認）。
 ETF_NAV_DATE_UNKNOWN_TEXT = 'NAV 已取得，但資料日期無法確認，暫不判定新鮮度。'
+#: NAV 資料日期在未來（晚於今日）：日期不可信，不得顯示「今天」或任何已驗證新鮮度（fail-closed，#1217 NOTE-3）。
+ETF_NAV_DATE_FUTURE_TEXT = 'NAV 資料日期不可信，暫不判定新鮮度。'

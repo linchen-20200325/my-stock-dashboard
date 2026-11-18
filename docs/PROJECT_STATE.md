@@ -1472,3 +1472,8 @@
 - 已揭露副作用：`data_coverage.py` 對台股主動式 NAV 缺值降級；無日期 NAV（路徑 A）由 🟢 改 🔴。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；真實 TWSE 直讀 payload 是否帶日期未在 Cloud 驗證。
 - **QA 更正（§73；只追加）**：① NAV 列不再以 `date.today()` 冒充資料日；NAV 有值時過期／日期不明一律 🔴 並顯示真實原因句（含台股主動式、舊 session payload；原誤顯示「公開資料受限」已修）；海外 NAV 有值但過期仍為 ⚪ 不適用句。OPEN：未來日期 NAV 仍 🟢（`freshness_light` 既有行為，未動）。
+
+## 75. ETF NAV 診斷未來日期 fail-closed（2026-11-18；DEC-198；只追加；非 QA PASS；單組作者環境）
+- 分支 `a-etf-future-nav-date`（基於 origin/main cce44294）。`health_inspector` NAV 列：日期 > 今日 ⇒ 🔴＋`ETF_NAV_DATE_FUTURE_TEXT`，不再 🟢「今天」。`freshness_light`、NAV 計算／來源、AUM／費用率／Beta 皆未動。
+- AUM／費用率／Beta：payload 無來源日期，僅唯讀查證、登 BACKLOG `ETF-DIAG-ASOF-1`。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。

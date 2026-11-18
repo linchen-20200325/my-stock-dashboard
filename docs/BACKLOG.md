@@ -2951,3 +2951,5 @@
 ## 2026-11-18 DEC-196 QA 後續（append-only；非 QA PASS）
 - 已修 NOTE-1（台股主動式 NAV 有值時措辭）、NOTE-2（海外 NAV 有值過期的矛盾字樣）。
 - **OPEN｜NOTE-3 未來日期 NAV 仍 🟢**：`premium.nav_date`／`data_date` 晚於今天（例：今天 +3 天）時 `freshness_light` 仍判 🟢「今天」。既有行為，不在 A 線核准範圍，未動 `freshness_light`。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期 NAV 回報。
+- ~~**OPEN｜NOTE-3 未來日期 NAV 仍 🟢**~~（上方原文保留）**已結案（DEC-198，2026-11-18；有意識的更新，不是漏刪）**：NAV 診斷 caller 改 fail-closed（日期 > 今日 ⇒ 🔴「NAV 資料日期不可信，暫不判定新鮮度。」）；`freshness_light` 仍未動。待非作者 QA／CI。
+- **OPEN｜ETF-DIAG-ASOF-1 AUM／費用率／Beta 列日期為 `date.today()`**：唯讀查證（DEC-198）——`etf_single_data` 的 `aum`／`expense`／`beta` 為純數值，無來源日期，值存在即顯示 🟢「今天」，實際新鮮度未知；未證實有錯誤日期的可重現反例，未改程式。若要處理需先在 L1 fetcher 帶 as_of（動 Schema／資料源，須 GPT 簽核）。Owner：專案 AI；觸發：有實際回報或 GPT 派工。
