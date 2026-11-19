@@ -10798,3 +10798,8 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **DEC-203 補註（修正輪，不新增編號；2026-11-19；非 QA PASS）**：依獨立 UX 審查與工程 QA 修正原型——9003 部分缺值改琥珀「部分欄位未取得」、9005 未來日改獨立 chip「資料日期不可信」（紅，對齊 #1202；與 9004 來源不可用區分）、字串登錄表＋README PROPOSED 清單一致性測試、placeholder「輸入代碼」、查無隱藏加入觀察、手機結果置於範例之上、示範值打亂並註明無單位、規則 7 天對映 `shared/staleness.py` STALE_DAYS_DAILY（前版 3 天無出處，已更正；仍為 PROPOSED）。仍為隔離示範、非正式施工、待 Visual Gate。
 
 - **DEC-203 補註二（最後小修；不新增編號；非 QA PASS）**：9005 展開區資料日列改「資料日期不可信，不顯示」並說明「來源有回應，但資料日晚於基準日」；README 9004 列對齊實作；9005 日期斷言改正則（排除示範基準日）並加突變；README 補 Gate 推薦、Visual Gate 需裁示點、示範限制；9002 數值改中性色。
+
+### DEC-204｜New UI2 標的「即時查一檔」隔離原型 V2 視覺候選（#1199 comment 7003017605 授權 B 線最小 PR；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **決定**：在同一隔離目錄新增 V2 候選（`index_v2.html`／`README_V2.md`／`screenshots_v2/`，含 V1｜V2 並排對照圖），V1 全部檔案原樣保留。落實裁示 (a) 9001 移除綠色 OK chip 與「資料日在規則內」詳述；(b) 9003 移除「部分欄位未取得」「N／6 欄有值」，逐欄沿用既有缺值字樣；(c) 9004／9005 維持紅色 fail-closed、以既有文字區分，移除需源頭可稽核訊號的理由句；第二層 Evidence 收斂為一行 `資料日 … ｜ 來源 …`；文案分三級（沿用正式／設計候選 PROPOSED／僅原型適用），registry 新增 `tier` 欄位並由 `tests/test_nui2_target_lookup_prototype_v2.py` 與 README_V2 比對。
+- **非正式施工**：**不得合併進正式 New UI2**；仍待**使用者最終 Visual 確認**；三個正式接線 Gate（個股權利／PIT／Schema → L3 lookup service contract → OneBrain 接線）維持 HOLD。未改 app／src／shared／既有測試／DEC-137 JSON／V1 檔案。
+- **編號**：origin/main a56406c9 已用至 DEC-203／§80；合併時若被佔則順延。

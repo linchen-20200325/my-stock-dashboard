@@ -2995,3 +2995,6 @@
 - 隔離離線原型已交付 Draft PR；待客戶 Visual Gate。正式接線（真資料權利／PIT／Schema、查詢服務契約、OneBrain 接線）**未授權**，不得自行施工。PROPOSED 新字句未核准。
 
 - 修正輪（DEC-203 補註）：UX 審查與工程 QA 必修項已處理，待 Visual Gate；正式接線仍未授權。
+
+## 2026-11-19 NUI2-TARGET-LOOKUP-VISUAL-PROTOTYPE V2 候選（DEC-204；append-only；非 QA PASS；單組作者環境）
+- V2 候選已交付 Draft PR（#1199 comment 7003017605 授權），待**使用者最終 Visual 確認**；不得合併進正式 New UI2。正式接線三 Gate（個股權利／PIT／Schema → L3 lookup service contract → OneBrain）仍 HOLD，未授權。
