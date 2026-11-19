@@ -1505,3 +1505,9 @@
 ## 81. New UI2 標的「即時查一檔」原型 V2 視覺候選（2026-11-19；DEC-204；只追加；非 QA PASS；單組作者環境）
 - 分支 `b-nui2-target-lookup-prototype-v2`（base origin/main a56406c9）。於 `docs/vnext/prototypes/nui2_target_lookup/` 新增 `index_v2.html`／`README_V2.md`／`screenshots_v2/`（含 `compare_*` V1｜V2 對照）與 `tests/test_nui2_target_lookup_prototype_v2.py`；V1 不動。隔離原型、非正式施工、不得併入正式 New UI2、待使用者 Visual 確認。
 - **NOT VERIFIED**：使用者 Visual 確認、非作者 QA、exact-head CI、真機、Cloud。
+
+## 82. 查一檔 MVP 決議入庫與 L3 契約候選（2026-11-19；DEC-205；只追加；docs-only；非 QA PASS；單組作者環境）
+- 分支 `b-docs-lookup-mvp-pregate`（base origin/main f1f199e5）。授權 #1199 comment 7007425153：使用者決議方案② DG-PIT＝B＋X、DG-LIC＝A（限定射程見 DECISIONS DEC-205）；不授權資料發布、施工或 UI2 接線。
+- 新增 `docs/vnext/LOOKUP_MVP_L3_CONTRACT_CANDIDATE_2026-11-19.md`（候選／草案／NO CODE）；BACKLOG 新增 LOOKUP-MVP 追蹤段；HANDOFF 下一接手點。**未改任何程式、測試、JSON、workflow、data_cache；無網路請求、無下載。**
+- 結論：headless 邊界 NO-GO（DG-LIC 逐資料集證據、季度 PIT 語意、官方資料集欄位／單位／口徑、L3 Schema、G2F 皆未達）；DG-LIC 權利 Gate 仍 HOLD。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI；官方資料集頁面內容（本批 B 線未獨立查證，引自 c7007425153）。

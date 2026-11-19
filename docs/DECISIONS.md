@@ -10805,3 +10805,13 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **編號**：origin/main a56406c9 已用至 DEC-203／§80；合併時若被佔則順延。
 
 - **DEC-204 補註（V2 小修輪，不新增編號；2026-11-19；非 QA PASS）**：工程 QA PASS、UX 審查無硬阻擋，採納建議項——9004／9005 版型一致（各只一個紅框，框內皆以既有 🔴 開頭，移除重複標題 chip）；展開區只掛一枚 PROPOSED 標籤且各段不斷行；示範值註記移到六格上方並提高對比；compare 圖改裁切結果區放大並標註 V1／V2 差異項；README_V2 補「仍待確認」（OK 態不判新舊、單一資料日是否暗示各維共用 as_of、9004／9005 展開相同屬刻意、過期 9 天為夾具）。V1 檔案未動；仍不得併入正式 New UI2、待使用者 Visual 確認。
+
+### DEC-205｜使用者正式決議：方案② DG-PIT＝B＋X、DG-LIC＝A；授權最小唯讀取證與「查一檔 MVP」安全前置，不授權施工接線（#1199 comment 7007425153；2026-11-19；只追加；docs-only；非 QA PASS；單組作者環境）
+- **使用者原話（逐字，#1199 comment 7007425153 §1）**：「我同意你推薦的方案②：DG-PIT B＋X、DG-LIC A。請正式記錄決定，安排官方資料集唯讀取證及查一檔 MVP 的安全前置工作，不授權正式資料發布或 UI2 接線。」
+- **DG-PIT＝B＋X 的限定射程**（依 `DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 決策 3）：僅顯示最新值的**資料日**；`fetched_at` 僅內部稽核證據，**絕不**作官方公布日；**不得**拿缺 `published_at` 的資料做歷史序列、比較、回測、訊號或事後當時已知判斷；畫面未證實官方發布時點須保持 NOT VERIFIED。對個股季報 MVP：僅「最新已證季報事實＋報表年季／期別、期間截止日」，不得把期末日、`fetched_at`、metadata 出表日（首次發布語意未核查）冒充可得／公布時間；季度別 PIT／修訂語意須具名審核。**這是限制可呈現範圍，不是證明季度 PIT 已通過。**
+- **DG-LIC＝A 的限定射程**（決策 4）：先查官方原始資料集頁、授權條款原文／必要法務意見、各資料集實際取得方式；**逐資料集三層證據分列**——A 條款可回查、B 條款適用所使用的實際資料資源／下載路徑、C 對本專案公開／儲存／顯名義務的適用及符合。**不得以使用者承擔風險取代授權**；**不得拿 A 層證據宣稱 C 層獲核准**；**DG-LIC 權利 Gate 仍 HOLD，直到逐資料集符合使用條件的證據完成裁定**。既有公開 repo 中 MOPS／FinMind／TWSE／TPEX／Yahoo 歷史資料的授權疑慮，**不因另一份開放資料集標有開放條款而自動解除**。
+- **絕不推定授權（全部維持原 Gate HOLD）**：正式資料下載／定期取用／發布／再散布；改資料 cache；Cloud／NAS／Secrets；workflow 啟用；`src/ui2/**`／`real_feed`／G2F 白名單接線；正式 production；真 OneBrain Provider／模型費用／caller；System Action／Risk Cap／Schema 變更。
+- **本批授權範圍**：Work 唯讀取證（data.gov.tw 91998、94865；91995 金融業僅列另 Schema 候選；政府資料開放授權條款第 1 版）＋ B 線 L3 契約**候選**文件（`docs/vnext/LOOKUP_MVP_L3_CONTRACT_CANDIDATE_2026-11-19.md`）。**NO CODE／NO 測試／NO UI caller／NO 下載。** 最短結論：以目前證據 headless 邊界 **NO-GO**（blocker 見該文件 §6、BACKLOG LOOKUP-MVP）。
+- **未解除**：#7006417845 的 PREGATE NO-GO 不因本決議翻轉；HEADLESS-MVP-IMPLEMENTATION 為**待另送**的 Decision Gate，證據達標前不得施工。
+- **不倒改舊 DEC**：DEC-165／171／179／184／185 等一字未動；PREGATE 推薦的 DG-PIT「第 (a) 層」與本決議的 B＋X 並存，以本決議的限定射程為準。
+- **編號**：origin/main（f1f199e5）已用至 DEC-204／§81；本批 DEC-205／§82；合併時若被佔則順延。

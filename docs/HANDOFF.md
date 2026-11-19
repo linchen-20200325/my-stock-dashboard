@@ -1616,3 +1616,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 ## 2026-11-19 B 線：標的即時查一檔原型 V2 視覺候選（DEC-204；append-only；非 QA PASS）
 - 分支 `b-nui2-target-lookup-prototype-v2`（base a56406c9），Draft PR。僅隔離原型精修；下一手：使用者看 `screenshots_v2/compare_*` 做 Visual 確認 → 非作者 QA → CI。**不得合併進正式 New UI2**；正式接線 Gate 維持 HOLD。
+
+## 2026-11-19 B 線 docs：查一檔 MVP 決議入庫＋L3 契約候選（DEC-205；append-only；非 QA PASS）
+- 分支 `b-docs-lookup-mvp-pregate`（base f1f199e5），docs-only Draft PR。授權 #1199 comment 7007425153（DG-PIT＝B＋X、DG-LIC＝A）。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。之後 **Work 唯讀取證**（91998／94865／政府資料開放授權條款第 1 版；91995 另 Schema）→ 核對權利／PIT／Schema 是否達標 → **只在證據達標時**另送 HEADLESS-MVP-IMPLEMENTATION Decision Gate。headless 邊界目前 NO-GO；勿自行施工，勿下載、勿改 cache／workflow／UI2。非 QA PASS。
