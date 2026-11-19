@@ -10782,3 +10782,10 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **DEC-137**：`measure_viewport.source_hash` 只涵蓋 `src/ui2/**`、`app_ui2.py`、`measure_viewport.py`，不含 `src/services/ui2/**` → 4 份存證 JSON 不需重生（`tests/test_ui2_real_feed.py` source_hash 測試通過）。
 - **揭露**：根因與遮蔽路徑為 B 線單組結論，未經第二組驗證；須非作者 QA。
 - **編號**：origin/main（8d09c3d6）已用至 DEC-200／§77，本批 DEC-201／§78；合併時若被佔則順延（src 註解不含編號）。
+
+### DEC-202｜New UI2 產品收斂：N1 降 P2 已知限制、O1／O2 判定非缺陷並文件揭露（#1199 comment 6995747146 授權；GPT 總管管理裁示；2026-11-19；只追加；docs-only；非 QA PASS）
+- **決定**：N1（切頁捲動未重置）採方案 A＝降為 P2「已知限制」，不施工；B1／B2／B3 未授權，UI2 維持零 JS（DEC-146）。O1／O2 已重現，判定非缺陷＝符合 DEC-177 口徑，維持現狀，僅以文件揭露（設計文件 §7 補註）。
+- **不新增契約**：未改程式、測試、JSON、Schema、UI 文案、統計口徑；不重寫 DEC-177；候選的新字句／改口徑／口徑鎖定測試均**未授權**。
+- **證據**：#1199 comment 6995401840；實測數值與重啟條件見 BACKLOG 2026-11-19 UI2-PRODUCT-CLOSURE。
+- **範圍聲明**：僅 Offline Preview Ready；Cloud Runtime Verified NOT VERIFIED、Production Ready 不成立。
+- **編號**：origin/main（6623760d）已用至 DEC-201／§78，本批 DEC-202／§79；合併時若被佔則順延。

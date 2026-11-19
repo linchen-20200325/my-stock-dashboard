@@ -2975,6 +2975,18 @@
 
 ## 2026-11-19 B 線 N2 結案＋N1／O1／O2 登記（DEC-201；append-only；非 QA PASS；單組作者環境）
 - ~~**N2｜📊 市場頁 Real feed：TWII 未來資料日時，卡片顯示「資料日期不可信」，日 K meta 行卻印「資料日 <未來日>」**（證據 #1199 comment 6990816116）~~ **已修（DEC-201，2026-11-19；有意識的更新，不是漏刪）**：`real_canonical.kbar_chart_spec` 在 `as_of_future is True` 或原因碼 `FUTURE_DATE` 時不帶 `as_of`，meta 行改顯示既有缺日期字樣；含遮蔽路徑（原因碼被較早列蓋掉）。測試 `tests/test_ui2_n2_future_kbar_meta.py`。待非作者 QA／exact-head CI／merge／main CI。
-- **DECISION GATE／HOLD｜N1 切頁後捲動位置未重置**：稽核重現步驟——viewport 390×844（手機），於某頁向下捲動後切換到另一頁，新頁 `scrollTop` 保留前頁位置，頁標題被捲出視窗之外。修法需前端 JS（捲動重置），屬新前端行為，依 #1199 comment 6990535956 只登記、不施工、不以 JS 注入繞過既有 contract。Owner：GPT 專案總管裁示；觸發：核准 JS 前端行為 Gate。
-- **OPEN（觀察，不施工）｜O1 FETCH_FAILED 與「資料新鮮度總覽」計數不一致**：稽核觀察到上游抓取狀態為 FETCH_FAILED 的項目，與 🗂 資料頁新鮮度總覽的計數口徑不一致。本批未重現、未查證根因。Owner：專案 AI；觸發：有任務動到新鮮度總覽或收到實際回報。
-- **OPEN（觀察，不施工）｜O2 regime 無 as_of 時顯示「資料未備」**：regime 事實不帶 as_of，畫面顯示「資料未備」字樣，是否為預期（誠實缺值）或誤導待判定。本批未查證。Owner：專案 AI；觸發：有任務動到 regime 呈現或 GPT 派工。
+- ~~**DECISION GATE／HOLD｜N1 切頁後捲動位置未重置**：稽核重現步驟——viewport 390×844（手機），於某頁向下捲動後切換到另一頁，新頁 `scrollTop` 保留前頁位置，頁標題被捲出視窗之外。修法需前端 JS（捲動重置），屬新前端行為，依 #1199 comment 6990535956 只登記、不施工、不以 JS 注入繞過既有 contract。Owner：GPT 專案總管裁示；觸發：核准 JS 前端行為 Gate。~~ **已更新（2026-11-19；有意識的更新，不是漏刪，決策者 GPT 總管 #1199 comment 6995747146）**：降為 P2 已知限制，見下方 UI2-PRODUCT-CLOSURE 段。
+- ~~**OPEN（觀察，不施工）｜O1 FETCH_FAILED 與「資料新鮮度總覽」計數不一致**：稽核觀察到上游抓取狀態為 FETCH_FAILED 的項目，與 🗂 資料頁新鮮度總覽的計數口徑不一致。本批未重現、未查證根因。Owner：專案 AI；觸發：有任務動到新鮮度總覽或收到實際回報。~~ **已更新（2026-11-19 UI2-PRODUCT-CLOSURE；有意識的更新，不是漏刪，決策者 GPT 總管 #1199 comment 6995747146）**：原「本批未重現、未查證」已過時，見下方 2026-11-19 UI2-PRODUCT-CLOSURE 段 O1。
+- ~~**OPEN（觀察，不施工）｜O2 regime 無 as_of 時顯示「資料未備」**：regime 事實不帶 as_of，畫面顯示「資料未備」字樣，是否為預期（誠實缺值）或誤導待判定。本批未查證。Owner：專案 AI；觸發：有任務動到 regime 呈現或 GPT 派工。~~ **已更新（2026-11-19 UI2-PRODUCT-CLOSURE；有意識的更新，不是漏刪，決策者 GPT 總管 #1199 comment 6995747146）**：原「本批未重現、未查證」已過時，見下方 2026-11-19 UI2-PRODUCT-CLOSURE 段 O2。
+
+## 2026-11-19 UI2-PRODUCT-CLOSURE 結論：N1 降 P2 已知限制＋O1／O2 已重現判定非缺陷（DEC-202；docs-only；append-only；非 QA PASS；單組作者環境）
+授權：#1199 comment 6995747146（GPT 總管：N1 採方案 A；O1／O2 現狀＋文件揭露；最多 1 個 docs-only PR）。證據：#1199 comment 6995401840（完成矩陣＋O1／O2 重現＋N1 實測）；基準 main `6623760d`。
+
+- ~~**DECISION GATE／HOLD｜N1 切頁後捲動位置未重置**~~ **有意識的更新，不是漏刪，決策者 GPT 總管（#1199 comment 6995747146）：降為 P2「已知限制」（採方案 A，不施工）**。
+  - **實測（#6995401840）**：捲動容器為 `[data-testid=stMain]`，切頁不重置 `scrollTop`。390×844：我的頁捲 197 → 切持股，標題 y=-108；持股 240 → 資料，y=-170；資料 240 → 市場，y=-151；較短的新頁被瀏覽器 clamp 回 0。1440×900：僅 135–163px 可捲範圍，標題多在 y=77 屬正常。焦點留在 nav radio。
+  - **現無不需 JS 的緩解。** B1（`st.navigation`）、B3（JS 注入）、B2 **均未授權**。UI2 現為零 JS 守衛（`tests/test_ui2_drawer_js_guard.py` 內容已是 `src/ui2` 零 JS；DEC-146 起 Drawer 已退役），不得以 JS 繞過。
+  - **重啟條件**：使用者真實困擾顯著增加，或正式提出可驗方案時，另開 UX／安全 Gate。
+- **O1｜FETCH_FAILED 與「資料新鮮度總覽」計數不一致**：已重現（main `6623760d`）。**判定：非缺陷，符合 DEC-177 口徑，僅需文案揭露；維持現狀。** 新鮮度總覽計的是「資料日相對規則」，不等於本次抓取成功；`upstream_state=FETCH_FAILED` 是獨立事實（`shared/upstream_state.py`），本計數不反映。使用者影響：低～中（可能誤以為「新鮮」＝剛抓成功）。
+- **O2｜regime 有值但無可驗證 as_of 時歸「資料未備」**：已重現。**判定：非缺陷，符合 DEC-177 口徑；維持現狀。** 「多頭」等顯示不構成已確認資料日期。使用者影響：低。
+- **候選但未授權（不得自行施工）**：新增揭露字句、更改計數口徑、口徑鎖定測試。UI 字串與統計口徑均未動；文件揭露見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §7。
+- **成立範圍／NOT VERIFIED**：僅 **Offline Preview Ready** 成立（以 #6995401840 矩陣為準，不重貼）。**Cloud Runtime Verified：NOT VERIFIED／不成立；Production Ready：不成立。** 缺的證據：Cloud 真實部署實況（#1107 Cloud 驗收）、非作者 QA、exact-head 原生 CI、main push CI、真實瀏覽器雲端人工驗收。
