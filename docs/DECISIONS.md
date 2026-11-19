@@ -10794,3 +10794,5 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **決定**：新增與 App 完全隔離的單檔離線 HTML 原型（`docs/vnext/prototypes/nui2_target_lookup/`），全 FAKE、虛構標的 9001~9006，僅供 Visual Gate 審視。**不是正式施工授權**；未改 app／src／shared／既有測試／DEC-137 JSON；無網路、無真實資料。
 - **新字句**一律 UI 標「PROPOSED・未核准」，清單見該目錄 README。待客戶 Visual Gate 核准。
 - **編號**：origin/main（eff23f48）已用至 DEC-202／§79；合併時若被佔則順延。
+
+- **DEC-203 補註（修正輪，不新增編號；2026-11-19；非 QA PASS）**：依獨立 UX 審查與工程 QA 修正原型——9003 部分缺值改琥珀「部分欄位未取得」、9005 未來日改獨立 chip「資料日期不可信」（紅，對齊 #1202；與 9004 來源不可用區分）、字串登錄表＋README PROPOSED 清單一致性測試、placeholder「輸入代碼」、查無隱藏加入觀察、手機結果置於範例之上、示範值打亂並註明無單位、規則 7 天對映 `shared/staleness.py` STALE_DAYS_DAILY（前版 3 天無出處，已更正；仍為 PROPOSED）。仍為隔離示範、非正式施工、待 Visual Gate。

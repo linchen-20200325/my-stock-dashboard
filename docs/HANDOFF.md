@@ -1611,3 +1611,5 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 
 ## 2026-11-19 B 線：標的即時查一檔視覺原型（DEC-203；append-only；非 QA PASS）
 - 分支 `b-nui2-target-lookup-prototype`（base eff23f48），Draft PR。原型僅示範、隔離於 App 外；下一手：客戶 Visual Gate → 非作者 QA → CI。正式接線未授權。
+
+- 修正輪（DEC-203 補註）：同分支追加 commit；下一手仍為客戶 Visual Gate → 非作者 QA → CI。

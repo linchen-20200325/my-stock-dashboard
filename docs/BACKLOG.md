@@ -2993,3 +2993,5 @@
 
 ## 2026-11-19 NUI2-TARGET-LOOKUP-VISUAL-PROTOTYPE 第一階段（DEC-203；append-only；非 QA PASS；單組作者環境）
 - 隔離離線原型已交付 Draft PR；待客戶 Visual Gate。正式接線（真資料權利／PIT／Schema、查詢服務契約、OneBrain 接線）**未授權**，不得自行施工。PROPOSED 新字句未核准。
+
+- 修正輪（DEC-203 補註）：UX 審查與工程 QA 必修項已處理，待 Visual Gate；正式接線仍未授權。

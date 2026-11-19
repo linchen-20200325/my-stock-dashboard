@@ -1499,3 +1499,5 @@
 ## 80. New UI2 標的「即時查一檔」隔離視覺原型（2026-11-19；DEC-203；只追加；非 QA PASS；單組作者環境）
 - 分支 `b-nui2-target-lookup-prototype`（base origin/main eff23f48）。新增 `docs/vnext/prototypes/nui2_target_lookup/`（index.html／README／screenshots）與 `tests/test_nui2_target_lookup_prototype.py`。隔離原型、非正式施工、待 Visual Gate。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、真機、Cloud。
+
+- 修正輪（DEC-203 補註）：原型字串登錄表／測試強化、9003／9005 狀態修正、截圖重拍。仍待 Visual Gate；非 QA PASS。

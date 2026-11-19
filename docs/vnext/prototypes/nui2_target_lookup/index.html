@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>示範原型：標的・即時查一檔</title>
+<title>x</title>
 <style>
-/* 色票／字級／間距讀自 src/ui2/shell/css.py（深色 only、mobile-first）；本檔自成一體，不被 App 引用。 */
+/* tokens read from src/ui2/shell/css.py (dark only, mobile-first); this file is self-contained and never imported by the app */
 :root{--bg:#0e1117;--fg:#e6edf3;--nav-bg:#161b22;--line:rgba(128,128,128,.4);--tint:rgba(128,128,128,.10);
   --pos:#3fb950;--pos-bg:rgba(26,127,55,.12);--warn:#d29922;--warn-bg:rgba(183,121,31,.14);--dng:#ff7b72;--dng-bg:rgba(198,40,40,.12)}
 *{box-sizing:border-box}
@@ -17,8 +17,9 @@ body{padding-bottom:3rem;overflow-x:hidden}
 .wrap{max-width:1100px;margin:0 auto;padding:12px .9rem 0}
 h1{font-size:1.35rem;font-weight:700;margin:4px 0 8px;line-height:1.3}
 @media (max-width:640px){h1{font-size:1.2rem}}
-.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
-@media (min-width:900px){.layout{grid-template-columns:360px minmax(0,1fr);align-items:start}.col-l{position:sticky;top:56px}}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;grid-template-areas:"controls" "result" "samples"}
+.controls{grid-area:controls}.col-r{grid-area:result;min-width:0}.samples-wrap{grid-area:samples}
+@media (min-width:900px){.layout{grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto 1fr;grid-template-areas:"controls result" "samples result"}}
 .card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;overflow-wrap:anywhere}
 .muted{opacity:.75;font-size:.8rem}
 button,input{font:inherit;color:inherit}
@@ -27,7 +28,7 @@ button{cursor:pointer}
 .modes{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 10px}
 .modes button{flex:1 1 0;min-height:44px;background:none;border:0;border-bottom:3px solid transparent;padding:0 12px}
 .modes button[aria-checked="true"]{font-weight:700;border-bottom-color:currentColor;background:var(--tint)}
-.modes button[aria-checked="true"]::before{content:"● ";font-size:.7em}
+.modes button[aria-checked="true"]::before{content:"\25CF ";font-size:.7em}
 .search{display:flex;gap:8px;align-items:stretch}
 .search input{flex:1 1 auto;min-width:0;min-height:44px;background:var(--bg);border:1px solid currentColor;border-radius:8px;padding:6px 10px}
 .btn{min-height:44px;min-width:44px;border:2px solid currentColor;border-radius:8px;background:none;padding:6px 14px;font-weight:700}
@@ -53,7 +54,7 @@ button{cursor:pointer}
 .field[data-state="missing"],.field[data-state="not_evaluated"]{border-style:dotted}
 .field[data-state="stale"] .v{color:var(--warn)}
 details{margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:0 10px}
-summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:pointer;font-weight:600}
 details dl{margin:0 0 8px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.85rem}
 details dt{opacity:.75}details dd{margin:0}
 .actions{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-start;margin:8px 0}
@@ -63,155 +64,210 @@ details dt{opacity:.75}details dd{margin:0}
 </style>
 </head>
 <body>
-<div class="banner" role="note" id="banner"><b>示範原型・FAKE 資料，不是市場資料</b></div>
+<div class="banner" role="note" id="banner"><b data-s="banner"></b></div>
 <main class="wrap">
-  <h1 id="page-title">🎯 標的</h1>
+  <h1 id="page-title" data-s="h1"></h1>
   <div class="layout">
-    <div class="col-l">
-      <div role="radiogroup" aria-label="模式" class="modes" id="modes">
-        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="curated">市場精選</button>
-        <button type="button" role="radio" aria-checked="true" tabindex="0" data-mode="lookup">即時查一檔</button>
+    <div class="controls">
+      <div role="radiogroup" data-sal="mode_label" class="modes" id="modes">
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="curated" data-s="mode_curated"></button>
+        <button type="button" role="radio" aria-checked="true" tabindex="0" data-mode="lookup" data-s="mode_lookup"></button>
       </div>
       <form class="search" id="search-form" role="search" novalidate>
-        <input id="q" name="q" type="text" autocomplete="off" placeholder="代碼／名稱" aria-label="代碼／名稱" aria-describedby="search-reason">
-        <button type="submit" class="btn" id="go">查詢</button>
+        <input id="q" name="q" type="text" autocomplete="off" data-sph="ph" data-sal="ph" aria-describedby="search-reason">
+        <button type="submit" class="btn" id="go" data-s="cta"></button>
       </form>
+      <div class="reason" data-s="ph_tag"></div>
       <div class="reason" id="search-reason" aria-live="polite"></div>
-      <p class="muted" style="margin:10px 0 0" id="samples-label"></p>
-      <ul class="samples" id="samples" aria-labelledby="samples-label"></ul>
     </div>
     <div class="col-r">
-      <section id="panel-curated" hidden aria-label="市場精選"></section>
-      <section id="panel-lookup" aria-label="即時查一檔">
-        <div id="result" aria-live="polite"></div>
-      </section>
+      <section id="panel-curated" hidden></section>
+      <section id="panel-lookup"><div id="result" aria-live="polite"></div></section>
+    </div>
+    <div class="samples-wrap">
+      <p class="muted" style="margin:0" id="samples-label"></p>
+      <ul class="samples" id="samples" aria-labelledby="samples-label"></ul>
     </div>
   </div>
 </main>
+<script type="application/json" id="strings">
+{
+"title":{"t":"示範原型：標的・即時查一檔","c":"proposed"},
+"banner":{"t":"示範原型・FAKE 資料，不是市場資料","c":"auth"},
+"tag":{"t":"PROPOSED・未核准","c":"meta"},
+"ph_tag":{"t":"PROPOSED・未核准：輸入框提示字","c":"meta"},
+"h1":{"t":"🎯 標的","c":"reuse","s":"shared/ia_nav4.py"},
+"mode_label":{"t":"模式","c":"reuse","s":"src/ui2/views/target.py"},
+"mode_curated":{"t":"市場精選","c":"reuse","s":"shared/ui2_contract/pages.py"},
+"mode_lookup":{"t":"即時查一檔","c":"reuse","s":"shared/ui2_contract/pages.py"},
+"ph":{"t":"輸入代碼","c":"proposed"},
+"cta":{"t":"查詢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"cta_dis":{"t":"尚未開放查詢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"curated_hint":{"t":"請先切換到「即時查一檔」","c":"proposed"},
+"curated_empty":{"t":"精選尚未開放（需連網取得，且候選的組合方式尚待定義）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"samples_label":{"t":"示範範例（點選即查）","c":"proposed"},
+"sample_sub_9099":{"t":"查無示範","c":"proposed"},
+"n9001":{"t":"9001 示範甲","c":"auth"},
+"n9002":{"t":"9002 示範乙","c":"auth"},
+"n9003":{"t":"9003 示範丙","c":"auth"},
+"n9004":{"t":"9004 示範丁","c":"auth"},
+"n9005":{"t":"9005 示範戊","c":"auth"},
+"n9006":{"t":"9006 示範己","c":"auth"},
+"n9099":{"t":"9099","c":"auth"},
+"not_loaded":{"t":"⬜ 尚未載入","c":"reuse","s":"shared/ui2_contract/text.py"},
+"idle_hint":{"t":"輸入代碼或點選示範範例後按「查詢」","c":"proposed"},
+"need_input":{"t":"請先輸入代碼","c":"proposed"},
+"no_name":{"t":"請輸入代碼（名稱搜尋尚未提供）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"not_found":{"t":"查無此標的","c":"proposed"},
+"not_found_hint":{"t":"示範原型只收 9001~9006","c":"proposed"},
+"real_code":{"t":"示範原型不查真實代碼","c":"proposed"},
+"chip_ok":{"t":"🟢 資料日在規則內","c":"proposed"},
+"ok_detail":{"t":"資料日在規則內只表示資料日未超過規則，不是買賣訊號。","c":"reuse","s":"docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md"},
+"stale":{"t":"⚠ 過期 {n} 天","c":"reuse","s":"shared/ui2_contract/text.py"},
+"chip_partial":{"t":"🟡 部分欄位未取得","c":"proposed"},
+"partial_count":{"t":"{n}／6 欄有值","c":"proposed"},
+"miss_f":{"t":"⬜ 資料未取得","c":"reuse","s":"shared/ui2_contract/text.py"},
+"miss_r":{"t":"⬜ 資料未備","c":"reuse","s":"shared/ui2_contract/text.py"},
+"asof_missing":{"t":"⬜ 資料日未提供","c":"reuse","s":"shared/ui2_contract/text.py"},
+"unavail":{"t":"🔴 來源目前不可用","c":"reuse","s":"shared/ui2_contract/text.py"},
+"reason_unavail":{"t":"原因類別：來源逾時（示範）","c":"proposed"},
+"not_eval":{"t":"⬜ 尚未評估","c":"reuse","s":"shared/ui2_contract/text.py"},
+"chip_future":{"t":"🔴 資料日期不可信","c":"proposed"},
+"future_text":{"t":"資料日期不可信，暫時無法顯示","c":"auth"},
+"asof_label":{"t":"資料日","c":"reuse","s":"shared/ui2_contract/text.py"},
+"src_label":{"t":"來源","c":"proposed"},
+"rule_label":{"t":"規則","c":"proposed"},
+"src_val":{"t":"示範來源","c":"proposed"},
+"rule_val":{"t":"示範規則：資料日距示範基準日 {base} 不超過 {tol} 天視為在規則內，超過視為過期","c":"proposed"},
+"details":{"t":"展開：資料日／來源／規則","c":"proposed"},
+"demo_val":{"t":"示範值","c":"auth"},
+"demo_note":{"t":"示範值為示意數字：無單位，也不代表排序或好壞","c":"proposed"},
+"d1":{"t":"基本面","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d2":{"t":"估值","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d3":{"t":"籌碼","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d4":{"t":"趨勢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d5":{"t":"產業","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d6":{"t":"市場環境","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"add_watch":{"t":"加入觀察（尚未提供）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"add_watch_reason":{"t":"加入觀察尚未開放；這裡不會寫入任何持股或觀察清單","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"isolation":{"t":"查一檔只在這次瀏覽有效：不會加入持股、觀察或候選池，也不會改變策略、Risk Cap 或排名，不寫入 Sheet。","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"clear":{"t":"清除查詢結果","c":"proposed"}
+}
+</script>
 <script>
 (function () {
   "use strict";
-  // 重用正式字樣：逐字取自 shared/ui2_contract/text.py、src/services/ui2/real_canonical.py（測試會對照）
-  var T = {
-    MISSING_NOT_FETCHED: "⬜ 資料未取得", MISSING_NOT_READY: "⬜ 資料未備", ASOF_MISSING: "⬜ 資料日未提供",
-    STALE_FMT: "⚠ 過期 {n} 天", UNAVAILABLE: "🔴 來源目前不可用", NOT_EVALUATED: "⬜ 尚未評估", NOT_LOADED: "⬜ 尚未載入",
-    NO_NAME_SEARCH: "請輸入代碼（名稱搜尋尚未提供）",
-    CTA_DISABLED: "尚未開放查詢",
-    CURATED_EMPTY: "精選尚未開放（需連網取得，且候選的組合方式尚待定義）",
-    ADD_WATCH: "加入觀察（尚未提供）", ADD_WATCH_REASON: "加入觀察尚未開放；這裡不會寫入任何持股或觀察清單",
-    ISOLATION: "查一檔只在這次瀏覽有效：不會加入持股、觀察或候選池，也不會改變策略、Risk Cap 或排名，不寫入 Sheet。",
-    OK_DETAIL: "資料日在規則內只表示資料日未超過規則，不是買賣訊號。"
-  };
-  // 任務指定（授權）字樣
-  var AUTH_FUTURE = "資料日期不可信，暫時無法顯示";
+  var R = JSON.parse(document.getElementById("strings").textContent);
+  var BASE = "2026-11-19", TOL = 7;   // fixed demo base date; TOL mirrors shared/staleness.py STALE_DAYS_DAILY
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
-  // 新字句一律經 P()：UI 上附「PROPOSED・未核准」小標；清單見 README
-  function P(s) { return '<span class="prop">' + esc(s) + '</span><span class="prop-tag">PROPOSED・未核准</span>'; }
+  function raw(id, vars) {
+    var t = R[id].t;
+    if (vars) for (var k in vars) t = t.split("{" + k + "}").join(vars[k]);
+    return t;
+  }
+  function tag() { return '<span class="prop-tag">' + esc(R.tag.t) + '</span>'; }
+  // every visible string goes through S(): proposed strings always get the visible tag
+  function S(id, vars) { return '<span class="s">' + esc(raw(id, vars)) + '</span>' + (R[id].c === "proposed" ? tag() : ""); }
+  function chip(cls, id, vars) { return '<span class="chip chip--' + cls + '">' + esc(raw(id, vars)) + '</span>' + (R[id].c === "proposed" ? tag() : ""); }
+  function dyn(v) { return '<span class="dyn">' + esc(v) + '</span>'; }
+  var $ = function (id) { return document.getElementById(id); };
 
-  // 固定示範基準日（不讀系統時間，截圖與測試可重現）；規則：資料日距基準日不超過 TOL 天視為在規則內
-  var BASE = "2026-11-19", TOL = 3;
   function dayDiff(a, b) { var x = a.split("-"), y = b.split("-");
     return Math.round((Date.UTC(+x[0], +x[1] - 1, +x[2]) - Date.UTC(+y[0], +y[1] - 1, +y[2])) / 86400000); }
 
-  // 虛構標的（9001~9006 示範區間；9099 刻意不收錄，示範「查無此標的」）
-  var DIMS = ["基本面", "估值", "籌碼", "趨勢", "產業", "市場環境"];
+  var DIMS = ["d1", "d2", "d3", "d4", "d5", "d6"];
+  // fictional targets only; values are shuffled on purpose so they imply no ranking
   var TARGETS = {
-    "9001": { name: "示範甲", asof: "2026-11-18", tag: "資料齊全", vals: [11, 22, 33, 44, 55, 66] },
-    "9002": { name: "示範乙", asof: "2026-11-10", tag: "資料過期", vals: [12, 23, 34, 45, 56, 67] },
-    "9003": { name: "示範丙", asof: "2026-11-18", tag: "部分缺值", vals: [13, 24, null, null, 57, null], miss: { 2: "F", 3: "R", 5: "F" } },
-    "9004": { name: "示範丁", tag: "來源不可用", unavailable: "來源逾時" },
-    "9005": { name: "示範戊", tag: "日期不可信", future: true },
-    "9006": { name: "示範己", tag: "尚未評估", notEval: true }
+    "9001": { asof: "2026-11-18", vals: [41, 17, 63, 8, 52, 29] },
+    "9002": { asof: "2026-11-10", vals: [26, 59, 12, 47, 33, 71] },
+    "9003": { asof: "2026-11-18", vals: [38, 14, null, null, 66, null], miss: { 2: "miss_f", 3: "miss_r", 5: "miss_f" } },
+    "9004": { unavailable: true },
+    "9005": { future: true },
+    "9006": { notEval: true }
   };
   var ORDER = ["9001", "9002", "9003", "9004", "9005", "9006", "9099"];
-
-  var state = { mode: "lookup", query: null };   // query: null | {kind, code}
-  var $ = function (id) { return document.getElementById(id); };
-  function chip(cls, text) { return '<span class="chip chip--' + cls + '">' + esc(text) + '</span>'; }
+  var state = { mode: "lookup", query: null };
 
   function renderSamples() {
-    $("samples-label").innerHTML = P("示範範例（點選即查）");
+    $("samples-label").innerHTML = S("samples_label");
     var dis = state.mode !== "lookup";
     $("samples").innerHTML = ORDER.map(function (c) {
-      var t = TARGETS[c];
       return '<li><button type="button" class="sample" data-code="' + c + '"' + (dis ? ' aria-disabled="true"' : '') + '>' +
-        esc(t ? c + " " + t.name : c) + '<small>' + P(t ? "示範：" + t.tag : "示範：查無此標的") + '</small></button></li>';
+        esc(raw("n" + c)) + (c === "9099" ? '<small>' + S("sample_sub_9099") + '</small>' : '') + '</button></li>';
     }).join("");
   }
 
   function fieldHtml(i, t) {
     var st = "ok", v;
-    if (t.notEval) { st = "not_evaluated"; v = T.NOT_EVALUATED; }
-    else if (t.vals[i] === null) { st = "missing"; v = t.miss[i] === "F" ? T.MISSING_NOT_FETCHED : T.MISSING_NOT_READY; }
-    else { v = "示範值 " + t.vals[i]; if (t.stale) st = "stale"; }
-    return '<div class="field" data-dim="' + esc(DIMS[i]) + '" data-state="' + st + '"><span class="l">' + esc(DIMS[i]) +
-      '</span><span class="v">' + esc(v) + '</span></div>';
+    if (t.notEval) { st = "not_evaluated"; v = S("not_eval"); }
+    else if (t.vals[i] === null) { st = "missing"; v = S(t.miss[i]); }
+    else { if (t.stale) st = "stale"; v = S("demo_val") + " " + dyn(t.vals[i]); }
+    return '<div class="field" data-dim="' + DIMS[i] + '" data-state="' + st + '"><span class="l">' + S(DIMS[i]) + '</span><span class="v">' + v + '</span></div>';
   }
-  function head(code, t, chipHtml) {
-    return '<div class="head"><h2 id="res-title" tabindex="-1">' + esc(code + " " + t.name) + '</h2>' + chipHtml + '</div>';
+  function fieldsHtml(t) {
+    return '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>' +
+      (t.notEval ? "" : '<div class="muted">' + S("demo_note") + '</div>');
   }
-  function detail(rows) {
-    return '<details><summary>' + P("展開：資料日／來源／規則") + '</summary><dl>' + rows.map(function (r) {
-      return '<dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd>'; }).join("") + '</dl></details>';
+  function head(code, chipHtml) { return '<div class="head"><h2 id="res-title" tabindex="-1">' + esc(raw("n" + code)) + '</h2>' + chipHtml + '</div>'; }
+  function metaAsof(v) { return '<div class="meta">' + S("asof_label") + " " + (v ? dyn(v) : S("asof_missing")) + '</div>'; }
+  function detail(asof, withRule) {
+    var rows = [[S("src_label"), S("src_val")], [S("asof_label"), asof ? dyn(asof) : S("asof_missing")]];
+    if (withRule) rows.push([S("rule_label"), '<span class="s">' + esc(raw("rule_val", { base: BASE, tol: TOL })) + '</span>' + tag()]);
+    return '<details><summary>' + S("details") + '</summary><dl>' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join("") + '</dl></details>';
   }
-  function tail() {
-    return '<div class="actions"><div><button type="button" class="btn" aria-disabled="true" aria-describedby="aw-reason">' + esc(T.ADD_WATCH) +
-      '</button><div class="reason" id="aw-reason">' + esc(T.ADD_WATCH_REASON) + '</div></div>' +
-      '<button type="button" class="link" id="clear">' + P("清除查詢結果") + '</button></div>' +
-      '<div class="muted">' + esc(T.ISOLATION) + '</div>';
+  function tail(withWatch) {
+    return '<div class="actions">' + (withWatch ? '<div><button type="button" class="btn" aria-disabled="true" aria-describedby="aw-reason">' + S("add_watch") +
+      '</button><div class="reason" id="aw-reason">' + S("add_watch_reason") + '</div></div>' : '') +
+      '<button type="button" class="link" id="clear">' + S("clear") + '</button></div>' +
+      (withWatch ? '<div class="muted">' + S("isolation") + '</div>' : '');
   }
-  var RULE_ROW = ["規則", P("示範規則：資料日距示範基準日 " + BASE + " 不超過 " + TOL + " 天視為在規則內，超過視為過期")];
-  var SRC_ROW = ["來源", P("示範來源")];
-  var ASOF_NONE = ["資料日", esc(T.ASOF_MISSING)];
+  function notFound(titleId, hintId) {
+    return '<div class="card" id="res-card" data-view="not-found"><div class="empty" data-state="not_found"><strong id="res-title" tabindex="-1">' +
+      S(titleId) + '</strong>' + (hintId ? '<div class="reason">' + S(hintId) + '</div>' : '') + '</div>' + tail(false) + '</div>';
+  }
 
   function resultHtml() {
     var q = state.query;
-    if (!q) {
-      return '<div class="card"><div class="empty" data-view="idle" data-state="not_loaded">' + esc(T.NOT_LOADED) +
-        '<div class="reason">' + P("輸入代碼或點選左側示範範例後按「查詢」") + '</div></div></div>';
-    }
-    if (q.kind === "empty") {
-      return '<div class="card"><div class="empty" data-view="need-input" data-state="not_loaded">' + esc(T.NOT_LOADED) +
-        '<div class="reason">' + P("請先輸入代碼") + '</div></div></div>';
-    }
-    if (q.kind === "name") {
-      return '<div class="card"><div class="empty" data-view="name-search" data-state="missing">' + esc(T.NO_NAME_SEARCH) + '</div></div>';
-    }
-    var t = TARGETS[q.code], code = q.code, body;
-    if (!t) {
-      return '<div class="card" id="res-card" data-view="not-found"><div class="empty" data-state="not_found"><strong id="res-title" tabindex="-1">' +
-        P("查無此標的") + '</strong><div class="reason">' + P("示範原型只收 9001~9006") + '</div></div>' + tail() + '</div>';
-    }
+    if (!q) return '<div class="card"><div class="empty" data-view="idle" data-state="not_loaded">' + S("not_loaded") + '<div class="reason">' + S("idle_hint") + '</div></div></div>';
+    if (q.kind === "empty") return '<div class="card"><div class="empty" data-view="need-input" data-state="not_loaded">' + S("not_loaded") + '<div class="reason">' + S("need_input") + '</div></div></div>';
+    if (q.kind === "name") return '<div class="card"><div class="empty" data-view="name-search" data-state="missing">' + S("no_name") + '</div></div>';
+    var code = q.code, t = TARGETS[code], body;
+    if (!t) return /^\d{4}$/.test(code) && (+code < 9001 || +code > 9099) ? notFound("real_code") : notFound("not_found", "not_found_hint");
     t.stale = false;
     if (t.unavailable) {
-      body = head(code, t, chip("dng", T.UNAVAILABLE)) +
-        '<div class="err" data-state="unavailable" role="alert"><strong>' + esc(T.UNAVAILABLE) + '</strong><div>' +
-        P("原因類別：" + t.unavailable + "（示範）") + '</div></div>' + detail([SRC_ROW, ASOF_NONE]);
+      body = head(code, chip("dng", "unavail")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("unavail") + '</strong><div>' + S("reason_unavail") + '</div></div>' + detail(null, false);
     } else if (t.future) {
-      body = head(code, t, chip("dng", T.UNAVAILABLE)) +
-        '<div class="err" data-state="unavailable" role="alert"><strong>' + esc(T.UNAVAILABLE) + '</strong><div>' + esc(AUTH_FUTURE) + '</div></div>' +
-        detail([SRC_ROW, ASOF_NONE, RULE_ROW]);
+      body = head(code, chip("dng", "chip_future")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("future_text") + '</strong></div>' + detail(null, true);
     } else if (t.notEval) {
-      body = head(code, t, chip("gray", T.NOT_EVALUATED)) + '<div class="meta">' + esc(T.ASOF_MISSING) + '</div>' +
-        '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>' +
-        detail([SRC_ROW, ASOF_NONE]);
+      body = head(code, chip("gray", "not_eval")) + metaAsof(null) + fieldsHtml(t) + detail(null, false);
     } else {
-      var d = dayDiff(BASE, t.asof); t.stale = d > TOL;
-      var chipHtml = t.stale ? chip("warn", T.STALE_FMT.replace("{n}", d))
-                            : chip("pos", "🟢 資料日在規則內") + '<span class="prop-tag">PROPOSED・未核准</span>';
-      body = head(code, t, chipHtml) + '<div class="meta">資料日 ' + esc(t.asof) + '</div>' +
-        '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>' +
-        (t.stale ? "" : '<div class="muted">' + esc(T.OK_DETAIL) + '</div>') +
-        detail([SRC_ROW, ["資料日", esc(t.asof)], RULE_ROW]);
+      var d = dayDiff(BASE, t.asof), n = t.vals.filter(function (v) { return v !== null; }).length;
+      t.stale = d > TOL;
+      var chipHtml = n < 6 ? chip("warn", "chip_partial") + ' <span class="muted">' + S("partial_count", { n: n }) + '</span>'
+        : (t.stale ? chip("warn", "stale", { n: d }) : chip("pos", "chip_ok"));
+      body = head(code, chipHtml) + metaAsof(t.asof) + fieldsHtml(t) +
+        (n === 6 && !t.stale ? '<div class="muted">' + S("ok_detail") + '</div>' : '') + detail(t.asof, true);
     }
-    return '<div class="card" id="res-card" data-code="' + code + '" data-view="result">' + body + tail() + '</div>';
+    return '<div class="card" id="res-card" data-code="' + code + '" data-view="result">' + body + tail(true) + '</div>';
+  }
+
+  function fill() {
+    document.title = raw("title");
+    var i, nodes = document.querySelectorAll("[data-s]");
+    for (i = 0; i < nodes.length; i++) {
+      var id = nodes[i].getAttribute("data-s");
+      nodes[i].innerHTML = esc(raw(id)) + (R[id].c === "proposed" ? tag() : "");
+    }
+    nodes = document.querySelectorAll("[data-sal]");
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute("aria-label", raw(nodes[i].getAttribute("data-sal")));
+    nodes = document.querySelectorAll("[data-sph]");
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute("placeholder", raw(nodes[i].getAttribute("data-sph")));
   }
 
   function renderPanels() {
     var cur = state.mode === "curated";
     $("panel-curated").hidden = !cur; $("panel-lookup").hidden = cur;
-    $("panel-curated").innerHTML = '<div class="card"><div class="empty" data-view="curated-empty" data-state="not_evaluated">' +
-      esc(T.CURATED_EMPTY) + '</div></div>';
+    $("panel-curated").innerHTML = '<div class="card"><div class="empty" data-view="curated-empty" data-state="not_evaluated">' + S("curated_empty") + '</div></div>';
     $("result").innerHTML = resultHtml();
     var btns = $("modes").querySelectorAll("button");
     for (var i = 0; i < btns.length; i++) {
@@ -221,24 +277,24 @@ details dt{opacity:.75}details dd{margin:0}
     var q = $("q"), go = $("go");
     if (cur) {
       q.setAttribute("aria-disabled", "true"); q.readOnly = true; go.setAttribute("aria-disabled", "true");
-      $("search-reason").innerHTML = esc(T.CTA_DISABLED) + "：" + P("請先切換到「即時查一檔」");
+      $("search-reason").innerHTML = S("cta_dis") + " " + S("curated_hint");
     } else {
       q.removeAttribute("aria-disabled"); q.readOnly = false; go.removeAttribute("aria-disabled");
       $("search-reason").textContent = "";
     }
     renderSamples();
   }
-
   function setMode(m, focus) {
     state.mode = m; renderPanels();
     if (focus) { var b = $("modes").querySelector('[data-mode="' + m + '"]'); if (b) b.focus(); }
   }
-  function run(raw) {
+  function run(raw0) {
     if (state.mode !== "lookup") return;
-    var s = String(raw).replace(/^\s+|\s+$/g, "");
+    var s = String(raw0).replace(/^\s+|\s+$/g, "");
     state.query = !s ? { kind: "empty" } : (/^\d+$/.test(s) ? { kind: "code", code: s } : { kind: "name" });
     renderPanels();
-    var t = $("res-title"); if (t) t.focus();
+    var t = $("res-title") || $("result"); if (t && t.focus) t.focus();
+    var c = $("res-card") || $("result"); if (c.scrollIntoView) c.scrollIntoView({ block: "nearest" });
   }
 
   $("modes").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) setMode(b.getAttribute("data-mode"), false); });
@@ -256,7 +312,7 @@ details dt{opacity:.75}details dd{margin:0}
   $("result").addEventListener("click", function (e) {
     if (e.target.closest("#clear")) { state.query = null; $("q").value = ""; renderPanels(); $("q").focus(); }
   });
-  renderPanels();
+  fill(); renderPanels();
 })();
 </script>
 </body>
