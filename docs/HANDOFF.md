@@ -1620,3 +1620,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-19 B 線 docs：查一檔 MVP 決議入庫＋L3 契約候選（DEC-205；append-only；非 QA PASS）
 - 分支 `b-docs-lookup-mvp-pregate`（base f1f199e5），docs-only Draft PR。授權 #1199 comment 7007425153（DG-PIT＝B＋X、DG-LIC＝A）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。之後 **Work 唯讀取證**（91998／94865／政府資料開放授權條款第 1 版；91995 另 Schema）→ 核對權利／PIT／Schema 是否達標 → **只在證據達標時**另送 HEADLESS-MVP-IMPLEMENTATION Decision Gate。headless 邊界目前 NO-GO；勿自行施工，勿下載、勿改 cache／workflow／UI2。非 QA PASS。
+
+## 2026-11-19 B 線 tests-only：UI2 安全降級現況回歸守衛（DEC-206；append-only；非 QA PASS）
+- 分支 `b-tests-ui2-safe-degrade-1202`（base f86e62e7），tests-only Draft PR。授權 #1199 comment 7011328051＋Issue #1202。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。BACKLOG `UI2-SAFE-DEGRADE-GAPS-1202` 的 D1／D2／D3／G-5～G-9／髒 session 崩潰**待總管裁示，未施工**，勿自行施工。非 QA PASS。

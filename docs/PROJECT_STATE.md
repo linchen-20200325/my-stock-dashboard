@@ -1511,3 +1511,8 @@
 - 新增 `docs/vnext/LOOKUP_MVP_L3_CONTRACT_CANDIDATE_2026-11-19.md`（候選／草案／NO CODE）；BACKLOG 新增 LOOKUP-MVP 追蹤段；HANDOFF 下一接手點。**未改任何程式、測試、JSON、workflow、data_cache；無網路請求、無下載。**
 - 結論：headless 邊界 NO-GO（DG-LIC 逐資料集證據、季度 PIT 語意、官方資料集欄位／單位／口徑、L3 Schema、G2F 皆未達）；DG-LIC 權利 Gate 仍 HOLD。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI；官方資料集頁面內容（本批 B 線未獨立查證，引自 c7007425153）。
+
+## 83. Issue #1202 後續：UI2 安全降級現況回歸守衛（2026-11-19；DEC-206；只追加；tests-only；非 QA PASS；單組作者環境）
+- 分支 `b-tests-ui2-safe-degrade-1202`（base origin/main f86e62e7）。授權 #1199 comment 7011328051（新工作 1）＋Issue #1202。僅新增 `tests/test_ui2_safe_degrade_regression_1202.py`（G-1 Real×查一檔冷啟、G-2 hostile session 注入、G-3 壞 parquet 形狀端到端、G-4 檢查器擴大組合、G-7 現況釘住）＋本批 docs 追加。**未改任何 src／shared／app／既有測試／DEC-137 JSON／workflow；測試不觸網；不被 `ui2_browser` lane 收（無 marker）。**
+- G-4 全數通過（未發現新缺陷）。未施工缺口 D1／D2／D3／G-5～G-9／髒 session 崩潰已登記 BACKLOG，待總管裁示。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。

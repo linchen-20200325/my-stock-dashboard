@@ -3020,3 +3020,20 @@
 
 - **不做**：新 fetch／下載、新定期監控、改 cache、動 workflow／Secrets／Cloud、`src/ui2`／G2F、OneBrain、價格／籌碼／估值／產業欄位。
 - **NOT VERIFIED**：官方資料集頁面內容（B 線未獨立查證）；非作者 QA、exact-head CI、main CI。
+
+## 2026-11-19 UI2-SAFE-DEGRADE-GAPS-1202（DEC-206；只追加；全部 OPEN／待總管裁示；**本 PR 未施工**）
+> 來源：#1202 後續兩組獨立調查（覆蓋盤點＋對抗式探測）。回歸守衛見 `tests/test_ui2_safe_degrade_regression_1202.py`（只釘「現況已安全」的部分）。以下為**仍存在、尚未處理**的缺口，不因該測試檔而視為已解決。
+
+| ID | 狀態 | 缺口 | 備註 |
+|---|---|---|---|
+| UI2-GAP-D1 | OPEN | 日 K y 軸可出現**負刻度** | 程式需修：`_kbar_svg` 的 lo-pad 應夾 ≥ 0。離群檢核屬 L0／業務決策，另議 |
+| UI2-GAP-D2 | OPEN | 日 K 日期僅 regex 檢查、不查曆法（如 `2026-02-30` 形式的合法格式假日期） | 一行縱深防禦即可 |
+| UI2-GAP-D3 | OPEN | 極端數值（巨大／極小但有限正值）無範圍檢查 | 範圍屬 L0／業務決策 |
+| UI2-GAP-G5 | OPEN | 卡片遇**重複日期列**仍顯示 OK（日 K 已擋 `DUPLICATE_DATE`） | L1／L3 行為 |
+| UI2-GAP-G6 | OPEN | `INCOMPLETE_BAR` 時卡片仍 OK、日 K 灰態 | 現為**釘住的設計**；是否改口徑待裁示 |
+| UI2-GAP-G7 | OPEN | 契約收緊：`ok=True` 且 `as_of=None` 目前被接受（卡片 OK 無資料日、🗂 計資料未備） | 現況已由 G-7 測試釘住；是否禁止此組合待裁示 |
+| UI2-GAP-G8 | OPEN | FAKE 軸「資料」頁含真探測 | |
+| UI2-GAP-G9 | OPEN | FAKE 軸固定欄位無 FAKE 前綴 | |
+| UI2-GAP-DIRTY-SESSION | OPEN | 髒 session 的未知頁／場景／帳戶／模式值會使**整頁崩潰** | 與 UI2-OFF-1 同族 |
+
+- **不做**：本批不修任何上列項目、不改 src／shared／app／既有測試／DEC-137 JSON／workflow。非 QA PASS。
