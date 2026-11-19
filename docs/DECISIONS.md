@@ -10815,3 +10815,16 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未解除**：#7006417845 的 PREGATE NO-GO 不因本決議翻轉；HEADLESS-MVP-IMPLEMENTATION 為**待另送**的 Decision Gate，證據達標前不得施工。
 - **不倒改舊 DEC**：DEC-165／171／179／184／185 等一字未動；PREGATE 推薦的 DG-PIT「第 (a) 層」與本決議的 B＋X 並存，以本決議的限定射程為準。
 - **編號**：origin/main（f1f199e5）已用至 DEC-204／§81；本批 DEC-205／§82；合併時若被佔則順延。
+
+### DEC-206｜Issue #1202 後續：UI2「安全降級」現況回歸守衛（tests-only；#1199 comment 7011328051 授權新工作 1＋Issue #1202；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **做了什麼**：新增 `tests/test_ui2_safe_degrade_regression_1202.py`（只新增測試檔；⛔ 未改任何 src／shared／app／既有測試／DEC-137 JSON／workflow；測試不觸網）。釘住兩組獨立調查（覆蓋盤點＋對抗式探測）確認「現況已安全、僅缺回歸守衛」的四項＋一項現況：
+  - **G-1** Real×🎯 查一檔冷啟（AppTest；Real 軸，≠ 既有 FAKE 軸 `test_f3_lookup_cold_in_real_app`）：只有 disabled 搜尋示意＋灰色說明；無 Snapshot／加入觀察／市場環境六維／FAKE 字樣／expander／text_input。
+  - **G-2** Hostile session 注入（`holdings`／`portfolio_df`／`gsheet_tokens`／`portfolio_sheet_id`＋`?ticker=…&ui2_account=signed_in`）：五頁（＋查一檔模式）可見文字不含 2330／台積電／SECRETTOK／abcdef123456／已登入／FAKE，無 text_input，髒 session 不被改寫。
+  - **G-3** 壞 parquet 形狀端到端（L1→L3→UI2；零列／全 NaN close／close 含非數字字串）：卡片＝「資料未備」（ok=False、failed=False；⛔ OK、⛔ 紅）、日 K 不畫且灰態、🗂 台股計「資料未備」且計數自洽、無數值外洩；附好資料控制組。
+  - **G-4** whitelist／位階殘留檢查器擴大組合（`as_of_future=True`、`FETCH_FAILED`、`NO_NEW_DATA`、日 K `INCOMPLETE_BAR`／`DUPLICATE_DATE`，另與位階三態交叉）：`check_only_wired_fields_carry_data` 全回 `[]`——**未發現新缺陷**。
+  - **G-7**（現況釘住）`TwiiFact(ok=True,is_stale=False,as_of=None)`：卡片 OK 且無資料日、🗂 計「資料未備」（real_canonical 註解「None 維持『資料日未提供』誠實呈現」＋`test_ui2_data_freshness_overview` 的 `no_date` 已釘 🗂 部分，故視為現行刻意設計）。
+- **「牙」**：每項皆以暫時突變驗證（讓 Real 查一檔多輸出「加入觀察」、讓髒 session／query 漏進頁面、讓 EMPTY 被當 OK／當紅、讓 🗂 把無資料日算進規則內、讓 as_of_future／FETCH_FAILED 組合冒出 VIX 值）→ 測試轉紅 → 還原；結果見 PR 描述。
+- **已涵蓋矩陣結論**：上述四項＋G-7 現況安全；本批證明的是「現況行為」，**不是**契約完備。
+- **未施工的缺口（待總管裁示，非本 PR；詳 BACKLOG `UI2-SAFE-DEGRADE-GAPS-1202`）**：D1 日 K y 軸可出現負刻度（程式需修）；D2 日 K 日期僅 regex 不查曆法；D3 極端數值無範圍檢查；G-5 卡片遇重複日期列仍 OK；G-6 `INCOMPLETE_BAR` 卡片 OK 為釘住設計；G-7 契約是否收緊；G-8 FAKE 軸資料頁含真探測；G-9 FAKE 固定欄無 FAKE 前綴；髒 session 的未知頁／場景／帳戶／模式會整頁崩潰（UI2-OFF-1 同族）。**本 PR 一個都沒修、沒有以測試放寬或繞過它們。**
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI；本決議的矩陣結論為單組自跑。
+- **編號**：origin/main（f86e62e7）已用至 DEC-205／§82；本批 DEC-206／§83；合併時若被佔則順延。
