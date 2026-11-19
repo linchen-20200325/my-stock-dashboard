@@ -1495,3 +1495,9 @@
 ## 79. New UI2 產品收斂：N1／O1／O2 處置登記（2026-11-19；DEC-202；只追加；docs-only；非 QA PASS；單組作者環境）
 - 分支 `b-docs-ui2-n1-o1-o2`（base origin/main 6623760d）。只改 docs：BACKLOG、設計文件 §7 補註、DECISIONS、HANDOFF、本節。N1 降 P2 已知限制（方案 A）；O1／O2 判定非缺陷＝符合 DEC-177，僅文件揭露。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud runtime。Offline Preview Ready 成立；Cloud Runtime Verified／Production Ready 不成立。
+
+## 80. New UI2 標的「即時查一檔」隔離視覺原型（2026-11-19；DEC-203；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-nui2-target-lookup-prototype`（base origin/main eff23f48）。新增 `docs/vnext/prototypes/nui2_target_lookup/`（index.html／README／screenshots）與 `tests/test_nui2_target_lookup_prototype.py`。隔離原型、非正式施工、待 Visual Gate。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、真機、Cloud。
+
+- 修正輪（DEC-203 補註）：原型字串登錄表／測試強化、9003／9005 狀態修正、截圖重拍。仍待 Visual Gate；非 QA PASS。

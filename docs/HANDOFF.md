@@ -1608,3 +1608,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-19 B 線 docs：UI2 N1／O1／O2 處置（DEC-202；append-only；非 QA PASS）
 - 分支 `b-docs-ui2-n1-o1-o2`（base origin/main 6623760d），docs-only Draft PR。授權 #1199 comment 6995747146；證據 #6995401840。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。B1／B2／B3 與任何新字句／改口徑／口徑鎖定測試**未授權**，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線：標的即時查一檔視覺原型（DEC-203；append-only；非 QA PASS）
+- 分支 `b-nui2-target-lookup-prototype`（base eff23f48），Draft PR。原型僅示範、隔離於 App 外；下一手：客戶 Visual Gate → 非作者 QA → CI。正式接線未授權。
+
+- 修正輪（DEC-203 補註）：同分支追加 commit；下一手仍為客戶 Visual Gate → 非作者 QA → CI。

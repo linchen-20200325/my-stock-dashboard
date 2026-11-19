@@ -2990,3 +2990,8 @@
 - **O2｜regime 有值但無可驗證 as_of 時歸「資料未備」**：已重現。**判定：非缺陷，符合 DEC-177 口徑；維持現狀。** 「多頭」等顯示不構成已確認資料日期。使用者影響：低。
 - **候選但未授權（不得自行施工）**：新增揭露字句、更改計數口徑、口徑鎖定測試。UI 字串與統計口徑均未動；文件揭露見 `docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §7。
 - **成立範圍／NOT VERIFIED**：僅 **Offline Preview Ready** 成立（以 #6995401840 矩陣為準，不重貼）。**Cloud Runtime Verified：NOT VERIFIED／不成立；Production Ready：不成立。** 缺的證據：Cloud 真實部署實況（#1107 Cloud 驗收）、非作者 QA、exact-head 原生 CI、main push CI、真實瀏覽器雲端人工驗收。
+
+## 2026-11-19 NUI2-TARGET-LOOKUP-VISUAL-PROTOTYPE 第一階段（DEC-203；append-only；非 QA PASS；單組作者環境）
+- 隔離離線原型已交付 Draft PR；待客戶 Visual Gate。正式接線（真資料權利／PIT／Schema、查詢服務契約、OneBrain 接線）**未授權**，不得自行施工。PROPOSED 新字句未核准。
+
+- 修正輪（DEC-203 補註）：UX 審查與工程 QA 必修項已處理，待 Visual Gate；正式接線仍未授權。
