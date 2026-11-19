@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<!-- V2 visual candidate (isolated, FAKE). V1 index.html is kept unchanged. -->
+<title>x</title>
+<style>
+/* tokens read from src/ui2/shell/css.py (dark only, mobile-first); this file is self-contained and never imported by the app */
+:root{--bg:#0e1117;--fg:#e6edf3;--nav-bg:#161b22;--line:rgba(128,128,128,.4);--tint:rgba(128,128,128,.10);
+  --pos:#3fb950;--pos-bg:rgba(26,127,55,.12);--warn:#d29922;--warn-bg:rgba(183,121,31,.14);--dng:#ff7b72;--dng-bg:rgba(198,40,40,.12)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif}
+body{padding-bottom:3rem;overflow-x:hidden}
+.banner{position:sticky;top:0;z-index:10;background:var(--nav-bg);border-bottom:1px solid var(--line);padding:6px 12px;text-align:center}
+.banner b{display:inline-block;border:1px dashed currentColor;border-radius:8px;padding:2px 10px;background:var(--tint);font-size:.82rem;line-height:1.4}
+.wrap{max-width:1100px;margin:0 auto;padding:12px .9rem 0}
+h1{font-size:1.35rem;font-weight:700;margin:4px 0 8px;line-height:1.3}
+@media (max-width:640px){h1{font-size:1.2rem}}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;grid-template-areas:"controls" "result" "samples"}
+.controls{grid-area:controls}.col-r{grid-area:result;min-width:0}.samples-wrap{grid-area:samples}
+@media (min-width:900px){.layout{grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto 1fr;grid-template-areas:"controls result" "samples result"}}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;overflow-wrap:anywhere}
+.muted{opacity:.75;font-size:.8rem}
+.demo-note{font-size:.9rem;margin:6px 0 0;padding:4px 8px;border-left:3px solid currentColor;background:var(--tint)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.modes{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 10px}
+.modes button{flex:1 1 0;min-height:44px;background:none;border:0;border-bottom:3px solid transparent;padding:0 12px}
+.modes button[aria-checked="true"]{font-weight:700;border-bottom-color:currentColor;background:var(--tint)}
+.modes button[aria-checked="true"]::before{content:"\25CF ";font-size:.7em}
+.search{display:flex;gap:8px;align-items:stretch}
+.search input{flex:1 1 auto;min-width:0;min-height:44px;background:var(--bg);border:1px solid currentColor;border-radius:8px;padding:6px 10px}
+.btn{min-height:44px;min-width:44px;border:2px solid currentColor;border-radius:8px;background:none;padding:6px 14px;font-weight:700}
+.btn[aria-disabled="true"],.search input[aria-disabled="true"]{opacity:.5;border-style:dashed;cursor:not-allowed}
+.reason{font-size:.78rem;opacity:.75;margin-top:2px}
+.samples{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0;padding:0;list-style:none}
+.sample{min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--tint);padding:4px 10px;text-align:left;line-height:1.3}
+.sample small{display:block;opacity:.8;font-size:.72rem}
+.sample[aria-disabled="true"]{opacity:.5;cursor:not-allowed;border-style:dashed}
+.chip{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:1px 10px;font-size:.78rem;line-height:1.5;background:var(--tint)}
+.chip--pos{color:var(--pos);background:var(--pos-bg)}.chip--warn{color:var(--warn);background:var(--warn-bg)}
+.chip--dng{color:var(--dng);background:var(--dng-bg);font-weight:600}.chip--gray{opacity:.85}
+.head{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:0 0 4px}
+.head h2{font-size:1.1rem;margin:0}
+.head h2:focus{outline:none}
+.meta{font-size:.8rem;opacity:.85;margin:2px 0 6px}
+.empty{border:1px dotted rgba(128,128,128,.5);border-radius:8px;padding:8px 10px;margin:4px 0}
+.err{border:1px solid var(--dng);border-radius:8px;padding:8px 10px;margin:6px 0;background:var(--dng-bg)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin:8px 0}
+.field{border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0}
+.field .l{font-size:.8rem;opacity:.75;display:block}
+.field .v{font-weight:600}
+.field[data-state="missing"],.field[data-state="not_evaluated"]{border-style:dotted}
+.warn-text{color:var(--warn)}
+details{margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:0 10px}
+summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:pointer;font-weight:600}
+.evid{margin:0 0 8px;font-size:.85rem}.evid .nw{white-space:nowrap}.evid .sep{opacity:.6;margin:0 .15em}
+.actions{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-start;margin:8px 0}
+.link{min-height:44px;background:none;border:1px solid var(--line);border-radius:8px;padding:6px 14px}
+.prop-tag{display:inline-block;margin-left:.4em;border:1px solid var(--warn);color:var(--warn);border-radius:4px;padding:0 4px;font-size:.62rem;line-height:1.4;font-weight:600;vertical-align:middle;white-space:nowrap}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="banner" role="note" id="banner"><b data-s="banner"></b></div>
+<main class="wrap">
+  <h1 id="page-title" data-s="h1"></h1>
+  <div class="layout">
+    <div class="controls">
+      <div role="radiogroup" data-sal="mode_label" class="modes" id="modes">
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="curated" data-s="mode_curated"></button>
+        <button type="button" role="radio" aria-checked="true" tabindex="0" data-mode="lookup" data-s="mode_lookup"></button>
+      </div>
+      <form class="search" id="search-form" role="search" novalidate>
+        <input id="q" name="q" type="text" autocomplete="off" data-sph="ph" data-sal="ph" aria-describedby="search-reason">
+        <button type="submit" class="btn" id="go" data-s="cta"></button>
+      </form>
+      <div class="reason" data-s="ph_tag"></div>
+      <div class="reason" id="search-reason" aria-live="polite"></div>
+    </div>
+    <div class="col-r">
+      <section id="panel-curated" hidden></section>
+      <section id="panel-lookup"><div id="result" aria-live="polite"></div></section>
+    </div>
+    <div class="samples-wrap">
+      <p class="muted" style="margin:0" id="samples-label"></p>
+      <ul class="samples" id="samples" aria-labelledby="samples-label"></ul>
+    </div>
+  </div>
+</main>
+<script type="application/json" id="strings">
+{
+"title":{"t":"示範原型 V2：標的・即時查一檔","c":"proposed","tier":"proto"},
+"banner":{"t":"示範原型・FAKE 資料，不是市場資料","c":"auth"},
+"tag":{"t":"PROPOSED・未核准","c":"meta"},
+"ph_tag":{"t":"PROPOSED・未核准：輸入框提示字","c":"meta"},
+"h1":{"t":"🎯 標的","c":"reuse","s":"shared/ia_nav4.py"},
+"mode_label":{"t":"模式","c":"reuse","s":"src/ui2/views/target.py"},
+"mode_curated":{"t":"市場精選","c":"reuse","s":"shared/ui2_contract/pages.py"},
+"mode_lookup":{"t":"即時查一檔","c":"reuse","s":"shared/ui2_contract/pages.py"},
+"ph":{"t":"輸入代碼","c":"proposed","tier":"design"},
+"cta":{"t":"查詢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"cta_dis":{"t":"尚未開放查詢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"curated_hint":{"t":"請先切換到「即時查一檔」","c":"proposed","tier":"design"},
+"curated_empty":{"t":"精選尚未開放（需連網取得，且候選的組合方式尚待定義）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"samples_label":{"t":"示範範例（點選即查）","c":"proposed","tier":"proto"},
+"sample_sub_9099":{"t":"查無示範","c":"proposed","tier":"proto"},
+"n9001":{"t":"9001 示範甲","c":"auth"},
+"n9002":{"t":"9002 示範乙","c":"auth"},
+"n9003":{"t":"9003 示範丙","c":"auth"},
+"n9004":{"t":"9004 示範丁","c":"auth"},
+"n9005":{"t":"9005 示範戊","c":"auth"},
+"n9006":{"t":"9006 示範己","c":"auth"},
+"n9099":{"t":"9099","c":"auth"},
+"not_loaded":{"t":"⬜ 尚未載入","c":"reuse","s":"shared/ui2_contract/text.py"},
+"idle_hint":{"t":"輸入代碼或點選示範範例後按「查詢」","c":"proposed","tier":"proto"},
+"need_input":{"t":"請先輸入代碼","c":"proposed","tier":"design"},
+"no_name":{"t":"請輸入代碼（名稱搜尋尚未提供）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"not_found":{"t":"查無此標的","c":"proposed","tier":"proto"},
+"not_found_hint":{"t":"示範原型只收 9001~9006","c":"proposed","tier":"proto"},
+"real_code":{"t":"示範原型不查真實代碼","c":"proposed","tier":"proto"},
+"stale":{"t":"⚠ 過期 {n} 天","c":"reuse","s":"shared/ui2_contract/text.py"},
+"miss_f":{"t":"⬜ 資料未取得","c":"reuse","s":"shared/ui2_contract/text.py"},
+"miss_r":{"t":"⬜ 資料未備","c":"reuse","s":"shared/ui2_contract/text.py"},
+"asof_missing":{"t":"⬜ 資料日未提供","c":"reuse","s":"shared/ui2_contract/text.py"},
+"unavail":{"t":"🔴 來源目前不可用","c":"reuse","s":"shared/ui2_contract/text.py"},
+"not_eval":{"t":"⬜ 尚未評估","c":"reuse","s":"shared/ui2_contract/text.py"},
+"future_text":{"t":"資料日期不可信，暫時無法顯示","c":"auth"},
+"asof_label":{"t":"資料日","c":"reuse","s":"shared/ui2_contract/text.py"},
+"src_label":{"t":"來源","c":"proposed","tier":"design"},
+"src_val":{"t":"示範來源","c":"proposed","tier":"proto"},
+"demo_val":{"t":"示範值","c":"auth"},
+"demo_note":{"t":"示範值為示意數字：無單位，也不代表排序或好壞","c":"proposed","tier":"proto"},
+"d1":{"t":"基本面","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d2":{"t":"估值","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d3":{"t":"籌碼","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d4":{"t":"趨勢","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d5":{"t":"產業","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"d6":{"t":"市場環境","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"add_watch":{"t":"加入觀察（尚未提供）","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"add_watch_reason":{"t":"加入觀察尚未開放；這裡不會寫入任何持股或觀察清單","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"isolation":{"t":"查一檔只在這次瀏覽有效：不會加入持股、觀察或候選池，也不會改變策略、Risk Cap 或排名，不寫入 Sheet。","c":"reuse","s":"src/services/ui2/real_canonical.py"},
+"clear":{"t":"清除查詢結果","c":"proposed","tier":"design"},
+"details_v2":{"t":"展開：資料日／來源","c":"proposed","tier":"proto"},
+"evid_sep":{"t":"｜","c":"meta"},
+"red_dot":{"t":"🔴","c":"meta"}
+}
+</script>
+<script>
+(function () {
+  "use strict";
+  var R = JSON.parse(document.getElementById("strings").textContent);
+  var BASE = "2026-11-19";   // fixed demo base date; used only to render the fixture-declared stale days (9002). V2 applies and shows NO freshness rule.
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function raw(id, vars) {
+    var t = R[id].t;
+    if (vars) for (var k in vars) t = t.split("{" + k + "}").join(vars[k]);
+    return t;
+  }
+  function tag() { return '<span class="prop-tag">' + esc(R.tag.t) + '</span>'; }
+  // every visible string goes through S(): proposed strings always get the visible tag
+  function S(id, vars) { return '<span class="s">' + esc(raw(id, vars)) + '</span>' + (R[id].c === "proposed" ? tag() : ""); }
+  function chip(cls, id, vars) { return '<span class="chip chip--' + cls + '">' + esc(raw(id, vars)) + '</span>' + (R[id].c === "proposed" ? tag() : ""); }
+  function dyn(v) { return '<span class="dyn">' + esc(v) + '</span>'; }
+  var $ = function (id) { return document.getElementById(id); };
+
+  function dayDiff(a, b) { var x = a.split("-"), y = b.split("-");
+    return Math.round((Date.UTC(+x[0], +x[1] - 1, +x[2]) - Date.UTC(+y[0], +y[1] - 1, +y[2])) / 86400000); }
+
+  var DIMS = ["d1", "d2", "d3", "d4", "d5", "d6"];
+  // fictional targets only; values are shuffled on purpose so they imply no ranking
+  var TARGETS = {
+    "9001": { asof: "2026-11-18", vals: [41, 17, 63, 8, 52, 29] },
+    "9002": { asof: "2026-11-10", demoStale: true, vals: [26, 59, 12, 47, 33, 71] },
+    "9003": { asof: "2026-11-18", vals: [38, 14, null, null, 66, null], miss: { 2: "miss_f", 3: "miss_r", 5: "miss_f" } },
+    "9004": { unavailable: true },
+    "9005": { future: true },
+    "9006": { notEval: true }
+  };
+  var ORDER = ["9001", "9002", "9003", "9004", "9005", "9006", "9099"];
+  var state = { mode: "lookup", query: null };
+
+  function renderSamples() {
+    $("samples-label").innerHTML = S("samples_label");
+    var dis = state.mode !== "lookup";
+    $("samples").innerHTML = ORDER.map(function (c) {
+      return '<li><button type="button" class="sample" data-code="' + c + '"' + (dis ? ' aria-disabled="true"' : '') + '>' +
+        esc(raw("n" + c)) + (c === "9099" ? '<small>' + S("sample_sub_9099") + '</small>' : '') + '</button></li>';
+    }).join("");
+  }
+
+  function fieldHtml(i, t) {
+    var st = "ok", v;
+    if (t.notEval) { st = "not_evaluated"; v = S("not_eval"); }
+    else if (t.vals[i] === null) { st = "missing"; v = S(t.miss[i]); }
+    else { if (t.stale) st = "stale"; v = S("demo_val") + " " + dyn(t.vals[i]); }
+    return '<div class="field" data-dim="' + DIMS[i] + '" data-state="' + st + '"><span class="l">' + S(DIMS[i]) + '</span><span class="v">' + v + '</span></div>';
+  }
+  function fieldsHtml(t) {
+    return (t.notEval ? "" : '<div class="demo-note">' + S("demo_note") + '</div>') +
+      '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>';
+  }
+  function head(code, chipHtml) { return '<div class="head"><h2 id="res-title" tabindex="-1">' + esc(raw("n" + code)) + '</h2>' + chipHtml + '</div>'; }
+  function metaAsof(v, stale) { return '<div class="meta">' + S("asof_label") + " " + (v ? (stale ? '<span class="dyn warn-text">' + esc(v) + '</span>' : dyn(v)) : S("asof_missing")) + '</div>'; }
+  // second layer = ONE compact source/as_of draft line (no rule paragraph, no shared-freshness-window claim).
+  // asofHtml comes from the caller: a verified date, or the existing missing-value string (never a guessed value).
+  function detail(asofHtml) {
+    return '<details><summary>' + S("details_v2") + '</summary><p class="evid" data-evidence="line"><span class="nw">' + S("asof_label") + " " + asofHtml +
+      '</span> <span class="sep" aria-hidden="true">' + esc(raw("evid_sep")) + '</span> <span class="nw"><span class="s">' + esc(raw("src_label")) + '</span> <span class="s">' + esc(raw("src_val")) + '</span></span></p></details>';
+  }
+  function tail(withWatch) {
+    return '<div class="actions">' + (withWatch ? '<div><button type="button" class="btn" aria-disabled="true" aria-describedby="aw-reason">' + S("add_watch") +
+      '</button><div class="reason" id="aw-reason">' + S("add_watch_reason") + '</div></div>' : '') +
+      '<button type="button" class="link" id="clear">' + S("clear") + '</button></div>' +
+      (withWatch ? '<div class="muted">' + S("isolation") + '</div>' : '');
+  }
+  function notFound(titleId, hintId) {
+    return '<div class="card" id="res-card" data-view="not-found"><div class="empty" data-state="not_found"><strong id="res-title" tabindex="-1">' +
+      S(titleId) + '</strong>' + (hintId ? '<div class="reason">' + S(hintId) + '</div>' : '') + '</div>' + tail(false) + '</div>';
+  }
+
+  function resultHtml() {
+    var q = state.query;
+    if (!q) return '<div class="card"><div class="empty" data-view="idle" data-state="not_loaded">' + S("not_loaded") + '<div class="reason">' + S("idle_hint") + '</div></div></div>';
+    if (q.kind === "empty") return '<div class="card"><div class="empty" data-view="need-input" data-state="not_loaded">' + S("not_loaded") + '<div class="reason">' + S("need_input") + '</div></div></div>';
+    if (q.kind === "name") return '<div class="card"><div class="empty" data-view="name-search" data-state="missing">' + S("no_name") + '</div></div>';
+    var code = q.code, t = TARGETS[code], body;
+    if (!t) return /^\d{4}$/.test(code) && (+code < 9001 || +code > 9099) ? notFound("real_code") : notFound("not_found", "not_found_hint");
+    var missAsof = S("asof_missing");
+    if (t.unavailable) {
+      // 9004: connection failure. Says "source unavailable" only; never claims a date problem; no unverifiable reason sentence.
+      body = head(code, "") + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("unavail") + '</strong></div>' + detail(missAsof);
+    } else if (t.future) {
+      // 9005: untrusted (future) as_of. Fail-closed: no date, no six-dimension values; wording differs from 9004 (not colour only).
+      body = head(code, "") + '<div class="err" data-state="unavailable" role="alert"><strong><span class="s">' + esc(raw("red_dot")) + '</span> ' + S("future_text") + '</strong></div>' + detail(missAsof);
+    } else if (t.notEval) {
+      body = head(code, chip("gray", "not_eval")) + metaAsof(null) + fieldsHtml(t) + detail(missAsof);
+    } else {
+      // 9001 / 9002 / 9003: fact layer only (target, as_of, source, per-field values). No OK chip, no partial-summary chip, no field count.
+      var stale = !!t.demoStale, d = stale ? dayDiff(BASE, t.asof) : 0;
+      t.stale = stale;
+      body = head(code, stale ? chip("warn", "stale", { n: d }) : "") + metaAsof(t.asof, stale) + fieldsHtml(t) + detail(t.asof ? dyn(t.asof) : missAsof);
+    }
+    return '<div class="card" id="res-card" data-code="' + code + '" data-view="result">' + body + tail(true) + '</div>';
+  }
+
+  function fill() {
+    document.title = raw("title");
+    var i, nodes = document.querySelectorAll("[data-s]");
+    for (i = 0; i < nodes.length; i++) {
+      var id = nodes[i].getAttribute("data-s");
+      nodes[i].innerHTML = esc(raw(id)) + (R[id].c === "proposed" ? tag() : "");
+    }
+    nodes = document.querySelectorAll("[data-sal]");
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute("aria-label", raw(nodes[i].getAttribute("data-sal")));
+    nodes = document.querySelectorAll("[data-sph]");
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute("placeholder", raw(nodes[i].getAttribute("data-sph")));
+  }
+
+  function renderPanels() {
+    var cur = state.mode === "curated";
+    $("panel-curated").hidden = !cur; $("panel-lookup").hidden = cur;
+    $("panel-curated").innerHTML = '<div class="card"><div class="empty" data-view="curated-empty" data-state="not_evaluated">' + S("curated_empty") + '</div></div>';
+    $("result").innerHTML = resultHtml();
+    var btns = $("modes").querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) {
+      var on = btns[i].getAttribute("data-mode") === state.mode;
+      btns[i].setAttribute("aria-checked", on ? "true" : "false"); btns[i].tabIndex = on ? 0 : -1;
+    }
+    var q = $("q"), go = $("go");
+    if (cur) {
+      q.setAttribute("aria-disabled", "true"); q.readOnly = true; go.setAttribute("aria-disabled", "true");
+      $("search-reason").innerHTML = S("cta_dis") + " " + S("curated_hint");
+    } else {
+      q.removeAttribute("aria-disabled"); q.readOnly = false; go.removeAttribute("aria-disabled");
+      $("search-reason").textContent = "";
+    }
+    renderSamples();
+  }
+  function setMode(m, focus) {
+    state.mode = m; renderPanels();
+    if (focus) { var b = $("modes").querySelector('[data-mode="' + m + '"]'); if (b) b.focus(); }
+  }
+  function run(raw0) {
+    if (state.mode !== "lookup") return;
+    var s = String(raw0).replace(/^\s+|\s+$/g, "");
+    state.query = !s ? { kind: "empty" } : (/^\d+$/.test(s) ? { kind: "code", code: s } : { kind: "name" });
+    renderPanels();
+    var t = $("res-title") || $("result"); if (t && t.focus) t.focus();
+    var c = $("res-card") || $("result"); if (c.scrollIntoView) c.scrollIntoView({ block: "nearest" });
+  }
+
+  $("modes").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) setMode(b.getAttribute("data-mode"), false); });
+  $("modes").addEventListener("keydown", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].indexOf(e.key) < 0) return;
+    e.preventDefault(); setMode(state.mode === "curated" ? "lookup" : "curated", true);
+  });
+  $("search-form").addEventListener("submit", function (e) {
+    e.preventDefault(); if ($("go").getAttribute("aria-disabled") === "true") return; run($("q").value);
+  });
+  $("samples").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b || b.getAttribute("aria-disabled") === "true") return;
+    $("q").value = b.getAttribute("data-code"); run(b.getAttribute("data-code"));
+  });
+  $("result").addEventListener("click", function (e) {
+    if (e.target.closest("#clear")) { state.query = null; $("q").value = ""; renderPanels(); $("q").focus(); }
+  });
+  fill(); renderPanels();
+})();
+</script>
+</body>
+</html>

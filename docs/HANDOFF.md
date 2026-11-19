@@ -1613,3 +1613,6 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 分支 `b-nui2-target-lookup-prototype`（base eff23f48），Draft PR。原型僅示範、隔離於 App 外；下一手：客戶 Visual Gate → 非作者 QA → CI。正式接線未授權。
 
 - 修正輪（DEC-203 補註）：同分支追加 commit；下一手仍為客戶 Visual Gate → 非作者 QA → CI。
+
+## 2026-11-19 B 線：標的即時查一檔原型 V2 視覺候選（DEC-204；append-only；非 QA PASS）
+- 分支 `b-nui2-target-lookup-prototype-v2`（base a56406c9），Draft PR。僅隔離原型精修；下一手：使用者看 `screenshots_v2/compare_*` 做 Visual 確認 → 非作者 QA → CI。**不得合併進正式 New UI2**；正式接線 Gate 維持 HOLD。

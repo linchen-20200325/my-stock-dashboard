@@ -1501,3 +1501,7 @@
 - **NOT VERIFIED**：非作者 QA、exact-head CI、真機、Cloud。
 
 - 修正輪（DEC-203 補註）：原型字串登錄表／測試強化、9003／9005 狀態修正、截圖重拍。仍待 Visual Gate；非 QA PASS。
+
+## 81. New UI2 標的「即時查一檔」原型 V2 視覺候選（2026-11-19；DEC-204；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-nui2-target-lookup-prototype-v2`（base origin/main a56406c9）。於 `docs/vnext/prototypes/nui2_target_lookup/` 新增 `index_v2.html`／`README_V2.md`／`screenshots_v2/`（含 `compare_*` V1｜V2 對照）與 `tests/test_nui2_target_lookup_prototype_v2.py`；V1 不動。隔離原型、非正式施工、不得併入正式 New UI2、待使用者 Visual 確認。
+- **NOT VERIFIED**：使用者 Visual 確認、非作者 QA、exact-head CI、真機、Cloud。
