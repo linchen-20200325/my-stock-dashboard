@@ -278,6 +278,16 @@ def test_r4_search_html_enabled_false_shows_label_and_chip_only():
     assert 'class="ui2-searchbox" role="searchbox" aria-disabled="true"' in html or 'role="searchbox" aria-disabled="true"' in html
 
 
+def test_r4_disabled_branch_escapes_the_name_search_label():
+    """U-1 disabled 分支把 `name_search.label` 直接放進 HTML：必須 `escape()`（防 label 含 HTML 特殊字元時注入）。"""
+    base = _search_vm(enabled=False)
+    evil = dataclasses.replace(base, name_search=dataclasses.replace(base.name_search, label="<b>x</b>&"))
+    html = search_html(evil)
+    hint = _hint_of(html)
+    assert "&lt;b&gt;x&lt;/b&gt;&amp;" in hint
+    assert "<b>" not in html and "</b>" not in html
+
+
 def test_r4_enabled_branch_is_conditional_not_a_string_filter():
     """同一個 name_search.detail（「請輸入代碼…」）在 enabled=True 仍被渲染 → 證明 disabled 時是「不輸出」而非資料被改掉。"""
     on, off = _search_vm(enabled=True), _search_vm(enabled=False)

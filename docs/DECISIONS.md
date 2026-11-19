@@ -10860,3 +10860,4 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未做／仍 OPEN**：G-4（DEFER）；A11Y-F4 未決；Cloud 驗收；非作者 QA、exact-head 五項原生 CI、0 unresolved threads、main CI。
 - **NOT VERIFIED**：以上測試、突變、viewport 皆作者環境單組自跑，未經第二組驗證；Streamlit Cloud 實機；真瀏覽器（非 headless 模擬）390／1440。
 - **編號**：origin/main（d3ab92db）已用至 DEC-207／§84；本批 DEC-208／§85；合併時若被佔則順延。
+- **QA 回修（2026-11-20；只動文件與測試，未動 src／fixture／viewport JSON）**：兩組非作者 QA PASS、無 Must-fix；should-fix 已處理：(1) Active Contract §3.1 與 S25 引用處、`FINAL_UI_CONTRACT_FREEZE` 「DEC-117 Q1／Q6 仍有效」處、`NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT` N2 列各加一則 append-only 註記（原文不改），指向 DEC-208 與 #1199 comment 7021388731，範圍僅 New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險；(2) 新增 `test_r4_disabled_branch_escapes_the_name_search_label`（新測試檔共 66 條；拿掉 `escape()` 即紅，已還原）；(3) BACKLOG `DEC180-UI2-FAKE-COLD-COPY-GATE` 的 next action 改刪除線＋完成語意。`tests/test_ui2_active_contract_docs.py` 對上述文件無逐字釘住，仍全綠。

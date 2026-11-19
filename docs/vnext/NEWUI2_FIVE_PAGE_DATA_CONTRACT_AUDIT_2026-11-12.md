@@ -403,6 +403,8 @@
 | GUARD-GAP G1 | viewport 量測矩陣只含 390×844、1440×900（僅一處 320×568） | 低；非缺陷 | 調查者手動探測 320…1100 寬無問題，故只是無自動守衛 |
 | GUARD-GAP G2 | Real 軸瀏覽器量測證據只在 repo 既有 JSON（由 `test_ui2_real_feed.py` 的 `source_hash` 新鮮度守衛），本批未獨立複驗內容 | 低；非缺陷 | 登記 |
 
+> 📌 **2026-11-20 註記（歷史文件，原文不改）**：上表 N2「FAKE 冷啟動『⬜ 尚未載入，請按更新』＋『下一步 按 🚀 更新』…不建議改字」**已由 DEC-208 覆蓋**：下一步改既有 `⬜ 尚未提供（待系統動作整合）`；今日主要風險 chip 依使用者「同意」（#1199 comment 7021388731）於 FAKE＋cold＋更新 CTA disabled 單一情境改 `⬜ 尚未載入`。`RISK_SENTENCE_NOT_LOADED` 常數與 Legacy 仍逐字。
+
 ### 7.4 限制（如實）
 
 - **Real-data Preview 瀏覽器量測因環境限制未執行**（背景啟動被環境拒絕，依規則不繞過）。Real 軸僅有靜態審閱、既有 pytest、DOM 模擬（INFERENCE）。
