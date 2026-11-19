@@ -10789,3 +10789,8 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **證據**：#1199 comment 6995401840；實測數值與重啟條件見 BACKLOG 2026-11-19 UI2-PRODUCT-CLOSURE。
 - **範圍聲明**：僅 Offline Preview Ready；Cloud Runtime Verified NOT VERIFIED、Production Ready 不成立。
 - **編號**：origin/main（6623760d）已用至 DEC-201／§78，本批 DEC-202／§79；合併時若被佔則順延。
+
+### DEC-203｜New UI2 標的「即時查一檔」隔離離線視覺原型（#1199 comment 7000042502 授權第一階段；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **決定**：新增與 App 完全隔離的單檔離線 HTML 原型（`docs/vnext/prototypes/nui2_target_lookup/`），全 FAKE、虛構標的 9001~9006，僅供 Visual Gate 審視。**不是正式施工授權**；未改 app／src／shared／既有測試／DEC-137 JSON；無網路、無真實資料。
+- **新字句**一律 UI 標「PROPOSED・未核准」，清單見該目錄 README。待客戶 Visual Gate 核准。
+- **編號**：origin/main（eff23f48）已用至 DEC-202／§79；合併時若被佔則順延。
