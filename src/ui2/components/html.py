@@ -368,8 +368,12 @@ def search_html(search: SearchBoxVM) -> str:
            f'aria-label="{escape(search.placeholder)}">🔍 {escape(search.placeholder)}</span>')
     reason = (f'<div class="ui2-cta__reason">{escape(search.cta.disabled_reason)}</div>'
               if search.cta.disabled_reason else "")
-    hint = (f'<div class="ui2-search__hint">{status_chip_html(search.name_search)} '
-            f'<span class="ui2-row__detail">{escape(search.name_search.detail or "")}</span></div>')
+    if search.cta.enabled:                 # 可查詢：保留誠實引導（detail＝「請輸入代碼（名稱搜尋尚未提供）」）
+        hint = (f'<div class="ui2-search__hint">{status_chip_html(search.name_search)} '
+                f'<span class="ui2-row__detail">{escape(search.name_search.detail or "")}</span></div>')
+    else:                                  # DEC-208 U-1：查詢 disabled 時不輸出命令式引導（不叫人去輸入一個 disabled 的框）
+        hint = (f'<div class="ui2-search__hint"><span class="ui2-row__label">{escape(search.name_search.label)}</span> '
+                f'{status_chip_html(search.name_search)}</div>')
     return (f'<div class="ui2-search" data-ui2-q="q4" data-ui2-l1="search">{box}'
             f'{cta_html(search.cta, with_reason=False)}</div>{reason}{hint}')
 

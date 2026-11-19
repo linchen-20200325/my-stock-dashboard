@@ -576,7 +576,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ]
@@ -619,7 +619,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -638,16 +638,16 @@
    ],
    [
     "下一步",
-    "data",
-    "ok",
-    false,
+    "capability",
+    null,
     true,
+    false,
     null,
     null,
     null,
+    "2abb517c3240ae6ff14935aa2a48204a3de1f776",
     null,
-    "794c79bb7a7e8f1574db75261970bb608d4b0c48",
-    null
+    "a1f1d162eb364192ba29294ac26b567aac80c399"
    ]
   ],
   "lookup_sections": {},
@@ -1482,7 +1482,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1497,7 +1497,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1512,7 +1512,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1527,7 +1527,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1542,7 +1542,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1557,7 +1557,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ]
@@ -1587,7 +1587,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],
@@ -1606,16 +1606,16 @@
    ],
    [
     "下一步",
-    "data",
-    "ok",
-    false,
+    "capability",
+    null,
     true,
+    false,
     null,
     null,
     null,
+    "2abb517c3240ae6ff14935aa2a48204a3de1f776",
     null,
-    "794c79bb7a7e8f1574db75261970bb608d4b0c48",
-    null
+    "a1f1d162eb364192ba29294ac26b567aac80c399"
    ],
    [
     "今日結論",
@@ -1626,7 +1626,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ]
@@ -7218,7 +7218,7 @@
     null,
     null,
     null,
-    "2d18d45165ffe17aeadb7575f24adb3b648f8220",
+    "9bc11eb064d08fc5b8e2ac01a717c88df7546b0b",
     null,
     "ddfe007886ee225b1efa56638602ff81a7e62658"
    ],

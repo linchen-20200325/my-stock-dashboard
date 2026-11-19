@@ -1628,3 +1628,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-19 B 線 bugfix：UI2 D1＋G-5 最小修補（DEC-207；append-only；非 QA PASS）
 - 分支 `b-fix-ui2-d1-g5`（base e855a5f9），Draft PR。授權 #1199 comment 7011701691（裁示 1、2）。下一手：非作者 QA → exact-head CI（含 `ui2-browser-gate`）→ merge → main CI。
 - 注意：改 `src/ui2/**` 已重生 DEC-137 四份存證（`source_hash` 變）；之後任何 `src/ui2/**` 改動都要再重生。G-5 卡片目前**沒有原因句**（既有 `⬜ 無法判定` 字樣；加原因句屬新文案 Gate，勿自行加）。D2／D3／G-6～G-9／髒 session 崩潰仍 OPEN，勿自行施工。非 QA PASS。
+
+## 2026-11-20 B 線 UX：UI2 U-1／G-3／UX-1＋G-1(b)（DEC-208；append-only；非 QA PASS）
+- 分支 `b-ux-ui2-u1-g3-ux1`（base d3ab92db），Draft PR。授權 #1199 comment 7021221449／使用者「同意」#7021388731／總管 #7021701891。下一手：非作者 QA → exact-head 五項原生 CI → 0 unresolved threads → merge → main CI。
+- 注意：改 `src/ui2/**` 已重生 DEC-137 四份存證（`source_hash` 變）；P3 baseline 已有意識重生（僅 `fake/p4_{market,hold,target}/cold/None`），`_P3_BASELINE_SHA256` 已更新。之後再改 `src/ui2/**` 要再重生；再改 `scenarios.py` 文字要確認 P3 指紋。
+- **G-1(b) 例外只限 FAKE＋cold＋更新 CTA disabled**；若日後「🚀 更新」CTA 啟用，須重新評估（原句 `RISK_SENTENCE_NOT_LOADED` 仍保留為有效規格）。**G-4（👤 帳戶提示）DEFER、A11Y-F4 未決，勿順手動**。非 QA PASS。

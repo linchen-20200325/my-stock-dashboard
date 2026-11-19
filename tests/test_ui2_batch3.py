@@ -191,7 +191,11 @@ def _risk(scenario: str) -> FieldVM:
 
 def test_main_risk_per_scenario_uses_the_right_axis_and_verbatim_sentence():
     cold = _risk("cold")
-    assert cold.state is FieldState.NOT_EVALUATED and cold.status_text == T.RISK_SENTENCE_NOT_LOADED
+    # DEC-208：使用者 2026-11-20 明示同意（#1199 comment 7021388731）的**單一情境例外**——New UI2＋FAKE＋cold＋更新 CTA disabled：
+    # 外露 `⬜ 尚未載入`（TEXT_NOT_LOADED）而非 DEC-117 Q6 原句 `⬜ 尚未載入，請按更新`。原句常數／Legacy 逐字守衛（上一個測試）、
+    # 其餘場景的逐字斷言（下列 missing／not_evaluated／unavailable）一字不動；反向守衛見 tests/test_ui2_ux_cold_copy_dec208.py。
+    assert cold.state is FieldState.NOT_EVALUATED and cold.status_text == T.TEXT_NOT_LOADED
+    assert cold.status_text != T.RISK_SENTENCE_NOT_LOADED and "請按更新" not in (cold.status_text + (cold.detail or ""))
     assert cold.value_text is None and "danger" not in H.status_chip_html(cold)       # 冷啟動：灰、不出風險項列
     miss = _risk("missing")
     assert miss.state is JudgementState.UNDETERMINABLE and miss.status_text == T.RISK_SENTENCE_ALL_INSUFFICIENT

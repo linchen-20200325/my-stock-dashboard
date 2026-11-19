@@ -2681,7 +2681,7 @@
 | ID | 標題 | P | status | 來源 | next action |
 |---|---|---|---|---|---|
 | **DEC180-UI2-NO-DATA-ROOT-CAUSE** | New UI2「缺資料」根因稽核（唯讀）**已完成**：假說 A（預設 FAKE）＝FACT（程式碼層）；B（Real Feed 不連網）＝FACT（UI2 呼叫路徑，守衛 G2F）——**UI2 不用 NAS 是設計，不是漏接**；C（NAS 未配置致舊 UI 部分失敗）＝NOT VERIFIED；D（資料 PR HOLD 致 main 過期）＝分層（main 停 11-09＝FACT；原因＝INFERENCE；「畫面完全沒資料」不成立）；E（Cloud 未重新部署致版本落後）＝NOT VERIFIED。四類原因（資料未抓到／資料尚未發布／尚未接線／部署版本未更新）不得混為一談；絕大多數欄位屬「尚未接線」，與 PR 無關。單組，待非作者 QA | P2 | **稽核完成，待非作者 QA（結論列，非工作項）** | DEC-180；證據文件 §2、§6、§8、§9 | 無（結論列）。後續任一接線／發布動作皆需 Gate，見下列各列 |
-| **DEC180-UI2-FAKE-COLD-COPY-GATE** | FAKE cold 的理由句「按 🚀 更新後載入（FAKE 示意）」與永遠 disabled 的主 CTA（`vm_common.py:181`，disabled 理由預設「此功能尚未開放」）語意衝突，容易被讀成「資料抓不到」。屬 UI 文案／互動語意。**註**：純文字理由句不一定落在 `CLAUDE.md` §-1.5.D §03-2 ①；但「CTA enabled／disabled」互動語意變更涉及版面行為，保守起見走線框草稿 | P2 | **Candidate／未授權（UI 文案 Gate，待草稿）** | 證據文件 §4；`CLAUDE.md` §-1.5.D §03-2 ① | 客戶要求前不動；若要動，先出文字線框草稿＋推薦理由（可併入 `DEC180-UI2-VERSION-STAMP-GATE` 的草稿） |
+| **DEC180-UI2-FAKE-COLD-COPY-GATE** | FAKE cold 的理由句「按 🚀 更新後載入（FAKE 示意）」與永遠 disabled 的主 CTA（`vm_common.py:181`，disabled 理由預設「此功能尚未開放」）語意衝突，容易被讀成「資料抓不到」。屬 UI 文案／互動語意。**註**：純文字理由句不一定落在 `CLAUDE.md` §-1.5.D §03-2 ①；但「CTA enabled／disabled」互動語意變更涉及版面行為，保守起見走線框草稿 | P2 | ~~**Candidate／未授權（UI 文案 Gate，待草稿）**~~ **DONE（DEC-208，2026-11-20；有意識的狀態更新，舊句刪除線保留）**：FAKE cold 理由句／下一步／🎯 查一檔說明已改既有非命令式字串；含使用者「同意」的 G-1(b) 單一情境例外（#1199 comment 7021388731）。G-4（👤 帳戶提示）DEFER；非 QA PASS | 證據文件 §4；`CLAUDE.md` §-1.5.D §03-2 ① | 客戶要求前不動；若要動，先出文字線框草稿＋推薦理由（可併入 `DEC180-UI2-VERSION-STAMP-GATE` 的草稿） |
 | **DEC180-UI2-VERSION-STAMP-GATE** | UI2 畫面無 commit／build／版本字串，使用者與稽核者無法從畫面分辨「舊部署」與「新部署但資料舊」；建議加「版本＋資料日」小標（RECOMMENDATION，屬 UI 版面變更） | P2 | **Candidate／未授權（待線框草稿）** | 證據文件 §2 E、§10；與 `DEC177-FRESHNESS-IMPL-DECISION-SHEET` Q1～Q7 有交集 | 客戶要求前不動；先出線框草稿再拍板 |
 | **DEC180-UI2-REGIME-STATE-FILES-PUBLISH** | 市場位階狀態檔（`macro_state.json`／`risk_cap_state.json`）被 `.gitignore:22`、`:25` 排除、未被 git 追蹤，全新 Cloud 部署不存在 → Cloud 上位階預期恆「⬜ 尚未載入」（INFERENCE，未實機驗）。建議改由 cron 發布到 `data_cache`（RECOMMENDATION）。關聯既有 `NUI2-PREVIEW-CLOUD-STATE-FILES`（BACKLOG:1410，open 未驗）與 `ISSUE1110_DATA_AVAILABILITY_MATRIX_2026-11-10.md` §2／§8 | P2 | **Candidate／未授權（待裁示）**；涉及資料發布與 WIRING-GATE | 證據文件 §4、§11 A③、§14.2 | 客戶裁示前不動；不新增 cron／Secrets |
 | **DEC180-LEGACY-PROXY-OBSERVATIONS-P1-P9** | 舊 UI 資料問題觀察 P1～P9（三套 proxy 解析器不一致；多條取數鏈繞過 `proxy_helper`；`leading_indicators.py:53` 於 import 時綁定；`_proxy_env` 無鎖；失敗結果可能被 `st.cache_data` 快取；`fetch_url` 成功 log 誤導；`src/compute/etf/etf_calc.py:419` 註解過期；`health_inspector` 印出 NAS host；CI／cron 3.11 vs Cloud 3.14.10）。**僅登記觀察，不修** | P3 | **Candidate／P3、open；需客戶或總管另行指派；非授權** | 證據文件 §15（P2 編號為寫入組補，見 §14.2） | `CLAUDE.md` §-1：無實際 bug 觸發不主動動工 |
@@ -2929,7 +2929,7 @@
 ## 2026-11-18 New UI2 a11y 三項最小修後續（DEC-197；append-only；以下四項已重現、未修、皆需 ChatGPT 簽核後才能動）
 - **A11Y-F1｜導覽 radio 的 accessible name 為 `● `**：選中項的 `p::before{content:"● "}` 被計入 AX name，螢幕閱讀器念成「● 」而非頁名。修法牽涉導覽 CSS／符號載體（Freeze §4.1 要求選中不只靠顏色），屬 UI 契約內設計取捨。Owner：ChatGPT 簽核；觸發：下一次動導覽。
 - **A11Y-F2｜分段切換（🎯 模式 radio）高度 31–33px**（探查量到「即時查一檔」31px、「市場精選」33px）：低於 44px 觸控目標（頂部導覽已 ≥44px）。改高度會動版面，需線框草稿（v3 §03-2 ①）。Owner：ChatGPT 簽核。
-- **A11Y-F3｜FAKE cold 文案指向已 disabled 的 CTA**：FAKE cold 場景多處顯示「⬜ 尚未載入，請按更新」（探查證據 `fake_cold.json`），但指向的「更新」CTA 是 `aria-disabled`（修前游標還是 pointer；D1 只修了游標，文案語意仍矛盾）。屬文案／契約問題（不得自行改字）。Owner：ChatGPT 簽核。
+- ~~**A11Y-F3｜FAKE cold 文案指向已 disabled 的 CTA**：FAKE cold 場景多處顯示「⬜ 尚未載入，請按更新」（探查證據 `fake_cold.json`），但指向的「更新」CTA 是 `aria-disabled`（修前游標還是 pointer；D1 只修了游標，文案語意仍矛盾）。屬文案／契約問題（不得自行改字）。Owner：ChatGPT 簽核。~~ **更新（DEC-208，2026-11-20）：UX-1 完成**——📊／💼 FAKE cold 的「按…更新／更新後載入」誘導字樣已清除；📊 今日主要風險 chip 依使用者「同意」的 G-1(b) 單一情境例外（New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled）由 `⬜ 尚未載入，請按更新` 改 `⬜ 尚未載入`；`RISK_SENTENCE_NOT_LOADED` 常數與 Legacy 逐字不變。（曾於本批前段為 UX-1 PARTIAL；G-1 解除 HOLD 後併入同一 PR 完成。）G-4（👤 帳戶 signed_out／unavailable 提示）DEFER。非 QA PASS。
 - **A11Y-F4｜「尚未載入」vs「尚未評估」措辭不一致**：「尚未載入」（尚未按更新）與「尚未評估」（not_evaluated 場景）對使用者是否為同一種狀態未定義，兩者並存易混淆；是否統一需 ChatGPT 決定（探查只確認兩種字樣並存，未窮舉全站）。屬文案凍結範圍，不得自行統一。Owner：ChatGPT 簽核。
 - 以上來源為唯讀探查（作者環境單組重現）；證據腳本在作者 scratchpad，未入 repo。
 
@@ -3044,3 +3044,6 @@
 - [ ] 非作者 QA、native CI、merge、main CI（本分支尚未合併）。
 - **下一個須使用者批准的最小 code gate**：`OB-2-FINGERPRINT-ONLY-CODE`（L0 單檔純函式＋逐欄突變測試＋兩支守衛白名單同步；前置＝使用者明確批准＋總管採納本規格並裁示其〔待裁〕項）。**未提出、未授權。**
 - NOT VERIFIED：各來源「重抓是否改值」（`fetched_at` D2 白名單初始為空）、跨版本 float repr、新增檔後守衛實際紅燈、真成本／真洩漏／並發／TTL。
+
+- **UX2-SEARCH-HINT-1｜🎯 搜尋 hint 命令式誘導（U-1；2026-11-20 新登記，同日完成）**：`search_html` 在搜尋 CTA disabled 時仍顯示「請輸入代碼（名稱搜尋尚未提供）」（FAKE 6 場景×2 模式＋Real×2 模式共 14 處），與同頁 `aria-disabled` 搜尋框／「尚未開放查詢」自相矛盾。**DONE（DEC-208）**：`cta.enabled=False` 時改「名稱搜尋」label＋既有 `⬜ 尚未提供` chip；`enabled=True` 行為不變；G-3 `_LOOKUP_COLD` 同批改既有「FAKE 示意：尚未載入」。零新字串、不啟用搜尋、不改 canonical。非 QA PASS。
+- **UX-G4-ME-HINT｜👤 FAKE signed_out／unavailable 的「請先登入／重新讀取」與 disabled 動作的提示衝突（2026-11-20；DEC-208）**：**DEFER**（總管 #7021221449 G-4：涉及另一組帳戶狀態／登入暗示，另列 next UX-small Gate；不得借 G-1 擴 scope；不改 `_me_account_variant`／帳戶 VM／Real 帳戶）。A11Y-F4（「尚未載入」vs「尚未評估」）仍未決，不順手統一。
