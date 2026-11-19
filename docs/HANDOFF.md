@@ -1624,3 +1624,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-19 B 線 tests-only：UI2 安全降級現況回歸守衛（DEC-206；append-only；非 QA PASS）
 - 分支 `b-tests-ui2-safe-degrade-1202`（base f86e62e7），tests-only Draft PR。授權 #1199 comment 7011328051＋Issue #1202。
 - 下一手：非作者 QA → exact-head CI → merge → main CI。BACKLOG `UI2-SAFE-DEGRADE-GAPS-1202` 的 D1／D2／D3／G-5～G-9／髒 session 崩潰**待總管裁示，未施工**，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線 bugfix：UI2 D1＋G-5 最小修補（DEC-207；append-only；非 QA PASS）
+- 分支 `b-fix-ui2-d1-g5`（base e855a5f9），Draft PR。授權 #1199 comment 7011701691（裁示 1、2）。下一手：非作者 QA → exact-head CI（含 `ui2-browser-gate`）→ merge → main CI。
+- 注意：改 `src/ui2/**` 已重生 DEC-137 四份存證（`source_hash` 變）；之後任何 `src/ui2/**` 改動都要再重生。G-5 卡片目前**沒有原因句**（既有 `⬜ 無法判定` 字樣；加原因句屬新文案 Gate，勿自行加）。D2／D3／G-6～G-9／髒 session 崩潰仍 OPEN，勿自行施工。非 QA PASS。

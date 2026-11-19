@@ -60,6 +60,11 @@ class TwiiTrendView:
             True／False ＝ 已與基準日比對；None ＝ 沒有可信基準日、或 `as_of` 缺失／無法解析 → ⛔ 不判未來
             （維持既有 fail-closed／stale 語意）。基準日是 UI「資料日期可顯示性」的台北牆鐘，⛔ 不是官方
             `published_at`、⛔ 不是交易日公布／PIT 證據。與 `age_days<0 → None＋is_stale=True`（下）各自獨立、不改。
+        as_of_ambiguous: G-5（#1199 總管裁示 2）：**卡片實際採用的最新觀測日期**在輸入收盤序列中有多列（值相同或不同皆然）＝來源歧義。
+            True → 卡片路徑 `ok=False`、`close`／`xs` 為空（⛔ 取末筆、⛔ 平均、⛔ 去重擇一）；L5 以既有灰色「無法判定」呈現。
+            與 `ok=False` 的其他原因（讀不到、價格無效、NaN 最新日）互斥：那些維持 False。`with_ohlc=True` 同一個判定（同一個 `_s`），
+            但該路徑 `ok` 不變（日 K 走自己的 `DUPLICATE_DATE` 灰態，不連動成「資料未取得」）。歷史重複而最新日唯一 → False。
+            L1 不去重；本旗標只由 L3 以唯讀 index 判定。
     """
 
     ok: bool
@@ -86,6 +91,8 @@ class TwiiTrendView:
     n_ohlc: int = 0
     # ── Issue #1202：未來資料日旗標（加性尾欄、預設 None ⇒ 既有建構方式不受影響）──
     as_of_future: bool | None = None
+    # ── G-5：最新觀測日重複 → 來源歧義旗標（加性尾欄、預設 False ⇒ 既有建構方式不受影響）──
+    as_of_ambiguous: bool = False
 
     def __post_init__(self) -> None:
         # Issue #1140 C2：負的 age_days ＝ 資料日晚於基準日（未來日；L1 `compute_cache_staleness` D2 照實保留負值供診斷）。
@@ -137,6 +144,12 @@ def get_twii_trend_view(n_trading_days: int, *, with_ohlc: bool = False, today=N
     if _s is None or len(_s) == 0:
         return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT)
     _attrs = getattr(_s, "attrs", {}) or {}
+    _amb = _latest_date_ambiguity(_s)
+    if _amb:
+        # G-5：最新觀測日有多列 ⇒ 來源歧義，卡片不得呈現任何看似有效的收盤（⛔ 取末筆／平均／去重擇一）。
+        # 沿用既有「讀不到」灰態字樣（legacy 不新增使用者可見文案）；UI2 以 `as_of_ambiguous` 走既有「無法判定」。具體原因只進 log。
+        print(f"[market_twii_view_service] 最新資料日重複，來源歧義，卡片不用：{_amb}")
+        return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT, as_of_ambiguous=True)
     _bad = _card_price_problem(_s, _attrs, n_trading_days)
     if _bad:
         # Issue #1140 C1：收盤價必須是有限正值（與日 K 契約 `price_problem` 同一規則）；⛔ 不補 0／不剔除壞值後照畫。
@@ -148,6 +161,21 @@ def get_twii_trend_view(n_trading_days: int, *, with_ohlc: bool = False, today=N
 
 #: 讀不到（檔不存在／壞檔／缺欄／空）時的說明（灰，非例外）。
 _UNREADABLE_TEXT: str = "加權指數歷史快取讀不到（檔案不存在、壞檔、缺欄或內容為空）"
+
+
+def _latest_date_ambiguity(_s) -> str:
+    """G-5：卡片實際採用的最新觀測日期（`_s` 尾端那一列的日期）在輸入序列中是否有多列（合格 → `""`）。
+
+    唯讀 `Series.index`：⛔ 不去重、⛔ 不改序列、⛔ 不看值（值相同或不同皆歧義）。只看**最新日**：重複只在遠端歷史、
+    最近收盤唯一 → `""`（卡片與日 K 的隔離語意保留，日 K 仍依自身視窗規則拒畫）。輸入是 L1 dropna 之後的收盤序列
+    （與卡片顯示的值同源）；with_ohlc／非 ohlc 兩條路徑對**同一個** `_s` 呼叫本函式 ⇒ 判定一致。"""
+    if _s is None or len(_s) < 2:
+        return ""
+    _latest = _iso(_s.index[-1])
+    if _latest is None:
+        return ""
+    _n = sum(1 for _i in _s.index if _iso(_i) == _latest)
+    return f"{_latest} 在收盤序列有 {_n} 列" if _n > 1 else ""
 
 
 def _card_price_problem(_s, _attrs: dict, n_trading_days: int) -> str:
@@ -255,7 +283,7 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
     - 讀取丟例外 → 沿用既有 `failed=True` 路徑（紅）。
     """
     from shared.twii_ohlc_contract import (
-        EMPTY, OHLC_OK, READ_FAILED, WINDOW_MISMATCH, validate_ohlc_window,
+        DUPLICATE_DATE, EMPTY, OHLC_OK, READ_FAILED, WINDOW_MISMATCH, validate_ohlc_window,
     )
     try:
         # Issue #1202：本次呼叫只取一次基準日（注入優先，否則台北今日），L1／卡片比對／日 K 驗證共用同一個值。
@@ -275,6 +303,9 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
             return TwiiTrendView(ok=False, error=_UNREADABLE_TEXT, ohlc_requested=True, ohlc_ok=False,
                                  ohlc_error=EMPTY, ohlc_detail="收盤欄全為空值")
         _kw = _close_view_kwargs(_s, _attrs, n_trading_days, base=_base)
+        _amb = _latest_date_ambiguity(_s)       # G-5：與卡片路徑同一個判定（同一個 `_s`）；`ok` 不變，見 TwiiTrendView.as_of_ambiguous
+        if _amb:
+            _kw = {**_kw, "as_of_ambiguous": True}
 
         _win = _df.tail(n_trading_days)
         _dates = tuple(_iso(_i) or "" for _i in _win.index)
@@ -286,6 +317,9 @@ def _get_twii_trend_view_with_ohlc(n_trading_days: int, *, today=None) -> TwiiTr
             as_of=_kw["as_of"],
             today=_base_in,
         )
+        if _ok and _amb:
+            # n 很小（例：1）時視窗只含重複兩列中的一列，L0 看不到重複；最新日歧義 ⇒ 日 K 同樣保守不畫（與卡片一致）。
+            _ok, _code, _detail = False, DUPLICATE_DATE, f"{_amb}（日 K 視窗不含其餘重複列，仍保守不畫）"
         if _ok and _dates != _kw["xs"]:
             # 同快照自檢：通過驗證的視窗（無 NaN close）理應與收盤卡的 dropna 尾端是同一批列；不是就 fail-closed。
             _ok, _code, _detail = False, WINDOW_MISMATCH, (

@@ -3026,10 +3026,10 @@
 
 | ID | 狀態 | 缺口 | 備註 |
 |---|---|---|---|
-| UI2-GAP-D1 | OPEN | 日 K y 軸可出現**負刻度** | 程式需修：`_kbar_svg` 的 lo-pad 應夾 ≥ 0。離群檢核屬 L0／業務決策，另議 |
+| UI2-GAP-D1 | ~~OPEN~~ **已核准並修復（2026-11-19；DEC-207／PROJECT_STATE §84；#1199 c7011701691 裁示 1；非 QA PASS）** | 日 K y 軸可出現**負刻度** | ~~程式需修：`_kbar_svg` 的 lo-pad 應夾 ≥ 0。離群檢核屬 L0／業務決策，另議~~ **現行**：`_kbar_svg` y 軸下界夾 ≥ 0 並以新 domain 重算 ticks／座標（`tests/test_ui2_d1_kbar_yaxis_floor.py`）；離群檢核屬 L0／業務決策，**仍另議、未做**（與 D2／D3 同屬另案 Domain Gate）。（#1229 合併時本列記為「程式需修／待總管裁示」是當時事實；其後總管已核准，本列為**事實更新**，非 #1229 記載有誤。）NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud |
 | UI2-GAP-D2 | OPEN | 日 K 日期僅 regex 檢查、不查曆法（如 `2026-02-30` 形式的合法格式假日期） | 一行縱深防禦即可 |
 | UI2-GAP-D3 | OPEN | 極端數值（巨大／極小但有限正值）無範圍檢查 | 範圍屬 L0／業務決策 |
-| UI2-GAP-G5 | OPEN | 卡片遇**重複日期列**仍顯示 OK（日 K 已擋 `DUPLICATE_DATE`） | L1／L3 行為 |
+| UI2-GAP-G5 | ~~OPEN~~ **已核准並修復（2026-11-19；DEC-207／PROJECT_STATE §84；#1199 c7011701691 裁示 2；非 QA PASS）** | 卡片遇**重複日期列**仍顯示 OK（日 K 已擋 `DUPLICATE_DATE`） | ~~L1／L3 行為~~ **現行**：L3 `get_twii_trend_view` 以唯讀 index 判定「卡片採用的最新觀測日是否多列」，命中 ⇒ 卡片走既有灰色 `⬜ 無法判定`（不顯任何收盤數字）、日 K 維持 `DUPLICATE_DATE` 保守不畫；L1 不去重、L0 契約不放寬；歷史重複而最新日唯一 ⇒ 卡片照常（`tests/test_ui2_g5_latest_date_duplicate.py`）。**未做**：卡片原因句（新文案 Gate）；cron 是否真會寫入重複日仍 NOT VERIFIED；NaN＋重複混合列為已登記邊界（見 DEC-207）。（#1229 當時記載落後屬**事實更新**。）NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud |
 | UI2-GAP-G6 | OPEN | `INCOMPLETE_BAR` 時卡片仍 OK、日 K 灰態 | 現為**釘住的設計**；是否改口徑待裁示 |
 | UI2-GAP-G7 | OPEN | 契約收緊：`ok=True` 且 `as_of=None` 目前被接受（卡片 OK 無資料日、🗂 計資料未備） | 現況已由 G-7 測試釘住；是否禁止此組合待裁示 |
 | UI2-GAP-G8 | OPEN | FAKE 軸「資料」頁含真探測 | |
