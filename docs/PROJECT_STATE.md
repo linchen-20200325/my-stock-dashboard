@@ -1491,3 +1491,7 @@
 - 分支 `b-ui2-n2-future-kbar-asof`（base origin/main 8d09c3d6）。只改 `src/services/ui2/real_canonical.py`（`TwiiKbarFact.as_of_future` 尾欄＋`kbar_chart_spec` 未來日不帶 `as_of`＋驗證三態）；新增 `tests/test_ui2_n2_future_kbar_meta.py`。DEC-137 存證不需重生（`src/services/ui2/**` 不在 source_hash 範圍）。
 - N1（切頁捲動）維持 DECISION GATE／HOLD；O1／O2 為觀察項，登 BACKLOG 不施工。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud runtime、瀏覽器真畫面（本批以單元＋渲染 HTML 字串驗證）。
+
+## 79. New UI2 產品收斂：N1／O1／O2 處置登記（2026-11-19；DEC-202；只追加；docs-only；非 QA PASS；單組作者環境）
+- 分支 `b-docs-ui2-n1-o1-o2`（base origin/main 6623760d）。只改 docs：BACKLOG、設計文件 §7 補註、DECISIONS、HANDOFF、本節。N1 降 P2 已知限制（方案 A）；O1／O2 判定非缺陷＝符合 DEC-177，僅文件揭露。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud runtime。Offline Preview Ready 成立；Cloud Runtime Verified／Production Ready 不成立。

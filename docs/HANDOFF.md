@@ -1604,3 +1604,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-19 B 線 N2 未來資料日日 K meta 修正（DEC-201；append-only；非 QA PASS）
 - 分支 `b-ui2-n2-future-kbar-asof`（base origin/main 8d09c3d6，#1221 已 merge、main push CI run 44407556580 success 後才施工），Draft PR。只改 `src/services/ui2/real_canonical.py`＋新測試 `tests/test_ui2_n2_future_kbar_meta.py`；`src/ui2/**` 零改動，DEC-137 存證不需重生。
 - 下一手：非作者 QA → exact-head 五項 CI → merge → main CI。N1 HOLD（需 JS Gate）；O1／O2 為 OPEN 觀察，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線 docs：UI2 N1／O1／O2 處置（DEC-202；append-only；非 QA PASS）
+- 分支 `b-docs-ui2-n1-o1-o2`（base origin/main 6623760d），docs-only Draft PR。授權 #1199 comment 6995747146；證據 #6995401840。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。B1／B2／B3 與任何新字句／改口徑／口徑鎖定測試**未授權**，勿自行施工。非 QA PASS。
