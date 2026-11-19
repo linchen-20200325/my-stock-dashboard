@@ -3015,6 +3015,7 @@
 | LOOKUP-MVP-L3-SCHEMA | 「4 碼→最新一期一般業財報事實」L3 契約裁示（候選見上列文件） | **B 提候選**；總管＋使用者裁示 |
 | LOOKUP-MVP-STORAGE | 資料入庫／儲存位置（不得新增公開 repo data cache） | Decision Gate |
 | LOOKUP-MVP-G2F | G2F allowlist／UI2 接線／Visual Gate | Decision Gate |
+| LOOKUP-MVP-LOCAL-MOPS-RIGHTS | 本地 MOPS 季快照（`data_cache/fundamentals/**`）自身權利 NV：在 5 檔授權矩陣之外，條款一律 NOT VERIFIED；該路徑技術上可為純讀薄層，但被此項＋無公告日＋累計口徑＋Schema＋G2F 阻擋（契約候選 §6 B7） | Decision Gate（DG-LIC 取證範圍須納入） |
 | LOOKUP-MVP-FIN-91995 | 91995 金融業綜合損益表（異構欄位）**另 Schema**，不與一般業混合 | Decision Gate（本批排除） |
 
 - **不做**：新 fetch／下載、新定期監控、改 cache、動 workflow／Secrets／Cloud、`src/ui2`／G2F、OneBrain、價格／籌碼／估值／產業欄位。
