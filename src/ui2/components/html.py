@@ -512,7 +512,10 @@ def _kbar_svg(kbar: KbarChartVM) -> str:
     lo, hi = min(c.low for c in cs), max(c.high for c in cs)
     span = hi - lo
     pad = span * 0.06 if span > 0 else max(abs(hi) * 0.001, 1.0)
-    lo_p, hi_p = lo - pad, hi + pad
+    # D1（#1199 總管裁示 1）：y 軸下界夾在 ≥ 0。指數點位不可能為負；一筆極端離群低價把 span 撐大時 `lo - pad` 會變負，
+    # 畫出「負的台股指數刻度」。夾住的是**顯示 domain**（0 可作軸刻度，不代表實際值為 0）；下面的 yt／ticks 都以這個新 domain
+    # 計算（⛔ 只把負 tick 字串藏起來而維持負域）。資料、取樣、K 根數與 lo - pad ≥ 0 的正常窗輸出完全不變。
+    lo_p, hi_p = max(0.0, lo - pad), hi + pad
     h = KBAR_PLOT_H
     y0, y1 = _KB_TOP, h - _KB_BOTTOM_PAD
 

@@ -1516,3 +1516,8 @@
 - 分支 `b-tests-ui2-safe-degrade-1202`（base origin/main f86e62e7）。授權 #1199 comment 7011328051（新工作 1）＋Issue #1202。僅新增 `tests/test_ui2_safe_degrade_regression_1202.py`（G-1 Real×查一檔冷啟、G-2 hostile session 注入、G-3 壞 parquet 形狀端到端、G-4 檢查器擴大組合、G-7 現況釘住）＋本批 docs 追加。**未改任何 src／shared／app／既有測試／DEC-137 JSON／workflow；測試不觸網；不被 `ui2_browser` lane 收（無 marker）。**
 - G-4 全數通過（未發現新缺陷）。未施工缺口 D1／D2／D3／G-5～G-9／髒 session 崩潰已登記 BACKLOG，待總管裁示。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI。
+
+## 84. UI2 D1 日 K y 軸負刻度＋G-5 最新日重複卡片 fail-closed 最小修補（2026-11-19；DEC-207；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-fix-ui2-d1-g5`（base origin/main e855a5f9）。授權 #1199 comment 7011701691 裁示 1（D1）、2（G-5）。改 `src/ui2/components/html.py`（y 軸下界夾 ≥ 0）、`src/services/market_twii_view_service.py`（`_latest_date_ambiguity`＋`TwiiTrendView.as_of_ambiguous`）、`src/services/ui2/real_canonical.py`／`real_feed.py`（`TwiiFact.as_of_ambiguous` 尾欄＋卡片走既有灰色 `⬜ 無法判定`）；新增 `tests/test_ui2_d1_kbar_yaxis_floor.py`、`tests/test_ui2_g5_latest_date_duplicate.py`；重生 DEC-137 四份 viewport JSON（`source_hash` 變，FAKE 82／Real 13 全過、除 meta 外零差異）。
+- **未動**：L1（不去重）、L0 OHLC 契約、G2／G2F 白名單、FieldState／凍結 schema／可見文案、資料來源、財務數據、Risk Cap／訊號規則、cron／parquet／現存公開資料、workflow。D2／D3／G-6～G-9 維持 OPEN。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud deployed SHA；cron 是否真寫入重複日。

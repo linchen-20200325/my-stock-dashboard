@@ -61,7 +61,8 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
             has_upstream_error=(v.upstream_state == "FETCH_FAILED"),
             error_type=_type_of_service_error(v.error) if v.failed else "",
             failed=bool(v.failed), source=str(v.source), upstream_state=v.upstream_state,
-            as_of_future=v.as_of_future)       # #1202：只拷貝 L3 以單一台北基準日比對的結果（本檔不讀時鐘）
+            as_of_future=v.as_of_future,       # #1202：只拷貝 L3 以單一台北基準日比對的結果（本檔不讀時鐘）
+            as_of_ambiguous=bool(v.as_of_ambiguous))   # G-5：只拷貝 L3 的最新日重複判定（本檔不讀序列、不去重）
         validate_twii_fact(fact)                # 讀取期驗契約：違反 → 本事實 Unavailable，另一事實照常
         return fact, ""
     except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句

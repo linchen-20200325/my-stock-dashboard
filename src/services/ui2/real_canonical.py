@@ -145,6 +145,9 @@ class TwiiFact:
     #: Issue #1202：L3 以單一台北基準日比對的結果（`as_of > 基準日` 才 True）；None ＝ 沒有可信基準／as_of 缺失或無法解析
     #: （⛔ 不判未來）。本檔不讀時鐘（G2），只轉述 L3 的判定；True → `validate_twii_fact` 專用例外。加性尾欄。
     as_of_future: bool | None = None
+    #: G-5（#1199 總管裁示 2）：L3 判定「卡片採用的最新觀測日在輸入收盤序列有多列」（來源歧義）。True → `twii_card_spec` 走既有灰色
+    #: 「無法判定」，⛔ 帶任何收盤值（就算 fact 誤帶了 close）。本檔不讀序列、不去重，只轉述 L3 的布林。加性尾欄、預設 False。
+    as_of_ambiguous: bool = False
 
     def __post_init__(self) -> None:
         if self.error_type and not _ERR_CODE_RE.match(self.error_type):
@@ -380,6 +383,8 @@ def validate_twii_fact(t: TwiiFact) -> None:
         raise RealFeedContractError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
     if not (t.as_of_future is True or t.as_of_future is False or t.as_of_future is None):
         raise RealFeedContractError(f"台股：as_of_future 不是 True／False／None：{t.as_of_future!r}")
+    if not (t.as_of_ambiguous is True or t.as_of_ambiguous is False):          # G-5：只收真正的布林
+        raise RealFeedContractError(f"台股：as_of_ambiguous 不是 True／False：{t.as_of_ambiguous!r}")
     if t.ok and t.failed:
         raise RealFeedContractError("台股：ok=True 與 failed=True 矛盾")
     if t.upstream_state not in ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED"):
@@ -441,6 +446,10 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
         return {**base, "state": "unavailable", "reason": _error_text("台股加權指數", snap.twii_error)}
     t = snap.twii
     validate_twii_fact(t)                       # 防呆：feed 已驗
+    if t.as_of_ambiguous and not t.failed:
+        # G-5：最新觀測日有多列 ⇒ 來源歧義。既有灰色「無法判定」（JudgementState.UNDETERMINABLE，字樣 `⬜ 無法判定`；
+        # ⛔ 紅色 Unavailable、⛔ 「資料未取得」、⛔ 新增 FieldState／文案）。⛔ 帶收盤值／資料日（不挑任何一列代表它）；原因只進 log。
+        return {**base, "state": "undeterminable"}
     base.update(source=t.source, as_of=t.as_of)
     if not t.ok:
         if t.failed:
