@@ -140,6 +140,21 @@ def test_no_app_references_prototype():
             assert "nui2_target_lookup" not in p.read_text(encoding="utf-8", errors="ignore"), p
 
 
+#: 示範基準日是規則句的一部分（「距示範基準日 2026-11-19」），明確排除；其餘任何日期格式都不得出現在 9005。
+BASE_DATE = "2026-11-19"
+_DATE_RX = re.compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}月\d{1,2}日|(?<!\d)\d{1,2}/\d{1,2}(?!\d)")
+
+
+def _has_date(text: str) -> bool:
+    return bool(_DATE_RX.search(text.replace(BASE_DATE, "")))
+
+
+def test_has_date_helper_has_teeth():
+    assert not _has_date("距示範基準日 2026-11-19 不超過 7 天")
+    for d in ("資料日 2026-12-05", "2026/12/05", "12月5日", "12/05", "2026.12.05"):
+        assert _has_date(d), d
+
+
 # ───────────────────────── 瀏覽器（缺套件／Chromium 則 skip） ─────────────────────────
 def _launch(p):
     import glob
@@ -222,8 +237,19 @@ def test_browser_states_reachable_clean_and_strings_classified(size):
         assert "部分欄位未取得" in pg.inner_text("#result") and "3／6 欄有值" in pg.inner_text("#result")
         # 9005：不重用「來源目前不可用」、未來日不印
         pg.fill("#q", "9005"); pg.press("#q", "Enter")
+        pg.evaluate("document.querySelectorAll('#result details').forEach(d => d.open = true)")
         t5 = pg.inner_text("#result")
-        assert "來源目前不可用" not in t5 and "2026-12-05" not in t5
+        assert "來源目前不可用" not in t5
+        assert not _has_date(t5), t5
+        assert "資料日期不可信，不顯示" in t5 and "來源有回應，但資料日晚於基準日" in t5
+        # 突變：在 9005 結果內印出任一格式的日期，檢查必須轉紅
+        for bad_date in ("2026-12-05", "2026/12/05", "12月5日", "12/05"):
+            pg.evaluate("t => { const e = document.createElement('p'); e.textContent = t; document.getElementById('result').appendChild(e); }", bad_date)
+            assert _has_date(pg.inner_text("#result")), bad_date
+            pg.evaluate("document.getElementById('result').lastElementChild.remove()")
+        # 9002：數值維持中性色（琥珀只在 chip 與資料日）
+        pg.fill("#q", "9002"); pg.press("#q", "Enter")
+        assert pg.evaluate("[...document.querySelectorAll('.field .v')].every(e => getComputedStyle(e).color === getComputedStyle(document.body).color)")
         # 查無：無加入觀察；真實代碼語句
         pg.fill("#q", "9099"); pg.press("#q", "Enter")
         assert "加入觀察" not in pg.inner_text("#result")

@@ -52,7 +52,7 @@ button{cursor:pointer}
 .field .l{font-size:.8rem;opacity:.75;display:block}
 .field .v{font-weight:600}
 .field[data-state="missing"],.field[data-state="not_evaluated"]{border-style:dotted}
-.field[data-state="stale"] .v{color:var(--warn)}
+.warn-text{color:var(--warn)}
 details{margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:0 10px}
 summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:pointer;font-weight:600}
 details dl{margin:0 0 8px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.85rem}
@@ -135,6 +135,9 @@ details dt{opacity:.75}details dd{margin:0}
 "chip_future":{"t":"🔴 資料日期不可信","c":"proposed"},
 "future_text":{"t":"資料日期不可信，暫時無法顯示","c":"auth"},
 "asof_label":{"t":"資料日","c":"reuse","s":"shared/ui2_contract/text.py"},
+"future_asof_row":{"t":"資料日期不可信，不顯示","c":"proposed"},
+"note_label":{"t":"說明","c":"proposed"},
+"future_note":{"t":"來源有回應，但資料日晚於基準日","c":"proposed"},
 "src_label":{"t":"來源","c":"proposed"},
 "rule_label":{"t":"規則","c":"proposed"},
 "src_val":{"t":"示範來源","c":"proposed"},
@@ -209,9 +212,10 @@ details dt{opacity:.75}details dd{margin:0}
       (t.notEval ? "" : '<div class="muted">' + S("demo_note") + '</div>');
   }
   function head(code, chipHtml) { return '<div class="head"><h2 id="res-title" tabindex="-1">' + esc(raw("n" + code)) + '</h2>' + chipHtml + '</div>'; }
-  function metaAsof(v) { return '<div class="meta">' + S("asof_label") + " " + (v ? dyn(v) : S("asof_missing")) + '</div>'; }
-  function detail(asof, withRule) {
-    var rows = [[S("src_label"), S("src_val")], [S("asof_label"), asof ? dyn(asof) : S("asof_missing")]];
+  function metaAsof(v, stale) { return '<div class="meta">' + S("asof_label") + " " + (v ? (stale ? '<span class="dyn warn-text">' + esc(v) + '</span>' : dyn(v)) : S("asof_missing")) + '</div>'; }
+  function detail(asof, withRule, future) {
+    var rows = [[S("src_label"), S("src_val")], [S("asof_label"), future ? S("future_asof_row") : (asof ? dyn(asof) : S("asof_missing"))]];
+    if (future) rows.push([S("note_label"), S("future_note")]);
     if (withRule) rows.push([S("rule_label"), '<span class="s">' + esc(raw("rule_val", { base: BASE, tol: TOL })) + '</span>' + tag()]);
     return '<details><summary>' + S("details") + '</summary><dl>' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join("") + '</dl></details>';
   }
@@ -237,7 +241,7 @@ details dt{opacity:.75}details dd{margin:0}
     if (t.unavailable) {
       body = head(code, chip("dng", "unavail")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("unavail") + '</strong><div>' + S("reason_unavail") + '</div></div>' + detail(null, false);
     } else if (t.future) {
-      body = head(code, chip("dng", "chip_future")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("future_text") + '</strong></div>' + detail(null, true);
+      body = head(code, chip("dng", "chip_future")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("future_text") + '</strong></div>' + detail(null, true, true);
     } else if (t.notEval) {
       body = head(code, chip("gray", "not_eval")) + metaAsof(null) + fieldsHtml(t) + detail(null, false);
     } else {
@@ -245,7 +249,7 @@ details dt{opacity:.75}details dd{margin:0}
       t.stale = d > TOL;
       var chipHtml = n < 6 ? chip("warn", "chip_partial") + ' <span class="muted">' + S("partial_count", { n: n }) + '</span>'
         : (t.stale ? chip("warn", "stale", { n: d }) : chip("pos", "chip_ok"));
-      body = head(code, chipHtml) + metaAsof(t.asof) + fieldsHtml(t) +
+      body = head(code, chipHtml) + metaAsof(t.asof, t.stale) + fieldsHtml(t) +
         (n === 6 && !t.stale ? '<div class="muted">' + S("ok_detail") + '</div>' : '') + detail(t.asof, true);
     }
     return '<div class="card" id="res-card" data-code="' + code + '" data-view="result">' + body + tail(true) + '</div>';
