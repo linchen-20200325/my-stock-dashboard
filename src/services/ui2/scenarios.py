@@ -22,7 +22,7 @@ from shared.ui2_contract.pages import (
 )
 from shared.ui2_contract.text import (
     FAKE_SOURCE_PREFIX, RISK_ERROR_FMT, RISK_NOTE_UNEVALUATED_NOT_SAFE,
-    RISK_SENTENCE_ALL_INSUFFICIENT, RISK_SENTENCE_NOT_LOADED, TEXT_MISSING_NOT_READY,
+    RISK_SENTENCE_ALL_INSUFFICIENT, TEXT_MISSING_NOT_READY,
     TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
@@ -125,7 +125,8 @@ def _sections_market() -> list[dict]:
     ]
 
 
-_LOOKUP_COLD = "FAKE 示意：輸入代碼並查詢後顯示"
+# DEC-208 G-3：查詢 disabled，不指示輸入／查詢（舊：「FAKE 示意：輸入代碼並查詢後顯示」）
+_LOOKUP_COLD = "FAKE 示意：尚未載入"
 _ME_ACTION_REASON = "登入與 Sheet 操作尚未開放"
 
 
@@ -286,7 +287,7 @@ def _base(page: str) -> dict:
     raise ValueError(f"unknown page {page!r}")
 
 
-def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀 更新後載入（FAKE 示意）") -> dict:
+def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "FAKE 示意：尚未載入") -> dict:
     """場景轉換：只改呈現狀態旗標，⛔ 計算任何值。"""
     if spec.get("fixed"):
         return spec
@@ -307,7 +308,7 @@ def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀
     return s
 
 
-def _transform_current(spec: dict, scenario: str, cold_reason: str = "按 🚀 更新後載入（FAKE 示意）") -> dict:
+def _transform_current(spec: dict, scenario: str, cold_reason: str = "FAKE 示意：尚未載入") -> dict:
     s = dict(spec)
     if scenario == SCENARIO_COLD:
         s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
@@ -337,7 +338,7 @@ def _fake_conclusion(c: dict) -> dict:
     cs = c["current_state"]
     if cs.get("state") == "not_evaluated" and cs.get("sub_reason") == TEXT_NOT_LOADED:
         return _spec("conclusion", "今日結論", None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
-                     reason="按 🚀 更新後載入（FAKE 示意）", as_of=None, source=None)
+                     reason="FAKE 示意：尚未載入", as_of=None, source=None)
     f = field_from_spec(cs)
     clauses = [f"市場目前狀態 {f.value_text}" + (f"（{f.status_text}）" if f.status_text and f.value_text else "")
                if f.value_text else f"市場目前狀態 {f.status_text}"]
@@ -354,12 +355,17 @@ def _fake_main_risk(scenario: str) -> dict:
     """今日主要風險（L1）。退化／護欄句逐字取自 DEC-117 Q6（`shared/ui2_contract/text.py`）。
 
     ⛔ 本檔不產生任何風險項（燈色＋桶名＋燈名＋方向）：Preview 的 loaded／stale＝capability 尚未提供。
-    冷啟動＝**不出列**（無風險項列），只外露 `⬜ 尚未載入，請按更新`（灰，⛔ 紅）。
+    冷啟動＝**不出列**（無風險項列），只外露灰態 `⬜ 尚未載入`（⛔ 紅）。
+
+    DEC-208（使用者 2026-11-20「同意」，#1199 comment 7021388731）：**僅此一處**範圍性覆蓋 DEC-117 Q6 的原凍結句
+    `⬜ 尚未載入，請按更新`（`RISK_SENTENCE_NOT_LOADED`）——適用條件＝New UI2＋FAKE＋SCENARIO_COLD＋「🚀 更新」CTA disabled
+    （本檔即 FAKE 軸、Preview 的更新 CTA 恆 disabled，故冷啟動分支必為此情境）。改用既有 `TEXT_NOT_LOADED`＋既有
+    `FAKE 示意：尚未載入`；`RISK_SENTENCE_NOT_LOADED` 常數與 Legacy `_market_blocks.py::NOT_LOADED` 逐字保留，其餘場景句不變。
     """
     base = dict(as_of=None, source=None)
     if scenario == SCENARIO_COLD:
         return _spec("main_risk_f", "今日主要風險", None, state="not_evaluated",
-                     sub_reason=RISK_SENTENCE_NOT_LOADED, **base)
+                     sub_reason=TEXT_NOT_LOADED, reason="FAKE 示意：尚未載入", **base)
     if scenario == SCENARIO_MISSING:
         return _spec("main_risk_f", "今日主要風險", None, state="undeterminable",
                      sub_reason=RISK_SENTENCE_ALL_INSUFFICIENT, **base)
@@ -400,13 +406,14 @@ def fake_canonical(page: str, scenario: str, account: str | None = None) -> dict
     c["scenario"] = scenario
     c["is_fake"] = True
     # 🎯 標的頁沒有「🚀 更新」入口（精選走載入 gate、查一檔走搜尋）→ 冷啟動說明不得指向不存在的按鈕
+    # DEC-208 UX-1：📊／💼 的「🚀 更新」CTA 在 Preview 恆 disabled → 冷啟說明不得叫人去按它
+    # （舊：「按 🚀 更新後載入（FAKE 示意）」；三元收斂為「🎯 保留精選專用句，其餘一律『尚未載入』」）
     cold_reason = ("FAKE 示意：精選尚未載入" if page == P4_TARGET
-                   else "FAKE 示意：尚未載入" if page == P4_ME
-                   else "按 🚀 更新後載入（FAKE 示意）")
+                   else "FAKE 示意：尚未載入")
     c["current_state"] = _transform_current(c["current_state"], scenario, cold_reason)
     c["cards"] = [_transform(s, scenario, i, cold_reason) for i, s in enumerate(c["cards"])]
-    if scenario == SCENARIO_COLD and c.get("next_step") is None and page != P4_ME:
-        c["next_step"] = _spec("next", "下一步", "按 🚀 更新", fixed=True, as_of=None, source=None)
+    # DEC-208 UX-1 #5：舊 cold override「按 🚀 更新」已刪 → next_step 維持 None，由 vm_common 既有
+    # `aggregator_pending_field("下一步")`（⬜ 尚未提供（待系統動作整合））產生，與其餘 5 場景／Real 一致。
     if page == P4_ME:   # 我的頁：連線異常／下一步隨場景（非投資動作）
         c["action_needed"] = _transform_current(c["action_needed"], scenario, cold_reason)
         c["next_step"] = _transform_current(c["next_step"], scenario, cold_reason)

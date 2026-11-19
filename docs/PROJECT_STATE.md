@@ -1521,3 +1521,9 @@
 - 分支 `b-fix-ui2-d1-g5`（base origin/main e855a5f9）。授權 #1199 comment 7011701691 裁示 1（D1）、2（G-5）。改 `src/ui2/components/html.py`（y 軸下界夾 ≥ 0）、`src/services/market_twii_view_service.py`（`_latest_date_ambiguity`＋`TwiiTrendView.as_of_ambiguous`）、`src/services/ui2/real_canonical.py`／`real_feed.py`（`TwiiFact.as_of_ambiguous` 尾欄＋卡片走既有灰色 `⬜ 無法判定`）；新增 `tests/test_ui2_d1_kbar_yaxis_floor.py`、`tests/test_ui2_g5_latest_date_duplicate.py`；重生 DEC-137 四份 viewport JSON（`source_hash` 變，FAKE 82／Real 13 全過、除 meta 外零差異）。
 - **未動**：L1（不去重）、L0 OHLC 契約、G2／G2F 白名單、FieldState／凍結 schema／可見文案、資料來源、財務數據、Risk Cap／訊號規則、cron／parquet／現存公開資料、workflow。D2／D3／G-6～G-9 維持 OPEN。
 - **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud deployed SHA；cron 是否真寫入重複日。
+
+## 85. UI2 UX-1／UX-2：disabled「更新／搜尋」誘導字樣清除＋G-1(b) 單一情境例外（2026-11-20；DEC-208；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-ux-ui2-u1-g3-ux1`（base origin/main d3ab92db）。授權 #1199 comment 7021221449（G-2／U-1／G-3）＋使用者「同意」G-1(b)（#7021388731）。改 `src/ui2/components/html.py::search_html`（`cta.enabled=False` 時 hint＝`名稱搜尋` label＋`⬜ 尚未提供` chip；`enabled=True` 不變）、`src/services/ui2/scenarios.py`（cold 理由句、下一步 override 刪除、`_LOOKUP_COLD`、`_fake_main_risk` cold 分支）；新增 `tests/test_ui2_ux_cold_copy_dec208.py`；`tests/test_ui2_batch3.py` 僅精確更新 FAKE cold 主要風險一行；P3 baseline 僅 3 個 FAKE cold key 變（`_P3_BASELINE_SHA256` 更新）；DEC-137 四份 viewport JSON 重生。
+- **G-1(b) 範圍**：僅 New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險灰態 chip（`⬜ 尚未載入，請按更新` → `⬜ 尚未載入`）。`RISK_SENTENCE_NOT_LOADED` 常數、Legacy `_market_blocks.py`、其他場景與 Real 不變。UX-1 完成（含此單一例外）；**G-4 DEFER**；A11Y-F4 未決。
+- **未動**：`_me_account_variant`／帳戶 VM／Real 軸、disabled CTA／`disabled_reason`／`⬜ 尚未載入` chip／FAKE banner／四問、資料來源、Risk Cap、搜尋啟用、canonical 字串。
+- **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、main CI、Cloud deployed SHA（390／1440 為 headless 模擬量測，非 Cloud）。

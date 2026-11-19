@@ -143,6 +143,8 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 | **L3**〔§9〕 | raw table、full macro detail、engineering diagnostics | 16 燈明細、台股／國際／總經／籌碼原始表、X9 | ⛔ 把舊市場頁數千字搬回 L1 |
 | L2 Research | 圖 C 大盤 EPS×PE＝**Research**（見 §11） | `render_chart_c` 研究框架空槽 | 維持 |
 
+> 📌 **2026-11-20 指向性註記（DEC-208；append-only，上表一字未動）**：上列「DEC-117 Q1／Q6 仍有效」維持，但 Q6 退化句外露在 **New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險**有使用者「同意」的單一情境例外（`⬜ 尚未載入，請按更新` → `⬜ 尚未載入`；#1199 comment 7021388731）；`RISK_SENTENCE_NOT_LOADED` 與 Legacy 逐字保留、其餘場景不變。見 `docs/DECISIONS.md` DEC-208。
+
 ### §2.2 🎯 標的頁〔客戶 Stage C、§10～§18〕
 
 > ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2／L3 列中的 raw、完整分析明細不再作為頁內 expander；基本面／估值／籌碼／產業／風險改精簡 chart-first 卡；「查看全部候選」是使用者功能（維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
