@@ -3037,3 +3037,10 @@
 | UI2-GAP-DIRTY-SESSION | OPEN | 髒 session 的未知頁／場景／帳戶／模式值會使**整頁崩潰** | 與 UI2-OFF-1 同族 |
 
 - **不做**：本批不修任何上列項目、不改 src／shared／app／既有測試／DEC-137 JSON／workflow。非 QA PASS。
+
+## 2026-11-19 OneBrain OB-2 性質規格候選（C 線；docs-only；append-only；非 QA PASS；單組作者環境）
+授權：#1199 comment 7011701691 裁示 3（選 C：性質規格＋可失敗負例先行）。**OB-2 code／B′ 維持 HOLD**；指紋／cache／trace／budget 程式、Provider／SDK／Secret／預算、UI／LINE caller 皆未授權。
+- [x] 規格候選已產出：`docs/vnext/ONEBRAIN_OB2_PROPERTY_SPEC_CANDIDATE_2026-11-19.md`（CANDIDATE／NOT ENABLED／NO CODE）。含 P-FP／P-CACHE／P-TRACE／P-BUDGET／P-EFFECTIVE 性質與負例、`fetched_at` 納入／排除決策表、離線可證 vs runtime 對照、守衛紅燈點。
+- [ ] 非作者 QA、native CI、merge、main CI（本分支尚未合併）。
+- **下一個須使用者批准的最小 code gate**：`OB-2-FINGERPRINT-ONLY-CODE`（L0 單檔純函式＋逐欄突變測試＋兩支守衛白名單同步；前置＝使用者明確批准＋總管採納本規格並裁示其〔待裁〕項）。**未提出、未授權。**
+- NOT VERIFIED：各來源「重抓是否改值」（`fetched_at` D2 白名單初始為空）、跨版本 float repr、新增檔後守衛實際紅燈、真成本／真洩漏／並發／TTL。
