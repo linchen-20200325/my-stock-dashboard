@@ -144,7 +144,7 @@ def test_registry_classification_and_readme_v2_consistent():
 
 
 def test_readme_v2_content_gates():
-    for s in ("7003017605", "(a)", "(b)", "(c)", "仍待**使用者最終 Visual 確認**", "不得合併進正式 New UI2", "HOLD",
+    for s in ("OK 態不判新舊", "共用同一 as_of", "刻意", "夾具", "不是產品元素", "7003017605", "(a)", "(b)", "(c)", "仍待**使用者最終 Visual 確認**", "不得合併進正式 New UI2", "HOLD",
               "個股權利", "L3 lookup service contract", "OneBrain"):
         assert s in README, s
     assert README.count("\n") < 110   # ≤2 頁
@@ -222,8 +222,10 @@ _EXTRACT = """() => {
     const el = n.parentElement;
     if (el.closest('script,style,[hidden]')) continue;
     const r = el.getClientRects(); if (!r.length) continue;
+    const dt = el.closest('details');   // 展開區內只在標題掛一枚標籤，涵蓋整個展開區
     out.push({t, tag: el.classList.contains('prop-tag'),
-              next: el.nextElementSibling ? el.nextElementSibling.classList.contains('prop-tag') : false});
+              next: (el.nextElementSibling ? el.nextElementSibling.classList.contains('prop-tag') : false) ||
+                    (!!dt && !!dt.querySelector('summary .prop-tag') && !el.closest('summary'))});
   }
   document.querySelectorAll('[placeholder]').forEach(e => out.push({t: e.getAttribute('placeholder'), tag: false, attr: true}));
   return out;
@@ -291,6 +293,11 @@ def test_browser_v2_states(size):
         assert pg.evaluate(_POS_JS) == 0
         assert "資料日 2026-11-18" in texts["9001"] and "示範值" in texts["9001"]
         assert pg.locator("#result .evid").count() == 1
+        # S5：展開區只一枚 PROPOSED 標籤；一行內各段不斷行；S8：示範值註記在六格上方且為全對比
+        assert pg.locator("#result details .prop-tag").count() == 1
+        assert pg.evaluate("[...document.querySelectorAll('#result .evid .nw')].every(e => { const r = [...e.getClientRects()]; return r.length > 0 && Math.max(...r.map(x => x.top)) - Math.min(...r.map(x => x.top)) < 4; })")
+        assert pg.evaluate("document.querySelector('#result .demo-note').getBoundingClientRect().bottom <= document.querySelector('#result .fields').getBoundingClientRect().top")
+        assert pg.evaluate("getComputedStyle(document.querySelector('#result .demo-note')).opacity") == "1"
         assert "來源" in pg.inner_text("#result .evid") and "｜" in pg.inner_text("#result .evid")
         # 突變：塞入綠色 chip，檢查必須轉紅
         pg.evaluate("() => { const s = document.createElement('span'); s.className = 'chip chip--pos'; s.textContent = 'x'; document.getElementById('result').appendChild(s); }")
@@ -312,6 +319,20 @@ def test_browser_v2_states(size):
         err5 = pg.evaluate("getComputedStyle(document.querySelector('#result .err')).borderTopColor")
         assert pg.get_attribute("#result .err", "role") == "alert"
         assert err4 == err5 == ERR_RGB, (err4, err5)
+        # M1：9004／9005 版型一致——各只一個紅框、無標題 chip、框內皆以 🔴 開頭、各自文字只出現一次
+        for code in ("9004", "9005"):
+            _query(pg, code)
+            assert pg.locator("#result .err").count() == 1 and pg.locator("#result .chip").count() == 0, code
+            assert pg.locator("#result .err").inner_text().strip().startswith("🔴"), code
+            assert pg.locator("#result details .prop-tag").count() == 1, code
+        assert t4.count(T.TEXT_UNAVAILABLE) == 1 and t5.count("資料日期不可信") == 1
+        assert "🔴 資料日期不可信，暫時無法顯示" in t5
+        _query(pg, "9004"); ev4 = pg.inner_text("#result .evid")
+        _query(pg, "9005"); assert pg.inner_text("#result .evid") == ev4   # 刻意相同（理由句已移除）
+        # 突變：再塞一個 chip，M1 檢查（chip 數＝0）必須轉紅
+        pg.evaluate("() => { const s = document.createElement('span'); s.className = 'chip'; document.getElementById('result').appendChild(s); }")
+        assert pg.locator("#result .chip").count() == 1
+        _query(pg, "9005")
         assert T.TEXT_UNAVAILABLE in t4 and "資料日期不可信" not in t4 and "日期" not in t4.replace("資料日", "")
         assert "資料日期不可信，暫時無法顯示" in t5 and T.TEXT_UNAVAILABLE not in t5
         assert pg.locator("#result .err").inner_text().strip() != ""

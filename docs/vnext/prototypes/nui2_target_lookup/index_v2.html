@@ -23,6 +23,7 @@ h1{font-size:1.35rem;font-weight:700;margin:4px 0 8px;line-height:1.3}
 @media (min-width:900px){.layout{grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto 1fr;grid-template-areas:"controls result" "samples result"}}
 .card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;overflow-wrap:anywhere}
 .muted{opacity:.75;font-size:.8rem}
+.demo-note{font-size:.9rem;margin:6px 0 0;padding:4px 8px;border-left:3px solid currentColor;background:var(--tint)}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid currentColor;outline-offset:2px}
@@ -56,7 +57,7 @@ button{cursor:pointer}
 .warn-text{color:var(--warn)}
 details{margin:8px 0;border:1px solid var(--line);border-radius:8px;padding:0 10px}
 summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:pointer;font-weight:600}
-.evid{margin:0 0 8px;font-size:.85rem}.evid .sep{opacity:.6;margin:0 .15em}
+.evid{margin:0 0 8px;font-size:.85rem}.evid .nw{white-space:nowrap}.evid .sep{opacity:.6;margin:0 .15em}
 .actions{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-start;margin:8px 0}
 .link{min-height:44px;background:none;border:1px solid var(--line);border-radius:8px;padding:6px 14px}
 .prop-tag{display:inline-block;margin-left:.4em;border:1px solid var(--warn);color:var(--warn);border-radius:4px;padding:0 4px;font-size:.62rem;line-height:1.4;font-weight:600;vertical-align:middle;white-space:nowrap}
@@ -144,7 +145,8 @@ summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:po
 "isolation":{"t":"查一檔只在這次瀏覽有效：不會加入持股、觀察或候選池，也不會改變策略、Risk Cap 或排名，不寫入 Sheet。","c":"reuse","s":"src/services/ui2/real_canonical.py"},
 "clear":{"t":"清除查詢結果","c":"proposed","tier":"design"},
 "details_v2":{"t":"展開：資料日／來源","c":"proposed","tier":"proto"},
-"evid_sep":{"t":"｜","c":"meta"}
+"evid_sep":{"t":"｜","c":"meta"},
+"red_dot":{"t":"🔴","c":"meta"}
 }
 </script>
 <script>
@@ -198,16 +200,16 @@ summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:po
     return '<div class="field" data-dim="' + DIMS[i] + '" data-state="' + st + '"><span class="l">' + S(DIMS[i]) + '</span><span class="v">' + v + '</span></div>';
   }
   function fieldsHtml(t) {
-    return '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>' +
-      (t.notEval ? "" : '<div class="muted">' + S("demo_note") + '</div>');
+    return (t.notEval ? "" : '<div class="demo-note">' + S("demo_note") + '</div>') +
+      '<div class="fields">' + DIMS.map(function (_, i) { return fieldHtml(i, t); }).join("") + '</div>';
   }
   function head(code, chipHtml) { return '<div class="head"><h2 id="res-title" tabindex="-1">' + esc(raw("n" + code)) + '</h2>' + chipHtml + '</div>'; }
   function metaAsof(v, stale) { return '<div class="meta">' + S("asof_label") + " " + (v ? (stale ? '<span class="dyn warn-text">' + esc(v) + '</span>' : dyn(v)) : S("asof_missing")) + '</div>'; }
   // second layer = ONE compact source/as_of draft line (no rule paragraph, no shared-freshness-window claim).
   // asofHtml comes from the caller: a verified date, or the existing missing-value string (never a guessed value).
   function detail(asofHtml) {
-    return '<details><summary>' + S("details_v2") + '</summary><p class="evid" data-evidence="line">' + S("asof_label") + " " + asofHtml +
-      ' <span class="sep" aria-hidden="true">' + esc(raw("evid_sep")) + '</span> ' + S("src_label") + " " + S("src_val") + '</p></details>';
+    return '<details><summary>' + S("details_v2") + '</summary><p class="evid" data-evidence="line"><span class="nw">' + S("asof_label") + " " + asofHtml +
+      '</span> <span class="sep" aria-hidden="true">' + esc(raw("evid_sep")) + '</span> <span class="nw"><span class="s">' + esc(raw("src_label")) + '</span> <span class="s">' + esc(raw("src_val")) + '</span></span></p></details>';
   }
   function tail(withWatch) {
     return '<div class="actions">' + (withWatch ? '<div><button type="button" class="btn" aria-disabled="true" aria-describedby="aw-reason">' + S("add_watch") +
@@ -230,10 +232,10 @@ summary{min-height:44px;display:flex;align-items:center;flex-wrap:wrap;cursor:po
     var missAsof = S("asof_missing");
     if (t.unavailable) {
       // 9004: connection failure. Says "source unavailable" only; never claims a date problem; no unverifiable reason sentence.
-      body = head(code, chip("dng", "unavail")) + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("unavail") + '</strong></div>' + detail(missAsof);
+      body = head(code, "") + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("unavail") + '</strong></div>' + detail(missAsof);
     } else if (t.future) {
       // 9005: untrusted (future) as_of. Fail-closed: no date, no six-dimension values; wording differs from 9004 (not colour only).
-      body = head(code, "") + '<div class="err" data-state="unavailable" role="alert"><strong>' + S("future_text") + '</strong></div>' + detail(missAsof);
+      body = head(code, "") + '<div class="err" data-state="unavailable" role="alert"><strong><span class="s">' + esc(raw("red_dot")) + '</span> ' + S("future_text") + '</strong></div>' + detail(missAsof);
     } else if (t.notEval) {
       body = head(code, chip("gray", "not_eval")) + metaAsof(null) + fieldsHtml(t) + detail(missAsof);
     } else {

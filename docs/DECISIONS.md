@@ -10803,3 +10803,5 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **決定**：在同一隔離目錄新增 V2 候選（`index_v2.html`／`README_V2.md`／`screenshots_v2/`，含 V1｜V2 並排對照圖），V1 全部檔案原樣保留。落實裁示 (a) 9001 移除綠色 OK chip 與「資料日在規則內」詳述；(b) 9003 移除「部分欄位未取得」「N／6 欄有值」，逐欄沿用既有缺值字樣；(c) 9004／9005 維持紅色 fail-closed、以既有文字區分，移除需源頭可稽核訊號的理由句；第二層 Evidence 收斂為一行 `資料日 … ｜ 來源 …`；文案分三級（沿用正式／設計候選 PROPOSED／僅原型適用），registry 新增 `tier` 欄位並由 `tests/test_nui2_target_lookup_prototype_v2.py` 與 README_V2 比對。
 - **非正式施工**：**不得合併進正式 New UI2**；仍待**使用者最終 Visual 確認**；三個正式接線 Gate（個股權利／PIT／Schema → L3 lookup service contract → OneBrain 接線）維持 HOLD。未改 app／src／shared／既有測試／DEC-137 JSON／V1 檔案。
 - **編號**：origin/main a56406c9 已用至 DEC-203／§80；合併時若被佔則順延。
+
+- **DEC-204 補註（V2 小修輪，不新增編號；2026-11-19；非 QA PASS）**：工程 QA PASS、UX 審查無硬阻擋，採納建議項——9004／9005 版型一致（各只一個紅框，框內皆以既有 🔴 開頭，移除重複標題 chip）；展開區只掛一枚 PROPOSED 標籤且各段不斷行；示範值註記移到六格上方並提高對比；compare 圖改裁切結果區放大並標註 V1／V2 差異項；README_V2 補「仍待確認」（OK 態不判新舊、單一資料日是否暗示各維共用 as_of、9004／9005 展開相同屬刻意、過期 9 天為夾具）。V1 檔案未動；仍不得併入正式 New UI2、待使用者 Visual 確認。
