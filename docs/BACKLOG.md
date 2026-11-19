@@ -2998,3 +2998,25 @@
 
 ## 2026-11-19 NUI2-TARGET-LOOKUP-VISUAL-PROTOTYPE V2 候選（DEC-204；append-only；非 QA PASS；單組作者環境）
 - V2 候選已交付 Draft PR（#1199 comment 7003017605 授權），待**使用者最終 Visual 確認**；不得合併進正式 New UI2。正式接線三 Gate（個股權利／PIT／Schema → L3 lookup service contract → OneBrain）仍 HOLD，未授權。
+
+## 2026-11-19 LOOKUP-MVP｜DG-PIT＝B＋X、DG-LIC＝A 決議入庫與阻擋清單（DEC-205；docs-only；append-only；非 QA PASS；單組作者環境）
+授權：#1199 comment 7007425153（使用者方案②；限定射程見 DEC-205）；前序 PREGATE NO-GO：comment 7006417845。基準 main `f1f199e5`。
+
+- **狀態更新（不倒改舊列）**：`DG-PIT` → **使用者已決 B＋X（僅限定射程；不證明季度 PIT 通過）**；`DG-LIC` → **使用者已決 A（取證）；權利 Gate 仍 HOLD**，待逐資料集 A／B／C 三層證據。`I1144-WIRING-GATE`、DEC-185 三 workflow 停用、其餘 HOLD 皆**不變**。
+- **LOOKUP-MVP-L3-CONTRACT-CANDIDATE（B 線，DONE 為文件）**：`docs/vnext/LOOKUP_MVP_L3_CONTRACT_CANDIDATE_2026-11-19.md`；NO CODE。結論：headless 邊界 **NO-GO**。
+- **HEADLESS-MVP-IMPLEMENTATION（待另送的 Decision Gate，未提出、未授權）**：證據達標前不得施工；不得因有原型或資料集授權標示自行施工。
+- **阻擋清單與 owner**：
+
+| ID | 阻擋 | owner |
+|---|---|---|
+| LOOKUP-MVP-DGLIC-EVIDENCE | 官方資料集唯讀取證：data.gov.tw 91998（上市一般業）、94865（上櫃一般業）、政府資料開放授權條款第 1 版；逐資料集 A／B／C；資源連結 `mopsfin.twse.com.tw` 之適用；顯名／自動化存取限制 | **Work**（唯讀，不下載本體；NV 者回報所需最小授權） |
+| LOOKUP-MVP-FIELD-VERIFY | 欄位／單位／年度累計 vs 當季／`出表日期` 語意／最新季與修訂紀錄 | **Work** |
+| LOOKUP-MVP-DGPIT-QUARTERLY | 季度別 PIT／修訂語意具名審核 | Work 取證＋總管 |
+| LOOKUP-MVP-L3-SCHEMA | 「4 碼→最新一期一般業財報事實」L3 契約裁示（候選見上列文件） | **B 提候選**；總管＋使用者裁示 |
+| LOOKUP-MVP-STORAGE | 資料入庫／儲存位置（不得新增公開 repo data cache） | Decision Gate |
+| LOOKUP-MVP-G2F | G2F allowlist／UI2 接線／Visual Gate | Decision Gate |
+| LOOKUP-MVP-LOCAL-MOPS-RIGHTS | 本地 MOPS 季快照（`data_cache/fundamentals/**`）自身權利 NV：在 5 檔授權矩陣之外，條款一律 NOT VERIFIED；該路徑技術上可為純讀薄層，但被此項＋無公告日＋累計口徑＋Schema＋G2F 阻擋（契約候選 §6 B7） | Decision Gate（DG-LIC 取證範圍須納入） |
+| LOOKUP-MVP-FIN-91995 | 91995 金融業綜合損益表（異構欄位）**另 Schema**，不與一般業混合 | Decision Gate（本批排除） |
+
+- **不做**：新 fetch／下載、新定期監控、改 cache、動 workflow／Secrets／Cloud、`src/ui2`／G2F、OneBrain、價格／籌碼／估值／產業欄位。
+- **NOT VERIFIED**：官方資料集頁面內容（B 線未獨立查證）；非作者 QA、exact-head CI、main CI。
