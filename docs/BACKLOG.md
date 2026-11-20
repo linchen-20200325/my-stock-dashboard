@@ -3125,7 +3125,7 @@
 
 > 以上不暗示任何 Gate 已解除或任何接線／UI 施工已授權；G-F1／G-F2、Stage F／G、Digest v2／OB-1-D3、官方詢問草稿 v2（HOLD）、#1237（HOLD）、#1107 Cloud NV 均維持原狀。
 
-## 2026-11-20｜B-UI2-STALE-COPY-1 登記（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-214 與 #1199 comment 7040889025（GPT 總管裁示，方案 B）／7040812331（調查）；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫）
+## 2026-11-20｜B-UI2-STALE-COPY-1 登記（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-214 與 #1199 comment 7040889025（總管裁示，方案 B）／7040812331（調查）；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫）
 
 > **狹義文案 bug fix（顯示層）；Real 僅 `?ui2_dev=1`，使用者價值有上限。** 以下狀態為登記當下，外部驗收一律 NOT VERIFIED。
 
