@@ -1640,3 +1640,10 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - 注意：改 `src/ui2/**` 或 `measure_viewport.py` 要重生四份 DEC-137 存證（`source_hash` 變）；Real 🗂 存證現含 `expanded` 展開量測欄位（測試鎖定）。`SHOWN_FOLDS` 現為 4 項（含 `("p4_data","data_freshness_items")`，僅 Real 軸有該區塊）；`WIRED_PATHS` 對 🗂 為首屏 4＋明細 2 個精確 tuple（索引 0＝twii、6＝regime）。**兩處皆為客戶特定例外**，勿以此為由放寬其他頁／其他 section／wildcard。
 - 未接六項（外資、融資、M1B／M2、PMI、板塊、基本面）仍是既有 `⬜ 尚未提供`；接線屬 `I1144-WIRING-GATE`／DG-*，本 PR 不碰。
 - **Active Work Ledger**：見 #1199 Active Work Ledger v1（總管另貼 comment）；本檔與 BACKLOG 新登記 ID：`B-UI2-W3P1`、`C-OB-USABLE`、`A-FIX-CONTINUITY`、`WORK-UI2-CLOUD-DELTA`、`WORK-OB-USABILITY-DELTA` 與三個殘留項 `UI2-RESID-NAN-DUP-NAT-GATE`、`LEGACY-MACROV2-TWII-DUP-DATE`、`LEGACY-CHART-A-GREY-WORDING`（後三者**待 Decision Gate，未施工，不得宣稱已修**）。詳見 BACKLOG 2026-11-20 Active Work Ledger 登記段。
+
+
+## 2026-11-20 W3-P1／C-OB-USABLE 合併後閉環（純文件 PR；DEC-210；append-only；非 QA PASS）
+- 現況（依總管派工訊息）：main＝`52b628e6214732a5fdfaa49ff65570f702ba2390`（#1234 W3-P1，三組非作者 QA PASS、五項 CI run 44650159846 success）；前一個合併為 `401bcd4f`（#1233 C-OB-USABLE，兩組非作者 QA PASS、main push run 44647887409 success）。本分支 `b-docs-w3p1-closure-followup` 是純文件 Draft PR（無 `src/`／`tests/`／viewport JSON／fixture 變更）。Open PR 狀態以 GitHub 實查為準（寫稿時除本 PR 外為 0）。
+- Active Work Ledger v1 見 #1199（總管另貼；本檔不編 comment id）。
+- **下一步**：(1) **Work**：`WORK-UI2-CLOUD-DELTA`——對可辨識的新部署版本唯讀驗 🗂 Real 八項收合明細、FAKE 無外洩、two-wire／six-unwired、位階互斥狀態／日期、390／1440 展開／首屏；部署 SHA 不可辨識＝NV，不宣 PASS。(2) **C 線**：下一個最小 Gate（推論，非授權）＝客戶核准「rule-only 摘要掛入 UI2 FAKE feed」＋UI 線框草稿＋登記 `ALLOWED_CALLERS`；`WORK-OB-USABILITY-DELTA` 仍 NOT TESTABLE AT RUNTIME。(3) **A 線**：#1199 comment 7014878496 的**五項**殘留（見 BACKLOG 2026-11-20 閉環補登段；1 NaN＋重複混合列／NaT、2 重複＋未來日優先序、3 legacy 圖 A 用詞＋`macro_v2_service.get_twii_ohlc` 不偵測重複日、4 #1230 規格小修訂、5 D2／D3／G-6～G-9）全部待 Decision Gate，未施工。
+- 注意：DEC-209 的 `last_content_bottom` −56 說明已更正（頁面總高 +56，1698→1754；捲到底座標位移，非版面變矮）；調整「各項明細」位置（`UI2-DATA-ITEMS-POSITION-1`）屬版面異動，須線框草稿先行，待決策不施工。
