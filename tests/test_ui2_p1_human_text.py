@@ -39,7 +39,7 @@ ENGINEERING_VOCAB: tuple[str, ...] = (
     "規則分支", "DEC-", "traceback", "Traceback", "Exception", "src.", ".py", "詳見 log", "fake data",
     # QA 追加（P3）：FAKE microtag／內部場景用語
     "scenario", "ASOF", "冷啟動", "占位", "placeholder", "FAKE·",
-    # B-UI2-STALE-COPY-1（DEC-213）：L1 `compute_cache_staleness` 過期說明句的工程字樣（資料集檔名／門檻）不得上畫面。
+    # B-UI2-STALE-COPY-1（DEC-214）：L1 `compute_cache_staleness` 過期說明句的工程字樣（資料集檔名／門檻）不得上畫面。
     # 假陽性量測（改動前）：FAKE 五頁×全場景、Real 九組 snapshot×五頁、AppTest 渲染皆 0 命中。
     "twii_ohlcv", "門檻", "parquet",
 )
@@ -413,7 +413,7 @@ def test_expander_labels_have_no_text_arrow_prefix_streamlit_draws_its_own():
         assert all(not lb.lstrip().startswith("▸") for lb in labels), (page, labels)
 
 
-# ══════════════════════════════════════════════════════════════════ B-UI2-STALE-COPY-1（DEC-213）
+# ══════════════════════════════════════════════════════════════════ B-UI2-STALE-COPY-1（DEC-214）
 # 台股卡與日 K 的 Real 詳情不得原樣輸出 L1 `stale_reason`（資料集檔名／門檻字樣）。
 # 守衛用**真 L1 字串**（`REAL_L1_STALE_REASONS`，逐字取自 `compute_cache_staleness`），不是手寫人話版。
 _L1_JARGON = ("twii_ohlcv", "門檻", "daily", "parquet")

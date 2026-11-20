@@ -128,7 +128,7 @@ class TwiiFact:
 
     錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示固定說明句（型別名只留 snapshot 內部代碼），全文只 log
     （NUI2-REALFEED-ERROR-SCRUB 收斂：避免 token／路徑上畫面）。`stale_reason` 為 L1 依規則產生的說明句（非錯誤原文），
-    但含資料集檔名／門檻等工程字樣：**只留在 fact 供稽核，⛔ 上畫面**（B-UI2-STALE-COPY-1，DEC-213）。
+    但含資料集檔名／門檻等工程字樣：**只留在 fact 供稽核，⛔ 上畫面**（B-UI2-STALE-COPY-1，DEC-214）。
     """
 
     ok: bool
@@ -460,7 +460,7 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
     last = t.close[-1]
     # B2：依三態分流文案；⛔ 不再把所有空抓取都稱為「抓取失敗」。upstream_state 為空但 has_upstream_error（舊事實）→ 失敗句。
     _up_text = _upstream_state_text(t.upstream_state) or (_UPSTREAM_ERROR_TEXT if t.has_upstream_error else "")
-    # B-UI2-STALE-COPY-1（DEC-213）：⛔ `t.stale_reason`（L1 工程說明句，含資料集檔名／門檻字樣）不進畫面；
+    # B-UI2-STALE-COPY-1（DEC-214）：⛔ `t.stale_reason`（L1 工程說明句，含資料集檔名／門檻字樣）不進畫面；
     # 過期天數由 `stale_text(stale_days)` chip 呈現、資料日與來源由 freshness 列呈現。`stale_reason` 只留在 fact 供稽核。
     notes = [x for x in (_up_text,) if x]
     spec = {**base, "value": f"{last:,.2f}"}
@@ -542,7 +542,7 @@ def kbar_chart_spec(snap: RealFeedSnapshot) -> dict | None:
     notes = [KBAR_PARTIAL_FMT.format(n=len(candles), target=KBAR_VISIBLE_BARS)] if len(candles) < KBAR_VISIBLE_BARS else []
     # 新鮮度字樣與 TWII 卡同一套（twii_card_spec）：Stale 照畫（真歷史但舊），⛔ 當 fresh。
     _up_text = _upstream_state_text(k.upstream_state) or (_UPSTREAM_ERROR_TEXT if k.has_upstream_error else "")
-    # B-UI2-STALE-COPY-1（DEC-213）：同台股卡——⛔ `k.stale_reason` 原句上畫面（只留 fact）。
+    # B-UI2-STALE-COPY-1（DEC-214）：同台股卡——⛔ `k.stale_reason` 原句上畫面（只留 fact）。
     fresh_notes = [x for x in (_up_text,) if x]
     field = {**base, "value": f"{k.closes[-1]:,.2f}"}
     if k.is_stale is True:

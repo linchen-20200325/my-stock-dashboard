@@ -10929,8 +10929,22 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI；突變為作者端單組。本批綠燈**不得**用來放行 Stage F，也**不得**據此宣稱 OneBrain 已可用或 Top-N 風險已修。
 - **編號**：origin/main（3163e49d）已用至 DEC-211；本批 DEC-212；合併時若被佔則順延。
 
+### DEC-213｜C-OB-BREADTH-FORWARD-GATE：完整 eligible evidence 驗收準則候選（docs-only；方案 B；#1199 comment 7040939424 決策 1／2 授權；脈絡 #7040656318／#7037529004；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
 
-### DEC-213｜B-UI2-STALE-COPY-1：UI2 Real 台股卡與日 K 不再原樣輸出 L1 `stale_reason`（方案 B；#1199 comment 7040889025 唯一工程授權；脈絡 #7040812331；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
+> **docs-only 候選；不阻止截斷、不使 OneBrain 可用、不放行 Stage F。**
+
+- **授權依據**：總管裁示 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7040939424 決策 1（術語正式採用）、決策 2（方案 B：驗收準則候選＋附錄 A）；來源研究 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7040656318 與 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7037529004 。
+- **範圍（只有三樣）**：(1) 新增 `docs/vnext/ONEBRAIN_FULL_ELIGIBLE_EVIDENCE_ACCEPTANCE_CRITERIA_CANDIDATE_2026-11-20.md`；(2) 本 DEC；(3) `docs/BACKLOG.md` 補登一段（沿用 `OB-ASSEMBLER-FULL-INPUT-INVARIANT`，不立新 ID）。**零變更**：`src/**`、`shared/**`、`tests/**`、`scripts/**`、`app*.py`、UI2、baseline／allowlist、workflow、`data_cache`、`ALLOWED_CALLERS`、`OFFLINE_SHADOW_MODULES`、`BREADTH_PROXY_SCORING_ENABLED`、Secrets、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`、既有 DEC／BACKLOG 任何一字、官方詢問草稿 v2。
+- **決策 1：術語正式採用**——「雙側／對稱截斷」＝同一完整 eligible 母集衍生的 `station_rows` 與 `holdings_rows` 同時被一致縮減，使現有互相對帳計數相等卻誤報 `is_complete=True`。非「支持／反對」正反證兩側；撰寫當日 repo 內無既有定義。
+- **G1／G2 分級摘要**：新文件列 I1–I7。**G1**（文件／測試等級候選，不動 runtime／契約；仍需另行指派才可寫 tests）＝I1 完整母集來源、I2 兩通道各自導出、I4 禁止預過濾（invalid／unkeyed）；**G2**（涉及 schema／validator／簽章／Digest v2／L0 freshness／新 caller／持股，須使用者獨立授權，本文不決定，僅列未核准 Gate）＝I3 獨立母集計數 `expected_*`、I5 `is_complete` 只能證偽不能證明（含 `ProviderRequest` 變更）、I7 正反證雙側；I6 列層級 as_of／代表 stamp＝**未決（G2 邊界）**，不定義。
+- **反例結論**：僅單側截斷時，現有雙向對帳能擋；**擋不住對稱截斷**，以及**「station 與 holdings 兩通道同時預濾、且濾後 eligible ≤ `MAX_ACTIONS`」的預過濾**（分組各 Top1〔依 `_action` 分加碼／減碼分組，各取前 1 筆，聯集 2 筆；此「分組」不同於術語「雙側」〕、兩通道同取顯示 Top3、兩通道同時預濾 invalid 或 unkeyed 列，皆使 `is_complete` 由 False 變 True）。只預濾單一通道會被對帳擋下；濾後 eligible 超過上限則仍因 omitted 為 False。non-held 列不在其內（實測有無皆 True、builder 無計數器，I4 不列為保障）。證據為本機原型（非 native pytest、非 production integration QA；腳本未入庫）：〔F〕總管裁示 #7040939424 稱已重現（可於該留言核對）；〔NV〕C 線作者端及非作者 QA 另各自重現一致（待 #1199 回存，回存前不當作已驗事實）。
+- **附錄 A 結論句**：`scripts/publish_data_pr.py::union_parquet_by_date` **不保存逐次擷取的版本歷史（衝突時錯誤訊息會印出舊／新值但不持久化；git 提交歷史以 PR／合併為粒度，不是 vintage log），不能宣稱滿足 PIT**；`available_at`／`published_at` 在 repo **仍未定義**（DEC-070；PROJECT_STATE §10／§20）；`fetched_at` 不得回填為歷史 `available_at`。附錄只比較 historical backfill 與 forward-only 各能聲明什麼，並列出日後（需 DG-PIT 裁示）必須先回答的問題，**不定義**收集政策、主鍵、儲存格式或新欄位。
+- **精確「不是什麼」**：(1) docs-only **不能阻止**任何 caller 傳入被截斷的輸入；(2) **OneBrain 仍 NOT READY**，使用者在畫面上看不到任何 runtime OneBrain 輸出；(3) 正式市場廣度仍 **NOT EVALUATED**；(4) **不放行** Stage F／G，不得引用本批或 #1238 的綠燈作為放行依據；(5) #1238（DEC-212）是 tests-only 契約護欄，**不是**截斷修復；(6) 不凍結 schema、不核准 Digest v2、不新增 production caller。
+- **未解事項（皆未啟動、未授權）**：I3／I5／I6／I7 的客戶 Gate；DG-PIT；DG-LIC；G-F1／G-F2；Stage F／G；Digest v2／OB-1-D3；官方詢問草稿 v2＝HOLD（NO SEND）；#1237＝HOLD；#1107 Cloud 部署版本＝NOT VERIFIED。
+- **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI **均未完成**；本檔單組撰寫；18409／11369 與「OGDL v1 指定資源許可已核證」僅存在於 #1199 留言、尚未入 repo（標「外部提供」，本批不引用為結論）；歷史 PIT、`available_at`、修訂 vintage、母體映射皆 NV。
+
+
+### DEC-214｜B-UI2-STALE-COPY-1：UI2 Real 台股卡與日 K 不再原樣輸出 L1 `stale_reason`（方案 B；#1199 comment 7040889025 唯一工程授權；脈絡 #7040812331；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
 
 > **狹義文案 bug fix（顯示層轉接），不增加資料、不改任何資料契約。** Real 僅 `?ui2_dev=1` 可見，使用者價值有上限。
 
@@ -10946,4 +10960,4 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **測試（作者環境自跑）**：`python -m pytest tests/test_ui2_*.py` 2932 passed／57 deselected／3 xfailed（deselect 為倉庫預設）；細項與全套結果見 PR 描述。headless 模擬 ≠ Streamlit Cloud。
 - **未解鎖／不變**：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、融資／板塊 UI2 接線（BLOCKED）、Cloud deployed SHA（#1107 `NOT VERIFIED`／`BLOCKED_EXTERNAL_AUTH`）、#1237 NAS Draft／HOLD、C 線 OneBrain forward-only PIT、Stage F／G、真 Provider、W8、Risk Cap、Digest v2 皆維持。**不宣稱 Cloud 已驗。**
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI、Cloud 部署畫面；突變與 viewport 皆單組作者環境、未經第二組驗證。
-- **編號**：origin/main（5ea2f5fc）已用至 DEC-212；本批 DEC-213；合併時若被佔則順延。
+- **編號**：作者起點 main 5ea2f5fc 已用至 DEC-212；合併 main 685db89c（#1239）後該號已被 DEC-213 佔用，故本批改編為 DEC-214（有意識的改號，不是漏刪）。
