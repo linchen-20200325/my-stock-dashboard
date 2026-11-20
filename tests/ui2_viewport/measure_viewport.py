@@ -495,7 +495,7 @@ def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
 P3_ALLOWED_EXPANDER_TITLES: dict[str, frozenset[str]] = {
     "p4_market": frozenset(),
     "p4_hold": frozenset(),
-    "p4_data": frozenset(),         # DEC-146：🗂 資料頁不渲染任何 expander
+    "p4_data": frozenset({"各項明細"}),   # DEC-146 原為空；W3-P1（DEC-209，客戶 2026-11-20 同意）：僅 Real 軸的預設收合「各項明細」
     "p4_target": frozenset({"選股條件（收合）"}),
     "p4_me": frozenset({"Audit：Decision Digest", "Audit：Rule Registry（唯讀）"}),
 }
@@ -1049,13 +1049,68 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
             "summary": summary, "results": results}
 
 
+#: W3-P1（DEC-209）：🗂 Real-data Preview「各項明細」展開後量測（預設收合量測不變；本量測為**額外**欄位 `expanded`，不改既有欄位）。
+ITEMS_EXPANDER_TITLE = "各項明細"
+ITEMS_EXPECTED_ROWS = 8
+
+_JS_ITEMS_ROWS = r"""
+() => {
+  const ex = [...document.querySelectorAll('[data-testid="stExpander"]')]
+    .find(e => { const sm = e.querySelector('summary'); return sm && sm.innerText.replace(/\s+/g,' ').includes('各項明細'); });
+  if (!ex) return null;
+  const rows = [...ex.querySelectorAll('.ui2-row')];
+  const r = ex.getBoundingClientRect();
+  const d = ex.querySelector('details');
+  return {open: d ? d.open : null, box: {top: r.top, bottom: r.bottom, height: r.height, left: r.left, right: r.right},
+          rows: rows.map(e => e.innerText.replace(/\s+/g,' ').trim()),
+          row_labels: rows.map(e => { const l = e.querySelector('.ui2-row__label'); return l ? l.innerText.trim() : ''; })};
+}
+"""
+
+
+def measure_items_expanded(page, vw: int, vh: int) -> dict | None:
+    """🗂 資料頁：點開「各項明細」→ 量展開後的內容高度／橫向捲動／列數與逐列文字 → 再收合（⛔ 影響之後的量測）。
+    頁上沒有該 expander（例：降級頁以外的 FAKE 軸）→ None。"""
+    before = page.evaluate(_JS_ITEMS_ROWS)
+    if before is None:
+        return None
+    summary = page.locator('[data-testid="stExpander"] summary', has_text=ITEMS_EXPANDER_TITLE)
+    summary.scroll_into_view_if_needed()
+    summary.click()
+    page.wait_for_timeout(350)
+    m = measure_state(page, vw, vh)
+    after = page.evaluate(_JS_ITEMS_ROWS)
+    line = _nav_line(m)
+    se = m.get("scroll_end_bottom")
+    h = m["hscroll"]
+    out = {"collapsed_before": before["open"] is False, "open": after["open"], "expander_box": {k: round(v, 1) for k, v in after["box"].items()},
+           "row_count": len(after["rows"]), "row_labels": after["row_labels"], "rows": after["rows"],
+           "last_content_bottom": round(m["last_content"]["bottom"], 1),
+           "scroll_end_bottom": round(se, 1) if se is not None else None,
+           # 手機才有底部保留線（桌機導覽在頂部，`_nav_line` 對桌機無意義）→ 桌機 None
+           "scroll_end_gap_to_nav": round(line - se, 1) if (vw <= MOBILE_MAX_W and line is not None and se is not None) else None,
+           "hscroll": {k: {"scrollWidth": h[k]["scrollWidth"], "clientWidth": h[k]["clientWidth"]} for k in ("doc", "main")}}
+    summary.click()          # 還原預設收合
+    page.wait_for_timeout(250)
+    fails = []
+    if out["open"] is not True:
+        fails.append("展開後 details.open 不是 True")
+    if out["row_count"] != ITEMS_EXPECTED_ROWS:
+        fails.append(f"展開後列數 {out['row_count']} != {ITEMS_EXPECTED_ROWS}")
+    for k in ("doc", "main"):
+        if h[k]["scrollWidth"] > h[k]["clientWidth"] + 0.5:
+            fails.append(f"展開後橫向捲動 {k}: {h[k]['scrollWidth']} > {h[k]['clientWidth']}")
+    out["failures"] = fails
+    return out
+
+
 def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
               streamlit_version: str | None) -> dict:
     """Real-data Preview（NUI2-REAL-FEED A3）：每 viewport 四頁＋🎯 查一檔模式；手機市場頁加壓力態。"""
     from playwright.sync_api import sync_playwright
 
     from shared.ui2_contract.pages import (
-        FEED_REAL, MODE_LABELS, MODE_LOOKUP, P4_MARKET, P4_TARGET, PAGE_LABELS, PAGE_IDS, SCENARIO_REAL,
+        FEED_REAL, MODE_LABELS, MODE_LOOKUP, P4_DATA, P4_MARKET, P4_TARGET, PAGE_LABELS, PAGE_IDS, SCENARIO_REAL,
     )
     from src.ui2.shell.app import _FEED_LABELS
 
@@ -1075,6 +1130,12 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                                        mode="curated" if pid == P4_TARGET else None, feed="real"))
                 if out is not None and shots != "none":
                     _screenshot(page, out / f"{vp_name}_{pid}_real.png")
+                if pid == P4_DATA:           # W3-P1：展開「各項明細」後再量一次（額外欄位；既有收合量測不變）
+                    exp = measure_items_expanded(page, vw, vh)
+                    results[-1]["expanded"] = exp
+                    if exp is None or exp["failures"]:
+                        results[-1]["failures"] = {**results[-1]["failures"], "items_expanded": ["無明細 expander"] if exp is None else exp["failures"]}
+                        results[-1]["pass"] = False
                 if pid == P4_MARKET and vw <= MOBILE_MAX_W:
                     results.append(_record_stress(page, vp_name, vw, vh, SCENARIO_REAL, feed="real"))
                 if pid == P4_TARGET:

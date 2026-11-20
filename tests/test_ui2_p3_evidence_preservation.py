@@ -48,7 +48,8 @@ APP_UI2 = ROOT / "app_ui2.py"
 BASELINE = ROOT / "tests" / "fixtures" / "ui2_p3_evidence_baseline.json"
 
 #: 客戶核准保留的 L2／L3 expander（獨立於被測的 `_page.SHOWN_FOLDS`，避免 mutation 時檢查器跟著被改）。
-EXPECTED_SHOWN_FOLDS = frozenset({("p4_target", "conditions"), ("p4_me", "digest"), ("p4_me", "registry")})
+EXPECTED_SHOWN_FOLDS = frozenset({("p4_target", "conditions"), ("p4_me", "digest"), ("p4_me", "registry"),
+                                  ("p4_data", "data_freshness_items")})     # W3-P1（DEC-209）：客戶特定例外，僅 Real 軸
 
 #: 舊 T_new_1b 的原文（保留供追溯；已被本檔取代，見檔頭）。
 OLD_T_NEW_1B_ASSERTION = '[s.section_id for s in vm.context.sections if s.level in ("L2", "L3")] == []'
@@ -335,7 +336,8 @@ def _go(a, page):
 
 def _allowed_titles(page: str) -> set[str]:
     out: set[str] = set()
-    for vm in (get_preview_page_vm(page, "loaded"),):
+    # W3-P1（DEC-209）：🗂「各項明細」只在 Real 軸有，故允許標題的來源併入 Real 'loaded' VM（FAKE 軸仍零；非白名單者照舊不允許）。
+    for vm in (get_preview_page_vm(page, "loaded"), get_real_page_vm(page, _snapshots()["loaded"])):
         secs = list(vm.context.sections) + (list(vm.context.target.lookup.sections) if vm.context.target else [])
         out |= {s.title for s in secs if (page, s.section_id) in EXPECTED_SHOWN_FOLDS}
     return out
@@ -409,7 +411,8 @@ def test_whitelist_is_exactly_the_documented_set():
     assert _page.SHOWN_FOLDS == EXPECTED_SHOWN_FOLDS
     # 白名單裡的每一項都對得到真實存在的 L2／L3 section（不是死項目）
     for page, sid in _page.SHOWN_FOLDS:
-        vm = get_preview_page_vm(page, "loaded")
+        vm = (get_real_page_vm(page, _snapshots()["loaded"]) if (page, sid) == ("p4_data", "data_freshness_items")
+              else get_preview_page_vm(page, "loaded"))      # W3-P1：僅 Real 軸有；FAKE 軸另由 test_ui2_data_freshness_items_w3p1 鎖定「無」
         assert any(s.section_id == sid and s.level in ("L2", "L3") for s in vm.context.sections), (page, sid)
 
 
@@ -457,9 +460,9 @@ def test_viewport_checker_allowed_titles_match_the_pytest_whitelist_and_the_view
     from tests.ui2_viewport import measure_viewport as MV
     derived: dict[str, set[str]] = {p: set() for p in PAGE_IDS}
     for page in PAGE_IDS:
-        vm = get_preview_page_vm(page, "loaded")
-        secs = list(vm.context.sections) + (list(vm.context.target.lookup.sections) if vm.context.target else [])
-        derived[page] = {s.title for s in secs if (page, s.section_id) in EXPECTED_SHOWN_FOLDS}
+        for vm in (get_preview_page_vm(page, "loaded"), get_real_page_vm(page, _snapshots()["loaded"])):   # W3-P1：併入 Real 軸
+            secs = list(vm.context.sections) + (list(vm.context.target.lookup.sections) if vm.context.target else [])
+            derived[page] |= {s.title for s in secs if (page, s.section_id) in EXPECTED_SHOWN_FOLDS}
     assert {p: set(v) for p, v in MV.P3_ALLOWED_EXPANDER_TITLES.items()} == derived
     assert _page.SHOWN_FOLDS == EXPECTED_SHOWN_FOLDS
 

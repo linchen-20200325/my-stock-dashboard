@@ -1527,3 +1527,12 @@
 - **G-1(b) 範圍**：僅 New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險灰態 chip（`⬜ 尚未載入，請按更新` → `⬜ 尚未載入`）。`RISK_SENTENCE_NOT_LOADED` 常數、Legacy `_market_blocks.py`、其他場景與 Real 不變。UX-1 完成（含此單一例外）；**G-4 DEFER**；A11Y-F4 未決。
 - **未動**：`_me_account_variant`／帳戶 VM／Real 軸、disabled CTA／`disabled_reason`／`⬜ 尚未載入` chip／FAKE banner／四問、資料來源、Risk Cap、搜尋啟用、canonical 字串。
 - **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、main CI、Cloud deployed SHA（390／1440 為 headless 模擬量測，非 Cloud）。
+
+
+## 86. UI2 W3-P1：🗂 Real-data Preview 預設收合「各項明細」（2026-11-20；DEC-209；只追加；非 QA PASS；單組作者環境）
+- 分支 `b-ui2-w3p1-freshness-items`（base origin/main 273da902）、Draft PR #1234。授權＝客戶「同意」（#1199 comment 7025346343；**GPT 總管對客戶直接回答的轉錄，非原生客戶留言**）＋總管技術限縮 7025269520／方案 A 7024073040／排序 7021701891。
+- 改：`src/services/ui2/{data_page,real_canonical,vm_common}.py`、`src/ui2/views/_page.py::SHOWN_FOLDS`（＋`("p4_data","data_freshness_items")`）、`tests/ui2_viewport/measure_viewport.py`（`P3_ALLOWED_EXPANDER_TITLES["p4_data"]`＋Real 🗂 展開後量測）、`tests/test_ui2_real_feed.py::WIRED_PATHS`（＋`sections/data_freshness_items/0`、`/6` 兩個精確 tuple）、`EXPECTED_SHOWN_FOLDS`、P3 baseline（87 key 僅 9 個 `real/p4_data/*` 新增 section；sha256 `e39cd203…`）、DEC-137 四份 viewport 存證（`source_hash` `d21f0e64…`）；新增 `tests/test_ui2_data_freshness_items_w3p1.py`（529）。
+- 行為：僅 Real 軸；八項固定順序（台股加權指數、外資買賣超、融資餘額、M1B／M2、台灣 PMI、板塊資金流、市場位階、基本面季報）；僅 twii（索引 0）／regime（索引 6）轉述同一份 snapshot 既有 spec，其餘六項既有 `⬜ 尚未提供`；首屏四列／免責／Q3／CTA 一字不動；D-5 不改；R1～R3。FAKE 軸 0 真值。
+- **未動**：`real_feed.py`、L1／L3 欄位、G2／G2F／G4B、D-5 `regime_label_residue`、原四個首屏 allowlist、Old UI、其他頁、新資料來源／投資訊號／登入／Risk Cap／cron／OneBrain／Secrets／workflow；G-4 DEFER 不變。
+- **NOT VERIFIED**：非作者 QA、PR 最新 head 五項原生 CI、0 unresolved threads、main push CI；Cloud deployed SHA 與 🗂 實機 390／1440（headless 模擬 ≠ Cloud）。不得標 DONE。
+- **編號**：origin/main（273da902）已用至 DEC-208／§85；本批 DEC-209／§86；合併時若被佔則順延。

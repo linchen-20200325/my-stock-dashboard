@@ -546,3 +546,6 @@
 - **重算皆唯讀**：`compute_cache_staleness`、`assess_daily`、缺日比對、`metadata.json` 與 parquet 欄位檢視；沙箱無外網，**未對外部真值做對帳**。
 - 本機驗證（commit 前）：三個 docs 測試、`scrub_secrets`／`scrub_prose_secrets` 零改寫、markdown-it-py 渲染表格完整、`git grep` 自證所有引用檔名／ID 存在——結果記於 Draft PR 描述。
 - 單組撰寫；**獨立 QA 待做**；遠端 CI 待跑。本文不是 QA PASS，也不是授權。
+
+
+> 📌 **2026-11-20 指向性註記（DEC-209；append-only，上文一字未動）**：本檔／本節所述「`SHOWN_FOLDS` 現僅 3 個預設收合區、🗂 無」是 2026-11-12／13 當時事實。客戶已於 2026-11-20 回覆「同意」（#1199 comment 7025346343；GPT 總管轉錄）解除 Stage-2：🗂 **僅 Real 軸**新增一個預設收合「各項明細」，`SHOWN_FOLDS` 現為 4 項（客戶特定例外，非全域解凍）。見 `docs/DECISIONS.md` DEC-209。

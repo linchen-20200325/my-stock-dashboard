@@ -47,7 +47,8 @@ def field_from_spec(spec: Spec) -> FieldVM:
     if hint not in SPEC_STATE_HINTS:
         raise ValueError(f"{label}: 未知 state 提示 {hint!r}（允許 {sorted(map(str, SPEC_STATE_HINTS))}）")
     if hint == "unavailable":
-        return FieldVM(label, FieldState.UNAVAILABLE, None, TEXT_UNAVAILABLE, detail, fresh)
+        # `sub_reason` 只在呼叫端明示時採用（FieldVM 仍強制其必須以 `TEXT_UNAVAILABLE` 開頭；W3-P1 明細列用既有「…或資料異常」）。
+        return FieldVM(label, FieldState.UNAVAILABLE, None, spec.get("sub_reason") or TEXT_UNAVAILABLE, detail, fresh)
     if hint == "not_evaluated":
         return FieldVM(label, FieldState.NOT_EVALUATED, None,
                        spec.get("sub_reason") or TEXT_NOT_EVALUATED, detail, fresh)
@@ -62,8 +63,9 @@ def field_from_spec(spec: Spec) -> FieldVM:
                   else TEXT_MISSING_NOT_FETCHED)
         return FieldVM(label, FieldState.MISSING, None, status, detail, fresh)
     if hint == "stale":
+        # 同上：`sub_reason` 明示時採用（須以「⚠ 過期」／「⚠ 可能已過期」開頭，否則 FieldVM raise）；預設走 `stale_text`。
         return FieldVM(label, FieldState.STALE, str(value),
-                       stale_text(spec.get("stale_days")), detail, fresh)
+                       spec.get("sub_reason") or stale_text(spec.get("stale_days")), detail, fresh)
     return FieldVM(label, FieldState.OK, str(value), None, detail, fresh)
 
 
