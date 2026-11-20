@@ -3069,7 +3069,7 @@
 
 ## 2026-11-20｜W3-P1／C-OB-USABLE 合併後閉環補登（只追加；不改既有列〔僅上方以刪除線更新狀態與更正編號〕；依據 `docs/DECISIONS.md` DEC-210；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫）
 
-> 狀態更新（依總管派工訊息）：`B-UI2-W3P1`＝**已合併 #1234（`52b628e6`）**，Cloud deployed SHA／實機 NV，Work 增量驗收待（`WORK-UI2-CLOUD-DELTA`）——前段表內「ACTIVE（Draft PR）」為當時狀態，不改原列；`C-OB-USABLE`＝**#1233 已合併（`401bcd4f`）**，為 tests/ 離線 CLI 示意（非 UI／非 runtime），UI2 OneBrain 仍空殼，`WORK-OB-USABILITY-DELTA` 結論仍為 NOT TESTABLE AT RUNTIME；下一個最小 Gate＝客戶核准「rule-only 摘要掛入 UI2 FAKE feed」＋UI 線框草稿＋登記 `ALLOWED_CALLERS`（**推論，非授權**）。Active Work Ledger v1 見 #1199（不編 comment id）。
+> 狀態更新（依總管派工訊息）：`B-UI2-W3P1`＝**已合併 #1234（`52b628e6`）**，Cloud deployed SHA／實機 NV，Work 增量驗收待（`WORK-UI2-CLOUD-DELTA`）——前段表內「ACTIVE（Draft PR）」為當時狀態，不改原列；`C-OB-USABLE`＝**#1233 已合併（`401bcd4f`）**，為 tests/ 離線 CLI 示意（非 UI／非 runtime），UI2 OneBrain 仍空殼，`WORK-OB-USABILITY-DELTA` 結論仍為 NOT TESTABLE AT RUNTIME；~~下一個最小 Gate＝客戶核准「rule-only 摘要掛入 UI2 FAKE feed」＋UI 線框草稿＋登記 `ALLOWED_CALLERS`（**推論，非授權**）~~（📌 2026-11-20 有意識的更正，不是漏刪：客戶設計確認 #7030418754＋總管 #7032645702 §2 已授權「FAKE 靜態規則摘要節錄」，且靜態字面**不需**登記 `ALLOWED_CALLERS`；見下方 `C-OB-UI-FAKE-A1`／DEC-211。舊句理由〔掛入須 caller＋守衛白名單〕對「即時呼叫」仍成立，只是本次做的是靜態字面）。Active Work Ledger v1 見 #1199（不編 comment id）。
 
 | ID | 標題與事實 | 狀態 | 解阻 Gate／下一步 |
 |---|---|---|---|
@@ -3089,3 +3089,15 @@
 | 5 | D2／D3、G-6～G-9 維持 OPEN 登記、不施工 | 既有登記（見 DEC-207 與 #1199 Active Work Ledger v1）；本檔不另立新 ID | OPEN，不施工 |
 
 > 備註：新登 ID 皆已於落盤前 `git grep` 確認 0 命中；若總管有正式 ID，以正式 ID 為準並於本段加註對照（不改原列）。
+
+## 2026-11-20｜C-OB-UI-FAKE-A1 實作登記＋B-PREVIEW-VERSION-DEFER（只追加；不改既有列〔僅上方以刪除線更正一句〕；依據 `docs/DECISIONS.md` DEC-211；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫）
+
+> 授權：#1199 comment 7032645702 §2（客戶設計確認 #7030418754；前置調查 #7030563831 C 表 A1）；B 線裁示見 comment 7033108095。以下狀態為登記當下，外部驗收一律 NOT VERIFIED。
+
+| ID | owner | 標題與事實 | 狀態 | 下一步／解阻 |
+|---|---|---|---|---|
+| **C-OB-UI-FAKE-A1** | Claude C | 👤「Audit：Decision Digest」既有收合區，**只在 FAKE Preview** 顯示一份**固定、匿名合成、只讀的靜態規則摘要節錄**（字面常數在 `src/services/ui2/scenarios.py`；首列「示意：合成資料／固定規則摘要節錄；非即時 OneBrain；非投資建議」＋「節錄，並非完整摘要」；6 句 ⬜ 缺值句；**省略** Risk Cap／本期行動／市場位階燈號健康度／資料日）。`tests/test_ui2_digest_excerpt_parity.py` 以 #1233 同一份合成 evidence 現算 `build_rule_summary` 逐字比對。**不是 OneBrain runtime**：不新增 expander、Real 保持原空槽、`ALLOWED_CALLERS=∅`、Stage F／G 關閉、無 production Digest import／caller | **已實作於 Draft PR（待 QA／CI／merge；非 DONE）** | 兩組非作者 QA、exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI；新 FAKE Audit 畫面由 `WORK-OB-UI-DELTA` 驗**一次差額**（Cloud 部署版本需可辨識，否則 NV）。**真正「從完整 Digest 取證並在 UI 執行」仍須另開單一 caller 的 Stage F、coverage、安全與正式 UI Gate，未開啟** |
+| **B-PREVIEW-VERSION-DEFER** | Claude B | 🗂「程式版本」列（原 `B-UI2-VERSION`／`B-PREVIEW-USABLE`）因需放寬 G4B（`ALLOWED_CALLERS` 之外的 UI2 守衛例外）而 STOP；總管裁示**暫緩**（#1199 comment 7033108095；G4B 零變更） | **DEFER**（無 PR、未改任何共享檔） | **trigger**＝Cloud 上有**已驗證的部署版本證據**／受核准的 immutable build identity，且可**可靠傳至 runtime**。⛔ 不得改採：L5 自讀 `.git`、GitHub API 查 `main`、硬編已合併 SHA、憑 branch 推算。**A′**（新增 L3 `program_version_service`＋G4B 例外由一對擴為兩對）**已正式暫緩、不重問**。Work 只能以**功能指紋**（🗂 有「各項明細」＝≥ #1234）判定版本，**不得冒充精確 SHA**；Ledger 以本列為準 |
+| WORK-OB-UI-DELTA | Work OneBrain | 本 PR 合併後，對新 FAKE Audit 畫面驗**一次**新 UI 差額（#1233 CLI 已 PASS，**不重跑**）；真 runtime／caller 未來另驗 | NOT STARTED（待 C-OB-UI-FAKE-A1 合併＋部署可辨識） | 不得宣稱 OneBrain 已可 runtime 使用 |
+
+> 備註：`OB-1-D3`、stale／fetch_failed 的摘要未區分缺口**仍 OPEN／Gate-needed**——節錄刻意只用不含該缺口的 6 句；若日後要展示 stale／fetch_failed，必須明示「摘要內文未區分過期與尚無輸入／抓取失敗」。DEC-211 已登記 `C-OB-UI-FAKE-A1` 的三個殘留決策點（OK 態承載 ⬜ 句、第二個新字串、示意聲明的視覺醒目度），皆**待評估，不施工**。

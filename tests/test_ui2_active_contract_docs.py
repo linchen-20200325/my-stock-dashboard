@@ -697,7 +697,9 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
 #: （「按 🚀 更新後載入（FAKE 示意）」→「FAKE 示意：尚未載入」；📊／💼 cold 下一步 override 刪除 → 既有 capability 欄）。舊值 fedfa62d…cb2a6。
 #: DEC-209（W3-P1，2026-11-20，客戶同意）重生：僅 `real/p4_data/*` 九個 Real 狀態**新增**區塊 `data_freshness_items`（evidence 只增不減；
 #: 其餘 78 個 key 逐欄不變）。舊值 ba1abae6…419ba。
-_P3_BASELINE_SHA256 = "e39cd203b1a1cac33ef8ef2a194c874d39f4152e6795622232f295050571e7a5"
+#: DEC-211（C-OB-UI-FAKE-A1，2026-11-20，客戶設計確認＋總管裁示）重生：僅 `fake/p4_me/*`（6 場景×3 帳戶＝18 key）的 `sections.digest`
+#: 由單一 `⬜ 尚未提供` 空槽欄位改為 8 欄固定靜態節錄（示意聲明＋節錄聲明＋6 句 ⬜ 缺值句）；其餘 69 個 key（含全部 Real）與 p4_me 其餘區塊逐值不變。舊值 e39cd203…e7a5。
+_P3_BASELINE_SHA256 = "235770bb42f6275356f9631b4c0ee2d0ff17f44eed3a5d74941aa32fe92c7df0"
 
 
 def test_p3_evidence_baseline_file_is_pinned_by_sha256():

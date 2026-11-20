@@ -1647,3 +1647,10 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - Active Work Ledger v1 見 #1199（總管另貼；本檔不編 comment id）。
 - **下一步**：(1) **Work**：`WORK-UI2-CLOUD-DELTA`——對可辨識的新部署版本唯讀驗 🗂 Real 八項收合明細、FAKE 無外洩、two-wire／six-unwired、位階互斥狀態／日期、390／1440 展開／首屏；部署 SHA 不可辨識＝NV，不宣 PASS。(2) **C 線**：下一個最小 Gate（推論，非授權）＝客戶核准「rule-only 摘要掛入 UI2 FAKE feed」＋UI 線框草稿＋登記 `ALLOWED_CALLERS`；`WORK-OB-USABILITY-DELTA` 仍 NOT TESTABLE AT RUNTIME。(3) **A 線**：#1199 comment 7014878496 的**五項**殘留（見 BACKLOG 2026-11-20 閉環補登段；1 NaN＋重複混合列／NaT、2 重複＋未來日優先序、3 legacy 圖 A 用詞＋`macro_v2_service.get_twii_ohlc` 不偵測重複日、4 #1230 規格小修訂、5 D2／D3／G-6～G-9）全部待 Decision Gate，未施工。
 - 注意：DEC-209 的 `last_content_bottom` −56 說明已更正（頁面總高 +56，1698→1754，UX QA 以 DOM 實量、作者未自行重量；捲到底座標位移，非版面變矮）；調整「各項明細」位置（`UI2-DATA-ITEMS-POSITION-1`）屬版面異動，須線框草稿先行，待決策不施工。
+
+
+## 2026-11-20 C-OB-UI-FAKE-A1（FAKE 靜態規則摘要節錄）＋B-PREVIEW-VERSION-DEFER（DEC-211；append-only；非 QA PASS）
+- 現況：Draft PR 分支 `c-onebrain-fake-audit-excerpt`（base main `535c1484`）。👤 FAKE「Audit：Decision Digest」收合區顯示固定靜態規則摘要節錄（非 runtime、無 caller、非投資建議）；Real 空槽不變；`ALLOWED_CALLERS=∅`、Stage F／G 關閉。P3 baseline 與 `_P3_BASELINE_SHA256` 已在本 PR 重產（僅 `fake/p4_me/*` 的 digest 區塊）；DEC-137 `source_hash` 不變。
+- **B 線版本列＝DEFER**（#1199 comment 7033108095）：見 BACKLOG `B-PREVIEW-VERSION-DEFER`；Work 只用功能指紋判版本，不得冒充精確 SHA。
+- **下一步**：(1) 兩組非作者 QA、exact-head 五項原生 CI、merge、main push CI；(2) **Work OneBrain**：合併且部署可辨識後，對新 FAKE Audit 畫面驗**一次**差額（不重跑 #1233 CLI）；(3) 真 runtime caller（Stage F）仍須另開單一 caller 的 Gate，本批未開。
+- 殘留（待評估，不施工）：節錄句 OK 態內含 ⬜、第二個新字串、示意聲明無視覺強調、OB-1-D3／stale 區分缺口；詳見 DEC-211。

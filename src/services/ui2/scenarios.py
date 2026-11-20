@@ -130,16 +130,45 @@ _LOOKUP_COLD = "FAKE 示意：尚未載入"
 _ME_ACTION_REASON = "登入與 Sheet 操作尚未開放"
 
 
+# ── 👤 Audit：Decision Digest 的 FAKE 靜態「規則摘要節錄」（C-OB-UI-FAKE-A1；客戶設計確認 #7030418754、
+# 總管裁示 #7032645702 §2）──────────────────────────────────────────────────────────
+# ⚠️ 這是**固定、匿名合成、只讀的字面常數**，不是 OneBrain／Decision Digest 的 runtime 輸出：本檔不 import 任何
+# digest／onebrain 模組（C2 守衛），也沒有任何 caller 在執行期產生它。句子**逐字**取自 #1233 匿名合成示意
+# （tests/ 內的離線 demo）「證據齊全」情境規則式摘要中、以缺值符號 ⬜ 起頭的句子（尚未定義／研究框架未啟用／
+# 尚未設定投資策略分類；不含英文 regime token、方向字、資料日）；
+# 由 `tests/test_ui2_digest_excerpt_parity.py` 以同一份合成 evidence 現算 `build_rule_summary` 逐字比對，
+# 改任何一字即紅。⛔ 不含 Risk Cap／本期行動段、⛔ 不含市場位階／燈號／健康度、⛔ 不含資料日。
+# 區段標籤＝Digest 既有 `SECTION_LABELS`（市場／產業／存股／資本利得）。
+_DIGEST_EXCERPT_NOTICE = "示意：合成資料／固定規則摘要節錄；非即時 OneBrain；非投資建議"
+_DIGEST_EXCERPT_PARTIAL = "節錄，並非完整摘要"
+_DIGEST_EXCERPT_LINES = (
+    ("市場", "⬜ 台股趨勢：尚未定義，無法判定"),
+    ("市場", "⬜ 國際趨勢：尚未定義，無法判定"),
+    ("市場", "⬜ 大盤合理區間：研究框架，未啟用，無法判定"),
+    ("產業", "⬜ 產業趨勢：尚未定義，無法判定"),
+    ("存股", "⬜ 存股：尚未設定投資策略分類，無法判定"),
+    ("資本利得", "⬜ 資本利得：尚未設定投資策略分類，無法判定"),
+)
+
+
+def _digest_excerpt_fields() -> list[dict]:
+    """示意聲明（首列）→ 節錄聲明 → 逐字句列。⛔ 隨場景變化（fixed）；⛔ 資料日／來源（未知就不顯示）。"""
+    fixed = dict(fixed=True, as_of=None, source=None)
+    rows = [_spec("digest_notice", "Decision Digest", _DIGEST_EXCERPT_NOTICE, **fixed),
+            _spec("digest_partial", "Decision Digest", _DIGEST_EXCERPT_PARTIAL, **fixed)]
+    rows += [_spec(f"digest_line_{i}", label, text, **fixed)
+             for i, (label, text) in enumerate(_DIGEST_EXCERPT_LINES, 1)]
+    return rows
+
+
 def _me_sections() -> list[dict]:
     return [
         {"key": "settings", "title": "一般設定", "level": "L1", "fields": [
             _fixed_not_provided("strategy", "Strategy", _R_EMPTY),
             _fixed_not_provided("notify", "Notifications", _R_EMPTY),
             _fixed_not_provided("display", "Display preference", _R_EMPTY)]},
-        {"key": "digest", "title": "Audit：Decision Digest", "level": "L2", "fields": [
-            _spec("digest_f", "Decision Digest", None, state="not_provided",
-                  fixed=True,
-                  as_of=None, source=None, reason=_R_NOT_OPEN)]},
+        {"key": "digest", "title": "Audit：Decision Digest", "level": "L2",
+         "fields": _digest_excerpt_fields()},
         {"key": "registry", "title": "Audit：Rule Registry（唯讀）", "level": "L2", "fields": [
             _fixed_not_provided("registry_f", "Rule Registry", _R_EMPTY)]},
         {"key": "fresh", "title": "Audit：Data Freshness", "level": "L2", "fields": [

@@ -80,3 +80,11 @@ python -m tests.onebrain_anon_demo --scenario all --format json   # 機器對照
 - **C 情境的 stale 是注入狀態示意**（直接給 `FreshnessStatus.STALE`），不是由日期推算出來的。
 - **FakeProvider 是測試替身，不是真實模型**。echo 的 `shadow_accepted=True／grounding_clean=True` 只表示「規則草稿回聲通過檢查」，不代表 AI 輸出被採用或品質獲得認可。`provider_output_adopted=否` 是設計恆定宣告、非量測值；實質證據是 `effective_equals_rule_summary`。
 - **驗收狀態**：Work 對 273da902 的 NOT TESTABLE AT RUNTIME 結論**不因本 PR 自動解除**，待 Work 對本入口做增量驗收。
+
+## 8. C-OB-UI-FAKE-A1 後續註記（2026-11-20；只追加；上文各節原文未刪未改）
+
+> 授權：#1199 comment 7032645702 §2（客戶設計確認 #7030418754）。**這不是 OneBrain runtime，也不是 Stage F。**
+
+- **§0 第一點的現況更正（事實更新，不是政策變更）**：~~UI2 的 OneBrain／Digest 位置仍是硬編的「⬜ 尚未提供」空殼~~ → **FAKE 示意模式**的 👤「Audit：Decision Digest」收合區現有一份**固定、匿名合成、只讀的靜態規則摘要節錄**（`src/services/ui2/scenarios.py` 的字面常數；首列標「示意：合成資料／固定規則摘要節錄；非即時 OneBrain；非投資建議」＋「節錄，並非完整摘要」）。📊／💼 的 OneBrain 位置與 **Real 模式仍是空殼**。
+- **這份節錄不是本示意的輸出被 UI 讀進來**：UI 沒有 import 任何 digest／onebrain 模組，沒有 caller；`tests/test_ui2_digest_excerpt_parity.py` 以本檔同一份合成 evidence（情境 A）現算 `build_rule_summary`，逐字比對 UI 字面（改 UI 一字即紅）。節錄＝情境 A 摘要中以 ⬜ 起頭的 6 句（尚未定義／研究框架，未啟用／尚未設定投資策略分類）；**省略** Risk Cap 句、市場位階／燈號／健康度（含英文 regime token）、「本期行動」整段與所有資料日。
+- **§6 的修正**：~~「掛入 UI2 FAKE feed」需要登記 `ALLOWED_CALLERS`~~ → 靜態節錄**不需要** `ALLOWED_CALLERS`（沒有 production caller；`ALLOWED_CALLERS=∅`、Stage F／G 仍關閉）。「真的從完整 Digest 取證並在 UI 執行」仍須另開單一 caller 的 Stage F、coverage、安全與正式 UI Gate，本次**未**開啟。

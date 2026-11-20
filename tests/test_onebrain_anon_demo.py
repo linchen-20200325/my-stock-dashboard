@@ -52,6 +52,9 @@ def test_every_page_starts_with_anonymous_banner_and_has_four_zones(key):
     for zone in ("① 來源", "② 缺值", "③ 規則判斷", "④ fallback"):
         assert zone in t, (key, zone)
     assert "UI2" in t and "空殼" in t and "看不到" in t          # 誠實聲明：這不是 UI
+    # C-OB-UI-FAKE-A1：如實描述現況 —— FAKE 的 👤 Audit 區有固定靜態節錄（非 runtime、無 caller）；📊／💼 與 Real 仍是空殼
+    assert "FAKE" in t and "固定靜態節錄" in t and "非 runtime、無 caller" in t
+    assert "📊／💼" in t and "Real 模式" in t
     assert "mode=rule_only" in t
 
 
