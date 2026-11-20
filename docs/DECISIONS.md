@@ -11015,3 +11015,33 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **編號**：origin/main（`b522ecf3`）已用至 DEC-214；Open PR 僅 #1237（未使用 DEC 號）；本批 DEC-215；合併時若被佔則順延。
 
 單組撰寫。
+
+### DEC-216｜D2-A-UI2-REAL-DEFAULT-1：獨立 `app_ui2.py` Preview 一般入口預設改為 Real-data Preview（#1199 comment 7052908287；2026-11-20；只追加；非 QA PASS；單組作者環境）
+
+#### 一、授權依據與範圍
+
+客戶 D2=A（#1199 comment 7052908287，極窄）：僅「獨立 `app_ui2.py` Preview 的一般入口（無 `?ui2_dev=1`）預設以 Real-data Preview 呈現」。本批只改 `app_ui2.py`：於呼叫 `run(...)` 之前，若 session 尚無 `ui2_feed` 才播種為 Real（`FEED_REAL` 取自 `src.ui2.shell.app`，符合該檔 import 守衛；與 `shared.ui2_contract.pages.FEED_REAL` 相等由測試釘）。使用者／開發面已選的值與 rerun 持久性不被覆蓋。
+
+#### 二、行為
+
+- 一般入口：預設 Real-data Preview（唯讀；只接 2 項真資料）；缺值如實 ⬜／STALE，**不假填、不自動 fallback 到 FAKE**；Real 讀取整體失敗只出既有降級提示，`ui2_feed` 仍為 real。
+- `?ui2_dev=1` 開發面保留：feed 選單初值 real，可切 FAKE（切換後 rerun 持久，FAKE 場景內容照舊）。
+- 既有測試中默默依賴「預設 FAKE」的 AppTest 於測試開頭明示 `ui2_feed="fake"`（只加一行，斷言語意不變）；`tests/test_ui2_real_feed.py::_at` 增 `seed_fake` 參數（預設 True＝舊行為）。新增 `tests/test_ui2_real_default_d2a.py`（8 測試）。
+
+#### 三、零變更清單
+
+`app.py`、production 路由、Cloud、Secrets、NAS、OneBrain、持股／私人資料、新增 L3／caller、融資／板塊、資料契約／PIT／staleness 門檻、layout／五頁路由、`src/ui2/**`、`shared/**`、任何守衛（G2F_IMPORT_ALLOWLIST、WIRED_PATHS、ALLOWED_UI2_WRITES 等）皆未放寬。
+
+#### 四、後續裁示（總管，同日）與 viewport 證據
+
+- **舊預設測試改寫**：`test_default_feed_is_still_fake` 的舊預設已被客戶 D2=A 推翻，改寫為 `test_default_feed_is_real_after_d2a`（無 query、無預填 session 首跑 `ui2_feed=='real'`；並斷言 Real 標示在、FAKE 標示不在、`data-ui2-scenario="real"`、一般入口無開發面控制；較舊版更嚴，未刪其他斷言）。
+- **量測腳本最小修改**（授權：`tests/ui2_viewport/measure_viewport.py`）：僅在 FAKE feed 量測流程開頭明示把資料來源選為 FAKE（用既有 `_select_box`，錨點為預設冷啟動場景）；Real 流程、所有門檻／判準／量測邏輯未改。`degraded_launcher.py` 未動。
+- **DEC-137 四份存證已重產**（`--shots none`；Real 加 `--feed real`；1.56.0 用暫時 venv `streamlit==1.56.0`；playwright 已裝回 1.64.1，與舊證據一致）：FAKE 82／82、Real 13／13（1.59.2 與 1.56.0 皆是）。
+- **逐值差額**：FAKE 兩份（batch3b）除 meta（`git_sha`／`generated_at`／`source_hash`／`chromium_version`）外**逐值相同**（非 meta 差額 0）。Real 兩份：1.59.2 僅 `results[0]`、`results[7]` 的 `p2/chart_text` 「⚠ 過期 11 天→12 天」（時鐘；台北時間已跨日）；1.56.0 另有 `results[12].expanded.expander_box` 的 `bottom`／`height` 0.1px（652.7→652.6）。對照組：在未改動的 `app_ui2.py` 同時段重量 Real，1.59.2 與新證據**逐值相同**（含時鐘字樣）；1.56.0 僅同一個 0.1px 項不同（run-to-run 量測雜訊，與本改動無關）。
+- **meta 差異註記**：`chromium_version` 153.0.8010.12→157.0.8103.78（環境內 playwright 1.64.1 的 build 不在，腳本既有 fallback 改用現有 headless shell）；其餘 meta 為 `git_sha`／`generated_at`／`source_hash`。`playwright_version` 仍為 1.64.1。png 未重產（與 DEC-209 同）。headless 模擬 ≠ Cloud。
+- **未解（待裁）**：開發面 feed 選單標籤 `FAKE 場景（預設）`（`src/ui2/shell/app.py` 的 `_FEED_LABELS`）在預設改 Real 後字樣失真；總管裁示本批不改 shell（開發面專用文字、非產品內容）。
+- **測試**：指定範圍 pytest 3040 passed／57 deselected／3 xfailed／0 failed（基準 3032 passed）。突變（移除播種）使新檔 5 項與改寫後的預設測試轉紅，已還原。
+
+#### 五、NOT VERIFIED
+
+Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud 已更新；Real 資料可能停在 2026-11-09 而顯示 STALE；為非正式行情，可用於預覽。QA、CI、merge 均未完成；本條為單組作者自跑結論。

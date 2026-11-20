@@ -79,6 +79,7 @@ def _nodes(blob: str) -> list[str]:
 def _fake_at(page: str, scenario: str, mode: str | None = None):
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"            # 場景／帳戶／頁切換控制只在開發面
     at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)

@@ -39,6 +39,7 @@ def _at(dev: bool = False):
     """`dev=True`：開發面（`?ui2_dev=1`）。預設道（無旗標）不得有任何 Preview 控制（P1 起）。"""
     from streamlit.testing.v1 import AppTest
     a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    a.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     if dev:
         a.query_params["ui2_dev"] = "1"
     return a.run(timeout=60)

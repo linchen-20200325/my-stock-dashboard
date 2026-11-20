@@ -236,6 +236,7 @@ def _market_dom_order(scenario: str) -> list[str]:
     """整頁實際渲染的元素順序（AppTest；每個元素一個標記）。"""
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
     at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
@@ -264,6 +265,7 @@ def test_main_risk_is_not_interleaved_by_expanders_in_the_real_page(scenario):
     # 今日主要風險與四問同在 ui2-m-l1 這一個元素內（不可能被其他元素插隊）
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
     at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
@@ -307,6 +309,7 @@ def test_unknown_mode_is_rejected():
 def _at_target(scenario: str):
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
     at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
@@ -536,6 +539,7 @@ def test_me_default_account_is_unchanged_from_batch2_content():
 def test_me_page_switches_account_in_the_real_app():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
     at.run(timeout=60)
     at.radio(key="ui2_page").set_value(P4_ME).run(timeout=60)

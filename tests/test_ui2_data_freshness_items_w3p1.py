@@ -411,6 +411,7 @@ def test_fake_axis_renders_no_items_expander(monkeypatch):
     from streamlit.testing.v1 import AppTest
     for sc in SCENARIO_IDS:
         a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+        a.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
         a.session_state["ui2_scenario"] = sc
         a.run(timeout=60)
         a.radio(key="ui2_page").set_value(P4_DATA).run(timeout=60)

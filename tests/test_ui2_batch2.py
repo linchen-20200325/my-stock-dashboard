@@ -274,6 +274,7 @@ def test_full_rendered_page_has_no_global_update_time(scenario):
     """整頁（含 view／殼）實際 markdown：⛔ 全域假更新時間（`按更新時間 HH:MM`、時鐘時間、真實日期）。"""
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
     at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
