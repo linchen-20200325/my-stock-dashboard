@@ -47,7 +47,7 @@
 - 反例一（不滿足 ii）：6 列輸入（5 筆 eligible＋1 筆 invalid）兩通道預濾後，`actions_omitted_count`＝2，`is_complete` 仍為 False。
 - 反例二（不滿足 i）：只從 station 預濾 invalid 列、holdings 保留，`holdings_without_station_row`＝1，`is_complete` 仍為 False（被對帳擋下）。
 - 同型的另一個形狀（無鍵持股 unkeyed）：3 列輸入把 1 筆從 `holding_keys` 拿掉 → `unkeyed_held_count`＝1、`is_complete`＝False；兩通道都預濾該列 → `unkeyed_held_count`＝0、`is_complete`＝True。
-- 〔F〕以上為本機原型實測（撰寫者與一組非作者 QA 各自重現）；**non-held 列不在此列**：實測 non-held 列有無（原樣或預濾）`is_complete` 皆為 True、各計數不變，builder 對 non-held 沒有計數器（見 I4）。
+- 〔F〕以上為作者端本機原型實測（本文撰寫者於 repo 外暫存目錄重跑）；〔NV〕非作者 QA 另各自重現一致（待 #1199 回存，回存前不當作已驗事實）；**non-held 列不在此列**：實測 non-held 列有無（原樣或預濾）`is_complete` 皆為 True、各計數不變，builder 對 non-held 沒有計數器（見 I4）。
 
 **結論與限制（必須同時讀）**：
 1. **僅單側截斷時，現有雙向對帳（`holdings_without_station_row`／`station_rows_unmatched`）能擋**；不可概稱「所有截斷都擋不住」。
