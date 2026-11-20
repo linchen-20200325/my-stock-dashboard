@@ -7,7 +7,7 @@
 
 ## 0. 這份文件是什麼／不是什麼
 
-- **是**：把「OneBrain 日後若要宣稱『Evidence 來自完整 eligible 母集』，至少要滿足哪些不變量、哪些現在有保障、哪些根本沒有」整理成**可討論的驗收準則候選**（I1–I7），並把兩個容易被誤讀的事實寫清楚：(a) 對稱截斷／預過濾會讓現有 `is_complete` 誤報 `True`（§2）；(b) 現行資料發布流程不保存逐次擷取的版本歷史，不能支持 PIT 聲明（附錄 A）。
+- **是**：把「OneBrain 日後若要宣稱『Evidence 來自完整 eligible 母集』，至少要滿足哪些不變量、哪些現在有保障、哪些根本沒有」整理成**可討論的驗收準則候選**（I1–I7），並把兩個容易被誤讀的事實寫清楚：(a) 對稱截斷，以及「兩通道同時預濾且濾後 eligible ≤ `MAX_ACTIONS`」的預過濾，會讓現有 `is_complete` 誤報 `True`（條件見 §2）；(b) 現行資料發布流程不保存逐次擷取的版本歷史，不能支持 PIT 聲明（附錄 A）。
 - **不是**：實作、測試、schema、Gate 的批准。I3／I5／I6／I7 涉及 schema／validator／簽章／L0，本文只列為**未核准 Gate**。
 - **關於 #1238（務必讀）**：〔F〕`tests/test_onebrain_evidence_unknown_contract.py` 是 **tests-only 契約護欄**。它證明「單一 Top-N 回灌會把 `is_complete` 變 `True`」這個危險事實，並 pin 住 `assemble_digest` 簽章與 `ProviderRequest` 欄位。〔F〕它**沒有**阻止未來 builder 從 UI Top-N 反推完整 Evidence，也沒有偵測截斷的能力（該檔 docstring 自述「`assemble_digest` **無法偵測**輸入是否已被截斷」「本 tests-only PR **不阻止**任何實際 production caller 截斷」）。**本文不得被讀成「截斷已修復」。**
 
@@ -32,22 +32,27 @@
 | station 3／holdings 5（巢狀） | 3／0 | 2／0 | 5 | False |
 | station 3／holdings 3（不相交） | 0／0（total＝0） | 3／3 | 3 | False |
 | **兩通道同取 builder 實際顯示的 Top3（對稱截斷）** | 3／0 | 0／0 | 3 | **True（錯判）** |
-| **各側 Top1（聯集 2 筆）** | 2／0 | 0／0 | 2 | **True（錯判）** |
-| 各側 Top2（聯集 4 筆） | 4／1 | 0／0 | 4 | False（但原因見下） |
-| 各側 Top3（聯集 6 筆） | 6／3 | 0／0 | 6 | False（但原因見下） |
+| **分組各 Top1（加碼／減碼分組，聯集 2 筆）** | 2／0 | 0／0 | 2 | **True（錯判）** |
+| 分組各 Top2（聯集 4 筆） | 4／1 | 0／0 | 4 | False（但原因見下） |
+| 分組各 Top3（聯集 6 筆） | 6／3 | 0／0 | 6 | False（但原因見下） |
 
 註：
-- 「各側」＝以輸入的 `_action` 分兩側：加碼側（add／pause_add：T0、T1、T5、T6、T7、T8）與減碼側（cut／take_profit_force／take_profit_partial：T2、T3、T4、T9）；「Top-k」＝該側依輸入順序取前 k 列（**原型的取法，不是 production 排序**）。各側 Top1 時，減碼側與加碼側**各自單獨**組裝也各是 `True`，合起來（聯集 2 筆）才是被截斷的母集——即任何單側檢查都看不出問題。
-- 各側 Top2／Top3 的 `is_complete=False` **不是**偵測到截斷：`total` 低報（真值 10，卻報 4、6），`False` 只因展示上限 `MAX_ACTIONS`＝3 造成 `omitted>0`。
+- 「分組」＝以輸入的 `_action` 分成加碼分組（add／pause_add：T0、T1、T5、T6、T7、T8）與減碼分組（cut／take_profit_force／take_profit_partial：T2、T3、T4、T9）。⚠️ **此處的「分組」與 §1 的「雙側」（＝station_rows／holdings_rows 兩條輸入通道）是兩回事**，本文一律不再用「側」稱呼加碼／減碼分組。「分組各 Top-k」＝每個分組依輸入順序取前 k 列，再把兩分組的結果合併為**兩條通道的輸入**（**原型的取法，不是 production 排序**）。分組各 Top1 時，加碼分組與減碼分組**各自單獨**組裝也各是 `True`，合起來（聯集 2 筆）才是被截斷的母集——即只看其中一個分組的檢查看不出問題。
+- 分組各 Top2／Top3 的 `is_complete=False` **不是**偵測到截斷：`total` 低報（真值 10，卻報 4、6），`False` 只因展示上限 `MAX_ACTIONS`＝3 造成 `omitted>0`。
 - 對稱截斷時，〔F〕`digest.actions` 與完整輸入**逐項相同**（保留集＝builder 實際顯示的三筆時），僅 `digest.holdings` 筆數不同（3 對 10）。〔F〕#1238 的 `test_KNOWN_UNFIXED_RISK_top_n_feedback_makes_truncated_input_look_complete` 斷言 `fed.digest.actions == full.digest.actions` 與 `is_complete` 不同，**但沒有斷言 holdings 筆數差異**——這是本文補的觀察，不是 #1238 的內容。若保留集取輸入的前三列而非 builder 實際顯示的三筆，`digest.actions` 並不相同（原型實測），故「actions 相同」僅在「保留集＝顯示 Top3」時成立。
 - 〔I〕由表推得（僅測 eligible 數 2、3、4、6）：保留集的 eligible 數 ≤ `MAX_ACTIONS` 時對稱截斷被判完整；更大時 `is_complete=False`，但屬展示上限造成，`total` 仍低報。
 
-**預先濾掉 invalid 列**（需 eligible ≤ `MAX_ACTIONS`，否則 `omitted>0` 使 `is_complete` 仍為 False）：4 列輸入（3 筆 eligible＋1 筆帶非空 `_invalid_lights`）→ `excluded_invalid_rows`＝1、`is_complete`＝False；呼叫端把該列從 station 與 holdings 兩通道都預先濾掉 → `excluded_invalid_rows`＝0、`is_complete`＝**True（錯判）**。
+**預先濾掉 invalid 列**。變 True 需**同時**滿足兩個條件：(i) **station 與 holdings 兩通道同時預濾**同一列；(ii) **濾後 eligible 數 ≤ `MAX_ACTIONS`**。
+- 4 列輸入（3 筆 eligible＋1 筆帶非空 `_invalid_lights`）→ `excluded_invalid_rows`＝1、`is_complete`＝False；兩通道都預濾該列 → `excluded_invalid_rows`＝0、`is_complete`＝**True（錯判）**。
+- 反例一（不滿足 ii）：6 列輸入（5 筆 eligible＋1 筆 invalid）兩通道預濾後，`actions_omitted_count`＝2，`is_complete` 仍為 False。
+- 反例二（不滿足 i）：只從 station 預濾 invalid 列、holdings 保留，`holdings_without_station_row`＝1，`is_complete` 仍為 False（被對帳擋下）。
+- 同型的另一個形狀（無鍵持股 unkeyed）：3 列輸入把 1 筆從 `holding_keys` 拿掉 → `unkeyed_held_count`＝1、`is_complete`＝False；兩通道都預濾該列 → `unkeyed_held_count`＝0、`is_complete`＝True。
+- 〔F〕以上為本機原型實測（撰寫者與一組非作者 QA 各自重現）；**non-held 列不在此列**：實測 non-held 列有無（原樣或預濾）`is_complete` 皆為 True、各計數不變，builder 對 non-held 沒有計數器（見 I4）。
 
 **結論與限制（必須同時讀）**：
 1. **僅單側截斷時，現有雙向對帳（`holdings_without_station_row`／`station_rows_unmatched`）能擋**；不可概稱「所有截斷都擋不住」。
-2. 擋不住的是：**對稱截斷**與**預過濾**（含預先濾掉 invalid 列）。兩者共同點：被截掉的列從所有通道**同時**消失，coverage 沒有任何「應有多少」的獨立參照（見 I3）。
-3. **證據強度聲明**：〔F〕本表來自 C 線以空命名空間（避開 streamlit import）載入 `src/services` 的**本機原型**；總管線獨立重跑一致；本文撰寫者另以同法在 repo 外暫存目錄重跑一次，數值一致（單組、非 QA）。**不是** native pytest、**不是** production integration QA。原型腳本**未入庫**（本文 NO CODE）；需重現者依 `tests/onebrain_anon_demo.py::_kwargs` 的固定合成輸入形狀自建。
+2. 擋不住的是：**對稱截斷**，以及**「兩通道同時預濾、且濾後 eligible ≤ `MAX_ACTIONS`」的預過濾**（含 invalid 列、unkeyed 列；只預濾單一通道會被對帳擋下，濾後 eligible 超過上限則仍因 omitted 而 False）。兩者共同點：被截掉的列從所有通道**同時**消失，coverage 沒有任何「應有多少」的獨立參照（見 I3）。
+3. **證據強度聲明**：〔F〕本表來自 C 線以空命名空間（避開 streamlit import）載入 `src/services` 的**本機原型**；GPT 總管裁示 #7040939424 稱已重現；C 線作者端及一組非作者 QA 另各自獨立重現一致（結果以 #1199 回存為準）；本文撰寫者另以同法在 repo 外暫存目錄重跑一次，數值一致（單組、非 QA）。**不是** native pytest、**不是** production integration QA。原型腳本**未入庫**（本文 NO CODE）；需重現者依 `tests/onebrain_anon_demo.py::_kwargs` 的固定合成輸入形狀自建。
 
 ## 3. 不變量 I1–I7（驗收準則候選）
 
@@ -57,8 +62,8 @@
 |---|---|---|---|---|---|
 | **I1** 完整母集來源 | Evidence 輸入必須來自**上游完整 eligible 清單**，不得由 Digest、規則摘要或 UI Top-N 反推（含 `src/ui/views/page_find.py::DEFAULT_TOP_N`＝50〔UI 請求筆數預設，選項 20／50／100〕） | 反推會讓 §2 的對稱截斷成為常態；客戶原文已禁（見右欄） | 〔F〕客戶原文：One AI Brain 不得「從 UI Top-N 認為只有 Top-N 資料存在」（`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` §2，引 DEC-109 十七）；〔F〕`assemble_digest` 簽章無 `top_n` 類參數，且被 #1238 的 `test_assembler_has_no_input_channel_declaring_truncation` pin 住。**執行期無強制**（無 production caller 亦無偵測） | **G1** | 未來 evidence builder 的測試應能證明其輸入資料流不經 Digest／摘要／UI 排序結果（資料流斷言或型別層限制，形態未定） |
 | **I2** 兩通道各自由母集導出 | `station_rows` 與 `holdings_rows` 各自由同一母集獨立導出，**不得互相過濾** | 互相過濾使對帳計數天然相等（§2 對稱截斷） | **部分**：單側截斷會被對帳計數擋；對稱不會 | **G1** | 對同一母集隨機抽子集，兩通道若被一致縮減，builder 層（而非 assembler）須能辨識或拒絕 |
-| **I3** 獨立母集計數 | producer 在**任何篩選之前**記下 `expected_*`（母集應有筆數），並與 coverage 實得值比對 | 唯一能偵測對稱截斷與預過濾的結構：需要一個**不由被截斷的輸入推出**的參照數 | **無**：〔F〕`DigestCoverage` 無 expected 欄；〔F〕Digest v2 計畫 A6 只有概念 `{evaluated, expected}`（`DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` §6，未實作）；DEC-160 裁示 3 僅記為方向 | **G2**：未核准 Gate，**不得寫成已批准契約** | 若日後授權：`expected≠evaluated` 時 `is_complete` 不得為 True（欄位位置、命名、版本屬 schema Gate） |
-| **I4** 禁止預過濾 | 不得預先剔除 invalid／non-held／unkeyed 列；一律交 builder 分類計數 | 預過濾使 `excluded_invalid_rows` 歸零（§2 末段） | **部分**：〔F〕builder 對**收到**的每一列分類計數（`DigestCoverage` docstring 鐵則 1）；對**沒收到**的列無能為力 | **G1** | 對含 invalid 列的母集，經 builder 組裝後 `excluded_invalid_rows` 須等於母集中的 invalid 數 |
+| **I3** 獨立母集計數 | producer 在**任何篩選之前**記下 `expected_*`（母集應有筆數），並與 coverage 實得值比對 | 偵測對稱截斷與上述預過濾所需的參照：需要一個**不由被截斷的輸入推出**的參照數（本文未窮舉其他可能結構） | **無**：〔F〕`DigestCoverage` 無 expected 欄；〔F〕Digest v2 計畫 A6 只有概念 `{evaluated, expected}`（`DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` §6，未實作）；DEC-160 裁示 3 僅記為方向 | **G2**：未核准 Gate，**不得寫成已批准契約** | 若日後授權：`expected≠evaluated` 時 `is_complete` 不得為 True（欄位位置、命名、版本屬 schema Gate） |
+| **I4** 禁止預過濾 | 不得預先剔除 invalid／unkeyed 列；一律交 builder 分類計數（範圍僅此二類，與授權文一致） | 兩通道同時預濾且濾後 eligible ≤ `MAX_ACTIONS` 時，`excluded_invalid_rows`／`unkeyed_held_count` 歸零而 `is_complete` 變 True（§2 末段） | **部分**：〔F〕builder 對**收到**的 invalid／unkeyed 列計數（`DigestCoverage` 欄位 `excluded_invalid_rows`、`unkeyed_held_count`）；對**沒收到**的列無能為力。**non-held 不屬本項保障**：〔F〕實測 non-held 列有無 `is_complete` 皆為 True、各計數不變，builder 對 non-held 沒有計數器；其處置本文**未驗**〔NV〕 | **G1** | 對含 invalid 列的母集，經 builder 組裝後 `excluded_invalid_rows` 須等於母集中的 invalid 數 |
 | **I5** `is_complete` 只能證偽、不能證明 | `is_complete=True` 只代表「已收到的列沒有可見遺漏」；**不得**被當作「母集完整」的證明或對 Provider／使用者的完整性保證 | 見 §2：`True` 可由截斷輸入產生 | 〔F〕`src/services/decision_digest_assembly.py` 模組 docstring「已知限制」第 1 點與 `AssembledDigest` docstring 自述「不防惡意偽造」；〔F〕`DigestCoverage` docstring 自述 `is_complete` 只回答「有沒有東西沒被讀進來」 | **G2**（若要讓 Provider 看見完整性，須動 `ProviderRequest`〔F〕現恰為 `{digest, task}`，#1238 已 pin）；僅列未核准 Gate | 若日後授權：Provider 端是否收得到完整性資訊屬契約變更；在那之前，文件與 UI 不得用 `is_complete` 宣稱「完整」 |
 | **I6** 列層級 as_of／代表 stamp | 每列（或每段）的資料日與代表 stamp 如何決定，目前**未定** | 整段共用一個 stamp，無法表達「母集中最舊的一列」 | 〔F〕`src/services/decision_digest_assembly.py::EvidenceInput` 只有整段一個 `stamp`（外加 `freshness`、`upstream_state`）；須重用 `shared/staleness`（〔F〕檔案存在）不另立常數 | **未決（G2 邊界）：本文不定義** | 新 L0 freshness key 需獨立授權；本文不提供取法 |
 | **I7** 正反證雙側 | 反證（contradicting evidence）若要進入 OneBrain，需有獨立欄位且缺資料不得當反證為 0 | 只有支持方的輸入會系統性偏向確認 | 〔F〕無 `contradict*` 識別字（§1）；〔F〕未核准草案列有 `contradicts_evidence_ids` | **G2**：涉及 schema，僅列未核准 Gate | 無（草案未核准，不提供驗收形態） |
@@ -83,7 +88,7 @@
 
 | 既有項 | 關係 |
 |---|---|
-| DEC-212（#1238 的登記） | 本文是其後續的**驗收準則候選**；不取代、不修改 DEC-212。DEC-212 已寫明「`assemble_digest` 無法偵測截斷」「不修復 Top-N」，本文補上對稱截斷／預過濾反例 |
+| DEC-212（#1238 的登記） | 本文是其後續的**驗收準則候選**；不取代、不修改 DEC-212。DEC-212 已寫明「`assemble_digest` 無法偵測截斷」「不修復 Top-N」，本文補上對稱截斷與（兩通道同時、濾後 eligible ≤ `MAX_ACTIONS` 的）預過濾反例 |
 | `OB-ASSEMBLER-FULL-INPUT-INVARIANT`（BACKLOG，OPEN／待 Gate） | **沿用同一 ID，不另立**。本文是它的驗收準則候選細化（I1–I7 分級）；狀態不變 |
 | `P1R-DIGEST-HEADLESS-ASSEMBLY`（BACKLOG） | I1／I2／I4 日後隨它的設計一併考量；本文不推進它 |
 | OB-1-D3／Digest v2 | I3／I5／I7 的 schema 面向歸此 Gate；本文不實作 |
@@ -133,7 +138,7 @@
 **(b) 現行 `scripts/publish_data_pr.py::union_parquet_by_date` 不保存逐次擷取的版本歷史（無 vintage log），不能宣稱已滿足 PIT。**〔F〕對碼描述如下（僅描述被呼叫時的行為；〔F〕它**只在 `auto/data-<job>` 分支已存在於遠端時**才被呼叫，分支不存在時直接提交腳本輸出）：
 - 兩邊皆有的 key：比對時**忽略揮發欄**（`VOLATILE_ROW_COLS`＝`VOLATILE_PARQUET_COLS`〔`fetched_at`、`captured_at`〕加 `updated_at`），其餘欄逐欄比對；合併時**舊列優先（含揮發欄）**。
 - 非帳本模式：舊值為空、新值有值 → **採新值**（僅在有傳入 log 時記一行「舊 null→新有值，採新值 N 格」）。因此該格被補上後，〔F〕所在列的 `fetched_at` 在舊列該欄非空時仍是**舊列的值**，不是該格的取得時刻；列上也**看不出該格原為空**。
-- 舊值非空而新值為空（或缺欄），或兩邊皆非空但不同 → `PublishError`（中止，不寫入、不 commit），**不記錄修訂前後兩版**。
+- 舊值非空而新值為空（或缺欄），或兩邊皆非空但不同 → `PublishError`（中止，不寫入、不 commit）；〔F〕錯誤訊息會印出最多 10 格舊值／新值，但**不持久化**——不寫入任何持久版本紀錄。另：git 提交歷史（以 PR／合併為粒度）**不是**逐次擷取的 vintage log。
 - 帳本模式（`LEDGER_PATHS`，目前 `data_cache/macro_forward_test/signals.parquet`）：同 date 已存在則保留既有列，**任何差異（含舊空→新有值）皆 fail-closed**；保留的是第一列，**不保存修訂**。
 - 另：〔F〕`parquet_substantive_change` 忽略揮發欄，故「僅 `fetched_at` 不同」不構成實質變更、不會觸發發布。
 - **結論**：不能靠「舊 null→新值」的行為證明該格「首次已見」；不能以 `fetched_at` 回填歷史 `available_at`；現行流程不構成 PIT 聲明的證據。〔NV〕各資料更新腳本自身（上游）對既有檔的寫入語意未在本附錄查證。
