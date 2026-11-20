@@ -155,8 +155,9 @@ def test_twii_parquet_is_the_real_local_cache_and_feed_reads_it_without_hardcodi
     (_twii_view(ok=False, close=(), as_of=None, failed=True, error="OSError: disk"), None,
      FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "台股加權指數暫時無法讀取"),
     (None, RuntimeError("boom-twii"), FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "台股加權指數暫時無法讀取"),
+    # B-UI2-STALE-COPY-1（DEC-213）：L1 `stale_reason` 不再原樣當 detail（過期天數由 chip 呈現）；有上游句才有 detail。
     (_twii_view(is_stale=True, age_days=3, stale_reason="快取超過 3 天"), None,
-     FieldState.STALE, "⚠ 過期 3 天", "快取超過 3 天"),
+     FieldState.STALE, "⚠ 過期 3 天", None),
     (_twii_view(is_stale=True, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, None),
     (_twii_view(is_stale=None, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, "新鮮度未判定"),
     (_twii_view(is_stale=False, upstream_error="HTTP 500"), None, FieldState.OK, None, "上游最近一次抓取失敗"),
@@ -171,6 +172,7 @@ def test_twii_states_are_mapped_without_inventing_values(monkeypatch, view, exc,
         assert f.value_text is None                       # missing ≠ 0；unavailable ≠ safe
     if detail_has:
         assert detail_has in (f.detail or "")
+    assert "快取超過 3 天" not in (f.detail or "")                                # DEC-213：L1 stale_reason 原句不上畫面
     assert not re.search(r"\w+(Error|Exception)", f.detail or "")             # 例外型別名不上畫面（型別名在 snapshot／log）
 
 

@@ -3114,3 +3114,13 @@
 | **G-F2** | 客戶 | **客戶隱私 Gate**：是否允許 OneBrain 在授權明確後**唯讀**使用私人持股作個人分析？**預設 NO PRIVATE HOLDINGS（default no access）**。若進行研究，需先定：單人／多人部署、專用最小唯讀權限、`as_of` 資料日、授權／撤銷與身分隔離 Gate。客戶選擇進行研究也**不是**准許立即取用帳戶、OAuth／Sheet、Secrets 或建立 production caller。與既有 G-F2（headless 持股授權，DEC-160「G-F2～G-F6 待裁示」）同一題的客戶面呈現，不重複立案 | **CUSTOMER_PRIVACY_GATE_PENDING**（default no access；引用 #1199 comment 7038579891 決策 2；本 PR 不提問客戶、不施工） | 由總管整理成客戶 Decision Gate；客戶決策可分期（私人持股預設延後）。不得取用任何帳戶／Sheet／OAuth／Secret |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F3～G-F6、OB-1-D3／Digest v2、Stage F／G、真 Provider、W8、Risk Cap 維持原狀。Cloud Preview＝BLOCKED_EXTERNAL_AUTH、#1237＝DRAFT／HOLD 與本批無關。
+
+## 2026-11-20｜B-UI2-STALE-COPY-1 登記（只追加；不改既有列；依據 `docs/DECISIONS.md` DEC-213 與 #1199 comment 7040889025（GPT 總管裁示，方案 B）／7040812331（調查）；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫）
+
+> **狹義文案 bug fix（顯示層）；Real 僅 `?ui2_dev=1`，使用者價值有上限。** 以下狀態為登記當下，外部驗收一律 NOT VERIFIED。
+
+| ID | owner | 標題與事實 | 狀態 | 下一步／解阻 |
+|---|---|---|---|---|
+| **B-UI2-STALE-COPY-1** | Claude B | UI2 Real 台股卡與 20 根日 K 的 detail 不再原樣輸出 L1 `stale_reason`（含 `twii_ohlcv`、`daily 門檻` 等工程字樣）。**已實作於本 PR（Draft）**：`src/services/ui2/real_canonical.py` 兩處（`twii_card_spec`／`kbar_chart_spec`）只保留既有已核准的上游三態句；`⚠ 過期 N 天` chip、資料日、來源、「新鮮度未判定」不變；fact 仍保留 `stale_reason` 供稽核。守衛：`ENGINEERING_VOCAB` 補 `twii_ohlcv`／`門檻`／`parquet`，以真 L1 `compute_cache_staleness` 輸出為 fixture（突變拔掉修正 9／9／6 紅）。P3 baseline 僅 `real/p4_market/stale` 1 key 變動；Real viewport 兩份重產（版面因少一行 detail 而變矮，非改版）。零變更 L1／L3／`shared/**`／`src/ui2/**`／資料契約；融資／板塊未接線項目不碰 | **PR OPEN（Draft）／NOT VERIFIED**（兩組非作者 QA、exact-head 五項原生 CI、0 threads、merge＋main CI 皆待） | 照 #1199 comment 7040889025 的 QA／merge Gate 執行；Cloud 部署畫面維持 `NOT VERIFIED`／`BLOCKED_EXTERNAL_AUTH`（#1107），不宣稱已驗 |
+
+> 未解鎖（皆不變）：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、融資／板塊 UI2 接線（BLOCKED）、#1237 NAS Draft／HOLD、C 線 OneBrain forward-only PIT、Stage F／G、真 Provider、W8、Risk Cap、Digest v2、官方詢問草稿 v2 寄出 HOLD。

@@ -1557,3 +1557,7 @@
 - **B-PREVIEW-VERSION-DEFER**：B 線版本列暫緩（#1199 comment 7033108095；G4B 零變更），登記於 BACKLOG；Work 只用功能指紋判版本。
 - **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、0 threads、merge／main CI；Cloud 與實機排版（未跑 Playwright）。殘留四點見 DEC-211。
 - **編號**：origin/main（535c1484）已用至 DEC-210／§87；本批 DEC-211／§88；合併時若被佔則順延。
+
+## 2026-11-20 B-UI2-STALE-COPY-1（DEC-213；append-only；非 QA PASS）
+- UI2 Real 台股卡與日 K 的過期 detail 不再原樣輸出 L1 `stale_reason`（工程字樣 `twii_ohlcv`／`門檻`）；chip「⚠ 過期 N 天」、資料日、來源不變。僅 `real_canonical.py` 兩處＋守衛測試＋P3 baseline 1 key（`real/p4_market/stale`）＋Real viewport 兩份。
+- Draft PR 分支 `b-ui2-stale-copy-1`（base main `5ea2f5fc`）。**NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI、Cloud 畫面（#1107 `BLOCKED_EXTERNAL_AUTH`）。Gate 全部不變（`I1144-WIRING-GATE`、DG-SCOPE／COV／LIC、融資／板塊接線 BLOCKED）。
