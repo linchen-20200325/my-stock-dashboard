@@ -10942,6 +10942,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **精確「不是什麼」**：(1) docs-only **不能阻止**任何 caller 傳入被截斷的輸入；(2) **OneBrain 仍 NOT READY**，使用者在畫面上看不到任何 runtime OneBrain 輸出；(3) 正式市場廣度仍 **NOT EVALUATED**；(4) **不放行** Stage F／G，不得引用本批或 #1238 的綠燈作為放行依據；(5) #1238（DEC-212）是 tests-only 契約護欄，**不是**截斷修復；(6) 不凍結 schema、不核准 Digest v2、不新增 production caller。
 - **未解事項（皆未啟動、未授權）**：I3／I5／I6／I7 的客戶 Gate；DG-PIT；DG-LIC；G-F1／G-F2；Stage F／G；Digest v2／OB-1-D3；官方詢問草稿 v2＝HOLD（NO SEND）；#1237＝HOLD；#1107 Cloud 部署版本＝NOT VERIFIED。
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI **均未完成**；本檔單組撰寫；18409／11369 與「OGDL v1 指定資源許可已核證」僅存在於 #1199 留言、尚未入 repo（標「外部提供」，本批不引用為結論）；歷史 PIT、`available_at`、修訂 vintage、母體映射皆 NV。
+- **編號**：origin/main（5ea2f5fc）已用至 DEC-212；本批 DEC-213；合併時若被佔則順延。
 
 
 ### DEC-214｜B-UI2-STALE-COPY-1：UI2 Real 台股卡與日 K 不再原樣輸出 L1 `stale_reason`（方案 B；#1199 comment 7040889025 唯一工程授權；脈絡 #7040812331；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
