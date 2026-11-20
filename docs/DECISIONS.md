@@ -10928,3 +10928,18 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未解事項（皆未啟動、未授權）**：(1) **OB-1-D3／Digest v2**——缺值原因進摘要／Digest 的詞彙與簽章，Gate-needed、客戶裁示；(2) **`OB-ASSEMBLER-FULL-INPUT-INVARIANT`**——「未來 headless evidence builder 必須使用完整 eligible input、不得由 UI Top-N 反推」是另需實作的**硬性 invariant／Gate**，本 PR 只實證風險、不阻止；(3) G-F1／G-F2 客戶 Decision Gate（見 BACKLOG，僅登記，不授權任何 fetcher、來源接線、OAuth／Sheet／Secrets 或 production caller）；(4) Stage F／G、真 Provider、W8、Risk Cap、DG-LIC／DG-PIT 維持原 Gate HOLD。
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI；突變為作者端單組。本批綠燈**不得**用來放行 Stage F，也**不得**據此宣稱 OneBrain 已可用或 Top-N 風險已修。
 - **編號**：origin/main（3163e49d）已用至 DEC-211；本批 DEC-212；合併時若被佔則順延。
+
+### DEC-213｜C-OB-BREADTH-FORWARD-GATE：完整 eligible evidence 驗收準則候選（docs-only；方案 B；#1199 comment 7040939424 決策 1／2 授權；脈絡 #7040656318／#7037529004；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
+
+> **docs-only 候選；不阻止截斷、不使 OneBrain 可用、不放行 Stage F。**
+
+- **授權依據**：總管裁示 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7040939424 決策 1（術語正式採用）、決策 2（方案 B：驗收準則候選＋附錄 A）；來源研究 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7040656318 與 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7037529004 。
+- **範圍（只有三樣）**：(1) 新增 `docs/vnext/ONEBRAIN_FULL_ELIGIBLE_EVIDENCE_ACCEPTANCE_CRITERIA_CANDIDATE_2026-11-20.md`；(2) 本 DEC；(3) `docs/BACKLOG.md` 補登一段（沿用 `OB-ASSEMBLER-FULL-INPUT-INVARIANT`，不立新 ID）。**零變更**：`src/**`、`shared/**`、`tests/**`、`scripts/**`、`app*.py`、UI2、baseline／allowlist、workflow、`data_cache`、`ALLOWED_CALLERS`、`OFFLINE_SHADOW_MODULES`、`BREADTH_PROXY_SCORING_ENABLED`、Secrets、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`、既有 DEC／BACKLOG 任何一字、官方詢問草稿 v2。
+- **決策 1：術語正式採用**——「雙側／對稱截斷」＝同一完整 eligible 母集衍生的 `station_rows` 與 `holdings_rows` 同時被一致縮減，使現有互相對帳計數相等卻誤報 `is_complete=True`。非「支持／反對」正反證兩側；撰寫當日 repo 內無既有定義。
+- **G1／G2 分級摘要**：新文件列 I1–I7。**G1**（文件／測試等級候選，不動 runtime／契約；仍需另行指派才可寫 tests）＝I1 完整母集來源、I2 兩通道各自導出、I4 禁止預過濾；**G2**（涉及 schema／validator／簽章／Digest v2／L0 freshness／新 caller／持股，須使用者獨立授權，本文不決定，僅列未核准 Gate）＝I3 獨立母集計數 `expected_*`、I5 `is_complete` 只能證偽不能證明（含 `ProviderRequest` 變更）、I7 正反證雙側；I6 列層級 as_of／代表 stamp＝**未決（G2 邊界）**，不定義。
+- **反例結論**：僅單側截斷時，現有雙向對帳能擋；**擋不住對稱截斷與預過濾**（各側 Top1 聯集 2 筆、兩通道同取顯示 Top3、預先濾掉 invalid 列，皆使 `is_complete` 由 False 變 True）。證據為本機原型（非 native pytest、非 production integration QA；腳本未入庫），總管線獨立重跑一致。
+- **附錄 A 結論句**：`scripts/publish_data_pr.py::union_parquet_by_date` **不保存逐次擷取的版本歷史，不能宣稱滿足 PIT**；`available_at`／`published_at` 在 repo **仍未定義**（DEC-070；PROJECT_STATE §10／§20）；`fetched_at` 不得回填為歷史 `available_at`。附錄只比較 historical backfill 與 forward-only 各能聲明什麼，並列出日後（需 DG-PIT 裁示）必須先回答的問題，**不定義**收集政策、主鍵、儲存格式或新欄位。
+- **精確「不是什麼」**：(1) docs-only **不能阻止**任何 caller 傳入被截斷的輸入；(2) **OneBrain 仍 NOT READY**，使用者在畫面上看不到任何 runtime OneBrain 輸出；(3) 正式市場廣度仍 **NOT EVALUATED**；(4) **不放行** Stage F／G，不得引用本批或 #1238 的綠燈作為放行依據；(5) #1238（DEC-212）是 tests-only 契約護欄，**不是**截斷修復；(6) 不凍結 schema、不核准 Digest v2、不新增 production caller。
+- **未解事項（皆未啟動、未授權）**：I3／I5／I6／I7 的客戶 Gate；DG-PIT；DG-LIC；G-F1／G-F2；Stage F／G；Digest v2／OB-1-D3；官方詢問草稿 v2＝HOLD（NO SEND）；#1237＝HOLD；#1107 Cloud 部署版本＝NOT VERIFIED。
+- **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI **均未完成**；本檔單組撰寫；18409／11369 與「OGDL v1 指定資源許可已核證」僅存在於 #1199 留言、尚未入 repo（標「外部提供」，本批不引用為結論）；歷史 PIT、`available_at`、修訂 vintage、母體映射皆 NV。
+- **編號**：origin/main（5ea2f5fc）已用至 DEC-212；本批 DEC-213；合併時若被佔則順延。

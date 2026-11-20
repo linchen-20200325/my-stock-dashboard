@@ -3114,3 +3114,13 @@
 | **G-F2** | 客戶 | **客戶隱私 Gate**：是否允許 OneBrain 在授權明確後**唯讀**使用私人持股作個人分析？**預設 NO PRIVATE HOLDINGS（default no access）**。若進行研究，需先定：單人／多人部署、專用最小唯讀權限、`as_of` 資料日、授權／撤銷與身分隔離 Gate。客戶選擇進行研究也**不是**准許立即取用帳戶、OAuth／Sheet、Secrets 或建立 production caller。與既有 G-F2（headless 持股授權，DEC-160「G-F2～G-F6 待裁示」）同一題的客戶面呈現，不重複立案 | **CUSTOMER_PRIVACY_GATE_PENDING**（default no access；引用 #1199 comment 7038579891 決策 2；本 PR 不提問客戶、不施工） | 由總管整理成客戶 Decision Gate；客戶決策可分期（私人持股預設延後）。不得取用任何帳戶／Sheet／OAuth／Secret |
 
 > 以上皆**不暗示任何 Gate 已解除、任何接線或 UI 施工已授權**；`DG-COV`／`DG-PIT`／`DG-LIC`／`DG-SCOPE`、`I1144-WIRING-GATE`、G-F3～G-F6、OB-1-D3／Digest v2、Stage F／G、真 Provider、W8、Risk Cap 維持原狀。Cloud Preview＝BLOCKED_EXTERNAL_AUTH、#1237＝DRAFT／HOLD 與本批無關。
+
+## 2026-11-20｜OB-ASSEMBLER-FULL-INPUT-INVARIANT 驗收準則候選補登（只追加；不改既有列；依據 DEC-213 與 #1199 comment 7040939424；登記不等於施工授權；本段單組撰寫）
+
+> **docs-only 候選補登；不新增待辦 ID、不改變任何既有列的狀態。** PR／QA／CI／merge 結果以 #1199 回存與 GitHub merged 狀態為準，本檔不自證完成。
+
+| ID | owner | 新增事實 | 狀態 | 下一步／解阻 |
+|---|---|---|---|---|
+| **OB-ASSEMBLER-FULL-INPUT-INVARIANT**（沿用既有 ID，不另立） | 僅此 docs PR＝Claude C；runtime 實作 owner 仍待 Gate 指派 | (1) 反例補充：**對稱截斷**（`station_rows` 與 `holdings_rows` 被一致縮減，如兩通道同取顯示 Top3、各側 Top1）與**預過濾 invalid 列**皆使 `is_complete` 變 True，現有雙向對帳擋不住；**僅單側截斷時現有對帳能擋**。證據為本機原型（非 native pytest；腳本未入庫）。(2) 驗收準則候選 I1–I7 與 G1／G2 分級見 `docs/vnext/ONEBRAIN_FULL_ELIGIBLE_EVIDENCE_ACCEPTANCE_CRITERIA_CANDIDATE_2026-11-20.md`；G1＝I1／I2／I4（文件／測試等級候選，仍需另行指派才可寫 tests）；G2＝I3／I5／I7（涉及 schema／validator／簽章，僅列未核准 Gate）；I6 未決。(3) 附錄 A：`union_parquet_by_date` 不保存版本歷史，不能宣稱滿足 PIT；`available_at` 仍未定義 | **OPEN／待 Gate**（docs 候選不改變此狀態；不修復截斷、不使 OneBrain 可用、不放行 Stage F） | 仍隨 Stage F／`P1R-DIGEST-HEADLESS-ASSEMBLY` 設計；I3／I5／I6／I7 須客戶 Gate；DG-PIT／DG-LIC 維持原 HOLD。若 assembler 日後可偵測截斷，須同步顯式更新 `tests/test_onebrain_evidence_unknown_contract.py` 的 Top-N 反例測試（DEC-212） |
+
+> 以上不暗示任何 Gate 已解除或任何接線／UI 施工已授權；G-F1／G-F2、Stage F／G、Digest v2／OB-1-D3、官方詢問草稿 v2（HOLD）、#1237（HOLD）、#1107 Cloud NV 均維持原狀。
