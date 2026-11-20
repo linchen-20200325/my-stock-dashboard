@@ -10899,3 +10899,32 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI；Cloud 部署版本與新 FAKE Audit 畫面實機（由 `WORK-OB-UI-DELTA` 驗一次差額）；**未實跑 Playwright 視覺**（只改 L3 字面、`src/ui2` 未動；AppTest 層測試綠，但 390×844／1440×900 實機排版未量）。以上測試／突變皆單組作者環境。
 - **未動**：`src/ui2/**`、`app_ui2.py`、viewport JSON、`ALLOWED_CALLERS`、Stage F／G、Digest 詞彙／簽章／OB-1-D3、Real／持股／System Action／Provider／Risk Cap、所有 Gate。
 - **編號**：origin/main（535c1484）已用至 DEC-210／§87；本批 DEC-211／§88；合併時若被佔則順延。
+
+### DEC-212｜C-OB-EVIDENCE-UNKNOWN-TESTS：OneBrain「證據不可用 ⇒ unknown」離線契約測試護欄（候選 A tests-only；#1199 comment 7038579891 決策 1 授權；脈絡 #7037529004；2026-11-20；只追加；非 QA PASS；本檔單組撰寫）
+
+> **離線測試護欄，不增加可用性、不修復 Top-N 輸入錯誤、不是 OneBrain 已可用。**
+
+- **授權依據**：GPT 總管裁示 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7038579891 決策 1「候選 A：CONDITIONAL APPROVE tests-only 最小 PR」；C 線唯讀差額審查 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7037529004 （候選 A 範圍）。授權範圍＝新增單一 `tests/test_onebrain_evidence_unknown_contract.py` ＋ DEC／BACKLOG append-only。
+- **範圍（只有三樣）**：(1) `tests/test_onebrain_evidence_unknown_contract.py`（新增）；(2) 本 DEC；(3) `docs/BACKLOG.md` 補登。**零變更**：`src/**`、`shared/**`、`app*.py`、`src/ui2/**`、P3 baseline／任何守衛白名單、`ALLOWED_CALLERS`／`OFFLINE_SHADOW_CALLERS`、Digest 文案／欄位／簽章、Stage F／G、真 Provider、Risk Cap、W8、資料接線、viewport JSON、workflow、`tests/onebrain_anon_demo.py` 與既有測試（只讀重用其固定合成輸入）。`PROJECT_STATE`／`HANDOFF` 未更新：tests-only 護欄，無新增架構知識。
+- **精確「不是什麼」**：(1) **不是**可用性進展——OneBrain 仍無 headless 且已授權的正式 producer、無 production caller，使用者在畫面上看不到任何 runtime OneBrain 輸出；(2) **不修復** Top-N 輸入錯誤——`assemble_digest` 仍**無法偵測**輸入是否已被截斷，本 PR **不阻止**任何實際 production caller 截斷；(3) **不放行** Stage F／G，綠燈不得被引用為放行依據；(4) **不凍結** Digest v1 以外的演進——斷言群 1、2 是**目前契約快照**，OB-1-D3／Digest v2 經正式批准變更後應同步更新測試，不是回歸。
+- **五個斷言群**（均確定性、匿名合成、0 付費 API、0 外部 IO、不呼叫時鐘；本檔 AST 不直接 import streamlit／網路客戶端／LLM SDK／時鐘）：
+  1. **原因只在 coverage**：macro／station 兩側各 5 種不可用原因（no_stamp／stale／fetch_failed／undetermined／pit_violation，皆由 `EvidenceInput` 輸入表達，每案 source 名稱不同以抓外洩）——`digest.to_dict()` 與 `build_rule_summary(...).lines` 在原因之間**逐字相同**（以比較而非硬編碼全文），coverage `withheld_reason` 各自不同且等於預期；Digest 無缺值原因欄、機器原因字串不進摘要。
+  2. **`ProviderRequest` 欄位恰為 `{digest, task}`**（`dataclasses.fields` 與 `__annotations__` 實查；另經 `run_shadow`＋`FakeProvider` 實跑確認 Provider 實際收到的請求無 coverage、`run_shadow` 簽章為 `(digest, provider)`）——Provider 看不到 coverage／原因，**不得誤宣稱 Provider 可完整判斷資料可用性**。
+  3. **Top-N 截斷反例（`KNOWN_UNFIXED_RISK`，未修復）**：7 筆合格行動（demo 情境 E 輸入）⇒ total=7／shown=3／omitted=4／`is_complete=False`；把摘要只列的 Top-3 **回灌**為輸入 ⇒ total=3／omitted=0／`is_complete=True`（**錯判完整性**）。測試**同時**斷言「回灌後 `is_complete` 與完整輸入**不同**」、回灌後的 Digest 行動與規則式摘要與完整輸入**一樣**（消費端看不出差別），並在名稱／docstring 明示這**不是**產品契約；另釘 `assemble_digest` 簽章無任何能宣告「輸入已被截斷／為完整 eligible set」的參數（無法偵測的結構性原因）。若日後 assembler 被修好，該測試轉紅屬**預期**，須改寫為修復後行為。
+  4. **未使用資料不得以 0／OK／正常／安全代替 unknown**（10 個 side×原因組合＋全段零證據）：被拒用段 `used=False` 且有原因；其事實無 OK 狀態、無數值（0 也不行）；station 側八個站內計數皆為 `None`（非 0）、`digest.actions` 為 UNAVAILABLE 且無項目；macro 側 `risk_cap.cap_valid is False`；`is_complete` 為 `False`（嚴格布林）；摘要與 coverage 輸出不含「正常／中性／安全／neutral／safe」。（最小有效斷言，未做 60 格重複矩陣——既有 `test_decision_digest_evidence_matrix_guard.py` 已覆蓋採用資格全組合。）
+  5. **衛生**：結果決定性（同輸入兩次逐字相同）；本檔 AST 無禁用 import／時鐘呼叫（重用 UI2 No-Second-AI 守衛的同一支掃描器查 LLM SDK／端點）。
+- **突變結果**（在作者工作樹暫時改動 src／shared 後以 `git checkout --` 還原，工作樹乾淨；新測試共 25 個；皆單組作者環境）：
+
+| # | 突變 | 轉紅 |
+|---|---|---|
+| M1 | `_classify` 把 stale 改回報 no_stamp | 2 紅（斷言群 1，兩側 `distinct_reasons`） |
+| M2 | 未採用段計數 `None` → `0`（assembly 組 coverage 處） | 11 紅（產品自身 envelope 一致性檢查先 raise `ValueError`）；M2b＝再拔掉 envelope 檢查以隔離本檔斷言 → 8 紅（斷言群 4 直接抓 `0`：station 五案＋零證據；另 `distinct_reasons[station]`＋決定性各 1） |
+| M3 | 被拒用證據的 stamp 洩漏進 Digest（macro／station 皆改傳 stamp） | 1 紅（斷言群 1，`macro` 的 Digest 不再逐字相同） |
+| M3b | stale 的 macro 證據連 `macro_state`／stamp 一起交給 builder（stale 以 OK 進 Digest） | 7 紅（斷言群 1、2、4、5 多處；部分為 envelope `ValueError`） |
+| M4 | `ProviderRequest` 增 `coverage` 欄 | 2 紅（斷言群 2） |
+| M5 | assembler 以「剛好 MAX 筆即疑似截斷」啟發式把 `station_rows_unmatched` +1（模擬被修復的截斷偵測） | 1 紅（斷言群 3 的「回灌後與完整輸入 `is_complete` 不同」；**這個轉紅的意義＝未來若修復，須同步更新該測試**） |
+| M6 | `shared/decision_digest_terms.py` 的 `no_input` 字面加「（視為正常）」 | 6 紅（斷言群 4 的安心字眼檢查） |
+
+- **未解事項（皆未啟動、未授權）**：(1) **OB-1-D3／Digest v2**——缺值原因進摘要／Digest 的詞彙與簽章，Gate-needed、客戶裁示；(2) **`OB-ASSEMBLER-FULL-INPUT-INVARIANT`**——「未來 headless evidence builder 必須使用完整 eligible input、不得由 UI Top-N 反推」是另需實作的**硬性 invariant／Gate**，本 PR 只實證風險、不阻止；(3) G-F1／G-F2 客戶 Decision Gate（見 BACKLOG，僅登記，不授權任何 fetcher、來源接線、OAuth／Sheet／Secrets 或 production caller）；(4) Stage F／G、真 Provider、W8、Risk Cap、DG-LIC／DG-PIT 維持原 Gate HOLD。
+- **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI；突變為作者端單組。本批綠燈**不得**用來放行 Stage F，也**不得**據此宣稱 OneBrain 已可用或 Top-N 風險已修。
+- **編號**：origin/main（3163e49d）已用至 DEC-211；本批 DEC-212；合併時若被佔則順延。
