@@ -695,7 +695,9 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
 #: ③ 把新值填到下面 ④ PR 描述與 BACKLOG 說明為何 evidence 變了（不得是縮小）。
 #: DEC-208（2026-11-20，G-2 有條件核准）重生：僅 `fake/p4_{market,hold,target}/cold/None` 的 cards／first_screen／context_rows 文字欄位變動
 #: （「按 🚀 更新後載入（FAKE 示意）」→「FAKE 示意：尚未載入」；📊／💼 cold 下一步 override 刪除 → 既有 capability 欄）。舊值 fedfa62d…cb2a6。
-_P3_BASELINE_SHA256 = "ba1abae601fa34f42baf49bcced933ab3ad92ea5203fd6afed5c430b935419ba"
+#: DEC-209（W3-P1，2026-11-20，客戶同意）重生：僅 `real/p4_data/*` 九個 Real 狀態**新增**區塊 `data_freshness_items`（evidence 只增不減；
+#: 其餘 78 個 key 逐欄不變）。舊值 ba1abae6…419ba。
+_P3_BASELINE_SHA256 = "e39cd203b1a1cac33ef8ef2a194c874d39f4152e6795622232f295050571e7a5"
 
 
 def test_p3_evidence_baseline_file_is_pinned_by_sha256():

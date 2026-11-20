@@ -792,6 +792,10 @@ WIRED_PATHS = frozenset({
     # 列內容的嚴格形狀／算式／僅 Real 由 tests/test_ui2_data_freshness_overview.py 補償鎖定（本檢查器對 allowlist 內路徑整個放行）。
     (P4_DATA, "first/context_rows/0"), (P4_DATA, "first/context_rows/1"),
     (P4_DATA, "first/context_rows/2"), (P4_DATA, "first/context_rows/3"),
+    # W3-P1（客戶 2026-11-20「同意」＝#1199 comment 7025346343；DEC-209）：🗂「各項明細」只放行**實際攜帶 Real 資料的兩個具名列**——
+    # `FRESHNESS_ITEMS` 索引 0＝twii、索引 6＝regime（由最終 VM 實證）；精確 tuple，非前綴、非 wildcard；其餘六個未接列**不入豁免**
+    # （仍須是無值／無來源／無資料日的 capability `⬜ 尚未提供`）。兩列內容的精確形狀由 tests/test_ui2_data_freshness_items_w3p1.py 補償鎖定。
+    (P4_DATA, "sections/data_freshness_items/0"), (P4_DATA, "sections/data_freshness_items/6"),
 })
 #: 契約固定欄（位置 → 期望態／字樣）；無值、無 source／as_of。
 FIXED_PATHS: dict[tuple[str, str], tuple[object, str]] = {

@@ -56,6 +56,20 @@ FRESHNESS_ITEMS: tuple[tuple[str, str | None], ...] = (
 )
 WIRED_ITEM_KEYS = frozenset(k for k, fact in FRESHNESS_ITEMS if fact is not None)
 
+# ── W3-P1：預設收合 L2「各項明細」（#1199 comment 7025346343；名稱出自線框 §1.2／DEC-177，字面不改）──
+ITEMS_SECTION_KEY = "data_freshness_items"
+ITEMS_SECTION_TITLE = "各項明細"
+FRESHNESS_ITEM_LABELS: dict[str, str] = {
+    "twii": "台股加權指數", "foreign_flow": "外資買賣超", "margin": "融資餘額", "m1b_m2": "M1B／M2",
+    "pmi": "台灣 PMI", "sector_flow": "板塊資金流", "regime": "市場位階", "fundamental": "基本面季報",
+}
+# 明細列用的既有狀態字句（非新字串：全部是上方首屏計數列已在用的既有常數）。
+ITEM_TEXT_IN_RULE = _L_IN_RULE                       # 資料日在規則內
+ITEM_TEXT_STALE = _L_STALE                           # ⚠ 過期或可能已過期
+ITEM_TEXT_MISSING = _L_MISSING                       # ⬜ 資料未備
+ITEM_TEXT_UNAVAILABLE = _L_UNAVAILABLE               # 🔴 來源目前不可用或資料異常
+ITEM_ASOF_FMT = "資料日 {as_of}"
+
 
 @dataclass(frozen=True)
 class FreshnessCounts:
@@ -121,11 +135,46 @@ def freshness_rows(c: FreshnessCounts) -> list[dict]:
     ]
 
 
-def data_page_canonical(counts: FreshnessCounts | None = None) -> dict:
-    """`counts=None` ＝ 示意軸：原本誠實空殼與原文案（⛔ 摘要／計數）。Real 軸**必須**明確傳入由 snapshot 導出的計數。"""
+def item_not_provided_spec(key: str) -> dict:
+    """未接入項目的明細列：既有 capability `⬜ 尚未提供`＋既有說明句；⛔ 值／來源／資料日；⛔ 當成失敗。"""
+    return _np(f"item_{key}", FRESHNESS_ITEM_LABELS[key], R_DATA_NEXT_STEP)
+
+
+def item_detail_specs(wired: Mapping[str, Mapping]) -> list[dict]:
+    """八項固定順序的明細列 spec。`wired` 的 key 必須恰等於 `WIRED_ITEM_KEYS`（已接入項目的列由 L3 轉述 spec 產生）；
+    其餘項目一律 `item_not_provided_spec`。⛔ 重排、⛔ 增減。"""
+    if set(wired) != set(WIRED_ITEM_KEYS):
+        raise ValueError(f"明細列必須恰為已接入項目 {sorted(WIRED_ITEM_KEYS)}，收到 {sorted(wired)}")
+    out = []
+    for key, fact in FRESHNESS_ITEMS:
+        if fact is None:
+            out.append(item_not_provided_spec(key))
+        else:
+            spec = dict(wired[key])
+            if spec.get("label") != FRESHNESS_ITEM_LABELS[key]:
+                raise ValueError(f"明細列名稱不符：{spec.get('label')!r}")
+            out.append(spec)
+    return out
+
+
+def data_page_canonical(counts: FreshnessCounts | None = None, items: list[dict] | None = None) -> dict:
+    """`counts=None` ＝ 示意軸：原本誠實空殼與原文案（⛔ 摘要／計數）。Real 軸**必須**明確傳入由 snapshot 導出的計數。
+    `items`（Real 軸才可傳；W3-P1）＝`item_detail_specs` 的八列，成為預設收合 L2「各項明細」區塊；示意軸 ⛔。"""
+    if items is not None and counts is None:
+        raise ValueError("各項明細只屬 Real 軸（示意軸 ⛔ 明細／真值）")
+    if items is not None and [i["label"] for i in items] != [FRESHNESS_ITEM_LABELS[k] for k, _ in FRESHNESS_ITEMS]:
+        raise ValueError("各項明細必須是八項固定順序")
     real = counts is not None
     reason = R_DATA_FIRST_SCREEN if real else R_DATA_NOT_WIRED
     old_block = R_DATA_OLD_BLOCK if real else R_DATA_NOT_WIRED
+    sections = [
+        {"key": "data_overview", "title": "資料來源與連線", "level": "L1", "fields": [
+            _np("src_health", "來源健康度", old_block),
+            _np("data_asof", "資料日", old_block),
+            _np("active_sheet", "Active Sheet 連線", "登入與 Sheet 尚未開放")]},
+    ]
+    if items is not None:
+        sections.append({"key": ITEMS_SECTION_KEY, "title": ITEMS_SECTION_TITLE, "level": "L2", "fields": list(items)})
     return {
         "page": P4_DATA, "title": PAGE_LABELS[P4_DATA],
         "current_state": _np("data_state", "資料健康度", reason),
@@ -134,10 +183,5 @@ def data_page_canonical(counts: FreshnessCounts | None = None) -> dict:
         "next_step": _np("data_next", "下一步", R_DATA_NEXT_STEP if real else _FAKE_NEXT_STEP),
         "cta": {"label": "查看資料健康度", "disabled_reason": R_DATA_CTA_DISABLED if real else _FAKE_CTA_DISABLED},
         "cards": [],
-        "sections": [
-            {"key": "data_overview", "title": "資料來源與連線", "level": "L1", "fields": [
-                _np("src_health", "來源健康度", old_block),
-                _np("data_asof", "資料日", old_block),
-                _np("active_sheet", "Active Sheet 連線", "登入與 Sheet 尚未開放")]},
-        ],
+        "sections": sections,
     }

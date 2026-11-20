@@ -65,8 +65,9 @@ from shared.ui2_contract.text import (
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
 from src.services.ui2.data_page import (
+    FRESHNESS_ITEM_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
     S_IN_RULE, S_MISSING, S_NOT_EVALUATED, S_STALE, S_UNAVAILABLE, S_UNDETERMINABLE, counts_from_states,
-    data_page_canonical,
+    data_page_canonical, item_detail_specs,
 )
 from src.services.ui2.market_vm import build_market_page_vm
 from src.services.ui2.skeleton_vm import build_skeleton_page_vm
@@ -750,9 +751,62 @@ def freshness_states(snap: RealFeedSnapshot) -> dict[str, str]:
             "regime": item_state_of_spec(regime_spec(snap, "regime", "市場位階"))}
 
 
+def _twii_item_spec(state: str, spec: dict) -> dict:
+    """台股列（W3-P1「各項明細」）：只轉述 `twii_card_spec` 與 `freshness_states` 已決定的狀態。
+    R1：只有 in_rule／stale 且資料日是有效 ISO 日期才顯示日期；missing／unavailable／undeterminable 不顯示 spec 可能殘留的 as_of。
+    R2：上游抓取失敗（卡片 reason 已含既有 `UPSTREAM_TEXT_FETCH_FAILED`）即使 in_rule 也帶該句（⛔ 寫成更新成功／最新）。
+    R3：日 K 不參與（本函式不讀 kbar）。⛔ 重算新鮮度、⛔ 讀時鐘、⛔ source／fetched_at／published_at。"""
+    base: dict[str, Any] = {"key": "item_twii", "label": FRESHNESS_ITEM_LABELS["twii"], "as_of": None, "source": None}
+    if state in (S_IN_RULE, S_STALE):
+        as_of = spec.get("as_of") if _is_valid_iso_date(spec.get("as_of")) else None
+        failed = _UPSTREAM_ERROR_TEXT in (spec.get("reason") or "")
+        if state == S_IN_RULE:
+            parts = [ITEM_ASOF_FMT.format(as_of=as_of)] if as_of else []
+            if failed:
+                parts.append(_UPSTREAM_ERROR_TEXT)
+            return {**base, "value": ITEM_TEXT_IN_RULE, "as_of": as_of, "reason": "；".join(parts) or None}
+        return {**base, "state": "stale", "sub_reason": ITEM_TEXT_STALE, "as_of": as_of,
+                "value": ITEM_ASOF_FMT.format(as_of=as_of) if as_of else TEXT_ASOF_MISSING,
+                "reason": _UPSTREAM_ERROR_TEXT if failed else None}
+    if state == S_MISSING:
+        return {**base, "value": None, "missing_kind": "not_ready", "reason": None}
+    if state == S_UNAVAILABLE:
+        return {**base, "value": None, "state": "unavailable", "sub_reason": ITEM_TEXT_UNAVAILABLE, "reason": None}
+    if state == S_UNDETERMINABLE:
+        return {**base, "value": None, "state": "undeterminable", "reason": None}
+    raise ValueError(f"🗂 各項明細：台股不可能出現狀態 {state!r}（⛔ 默默落成某一態）")
+
+
+def _regime_item_spec(state: str, spec: dict) -> dict:
+    """位階列：位階契約沒有 as_of（`regime_spec.as_of` 恆 None）⇒ 一律明寫既有「⬜ 資料日未提供」，⛔ 補日期、⛔ 位階標籤、
+    ⛔ 規則分支 id／source。D-5：not_evaluated 用既有「⬜ 尚未載入」（⛔ 逐字「未評估」）、undeterminable 用既有「⬜ 無法判定」
+    （原因只用既有安全人話 `REGIME_SEE_WHY`）、missing 用「⬜ 資料未備」、unavailable 維持紅態；互斥差異不得被缺日抹除。"""
+    base: dict[str, Any] = {"key": "item_regime", "label": FRESHNESS_ITEM_LABELS["regime"], "as_of": None, "source": None,
+                            "value": None}
+    if state == S_NOT_EVALUATED:
+        return {**base, "state": "not_evaluated", "sub_reason": TEXT_NOT_LOADED, "reason": TEXT_ASOF_MISSING}
+    if state == S_UNDETERMINABLE:
+        return {**base, "state": "undeterminable", "reason": f"{TEXT_ASOF_MISSING}；{REGIME_SEE_WHY}"}
+    if state == S_MISSING:
+        return {**base, "missing_kind": "not_ready", "reason": TEXT_ASOF_MISSING}
+    if state == S_UNAVAILABLE:
+        return {**base, "state": "unavailable", "sub_reason": ITEM_TEXT_UNAVAILABLE, "reason": None}
+    raise ValueError(f"🗂 各項明細：位階不可能出現狀態 {state!r}（位階無資料日，⛔ 補造）")
+
+
+def freshness_item_specs(snap: RealFeedSnapshot) -> list[dict]:
+    """🗂「各項明細」八列（固定順序）：已接入兩項由**同一份 snapshot** 的 `freshness_states`／`twii_card_spec`／`regime_spec` 轉述，
+    其餘六項 `⬜ 尚未提供`（⛔ 失敗）。"""
+    states = freshness_states(snap)
+    return item_detail_specs({
+        "twii": _twii_item_spec(states["twii"], twii_card_spec(snap)),
+        "regime": _regime_item_spec(states["regime"], regime_spec(snap, "regime", "市場位階")),
+    })
+
+
 def _data(snap: RealFeedSnapshot) -> dict:
-    """🗂 資料頁：既有空殼＋DEC-177「資料新鮮度總覽」計數（由 snapshot 導出；示意軸不走這裡）。"""
-    return data_page_canonical(counts_from_states(freshness_states(snap)))
+    """🗂 資料頁：既有空殼＋DEC-177「資料新鮮度總覽」計數＋W3-P1 預設收合「各項明細」（皆由同一份 snapshot 導出；示意軸不走這裡）。"""
+    return data_page_canonical(counts_from_states(freshness_states(snap)), items=freshness_item_specs(snap))
 
 
 def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:

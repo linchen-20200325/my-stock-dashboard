@@ -413,7 +413,10 @@ def test_market_page_unwired_fields_still_rejected():
 
 def test_allowlist_has_exactly_four_new_context_row_tuples_and_removing_them_turns_red(monkeypatch):
     new = {k for k in RF.WIRED_PATHS if k[0] == P4_DATA}
-    assert new == {(P4_DATA, f"first/context_rows/{i}") for i in range(4)}
+    # W3-P1（DEC-209，客戶 2026-11-20 同意）：首屏 4 個 context_rows ＋「各項明細」兩個具名已接列的精確 tuple（索引 0＝twii、6＝regime）；
+    # 六個未接列不入豁免。明細區的精確清單／負例另見 tests/test_ui2_data_freshness_items_w3p1.py。
+    assert new == {(P4_DATA, f"first/context_rows/{i}") for i in range(4)} | {
+        (P4_DATA, "sections/data_freshness_items/0"), (P4_DATA, "sections/data_freshness_items/6")}
     assert not any("*" in p or p.endswith("/") for _, p in RF.WIRED_PATHS)
     monkeypatch.setattr(RF, "WIRED_PATHS", frozenset(k for k in RF.WIRED_PATHS if k[0] != P4_DATA))
     assert len(RF.check_only_wired_fields_carry_data(_real_vms())) >= 4

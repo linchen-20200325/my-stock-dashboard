@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "d3ab92db5a9a0617392fff2774054dd494ac773f",
-  "source_hash": "60d060be2fb80f1fc11cdac2b22fbc2f5faf9e1b5b2954723347272e30f51629",
-  "generated_at": "2026-11-19T20:42:32+00:00",
+  "git_sha": "273da9026134a3942f467905345dd6391d5c7614",
+  "source_hash": "d21f0e64cb791880809e022ed0cda58c27345d263596ddc2318d0f3c85d5e50e",
+  "generated_at": "2026-11-20T00:01:01+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "streamlit_version": "1.56.0",
@@ -1444,9 +1444,14 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.2,
+   "last_content_bottom": 378.2,
    "card_heights": [],
-   "expanders": [],
+   "expanders": [
+    {
+     "title": "keyboard_arrow_right 各項明細",
+     "open": false
+    }
+   ],
    "p2": {
     "onebrain": null,
     "slot": null,
@@ -1481,7 +1486,53 @@
     "nav_margin_after_risk": 177.4
    },
    "failures": {},
-   "pass": true
+   "pass": true,
+   "expanded": {
+    "collapsed_before": true,
+    "open": true,
+    "expander_box": {
+     "top": 1304.2,
+     "bottom": 1956.8,
+     "height": 652.7,
+     "left": 14.4,
+     "right": 375.6
+    },
+    "row_count": 8,
+    "row_labels": [
+     "台股加權指數",
+     "外資買賣超",
+     "融資餘額",
+     "M1B／M2",
+     "台灣 PMI",
+     "板塊資金流",
+     "市場位階",
+     "基本面季報"
+    ],
+    "rows": [
+     "台股加權指數 資料日 2026-11-09 ⚠ 過期或可能已過期",
+     "外資買賣超 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "融資餘額 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "M1B／M2 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "台灣 PMI ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "板塊資金流 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供",
+     "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
+    ],
+    "last_content_bottom": 1029.8,
+    "scroll_end_bottom": 763.9,
+    "scroll_end_gap_to_nav": 27.1,
+    "hscroll": {
+     "doc": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+     },
+     "main": {
+      "scrollWidth": 390,
+      "clientWidth": 390
+     }
+    },
+    "failures": []
+   }
   },
   {
    "viewport_name": "desktop",
@@ -2700,9 +2751,14 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.3,
+   "last_content_bottom": 482.3,
    "card_heights": [],
-   "expanders": [],
+   "expanders": [
+    {
+     "title": "keyboard_arrow_right 各項明細",
+     "open": false
+    }
+   ],
    "p2": {
     "onebrain": null,
     "slot": null,
@@ -2737,7 +2793,53 @@
     "nav_margin_after_risk": null
    },
    "failures": {},
-   "pass": true
+   "pass": true,
+   "expanded": {
+    "collapsed_before": true,
+    "open": true,
+    "expander_box": {
+     "top": 1206.3,
+     "bottom": 1859,
+     "height": 652.7,
+     "left": 80,
+     "right": 1360
+    },
+    "row_count": 8,
+    "row_labels": [
+     "台股加權指數",
+     "外資買賣超",
+     "融資餘額",
+     "M1B／M2",
+     "台灣 PMI",
+     "板塊資金流",
+     "市場位階",
+     "基本面季報"
+    ],
+    "rows": [
+     "台股加權指數 資料日 2026-11-09 ⚠ 過期或可能已過期",
+     "外資買賣超 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "融資餘額 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "M1B／M2 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "台灣 PMI ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "板塊資金流 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供",
+     "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
+    ],
+    "last_content_bottom": 521,
+    "scroll_end_bottom": 867.7,
+    "scroll_end_gap_to_nav": null,
+    "hscroll": {
+     "doc": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+     },
+     "main": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440
+     }
+    },
+    "failures": []
+   }
   }
  ]
 }

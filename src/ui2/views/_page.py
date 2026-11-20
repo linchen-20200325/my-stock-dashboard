@@ -6,7 +6,7 @@
 **呈現政策（Active Contract §8；P3，客戶 2026-11-03 (17) A2）**：`PageVM.context.sections` 是 VM 全量（**不是** Decision
 Context，也不是畫面清單）；本檔只決定「哪些區塊在畫面上怎麼畫」，**不改 VM 內容**——L1 直接畫；L2／L3 **預設不渲染**
 （四個主要投資頁不承載完整 L2／L3 evidence expander；evidence 仍完整留在 VM／canonical／Digest 輸入），
-只有 `SHOWN_FOLDS` 白名單內的「使用者功能／已核准稽核入口」才以預設收合的 expander 呈現。新增 L2／L3 區塊
+只有 `SHOWN_FOLDS` 白名單內的「使用者功能／已核准稽核入口／客戶核准的資料明細」才以預設收合的 expander 呈現。新增 L2／L3 區塊
 **預設隱藏**（fail closed：不會因為新增 evidence 而意外長出 expander）。
 Batch 3：標題／本文拆成可重用片段，供 📊 市場（今日結論＋今日主要風險）、🎯 標的（雙模式）、
 👤 我的（帳戶 skeleton）三頁各自組版；所有頁仍只吃 PageVM（⛔ 取數／判態／聚合動作）。
@@ -55,6 +55,9 @@ SHOWN_FOLDS: frozenset[tuple[str, str]] = frozenset({
     ("p4_target", "conditions"),
     ("p4_me", "digest"),
     ("p4_me", "registry"),
+    # W3-P1（客戶 2026-11-20「同意」＝#1199 comment 7025346343，GPT 總管轉錄；DEC-209）：🗂 Real-data Preview 的「各項明細」
+    # （八項固定順序、預設收合）。客戶特定例外，不是全域解凍；FAKE 軸無此區塊。
+    ("p4_data", "data_freshness_items"),
 })
 
 
