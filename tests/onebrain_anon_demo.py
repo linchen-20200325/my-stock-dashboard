@@ -49,10 +49,17 @@ LIMIT_OMITTED = ("已知限制 OB-1-D3：摘要僅列 Top-{shown}，未揭露其
                  "省略數只在 coverage 側車（total={total}／shown={shown}／omitted={omitted}）。")
 
 SCENARIO_KEYS = ("A", "B", "C", "D", "E", "F")
+SYNTHETIC_PROVENANCE = "合成值（非真實 macro 資料日／非真實檔案；僅示意格式）"
+IS_COMPLETE_NOTE = "is_complete 只指四段證據齊備且無未讀入計數，不代表摘要完整、也不代表資料新鮮或可放心"
+IS_COMPLETE_UNKNOWN_NOTE = ("本情境行動計數為未知（None），is_complete 由此 fail-closed 為 False；"
+                            "is_complete 本身是 False（布林），不是 None")
+FAKE_PROVIDER_NOTE = "FakeProvider＝測試替身，不是真實模型"
+ECHO_ACCEPTED_NOTE = "僅表示規則草稿回聲通過檢查，不代表 AI 輸出被採用或品質認可"
+ADOPTED_NOTE = "設計恆定宣告，非量測值；實質證據是 effective==規則式摘要"
 SCENARIO_TITLES = {
     "A": "證據齊全（來源與資料日齊備）",
     "B": "零證據（全段無輸入）",
-    "C": "macro 證據過期（coverage withheld=stale）",
+    "C": "macro 證據過期（coverage withheld=stale；stale 以注入狀態示意，非由日期推算）",
     "D": "站內證據抓取失敗（FETCH_FAILED）",
     "E": "合格行動 7 筆（超過 Top-3 上限）",
     "F": "影子執行：Provider 逾時／垃圾輸出／回聲，使用者看到的結果不變",
@@ -61,15 +68,16 @@ SECTION_LABELS = {"market": "市場", "industry": "產業", "buy_and_hold": "存
                   "capital_gain": "資本利得", "actions": "本期行動"}
 
 # ── 固定合成輸入（無時鐘、無隨機）─────────────────────────────────────────
-_NOW = datetime(2026, 10, 27, 9, 0, tzinfo=timezone.utc)           # 台北 2026-10-27 17:00
-_ASOF = date(2026, 10, 26)
+# 合成日期：刻意取明顯非真實的樣式（2000-01-03），避免與任何真實資料日撞同；僅示意格式。
+_NOW = datetime(2000, 1, 4, 9, 0, tzinfo=timezone.utc)             # 台北 2000-01-04 17:00（合成）
+_ASOF = date(2000, 1, 3)                                           # 合成資料日
 _MACRO_STAMP = SourceStamp("macro_state.json", _ASOF)
 _STATION_STAMP = SourceStamp("dividend_station_service", _ASOF)
 _CODES = ("add", "pause_add", "cut", "take_profit_force", "take_profit_partial", "add", "pause_add")
 
 
 def _macro_state() -> dict:
-    disclosure = RiskCapDisclosure(snapshot_ts="2026-10-26 18:30:00", not_evaluated=(), disabled=(), sahm_status=None)
+    disclosure = RiskCapDisclosure(snapshot_ts="2000-01-03 18:30:00", not_evaluated=(), disabled=(), sahm_status=None)
     return {"is_loaded": True, "regime": "bull", "light": "🟢", "health": 72.5,
             "exposure_limit_pct": 60, "defense": False, "risk_cap_disclosure": disclosure}
 
@@ -158,6 +166,8 @@ def _shadow_runs(a: AssembledDigest) -> list:
             "effective_mode": o.effective.mode.value,
             "effective_equals_rule_summary": o.effective.lines == rule_lines,
             "provider_output_adopted": False,       # 設計：影子層永不採用 Provider 輸出
+            "provider_output_adopted_note": ADOPTED_NOTE,
+            "shadow_accepted_note": ECHO_ACCEPTED_NOTE if o.shadow_accepted else None,
         })
     return runs
 
@@ -169,11 +179,14 @@ def run_scenario(key: str) -> dict:
     report = {
         "scenario": key, "title": SCENARIO_TITLES[key], "banner": BANNER, "ui_disclaimer": UI_DISCLAIMER,
         "sources": {
-            "segments": [{"segment": s.segment, "used": s.used, "source": s.source, "as_of": _iso(s.as_of)}
-                         for s in cov.segments],
+            "provenance": SYNTHETIC_PROVENANCE,
+            "segments": [{"segment": s.segment, "used": s.used, "source": s.source, "as_of": _iso(s.as_of),
+                          "synthetic": True} for s in cov.segments],
             "actions": {"total": cov.actions_total_eligible, "shown": cov.actions_shown,
                         "omitted": cov.actions_omitted_count, "max": cov.actions_max},
             "is_complete": cov.is_complete,
+            "is_complete_note": IS_COMPLETE_NOTE,
+            "counts_unknown": cov.actions_total_eligible is None or cov.actions_omitted_count is None,
         },
         "missing": {"withheld": [{"segment": s.segment, "reason": s.withheld_reason}
                                  for s in cov.segments if not s.used]},
@@ -186,6 +199,7 @@ def run_scenario(key: str) -> dict:
     if key == "F":
         report["fallback"] = {"effective": "規則式摘要（rule_only）", "provider_used": False,
                               "provider": "FakeProvider（離線）；Provider 輸出只被檢查、永遠不被採用",
+                              "fake_provider_note": FAKE_PROVIDER_NOTE,
                               "shadow_runs": _shadow_runs(a)}
     return report
 
@@ -199,13 +213,17 @@ def render_text(r: dict) -> str:
     out = [f"{'═' * 60}", f"【{BANNER}】", f"情境 {r['scenario']}：{r['title']}", UI_DISCLAIMER,
            "行動文字 txt-… 為合成示意識別字，不是建議。", ""]
     src = r["sources"]
-    out.append("① 來源（coverage：source／資料日）")
+    out.append(f"① 來源（coverage：source／資料日）— {src['provenance']}")
     for s in src["segments"]:
         mark = "採用" if s["used"] else "未採用"
-        out.append(f"  - {s['segment']:<9}{mark}　source={s['source'] or '無'}　資料日={s['as_of'] or '無'}")
+        syn = "（合成）" if s["source"] else ""
+        out.append(f"  - {s['segment']:<9}{mark}　source={s['source'] or '無'}{syn}　資料日={s['as_of'] or '無'}{syn}")
     a = src["actions"]
     out.append(f"  - 行動候選：total={_fmt(a['total'])}／shown={a['shown']}／omitted={_fmt(a['omitted'])}（上限 {a['max']}）"
                f"；is_complete={src['is_complete']}")
+    out.append(f"  - {src['is_complete_note']}")
+    if src["counts_unknown"]:
+        out.append(f"  - {IS_COMPLETE_UNKNOWN_NOTE}")
     out.append("")
     out.append("② 缺值（⬜ 無法判定／資料不足 與原因）")
     if r["missing"]["withheld"]:
@@ -218,7 +236,7 @@ def render_text(r: dict) -> str:
     out.append(f"  - 摘要內帶「⬜」的句子共 {r['missing']['missing_mark_lines']} 句（含「尚未定義」「研究框架，未啟用」）；明細見③")
     out.append("")
     rj = r["rule_judgment"]
-    out.append(f"③ 規則判斷（規則式摘要五段；mode={rj['mode']}，state={rj['state']}）")
+    out.append(f"③ 規則判斷（規則式摘要五段；mode={rj['mode']}，state={rj['state']}；句中資料日為合成值）")
     for blk in rj["sections"]:
         out.append(f"  ▍{blk['label']}")
         out.extend(f"    {s}" for s in blk["sentences"])
@@ -229,11 +247,15 @@ def render_text(r: dict) -> str:
     out.append("④ fallback（使用者實際看到的是哪一份）")
     out.append(f"  - effective ＝ {fb['effective']}；Provider 輸出是否被採用：{'是' if fb['provider_used'] else '否'}")
     out.append(f"  - {fb['provider']}")
+    if fb.get("fake_provider_note"):
+        out.append(f"  - {fb['fake_provider_note']}")
     for run in fb.get("shadow_runs", []):
+        acc_note = f"（{run['shadow_accepted_note']}）" if run["shadow_accepted_note"] else ""
         out.append(f"  · Provider={run['provider_mode']}：error_kind={run['error_kind']}，"
-                   f"shadow_accepted={run['shadow_accepted']}，grounding_clean={run['grounding_clean']}，"
+                   f"shadow_accepted={run['shadow_accepted']}{acc_note}，grounding_clean={run['grounding_clean']}，"
                    f"effective==規則式摘要：{'是' if run['effective_equals_rule_summary'] else '否'}，"
-                   f"採用 Provider 輸出：{'是' if run['provider_output_adopted'] else '否'}")
+                   f"採用 Provider 輸出：{'是' if run['provider_output_adopted'] else '否'}"
+                   f"（{run['provider_output_adopted_note']}）")
     return "\n".join(out) + "\n"
 
 

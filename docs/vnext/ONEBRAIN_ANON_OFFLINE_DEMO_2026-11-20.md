@@ -39,7 +39,7 @@ python -m tests.onebrain_anon_demo --scenario all --format json   # 機器對照
 
 | 情境 | 輸入 | 重點結果 |
 |---|---|---|
-| A | macro＋站內證據皆 fresh、2 筆行動 | 四段 used、`as_of=2026-10-26`、`is_complete=True`；行動段列 2 筆 `txt-…` |
+| A | macro＋站內證據皆 fresh、2 筆行動 | 四段 used、資料日 `2000-01-03（合成）`、`is_complete=True`；行動段列 2 筆 `txt-…` |
 | B | 零證據 | 四段 `no_stamp`；所有可判斷句皆「⬜ …資料不足，無法判定（尚無輸入）」；total／omitted 為 None；`is_complete=False`；state=unavailable |
 | C | macro 證據 stale | market／risk_cap `withheld=stale`（仍帶 source 與資料日）；**摘要仍寫「尚無輸入」**——如實呈現，並加註「摘要字面未區分過期與無輸入」 |
 | D | 站內證據 `FETCH_FAILED` | holdings／actions `fetch_failed`；摘要寫「規則層未產出可引用依據」；加註摘要未點出抓取失敗 |
@@ -49,7 +49,7 @@ python -m tests.onebrain_anon_demo --scenario all --format json   # 機器對照
 ## 4. 誠實分區
 
 **已實作（本 PR）**
-- 匿名／離線／不付費的最小可執行流程：`assemble_digest → build_rule_summary →（run_shadow＋FakeProvider）`，四區輸出、text／json 兩格式、6 情境，與 30 個測試（含突變驗證）。
+- 匿名／離線／不付費的最小可執行流程：`assemble_digest → build_rule_summary →（run_shadow＋FakeProvider）`，四區輸出、text／json 兩格式、6 情境，與 45 個測試（含突變驗證）。
 
 **docs-only（只有文件、沒有程式）**
 - 本文件；OneBrain 更廣的架構／證據覆蓋藍圖（`docs/vnext/ONEBRAIN_*`）仍是藍圖。
@@ -72,3 +72,11 @@ python -m tests.onebrain_anon_demo --scenario all --format json   # 機器對照
 3. 在 `tests/test_decision_digest_invariants_guard.py` 登記 `ALLOWED_CALLERS`（附核准依據），並過 UI2 既有守衛（no-second-AI、evidence preservation、SHOWN_FOLDS／WIRED_PATHS 等）。
 
 在上述核准前，本示意是唯一的可執行入口。
+
+## 7. 讀輸出時的註記（QA 回修，2026-11-20）
+
+- **來源區是合成值**：`source`／資料日（`2000-01-03`，刻意取明顯非真實的樣式）都是合成的示意格式，**不是**真實 macro 資料日、也不是真實檔案；text 與 json（`sources.provenance`、每段 `synthetic: true`）都已標明。
+- **`is_complete` 的定義**：只指「四段證據齊備且無未讀入計數」，**不代表摘要完整**，也不代表資料新鮮或可放心。零證據／抓取失敗情境（B／D）的行動計數是未知（`None`，不是 0），`is_complete` 由此 fail-closed 為 `False`（布林 False，不是 None）。
+- **C 情境的 stale 是注入狀態示意**（直接給 `FreshnessStatus.STALE`），不是由日期推算出來的。
+- **FakeProvider 是測試替身，不是真實模型**。echo 的 `shadow_accepted=True／grounding_clean=True` 只表示「規則草稿回聲通過檢查」，不代表 AI 輸出被採用或品質獲得認可。`provider_output_adopted=否` 是設計恆定宣告、非量測值；實質證據是 `effective_equals_rule_summary`。
+- **驗收狀態**：Work 對 273da902 的 NOT TESTABLE AT RUNTIME 結論**不因本 PR 自動解除**，待 Work 對本入口做增量驗收。

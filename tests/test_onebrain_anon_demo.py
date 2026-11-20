@@ -91,10 +91,10 @@ def test_main_cli_text_json_and_bad_scenario(capsys):
 # ════════════════════════════════════════════════════════════════════
 def test_A_complete_evidence_has_source_and_as_of_for_every_segment():
     r = _report("A")
-    assert all(s["used"] and s["source"] and s["as_of"] == "2026-10-26" for s in r["sources"]["segments"])
+    assert all(s["used"] and s["source"] and s["as_of"] == "2000-01-03" for s in r["sources"]["segments"])
     assert r["sources"]["is_complete"] is True and r["missing"]["withheld"] == []
     t = _text("A")
-    assert "source=macro_state.json" in t and "資料日=2026-10-26" in t
+    assert "source=macro_state.json（合成）" in t and "資料日=2000-01-03（合成）" in t
     assert "四段證據皆採用" in t and r["notes"] == []
 
 
@@ -186,6 +186,77 @@ def test_F_demo_reports_divergence_instead_of_hardcoding_equality(monkeypatch):
     runs = demo.run_scenario("F")["fallback"]["shadow_runs"]
     assert all(x["effective_equals_rule_summary"] is False for x in runs)
     assert "effective==規則式摘要：否" in demo.run("F", "text")
+
+
+# ════════════════════════════════════════════════════════════════════
+# 3b. QA 回修（N1～N3）：來源為合成值、Provider 標示、is_complete 如實
+# ════════════════════════════════════════════════════════════════════
+def test_N1_sources_are_marked_synthetic_in_text_and_json_and_not_a_real_date():
+    for key in ("A", "C", "D", "E"):
+        t, r = _text(key), _report(key)
+        assert "① 來源（coverage：source／資料日）— 合成值（非真實 macro 資料日／非真實檔案；僅示意格式）" in t
+        assert r["sources"]["provenance"] == "合成值（非真實 macro 資料日／非真實檔案；僅示意格式）"
+        assert all(s["synthetic"] is True for s in r["sources"]["segments"])
+        used = [s for s in r["sources"]["segments"] if s["source"]]
+        assert used and all(s["as_of"] == "2000-01-03" for s in used)
+        for s in used:                                            # 每個 source／資料日旁都有「合成」
+            assert f"source={s['source']}（合成）　資料日={s['as_of']}（合成）" in t
+    assert "2026-" not in demo.run("all", "text") and "2026-" not in demo.run("all", "json")   # 不與真實資料日撞同
+
+
+def test_N2_fake_provider_is_labelled_and_acceptance_and_adopted_are_qualified():
+    t = _text("F")
+    assert "FakeProvider＝測試替身，不是真實模型" in t
+    assert "shadow_accepted=True（僅表示規則草稿回聲通過檢查，不代表 AI 輸出被採用或品質認可）" in t
+    assert t.count("採用 Provider 輸出：否（設計恆定宣告，非量測值；實質證據是 effective==規則式摘要）") == 3
+    runs = _report("F")["fallback"]["shadow_runs"]
+    assert runs[2]["shadow_accepted_note"] and runs[0]["shadow_accepted_note"] is None
+    assert all(r["provider_output_adopted_note"] for r in runs)
+    assert _report("F")["fallback"]["fake_provider_note"] == "FakeProvider＝測試替身，不是真實模型"
+
+
+@pytest.mark.parametrize("key", KEYS)
+def test_N3_is_complete_definition_shown_on_every_page(key):
+    assert "is_complete 只指四段證據齊備且無未讀入計數，不代表摘要完整" in _text(key)
+    assert "is_complete_note" in _report(key)["sources"]
+
+
+def test_N3_scenario_C_title_says_stale_is_injected_not_derived_from_dates():
+    assert "stale 以注入狀態示意，非由日期推算" in _text("C")
+    assert "stale 以注入狀態示意，非由日期推算" in _report("C")["title"]
+
+
+@pytest.mark.parametrize("key", ["B", "D"])
+def test_N3_unknown_counts_render_as_None_and_is_complete_is_a_real_False(key):
+    r, t = _report(key), _text(key)
+    assert r["sources"]["actions"]["total"] is None and r["sources"]["actions"]["omitted"] is None
+    assert r["sources"]["is_complete"] is False and r["sources"]["counts_unknown"] is True   # 布林 False，不是 None
+    assert ("行動候選：total=未知（None，不是 0）／shown=0／omitted=未知（None，不是 0）（上限 3）；is_complete=False"
+            in t)
+    assert "is_complete 本身是 False（布林），不是 None" in t
+    j = json.loads(demo.run(key, "json"))[0]["sources"]
+    assert j["is_complete"] is False and j["actions"]["total"] is None and j["actions"]["omitted"] is None
+
+
+def test_N3_known_counts_do_not_carry_the_unknown_note():
+    for key in ("A", "C", "E"):
+        assert _report(key)["sources"]["counts_unknown"] is False
+        assert "行動計數為未知" not in _text(key)
+
+
+# ── QA 存活突變補強：①區行動候選整行必須逐字出現（防 omitted／total 被寫死成 0）──
+def test_B_text_has_the_full_actions_line_with_unknown_not_zero():
+    t = _text("B")
+    assert "行動候選：total=未知（None，不是 0）／shown=0／omitted=未知（None，不是 0）" in t
+    assert "total=0" not in t and "omitted=0" not in t
+
+
+def test_E_text_has_the_full_actions_line():
+    assert "total=7／shown=3／omitted=4（上限 3）" in _text("E")
+
+
+def test_A_text_actions_line_matches_coverage_exactly():
+    assert "行動候選：total=2／shown=2／omitted=0（上限 3）；is_complete=True" in _text("A")
 
 
 # ════════════════════════════════════════════════════════════════════
