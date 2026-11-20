@@ -1560,3 +1560,76 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - HEAD c969ccd0（方案 C 實作＋合併 origin/main ca12825e）。正式碼只動 `src/services/ui2/data_page.py`、`real_canonical.py`；`src/ui2/**` 零 diff。
 - 作者環境複驗：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（1.59.2／1.56.0）；measure 兩版本 fake 82／82、real 13／13；`tests/test_ui2_*`＋z60＋#1208 還原鏈 2260 passed。viewport 證據 JSON 未重生（source_hash 輸入未變）。
 - 下一手：非作者 QA → exact-head CI → merge → main CI；Cloud 另案。延後項見 BACKLOG 同日段與 DEC-190。非 QA PASS。
+
+## 2026-11-18 C1 TWII 來源字串（append-only；非 QA PASS）
+- 僅改 `src/services/market_twii_view_service.py` 常數＋新增 `tests/test_c1_twii_source_text.py`＋docs 追加（DEC-191）。`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 零 diff；p3 baseline／`_P3_BASELINE_SHA256` 未動。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。
+### C2 D-5 守衛位置敏感化交接（2026-11-18；只追加；非 QA PASS）
+- 分支 `c2-d5-guard-hardening`（基於 origin/main 8f434fad，已合併 6cca6d07），僅動 `tests/test_ui2_real_feed.py` 與三份 docs；決策 DEC-192。
+- 下一手：非作者 QA → exact-head CI → merge。與 C1（`src/services/market_twii_view_service.py`）檔案無重疊；C1 已取 DEC-191，本項重編為 DEC-192。
+
+## 2026-11-18 融資來源字樣中性化（DEC-193；append-only）
+- 只改 `MARGIN_SOURCE_TEXT` 一個字串＋`tests/test_margin_fact_service.py` 三組斷言；無接線、無數值／單位／schema 變動。同類宣稱仍在 `shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`，provenance 衝突 OPEN。非接線核准；A／HOLD 不變。非 QA PASS。
+
+## 2026-11-18 `_likely_private` 移除（DEC-194；append-only）
+- 分支 `a-likely-private-unknown`（基於 origin/main 1fe95b4d），未推送、未發 PR。改 `src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`，新增 `shared/etf_missing_text.py`、`tests/test_a_likely_private_unknown.py`，SPEC §2／ARCHITECTURE 私募列以刪除線＋現行註記更新。
+- 副作用：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈改為降級（先前維持綠）。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。OPEN 發現三項見 DEC-194／BACKLOG，不在本次範圍。非 QA PASS。
+
+## 2026-11-18 New UI2 a11y 三項最小修（DEC-197；append-only；非 QA PASS）
+- 分支 `b-ui2-a11y-three`（基於 origin/main 897b3c04），未推送、未發 PR。改 `src/ui2/shell/css.py`、`src/ui2/components/html.py`、`src/ui2/views/_page.py`、`src/ui2/views/data.py`；新增 `tests/test_ui2_a11y_three.py`；`tests/test_ui2_drawer_browser.py` 追加 ui2_browser 測項；重生 `docs/vnext/newui2_{realfeed,batch3b}/viewport_measurements{,_streamlit156}.json`（`--shots none`）。
+- 重生指令（照 DEC-137）：`python -m tests.ui2_viewport.measure_viewport --out docs/vnext/newui2_batch3b --shots none`（加 `--python <1.56.0 venv> --json-name viewport_measurements_streamlit156.json` 為 floor）；Real 加 `--feed real --out docs/vnext/newui2_realfeed`。
+- 下一手：非作者 QA → exact-head CI（含 ui2-browser 兩個 matrix）→ merge → main CI。若 DEC／§ 編號與 OneBrain PR 衝突，合併時重編號（src 註解不含編號）。
+
+## 2026-11-18｜C 線 OneBrain OB-1 離線鷹架（DEC-195；只追加；非 QA PASS）
+- 分支 `c-onebrain-offline-ob1`（base 897b3c04），未推送、未發 PR。新增 `shared/onebrain_provider.py`、`src/services/onebrain_shadow.py`、`tests/onebrain_fake_provider.py`、`tests/test_onebrain_offline_guard.py`；擴充 `tests/test_decision_digest_evidence_matrix_guard.py`（PIT 邊界兩種 stamp）。
+- 規則：新模組**零 production import**（守衛強制）；`ShadowOutcome.effective` 恆為規則式摘要；Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，不餵下游。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。Delta 3 與 OB-2 介面差額為 Gate 項，勿自行施工。非 QA PASS。
+
+## 2026-11-18 舊 UI ETF 診斷三項最小安全修復（DEC-196；append-only）
+- 分支 `a-etf-diag-three-fixes`（基於 origin/main 897b3c04），**未推送、未發 PR**（作者交付當下紀錄）。改 `etf_tab_single.py`、`health_inspector.py`、`shared/etf_missing_text.py`；新增 `tests/test_a_etf_diag_three_fixes.py`。
+- 註：上方 DEC-194 段「未推送、未發 PR」是**當時點的紀錄**，DEC-194 其後已以 #1215 合併，不是現況。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。副作用：`data_coverage.py` 讀 `_err_nav`，台股主動式 NAV 缺值時覆蓋燈降級。非 QA PASS。
+
+- **2026-11-18 A 線 DEC-198／§75**：分支 `a-etf-future-nav-date`（基於 origin/main cce44294）。NAV 診斷未來日期 fail-closed（`health_inspector` NAV 列＋`shared/etf_missing_text.ETF_NAV_DATE_FUTURE_TEXT`）；測試 `tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`。AUM／費用率／Beta 僅查證，登 BACKLOG `ETF-DIAG-ASOF-1`。下一手：非作者 QA → exact-head CI → merge。非 QA PASS。
+
+## 2026-11-18 OneBrain NOTE-1 隔離（DEC-199；append-only）
+- 分支 `c-onebrain-provider-error-isolation`（基於 origin/main cce44294），Draft PR。只改 `onebrain_shadow.py` 一處＋測試。
+- 下一手：非作者 QA → exact-head CI → merge。OB-1-D3 仍待裁示。非 QA PASS。
+
+## 2026-11-18 B 線 New UI2 五頁離線可用收斂（DEC-200；append-only；非 QA PASS）
+- 分支 `b-ui2-offline-usable-diag`（base cce44294）。五頁矩陣見 BACKLOG `UI2-OFFLINE-MATRIX-1118`：只有 🗂 連線診斷有兩個可重現阻礙（冷卻提示殘留、壞形狀報告使頁面每次 rerun 崩潰），已修（`src/ui2/views/data.py`＋`tests/test_ui2_offline_usable_diag.py`），4 份 DEC-137 存證已重生。
+- 下一手：非作者 QA → exact-head 五項 CI → merge → main CI。UI2-OFF-1／-2 為登記項，勿自行施工（後者需草稿先行）。編號 DEC-200／§77 若與 #1219／#1220 合併順序衝突則順延。非 QA PASS。
+
+## 2026-11-19 B 線 N2 未來資料日日 K meta 修正（DEC-201；append-only；非 QA PASS）
+- 分支 `b-ui2-n2-future-kbar-asof`（base origin/main 8d09c3d6，#1221 已 merge、main push CI run 44407556580 success 後才施工），Draft PR。只改 `src/services/ui2/real_canonical.py`＋新測試 `tests/test_ui2_n2_future_kbar_meta.py`；`src/ui2/**` 零改動，DEC-137 存證不需重生。
+- 下一手：非作者 QA → exact-head 五項 CI → merge → main CI。N1 HOLD（需 JS Gate）；O1／O2 為 OPEN 觀察，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線 docs：UI2 N1／O1／O2 處置（DEC-202；append-only；非 QA PASS）
+- 分支 `b-docs-ui2-n1-o1-o2`（base origin/main 6623760d），docs-only Draft PR。授權 #1199 comment 6995747146；證據 #6995401840。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。B1／B2／B3 與任何新字句／改口徑／口徑鎖定測試**未授權**，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線：標的即時查一檔視覺原型（DEC-203；append-only；非 QA PASS）
+- 分支 `b-nui2-target-lookup-prototype`（base eff23f48），Draft PR。原型僅示範、隔離於 App 外；下一手：客戶 Visual Gate → 非作者 QA → CI。正式接線未授權。
+
+- 修正輪（DEC-203 補註）：同分支追加 commit；下一手仍為客戶 Visual Gate → 非作者 QA → CI。
+
+## 2026-11-19 B 線：標的即時查一檔原型 V2 視覺候選（DEC-204；append-only；非 QA PASS）
+- 分支 `b-nui2-target-lookup-prototype-v2`（base a56406c9），Draft PR。僅隔離原型精修；下一手：使用者看 `screenshots_v2/compare_*` 做 Visual 確認 → 非作者 QA → CI。**不得合併進正式 New UI2**；正式接線 Gate 維持 HOLD。
+
+## 2026-11-19 B 線 docs：查一檔 MVP 決議入庫＋L3 契約候選（DEC-205；append-only；非 QA PASS）
+- 分支 `b-docs-lookup-mvp-pregate`（base f1f199e5），docs-only Draft PR。授權 #1199 comment 7007425153（DG-PIT＝B＋X、DG-LIC＝A）。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。之後 **Work 唯讀取證**（91998／94865／政府資料開放授權條款第 1 版；91995 另 Schema）→ 核對權利／PIT／Schema 是否達標 → **只在證據達標時**另送 HEADLESS-MVP-IMPLEMENTATION Decision Gate。headless 邊界目前 NO-GO；勿自行施工，勿下載、勿改 cache／workflow／UI2。非 QA PASS。
+
+## 2026-11-19 B 線 tests-only：UI2 安全降級現況回歸守衛（DEC-206；append-only；非 QA PASS）
+- 分支 `b-tests-ui2-safe-degrade-1202`（base f86e62e7），tests-only Draft PR。授權 #1199 comment 7011328051＋Issue #1202。
+- 下一手：非作者 QA → exact-head CI → merge → main CI。BACKLOG `UI2-SAFE-DEGRADE-GAPS-1202` 的 D1／D2／D3／G-5～G-9／髒 session 崩潰**待總管裁示，未施工**，勿自行施工。非 QA PASS。
+
+## 2026-11-19 B 線 bugfix：UI2 D1＋G-5 最小修補（DEC-207；append-only；非 QA PASS）
+- 分支 `b-fix-ui2-d1-g5`（base e855a5f9），Draft PR。授權 #1199 comment 7011701691（裁示 1、2）。下一手：非作者 QA → exact-head CI（含 `ui2-browser-gate`）→ merge → main CI。
+- 注意：改 `src/ui2/**` 已重生 DEC-137 四份存證（`source_hash` 變）；之後任何 `src/ui2/**` 改動都要再重生。G-5 卡片目前**沒有原因句**（既有 `⬜ 無法判定` 字樣；加原因句屬新文案 Gate，勿自行加）。D2／D3／G-6～G-9／髒 session 崩潰仍 OPEN，勿自行施工。非 QA PASS。
+
+## 2026-11-20 B 線 UX：UI2 U-1／G-3／UX-1＋G-1(b)（DEC-208；append-only；非 QA PASS）
+- 分支 `b-ux-ui2-u1-g3-ux1`（base d3ab92db），Draft PR。授權 #1199 comment 7021221449／使用者「同意」#7021388731／總管 #7021701891。下一手：非作者 QA → exact-head 五項原生 CI → 0 unresolved threads → merge → main CI。
+- 注意：改 `src/ui2/**` 已重生 DEC-137 四份存證（`source_hash` 變）；P3 baseline 已有意識重生（僅 `fake/p4_{market,hold,target}/cold/None`），`_P3_BASELINE_SHA256` 已更新。之後再改 `src/ui2/**` 要再重生；再改 `scenarios.py` 文字要確認 P3 指紋。
+- **G-1(b) 例外只限 FAKE＋cold＋更新 CTA disabled**；若日後「🚀 更新」CTA 啟用，須重新評估（原句 `RISK_SENTENCE_NOT_LOADED` 仍保留為有效規格）。**G-4（👤 帳戶提示）DEFER、A11Y-F4 未決，勿順手動**。非 QA PASS。

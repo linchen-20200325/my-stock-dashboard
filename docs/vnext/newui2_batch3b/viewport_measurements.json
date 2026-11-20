@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.59.2",
-  "git_sha": "f7974c66e09ca3d533d3f4a9d0ea7c407780f844",
-  "source_hash": "25c1f27f6c40ef3a607fe6642aa51d70b4149df30d9c8223de6bdf7b61f0af3b",
-  "generated_at": "2026-11-17T11:25:07+00:00",
+  "git_sha": "d3ab92db5a9a0617392fff2774054dd494ac773f",
+  "source_hash": "60d060be2fb80f1fc11cdac2b22fbc2f5faf9e1b5b2954723347272e30f51629",
+  "generated_at": "2026-11-19T20:53:20+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "153.0.8010.12",
   "viewports": {
@@ -173,7 +173,7 @@
     },
     {
      "q": "concl",
-     "text": "今日結論 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "今日結論 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 190.0,
      "bottom": 261.7,
      "left": 27.4,
@@ -183,7 +183,7 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "市場目前狀態 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 261.7,
      "bottom": 316.6,
      "left": 27.4,
@@ -213,12 +213,12 @@
     },
     {
      "q": "q3",
-     "text": "下一步 按 🚀 更新",
+     "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
      "top": 427.4,
-     "bottom": 462.4,
+     "bottom": 482.3,
      "left": 27.4,
      "right": 362.6,
-     "height": 35,
+     "height": 54.9,
      "width": 335.2
     }
    ],
@@ -284,39 +284,39 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 434.0,
    "card_heights": [
-    159,
-    159,
-    159,
-    159,
-    159,
-    159
+    139,
+    139,
+    139,
+    139,
+    139,
+    139
    ],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1177.6,
-     "bottom": 1254.3,
+     "top": 1155.2,
+     "bottom": 1232.0,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
      "width": 361.2
     },
     "slot": {
-     "top": 552.9,
-     "bottom": 647.2,
+     "top": 592.0,
+     "bottom": 686.3,
      "left": 14.4,
      "right": 375.6,
      "height": 94.3,
      "width": 361.2
     },
     "grid": {
-     "top": 663.2,
-     "bottom": 1157.6,
+     "top": 702.3,
+     "bottom": 1135.2,
      "left": 14.4,
      "right": 375.6,
-     "height": 494.4,
+     "height": 433.0,
      "width": 361.2
     },
     "slot_graphics": 0,
@@ -335,14 +335,14 @@
    "h1": null,
    "batch3": {
     "risk": {
-     "top": 479.4,
-     "bottom": 536.9,
+     "top": 499.3,
+     "bottom": 576.0,
      "left": 14.4,
      "right": 375.6,
-     "height": 57.5,
+     "height": 76.7,
      "width": 361.2,
      "inside_l1": true,
-     "text": "今日主要風險 ⬜ 尚未載入，請按更新"
+     "text": "今日主要風險 ⬜ 尚未載入 FAKE 示意：尚未載入"
     },
     "mode_box": null,
     "mode_content": null,
@@ -352,10 +352,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 563.9,
+    "first_block_after_l1_top": 603.0,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.1,
-    "nav_margin_after_risk": 227.1
+    "scroll_end_bottom": 763.8,
+    "nav_margin_after_risk": 188.0
    },
    "failures": {},
    "pass": true
@@ -372,7 +372,7 @@
    "account": null,
    "feed": "fake",
    "stress_factor": 1.5,
-   "stressed_text_nodes": 10,
+   "stressed_text_nodes": 11,
    "elements": [
     {
      "q": "q4",
@@ -386,7 +386,7 @@
     },
     {
      "q": "concl",
-     "text": "今日結論 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）按 🚀 更新後載入",
+     "text": "今日結論 ⬜ 尚未載入 FAKE 示意：尚未載入FAKE 示",
      "top": 210.7,
      "bottom": 282.4,
      "left": 27.4,
@@ -396,7 +396,7 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）按 🚀 更新後載入",
+     "text": "市場目前狀態 ⬜ 尚未載入 FAKE 示意：尚未載入FAKE 示",
      "top": 282.4,
      "bottom": 337.3,
      "left": 27.4,
@@ -426,12 +426,12 @@
     },
     {
      "q": "q3",
-     "text": "下一步 按 🚀 更新按 🚀",
+     "text": "下一步 ⬜ 尚未提供（待系統動作整合）⬜ 尚未提供（待 動作判斷功能尚未開放動作判斷功",
      "top": 472.1,
-     "bottom": 507.1,
+     "bottom": 527,
      "left": 27.4,
      "right": 362.6,
-     "height": 35,
+     "height": 54.9,
      "width": 335.2
     }
    ],
@@ -453,11 +453,11 @@
     "top1_clipped": false
    },
    "stress": {
-    "risk_top": 524.1,
-    "risk_bottom": 581.6,
-    "scroll_end_bottom": 763.8,
-    "scroll_end_gap_to_nav": 27.2,
-    "risk_bottom_at_scroll_end": -267.4
+    "risk_top": 544,
+    "risk_bottom": 620.7,
+    "scroll_end_bottom": 763.5,
+    "scroll_end_gap_to_nav": 27.5,
+    "risk_bottom_at_scroll_end": -206.3
    },
    "failures": {},
    "pass": true
@@ -683,7 +683,7 @@
     },
     {
      "q": "q1",
-     "text": "查詢摘要 ⬜ 尚未載入 FAKE 示意：輸入代碼並查詢後顯示",
+     "text": "查詢摘要 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 289.2,
      "bottom": 344.1,
      "left": 27.4,
@@ -854,7 +854,7 @@
    "elements": [
     {
      "q": "q1",
-     "text": "組合狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "組合狀態 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 189.7,
      "bottom": 244.6,
      "left": 27.4,
@@ -8388,7 +8388,7 @@
     },
     {
      "q": "concl",
-     "text": "今日結論 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "今日結論 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 187.1,
      "bottom": 261.8,
      "left": 80,
@@ -8398,29 +8398,29 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "市場目前狀態 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 269.8,
-     "bottom": 328.7,
+     "bottom": 346.5,
      "left": 80,
      "right": 501.3,
-     "height": 58.9,
+     "height": 76.7,
      "width": 421.3
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 269.8,
-     "bottom": 328.7,
+     "bottom": 346.5,
      "left": 509.3,
      "right": 930.7,
-     "height": 58.9,
+     "height": 76.7,
      "width": 421.3
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 336.7,
-     "bottom": 394.6,
+     "top": 354.5,
+     "bottom": 412.4,
      "left": 80,
      "right": 1360,
      "height": 57.9,
@@ -8428,12 +8428,12 @@
     },
     {
      "q": "q3",
-     "text": "下一步 按 🚀 更新",
-     "top": 402.6,
-     "bottom": 440.6,
+     "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+     "top": 420.4,
+     "bottom": 478.3,
      "left": 80,
      "right": 1360,
-     "height": 38,
+     "height": 57.9,
      "width": 1280
     }
    ],
@@ -8499,7 +8499,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.6,
+   "last_content_bottom": 538.3,
    "card_heights": [
     142,
     142,
@@ -8511,24 +8511,24 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 717.0,
-     "bottom": 758.6,
+     "top": 754.7,
+     "bottom": 796.3,
      "left": 80,
      "right": 1360,
      "height": 41.6,
      "width": 1280
     },
     "slot": {
-     "top": 456.6,
-     "bottom": 550.9,
+     "top": 494.3,
+     "bottom": 588.6,
      "left": 80,
      "right": 1360,
      "height": 94.3,
      "width": 1280
     },
     "grid": {
-     "top": 566.9,
-     "bottom": 709.0,
+     "top": 604.6,
+     "bottom": 746.7,
      "left": 80,
      "right": 1360,
      "height": 142.1,
@@ -8551,13 +8551,13 @@
    "batch3": {
     "risk": {
      "top": 269.8,
-     "bottom": 328.7,
+     "bottom": 346.5,
      "left": 938.7,
      "right": 1360,
-     "height": 58.9,
+     "height": 76.7,
      "width": 421.3,
      "inside_l1": true,
-     "text": "今日主要風險 ⬜ 尚未載入，請按更新"
+     "text": "今日主要風險 ⬜ 尚未載入 FAKE 示意：尚未載入"
     },
     "mode_box": null,
     "mode_content": null,
@@ -8567,9 +8567,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 467.6,
+    "first_block_after_l1_top": 505.3,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -8796,7 +8796,7 @@
     },
     {
      "q": "q1",
-     "text": "查詢摘要 ⬜ 尚未載入 FAKE 示意：輸入代碼並查詢後顯示",
+     "text": "查詢摘要 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 280.3,
      "bottom": 335.2,
      "left": 93,
@@ -8967,7 +8967,7 @@
    "elements": [
     {
      "q": "q1",
-     "text": "組合狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 示意）",
+     "text": "組合狀態 ⬜ 尚未載入 FAKE 示意：尚未載入",
      "top": 169.4,
      "bottom": 228.3,
      "left": 938.7,

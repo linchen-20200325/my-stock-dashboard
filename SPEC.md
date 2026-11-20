@@ -30,9 +30,17 @@
 
 ---
 
-## §2 ETF 私募/特殊判別啟發式
+## §2 ~~ETF 私募/特殊判別啟發式~~ ETF 身分一律「未知」（DEC-194；2026-11-18 有意識的更正，不是漏刪）
 
-> 來源：`etf_tab_single._likely_private`，輸出至 `session_state['etf_single_data']['_likely_private']`。
+> 📌 **現行（DEC-194）**：程式內沒有任何可靠的**正向**身分證據（無私募名單、無投信揭露旗標），故**不再**由「AUM＋費用率＋NAV 三項皆缺」推斷私募；`_likely_private` 已自程式與 `session_state['etf_single_data']` 移除（舊 session 殘留的該鍵一律忽略）。
+> - 三項皆缺（非海外、非主動式）→ health_inspector 三列皆 🔴；AUM 列文字「目前沒有可用 ETF 規模資料，暫時無法顯示。 ETF 類型無法確認；資料未取得不代表私募。」；費用率／NAV 列走 payload `_err_expense`／`_err_nav` 既有句。
+> - `prem['stale_nav']` 為真且 NAV 無值 → NAV 列「淨值資料已過期，暫時無法顯示。」（`_ERR_NAV_STALE`），不再說成「沒有可用淨值資料」。
+> - 海外 ETF、台股主動式 ETF 規則逐字不變。句子單一來源 `shared/etf_missing_text.py`。
+> - 副作用（已揭露）：`data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈由原本維持綠色改為降級。
+> - 下方為舊設計原文，保留供追溯，**已不生效**。
+
+~~來源：`etf_tab_single._likely_private`，輸出至 `session_state['etf_single_data']['_likely_private']`。~~
+
 
 ```python
 _likely_private = (
@@ -47,11 +55,12 @@ _likely_private = (
 **health_inspector 行為**：
 | 條件 | AUM | 費用率 | NAV |
 |------|-----|--------|------|
-| 海外 ETF（`_is_overseas`） | 不動 | `na` + 海外訊息 | `na` + 海外訊息 |
-| 私募 ETF（`_likely_private`） | `na` + 私募訊息 | `na` + 私募訊息 | `na` + 私募訊息 |
+| 海外 ETF（`_is_overseas`） | ~~不動~~ **現行（DEC-196）**：有值 🟢；缺值 🔴＋誠實缺值句（海外身分優先，不宣稱主動式） | `na` + 海外訊息 | `na` + 海外訊息 |
+| **現行（DEC-196）台股主動式** | payload 有失敗證據（`_err_aum`／`_err_expense`／`_err_nav`）⇒ 🔴＋明示句；無證據（舊 session）⇒ ⚪ 公開資料受限 | 同左 | 同左；NAV 有值僅在有可信 `nav_date`／`data_date` 且非 stale 才綠，否則 🔴（過期句／日期不明句） |
+| ~~私募 ETF（`_likely_private`）~~（DEC-194 已移除，不生效） | ~~`na` + 私募訊息~~ | ~~`na` + 私募訊息~~ | ~~`na` + 私募訊息~~ |
 | 一般 | 缺漏 → 紅 | 缺漏 → 紅 + 3源錯誤訊息 | 缺漏 → 紅 + 5源錯誤訊息 |
 
-訊息字串：「私募/特殊 ETF — AUM、費用率、NAV 主流資料源皆未揭露」
+~~訊息字串：「私募/特殊 ETF — AUM、費用率、NAV 主流資料源皆未揭露」~~（DEC-194 已移除）
 
 ---
 

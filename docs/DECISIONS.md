@@ -10678,3 +10678,186 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **作者環境結果**（非 CI／非非作者 QA）：fast lane 40209 passed／0 failed／38 skipped／3 xfailed；ui2_browser 43 passed（streamlit 1.59.2、1.56.0）；measure_viewport fake 82／82、real 13／13。
 - **仍 NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud。
 - **延後（不在本 PR）**：TWII 卡片「每日更新」文案改為「本地加權指數歷史快取（來源 Yahoo）」（C 線獨立項）；第二階段細節；位階契約無 `as_of`，若日後新增，載入→「資料未備」歸類須重審。
+
+### DEC-191｜TWII 來源字串拿掉「，每日更新」（C1；GPT 2026-11-18 核准；只追加；非 QA PASS）
+- **依據**：GPT 核准留言 https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859；對應延後項見 DEC-190、`NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT_2026-11-12.md` M-23、`QUALITY_BATCH1_COVERAGE_GAP_AUDIT_2026-11-13.md` K7。
+- **變更**：`src/services/market_twii_view_service.py::TWII_SOURCE_TEXT` 由「本地加權指數歷史快取（來源 Yahoo，每日更新）」改為「本地加權指數歷史快取（來源 Yahoo）」。**只**移除「，每日更新」；來源、as_of、新鮮度判定、數值、`src/ui2/**`、`app_ui2.py`、`measure_viewport.py` 一律未動。
+- **舊值理由（仍成立）**：cron 本意為每日更新。**被權衡掉**：常數不隨新鮮度變，資料停更時仍宣稱「每日更新」與實況不符；來源字串不應承諾頻率。
+- **讀取點**：UI2 real feed（`real_canonical.twii_card_spec`→`TwiiFact.source`）、舊 UI `src/ui/views/_market_blocks.py`（兩處 `twii_svc.TWII_SOURCE_TEXT`）；測試皆引用常數而非字面，無舊字面釘點。
+- **不重生**：`tests/fixtures/ui2_p3_evidence_baseline.json` 的來源欄為「本地加權指數歷史快取」（不含本常數），`_P3_BASELINE_SHA256` 不變。`docs/vnext/**` 既有量測 JSON／線框文件內的舊字樣屬歷史證據，原文保留不改。
+- **測試**：`tests/test_c1_twii_source_text.py`（字面釘＋「每日」不得出現＋dataclass 預設值）。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud；既有 viewport 量測 JSON 未重量（`source_hash` 輸入未動，仍判新鮮，但其內嵌 TWII 字樣為舊值）。
+### DEC-192｜C2 D-5 例外守衛改為位置敏感（2026-11-18；只追加；測試限定；非 QA PASS）
+- **來源**：GPT 核准 C2（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）。DEC-190 的 D-5 例外原以整頁 `blob.replace(row4, "")` 實作，位置不敏感：核准文案出現在資料頁任何位置或重複，皆被一併放行。使用者核准範圍僅限資料頁第 4 列（`first/context_rows/3`）一次。
+- **決定**：`tests/test_ui2_real_feed.py::regime_label_residue` 例外改為只剪第一屏第 4 個 ctx 列 DOM 元素的 value 內文一次（`_strip_d5_row4_value`）。條件全成立才剪：整頁恰 4 個 ctx 列；第 4 列 label＝`FRESHNESS_ROW_LABELS[3]`；value＝核准文案。任一不成立即不給例外（fail closed）。
+- **範圍**：測試限定。正式碼、`src/ui2/**`、`app_ui2.py`、`tests/ui2_viewport/**` 零 diff；D-4 形狀補償測試（`tests/test_ui2_data_freshness_overview.py`）未動；未新增任何白名單。
+- **測試**：缺口示範 `test_c2_gap_demo_legacy_guard_tolerates_approved_string_at_wrong_position`；新增 `test_c2_d5_*`（正向一次通過；他處／重複／缺失或不同／ctx 數量與順序錯／其他四頁／非法形狀與其他位階字皆須失敗）。還原守衛後 11 個 c2 測試轉紅。
+- 仍 NOT VERIFIED：非作者 QA、exact-head CI、main CI、Cloud。
+
+### DEC-193｜融資來源字樣 `MARGIN_SOURCE_TEXT` 改中性措辭（I1140-MARGIN-SOURCE-TEXT／DEC174-GG1；ChatGPT 定稿；2026-11-18；只追加；非 QA PASS；非接線核准）
+- **裁示來源**：ChatGPT 定稿（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967429859）；獨立預查：0 production caller、無測試釘住舊字面。
+- **變更**：`src/services/margin_fact_service.py::MARGIN_SOURCE_TEXT` 由「本地融資餘額歷史快取（FinMind 全市場融資金額，元換算為億元；每日更新）」改為「本地融資餘額歷史快取（市場範圍與來源待確認）」。
+- **移除的宣稱**：「全市場」（範圍未證實）、「FinMind」（DATASTATION／finmind provenance 衝突仍 OPEN）、「每日更新」（更新頻率未證實）；另刪「元換算為億元」細節——單位已由 `MARGIN_UNIT`（億元）承載，不必在來源字樣重述。
+- **未動**：數值、單位換算（`TWD_PER_YI`、`MARGIN_UNIT`）、schema、FieldState、來源契約、`shared/margin_schema.py`、`macro_helpers.py`（`test_w1_r7_hit_source` 釘住）、`leading_indicators`、任何接線（UI2／real_feed 仍 0 引用）。
+- **同類「全市場」宣稱仍未處理**：`shared/margin_schema.py:55`、`macro_helpers.py:1966`、`leading_indicators.py:949`、`ARCHITECTURE.md:1281`。DATASTATION／finmind provenance 衝突仍 OPEN。
+- **明確聲明**：本項**不是接線核准**；DG-LIC、DG-PIT、DG-COV、I1144-WIRING-GATE 均不變；實際運作維持 A／HOLD。
+- **測試**：`tests/test_margin_fact_service.py` 新增字面釘住＋不含「全市場／每日更新／FinMind」；既有 scope guard 仍綠。作者環境自跑，未經非作者 QA。
+
+### DEC-194｜移除 `_likely_private`：ETF 身分一律「未知」（GPT 核准 plan C+A 保守最小版；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：GPT 核准（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6967695037），依獨立第二組驗證的原型與 AppTest harness 施作。
+- **問題**：`etf_tab_single._likely_private` 以「非海外且 AUM、費用率、NAV 全缺」推斷私募，於 health_inspector 顯示「私募/特殊 ETF — … 皆未揭露」並把三列壓成 ⚪。程式內**沒有任何可靠的正向身分證據**；三項缺值可能只是上游失敗，推斷私募等於捏造身分（§1）。
+- **設計**：身分一律「未知」。(A) `src/ui/etf/etf_tab_single.py`：刪除推斷；`_restricted = _is_active`；payload 不再存 `_likely_private`；`prem['stale_nav']` 真且 NAV 無值 → `_err_nav = _ERR_NAV_STALE`（「淨值資料已過期，暫時無法顯示。」），否則維持 `_ERR_NAV_NO_ATTEMPT_EVIDENCE`；費用率／AUM tooltip 改為中性缺值句。(B) `src/ui/pages/health_inspector.py` ETF Raw Data：移除 `_is_private_etf`／`_private_msg`；`_restricted = _is_active_etf_main`；費用率／NAV 直接走 payload `_err_expense`／`_err_nav`；AUM 缺值列顯示「目前沒有可用 ETF 規模資料，暫時無法顯示。」，且**僅在**非海外、非主動式、AUM＋費用率＋NAV 全缺時附「ETF 類型無法確認；資料未取得不代表私募。」。舊 session payload 的 `_likely_private` 鍵直接忽略。句子單一來源新檔 `shared/etf_missing_text.py`（L0，零 I/O）。
+- **未動**：公式、評分、品質、折溢價計算、新鮮度分級、`is_active_etf`、`_nav_ok`（含既有 stale-NAV 綠燈行為）、UI2、資料源、MoneyDJ 零請求守衛；不可達的 `elif _is_active` 死分支（測試釘住）；海外與台股主動式規則逐字不變（前後情境 S7／S7b／S8／S8b 輸出相同）。
+- **已揭露副作用**：(1) `src/ui/pages/data_coverage.py` 讀 `_err_nav`，三缺時 ETF 覆蓋燈由原本維持綠色改為降級（因為 `_err_nav` 現在非空）。(2) 非三缺的部分缺值情境（僅費用率／僅 NAV／費用率＋NAV 缺 AUM）燈號不變（🔴），但 AUM 列由無文字的「抓取失敗」改為顯示中性缺值句。(3) 三缺情境燈號由 ⚪ 變 🔴。
+- **OPEN 發現（不在本次範圍，未修）**：①`health_inspector` 的 `_nav_ok` 只看 `premium.nav is not None`，stale NAV 值過時但非 None 時仍亮 🟢（情境 S3b）＝既有 stale-NAV 偽綠燈；②`is_active_etf('SPY'/'VOO'/'QQQ')` 回 True，故海外 ETF AUM 列顯示「主動式 ETF — 公開資料受限（…投信官網有揭露…）」，此宣稱不正確；③台股主動式 ETF 依既有規則把真正的抓取失敗藏在 ⚪ 之後。
+- **測試**：新增 `tests/test_a_likely_private_unknown.py`（真實 `render_etf_single` → payload → 真實 `render_data_health_raw`；離線、封網）。反向注入（還原舊推斷／把 unknown 當 na）使關鍵測試轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-197｜New UI2 a11y 三項最小修（disabled CTA 游標／標題語意／stMain 焦點框；GPT §B 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：GPT §B（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6978992482）：在凍結 UI 契約內做最小修正；不改版面凍結、不新增區塊、不新增文案、不動資料／Auth／Sheet／production。
+- **D1**：`src/ui2/shell/css.py` 新增 `.ui2-ctawrap .ui2-cta.ui2-cta--disabled{cursor:not-allowed}`（specificity (0,3,0)，壓過 Streamlit `button:not(:disabled)` 的 pointer）。行為不變（無點擊效果、`aria-disabled="true"`、仍非 `<button>`）。五頁（含 👤 的 5 顆 CTA）實測 computed cursor 皆 `not-allowed`。
+- **D2**：頁標題（`views/_page.py::render_title`、`components/html.py::page_title_html`，兩者仍逐字相同）加 `role="heading" aria-level="1"`；區塊標題 7 處（`html.py` 5、`_page.py` 1、`views/data.py` 1）加 `role="heading" aria-level="2"`。屬性放在 `class` **之前**（`tests/test_ui2_p3_evidence_preservation.py` 以子字串 `ui2-section-title">{t}<` 比對，未改該測試、未重生基準）。CDP AX tree 驗證：五頁各恰 1 個 level-1 heading（= 頁標題），所有區塊標題皆為 level-2 heading；FAKE 六場景／Real／Real-degraded × 390×844／1440×900。
+- **D3**：`[data-testid="stMain"]:focus-visible{outline:2px solid var(--ui2-nav-fg);outline-offset:-2px}`（重用既有 token `--ui2-nav-fg`＝#e6edf3；offset -2px 畫在元素內側，不改版面）。⚠ 例外於 css.py「不依賴 Streamlit 內部 class」原則：此處用其 `data-testid`；規則放在檔尾，不在 DEC-146 導覽區段內（`test_w1_nav_css_does_not_depend_on_streamlit_internal_classes` 禁導覽區出現 `stMain`）。**實測 Streamlit 1.56.0 與 1.59.2 的 `section[data-testid="stMain"]` 皆有 `tabindex="0"`**，第一次 Tab 皆落在它，修前無可見焦點框、修後 2px solid rgb(230,237,243)。
+- **測試**：新增 `tests/test_ui2_a11y_three.py`（離線 10 項：規則存在＋specificity、兩個標題 renderer 屬性與位元組相等、7 個區塊標題站點與 2 個頁標題站點、D3 規則與例外註解）；`tests/test_ui2_drawer_browser.py` 追加 `ui2_browser` 測項（游標、AX 標題、第一個 Tab 停駐點焦點框、版面不變、3 項 teeth）。反向注入：還原 `src/ui2` 後離線 6 項、瀏覽器 11 項轉紅；注入 CSS／拔屬性的 teeth 測項轉紅。
+- **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變，已依文件程序重跑 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0，`--shots none`）。FAKE（batch3b）兩版本與舊證據逐值零差異（82 態全過）；Real（realfeed）13 態全過，與舊證據的差異來自 main 在證據生成後的文案變更（C1 拿掉「，每日更新」）與時鐘（過期 8→9 天），**不是**本批：以未改動的 origin/main 當日重量，與本批證據逐值零差異。
+- **未動**：版面凍結、區塊、文案、門檻、資料／Auth／Sheet／production、`.streamlit/config.toml`。
+- **已重現但本批不含（需 ChatGPT 簽核）**：見 BACKLOG `A11Y-F1`～`A11Y-F4`。
+- **編號**：#1216（OneBrain）用 DEC-195／§72、#1217 用 DEC-196／§73，故本批為 DEC-197／§74（`src/ui2` 註解不含 DEC 編號，重編號不影響 `source_hash`）。
+
+### DEC-195｜OneBrain OB-1 完全離線鷹架＋PIT 邊界測試（GPT §C 核准；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：Issue #1199 GPT §C（https://github.com/linchen-20200325/my-stock-dashboard/issues/comments/6978992482）。核准範圍僅限 OB-1 純內部離線 Provider Protocol＋FakeProvider＋deterministic 測試鷹架；非 production cutover、非付費 Provider 授權。
+- **決定**：(1) 新增 `shared/onebrain_provider.py`（L0）、`src/services/onebrain_shadow.py`（L3）、測試專用 `tests/onebrain_fake_provider.py`；(2) `ShadowOutcome.effective` 恆為 `build_rule_summary(digest)`，Provider 輸出只過 `check_summary`，乾淨僅設 `shadow_accepted`，任何例外分類為 `error_kind` 並 log，不改 action／Risk Cap、不降為 SAFE／neutral；(3) **0 production import**（AST 守衛強制，含 app.py、app_ui2.py、src/ui*、src/ui2、src/services/ui2）；0 SDK、0 API key、0 網路、0 付費、0 Secrets；(4) Digest v1 schema 與 `DecisionDigest` 欄位集合不變；(5) tests-only 補 PIT 邊界：`fetched_at == generated_at`（採用）與 as_of 晚於 fetched（`pit_violation`）。
+- **未動**：validator、投資門檻、正式 caller、UI／LINE、`src/ui2`、`shared/ui2_contract`。
+- **既有守衛調整（唯一一處）**：`tests/test_decision_digest_invariants_guard.py` 新增獨立常數 `OFFLINE_SHADOW_CALLERS`（僅兩個新檔），C2 的「0 digest 家族 production caller」與「L0 importer」掃描對其放行；`ALLOWED_CALLERS`（Stage F Gate）仍為空並以新測試釘住。
+- **仍待客戶／Gate 裁示（未授權）**：真 Provider／model／月預算／fallback；Stage F／G production；AB-2b（`ai_explained`／`ai_rejected`）；詞彙／Schema／semantic 變更（含 Delta 3「摘要揭露被省略 Top-N」）；System Action Aggregator／Risk Cap 權限；UI2 與 LINE 接線；OB-2 semantic fingerprint／cache／trace／budget 實作。
+- **測試**：`tests/test_onebrain_offline_guard.py` 38 例；矩陣測試新增 stamp 後 242 例。變異（`>=` 邊界、移除 as_of_after_fetched、`shadow_accepted` 恆真、吞例外改窄、effective 採 draft、app_ui2 注入 import）皆使守衛轉紅。作者環境自跑，未經非作者 QA。
+
+### DEC-195 更正與補註（2026-11-18；只追加；獨立 QA PASS_WITH_NOTES 後）
+- ~~Delta 1「兩種變異先前皆存活」~~ **更正**：僅 `>`→`>=` 邊界變異真正存活；「停用 as_of_after_fetched」變異已被 `tests/test_decision_digest_assembly.py::test_pit_rules[as_of3-fetched3-gen3-False]` 擊殺，矩陣測試只擴大覆蓋。BACKLOG／PROJECT_STATE §72 的對應敘述同此更正。
+- ~~C2 守衛對兩檔逐檔豁免~~ **更正**：改為逐模組（`OFFLINE_SHADOW_MODULES`：provider 只放 grounding；shadow 放 grounding＋summary），並在 `tests/test_onebrain_offline_guard.py` 加兩檔明確 import 白名單與反向測試。`ALLOWED_CALLERS` 仍為空。
+- 補註：「零 production import」AST 守衛屬縱深防禦、非窮舉；非常數動態 import（如 `__import__("src.services."+"onebrain_shadow")`）不會被抓到。
+
+### DEC-196｜舊 UI ETF 診斷三項最小安全修復（NAV 日期誠實／海外 AUM 措辭／台股主動式真失敗不遮蔽）（GPT 核准 A 線 APPROVED_FOR_MINIMAL_SAFE_FIX，comment 6978992482 §A；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：DEC-194 OPEN-1／OPEN-2／OPEN-3（#1199 closure ledger 6977952186）。僅限舊 UI：`src/ui/etf/etf_tab_single.py`、`src/ui/pages/health_inspector.py`、`shared/etf_missing_text.py`、直接測試。
+- **① NAV**：`health_inspector` NAV 列不再 `nav is not None → 今天 🟢`。資料日期只用 payload 內 `premium.nav_date`／`data_date`（既有新鮮度契約 `freshness_light`），**絕不用 `date.today()`**；~~`stale_nav`（含 nav 值被保留的 `nav_value_stale`，情境 S3b）⇒ 🔴＋「淨值資料已過期，暫時無法顯示。」（沿用 DEC-194 句）；~~（QA 更正：此句對台股主動式 ETF 不成立，見下方更正）有值但無任何可信日期（例如 TWSE 直讀路徑 A 的 payload）⇒ 🔴＋新句「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」（`ETF_NAV_DATE_UNKNOWN_TEXT`，唯一新增句）。
+- **② 海外 AUM**：診斷頁 AUM 列以海外身分優先（僅措辭；`is_active_etf` 全域不動）。海外 AUM 缺值 ⇒ 🔴＋「目前沒有可用 ETF 規模資料，暫時無法顯示。」，不再宣稱台灣主動式／投信官網。海外費用率／NAV 的真不適用 ⚪ 列保留。
+- **③ 台股主動式**：payload 新增 `_err_aum`（AUM 缺值時為缺值句），`_err_expense`／`_err_nav` 對台股主動式不再被 `_restricted` 一律壓成 None（原不可達的 `elif _is_active` 分支因此生效；其釘住字串 `elif _is_active:\n        _err_expense = _ERR_EXPENSE_ALL_TRIED_ACTIVE` 逐字仍在，`tests/test_issue1208_moneydj_zero_requests.py` 未改）。診斷頁：有失敗證據（上述欄位有值）⇒ 🔴＋明示句，且不虛稱網路錯誤；**無證據**（舊 session payload 缺這些欄）⇒ 維持 ⚪「主動式 ETF — 公開資料受限」；`_restricted` 旗標自 `etf_tab_single` 移除。
+- **未動**：評分、折溢價／NAV 公式、新鮮度分級帶、`is_active_etf`、`etf_calc`、資料源／網路、MoneyDJ 零請求守衛、New UI2；#1215 三態（三缺 🔴、身分未知、舊 `_likely_private` 忽略）。
+- **已揭露副作用**：(1) `data_coverage.py` 讀 `_err_nav`：台股主動式 NAV 缺值時覆蓋燈改為降級（原被壓成 None 維持綠）。(2) TWSE 直讀（路徑 A）等無日期的 NAV 值，診斷頁由 🟢 改 🔴（日期不明）。(3) 海外 AUM 缺值由 ⚪ 變 🔴（未取得）。(4) AUM／費用率／Beta 列的資料日期仍沿用既有 `date.today()` 顯示（本批僅核准 NAV 列，未動）。
+- **測試**：新增 `tests/test_a_etf_diag_three_fixes.py`（先在 main 上失敗 8 項，修後全綠）；`tests/test_a_likely_private_unknown.py` 僅三處依有意識的行為變更改斷言（舊文以刪除線註記）並新增 `valuestale` fixture；`tests/test_batch_z60.py` `_BASE_DIGEST` 依慣例更新舊值加刪除線。反向注入證據見 PR 描述／HANDOFF。
+- **QA 更正（DEC-196 ① 措辭；2026-11-18；只追加；有意識的更正，原文保留）**：非作者 QA（#1217，PASS_WITH_NOTES）指出上述 ① 對「台股主動式 ETF＋NAV 有值」過度宣稱：診斷頁 `_nav_masked` 在 NAV 有值時恆為真，主動式句先於過期／日期不明句被選中，燈雖 🔴 但文字誤為「公開資料受限（投信官網有揭露…）」。**現行行為**：`_nav_masked` 加上 `not _nav_ok`；NAV 有值時（不論主動式、被動式、新舊 session payload）過期 ⇒ 🔴「淨值資料已過期，暫時無法顯示。」、日期不明 ⇒ 🔴「NAV 已取得，但資料日期無法確認，暫不判定新鮮度。」；過期證據在 `premium` 欄位本身，舊 payload 亦適用。只有「NAV 真的沒有、且 payload 無失敗證據」的台股主動式才維持 ⚪。NOTE-2：海外 ETF NAV 有值但過期／日期不明 ⇒ 維持真不適用的 ⚪ 海外句（原會顯示矛盾的「❌ 海外 ETF 不適用」🔴）。
+- **新 OPEN（NOTE-3；不在核准範圍，未動 `freshness_light`）**：未來日期的 NAV 日期（`nav_date`／`data_date` 晚於今天）仍被判 🟢「今天 …」。重現：`_run` 將 `premium.nav_date`／`data_date` 改為今天 +3 天 ⇒ NAV 列 🟢。既有 `freshness_light` 行為。Owner：專案 AI；觸發：下一次動 `freshness_light` 或收到未來日期回報。
+
+### DEC-199｜OneBrain `run_shadow` 讀取 `ProviderError.kind` 的隔離（#1216 NOTE-1；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **來源**：#1199 comment 6988310131（C/P1）、#1216 QA NOTE-1。**編號**：DEC-197 已被 a11y 批佔用、DEC-198 保留給他線，故用 DEC-199／§76。
+- **問題**：`except ProviderError` 內 `getattr(e,"kind",None)` 若遇惡意 `kind` property（拋 RuntimeError／ValueError 等非 AttributeError）或對任何屬性拋錯的 `__getattr__`，例外會從 handler 內逃出 `run_shadow`（handler 內例外不被同層 `except Exception` 接住）。
+- **決定**：讀 `kind` 包內層 `try/except Exception`：失敗 ⇒ `kind=None` ⇒ 既有分支 ⇒ `INVALID_RESPONSE`，`logging.warning` 留型別名；`effective` 仍為 `build_rule_summary(digest)`，`shadow_accepted=False`、`grounding=None`。`KeyboardInterrupt`／`SystemExit`（BaseException）與規則式摘要自身例外維持 fail loud、照常上傳。
+- **未動**：Digest v1、詞彙、Risk Cap、system action、真 Provider、G1～G6、`ALLOWED_CALLERS` 空集合、`OFFLINE_SHADOW_MODULES`、import 白名單；無新增 SDK／network／secret／production import。
+- **測試**：`tests/test_onebrain_offline_guard.py` 新增 3 組反例（RuntimeError property、ValueError property、`__getattr__` 拋 RuntimeError；修前 3 紅）＋ KeyboardInterrupt／SystemExit 不被吞 ＋ 規則層錯誤仍上傳；既有 8 種畸形（N2 等）續綠。突變：內層改窄為 `ZeroDivisionError` ⇒ 3 反例紅；改成 `BaseException` ⇒ KeyboardInterrupt／SystemExit 2 例紅。
+- **仍待裁示（未動）**：OB-1-D3 規則式摘要 Top-N omitted disclosure。
+
+### DEC-198｜ETF NAV 診斷：未來日期 fail-closed（#1217 NOTE-3；GPT 派工 #1199 comment 6988310131 A/P0；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **問題**：`health_inspector` NAV 列餵 `freshness_light` 的 `nav_date`／`data_date` 若晚於今天（如 +3 天），`max(0, age)` 使其變 🟢「今天」＝假綠燈（承 DEC-196 NOTE-3）。
+- **決定**：僅在 NAV 診斷 caller 判斷「日期 > `date.today()`（與 `freshness_light` 預設基準相同）」→ 不餵新鮮度，顯示新常數 `shared/etf_missing_text.ETF_NAV_DATE_FUTURE_TEXT`＝「NAV 資料日期不可信，暫不判定新鮮度。」，燈號 🔴（與「日期無法確認」同級，文字必搭配）。海外 ETF 仍為 ⚪ 不適用句。
+- **未動**：`freshness_light` 本體、NAV 計算／來源／Schema／評分、AUM／費用率／Beta 列。無法解析的日期維持原路徑（🔴 無法解析）。
+- **測試**：`tests/test_a_etf_diag_three_fixes.py::TestNavFutureDateFailClosed`（被動式／主動式／海外；+1／+3／+30 天、今天、昨天、舊日期、無日期）；修前紅（🟢「今天」）、拿掉修復分支 8 例轉紅。
+- **AUM／費用率／Beta 列查證（唯讀）**：這三列在值存在時餵 `date.today()`，因 `etf_single_data` 的 `aum`／`expense`／`beta` 皆為純數值、payload 無任何來源日期欄，故無法判定其實際新鮮度；未來日期不可能發生，也無可重現的「錯誤日期」反例。結論：未證實為 bug，不改程式，只登 BACKLOG（`ETF-DIAG-ASOF-1`）。
+- **編號**：origin/main 已用至 DEC-197／§74，故本批 DEC-198／§75。
+
+### DEC-200｜New UI2 五頁「離線可用」收斂：🗂 連線診斷兩個離線可重現阻礙的最小修（#1199 comment 6988310131 B/P1；2026-11-18；只追加；非 QA PASS；單組作者環境）
+- **裁示來源**：#1199 comment 6988310131（B 線：先建矩陣，至多 3 個既有契約內小差額，優先安全互動／壞資料 fail-closed／錯誤導引；需正式 data feed／auth／Sheet／OneBrain UI／新布局／cutover 者標 Gate 不施工）。
+- **矩陣**：見 BACKLOG「UI2-OFFLINE-MATRIX-1118」。五頁在 FAKE 6 場景（5 頁×6＝30 態）與 Real 5 頁以 AppTest 全跑無例外、無 `None`／`nan`／`Traceback` 洩漏；唯二可重現阻礙都在 🗂 資料頁「🔌 連線診斷」。
+- **G-B1（錯誤導引）**：冷卻提示「請稍後再試」原本連同報告存進 `ui2_diag_report`，其後任何 rerun／換頁再回來仍掛著（冷卻早已過期）。現行：提示只在**產生它的那次點擊**顯示；session 只存 `notice=NONE` 的結果（上次檢查結果仍保留）。再按一次且仍在冷卻則再次顯示。
+- **G-B2（壞資料 fail-closed）**：`diag_check` 回傳的 `DiagReport` 只做 `isinstance(DiagReport)` 淺檢查；五欄不是 `ProbeResult(DiagStatus, DiagReason)` 或 notice 不是 `DiagNotice` 時，原樣存入 session，之後資料頁**每次 rerun 都 AttributeError**（換頁回來仍崩）。現行：深度驗證（`views/data.py::_valid_report`），形狀不對＝與「回傳非 DiagReport／丟例外」同一個固定結果（五項 `連線失敗／其他`）；session 內既有壞值讀取時視為 `INITIAL_REPORT`。
+- **測試**：新 `tests/test_ui2_offline_usable_diag.py`（11 項：提示當次顯示／plain rerun 與換頁不殘留／再按再現；5 種壞形狀＋已在 session 的壞值＋None／字串／例外＋合法混合報告不變）。突變（存回含 notice 的原報告、改回淺 isinstance）各自轉紅，驗後復原。既有 `tests/test_ui2_connection_diag_view.py` 全綠。
+- **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變，已用文件記載的 `measure_viewport --shots none` 重生 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0；13／82 態全過）。realfeed 與未改動 base 同日重量逐值相同（差異只有時鐘「過期 9→10 天」與其造成的折行高度，非本批）。
+- **未動**：版面、文案（無新增字串）、Schema／FieldState 語意、資料來源、診斷探測端點與冷卻策略、其他四頁。
+- **登記不施工**：UI2-OFF-1（stale/外來 session 值 `ui2_page`／`ui2_scenario`／`ui2_account`／`ui2_target_mode` 會 raise ValueError，無 UI 路徑可達）、UI2-OFF-2（檢查連線理論最長約 32 秒無區塊內忙碌提示；加 spinner＝新視覺元件，草稿先行 Gate）。見 BACKLOG。
+- **編號**：#1220 用 DEC-198、#1219 用 DEC-199；本批 DEC-200／§77，合併時若被佔則順延（`src/ui2` 註解不含編號）。
+
+### DEC-201｜New UI2 📊 市場頁：TWII 未來資料日時日 K meta 不再印出不可信日期（N2；#1199 comment 6990535956／6990840330 授權；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **問題（N2，證據 #1199 comment 6990816116）**：Real feed 下 TWII 資料日晚於台北基準日時，卡片顯示「資料日期不可信」，但日 K 圖下 meta 行印「資料日 <未來日>」，同頁自相矛盾。根因：`src/services/ui2/real_canonical.py::kbar_chart_spec` 在所有分支前 `base.update(source=..., as_of=k.as_of)`，undeterminable 分支也帶出未來 `as_of`；卡片 `twii_card_spec` 未來日分支則不帶日期。另有**遮蔽路徑**：`validate_ohlc_window` 逐列先遇先回，較早列的 `INCOMPLETE_BAR`／`FETCHED_AT_MISSING`／`NOT_FINITE` 會讓原因碼≠`FUTURE_DATE`，但 L3 `as_of_future=True`。
+- **決定（最小修，只改 `src/services/ui2/real_canonical.py`）**：`TwiiKbarFact` 加尾端欄位 `as_of_future: bool | None = None`（`from_view` 原樣拷貝 L3 判定，本檔不讀時鐘）；`kbar_chart_spec` 僅在 `not (as_of_future is True or ohlc_reason == FUTURE_DATE)` 時帶 `as_of`，`source` 照舊。加固：`validate_twii_kbar_fact` 拒收非 True／False／None 的 `as_of_future`（比照卡片端 `validate_twii_fact`）。meta 行改顯示既有缺日期字樣 `TEXT_ASOF_MISSING`；**無新文案**，未用 `TWII_FUTURE_AS_OF_TEXT`。
+- **未動**：`src/ui2/**`、`shared/ui2_contract` 語意、資料來源、Schema、卡片邏輯、stale／非未來不合格／讀取失敗／缺檔的顯示。
+- **測試**：新 `tests/test_ui2_n2_future_kbar_meta.py`（16 項）。修前：§1／§2 5 反例 FAIL、§3 6 對照 PASS。修後全綠。突變：整個還原 → 10 紅（5 反例＋5 項 §4 加固鎖）；只看原因碼 → 3 紅；只看 `as_of_future` → 1 紅；`from_view` 不拷貝 → 3 紅；拿掉驗證 → 4 紅；驗後復原。
+- **DEC-137**：`measure_viewport.source_hash` 只涵蓋 `src/ui2/**`、`app_ui2.py`、`measure_viewport.py`，不含 `src/services/ui2/**` → 4 份存證 JSON 不需重生（`tests/test_ui2_real_feed.py` source_hash 測試通過）。
+- **揭露**：根因與遮蔽路徑為 B 線單組結論，未經第二組驗證；須非作者 QA。
+- **編號**：origin/main（8d09c3d6）已用至 DEC-200／§77，本批 DEC-201／§78；合併時若被佔則順延（src 註解不含編號）。
+
+### DEC-202｜New UI2 產品收斂：N1 降 P2 已知限制、O1／O2 判定非缺陷並文件揭露（#1199 comment 6995747146 授權；GPT 總管管理裁示；2026-11-19；只追加；docs-only；非 QA PASS）
+- **決定**：N1（切頁捲動未重置）採方案 A＝降為 P2「已知限制」，不施工；B1／B2／B3 未授權，UI2 維持零 JS（DEC-146）。O1／O2 已重現，判定非缺陷＝符合 DEC-177 口徑，維持現狀，僅以文件揭露（設計文件 §7 補註）。
+- **不新增契約**：未改程式、測試、JSON、Schema、UI 文案、統計口徑；不重寫 DEC-177；候選的新字句／改口徑／口徑鎖定測試均**未授權**。
+- **證據**：#1199 comment 6995401840；實測數值與重啟條件見 BACKLOG 2026-11-19 UI2-PRODUCT-CLOSURE。
+- **範圍聲明**：僅 Offline Preview Ready；Cloud Runtime Verified NOT VERIFIED、Production Ready 不成立。
+- **編號**：origin/main（6623760d）已用至 DEC-201／§78，本批 DEC-202／§79；合併時若被佔則順延。
+
+### DEC-203｜New UI2 標的「即時查一檔」隔離離線視覺原型（#1199 comment 7000042502 授權第一階段；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **決定**：新增與 App 完全隔離的單檔離線 HTML 原型（`docs/vnext/prototypes/nui2_target_lookup/`），全 FAKE、虛構標的 9001~9006，僅供 Visual Gate 審視。**不是正式施工授權**；未改 app／src／shared／既有測試／DEC-137 JSON；無網路、無真實資料。
+- **新字句**一律 UI 標「PROPOSED・未核准」，清單見該目錄 README。待客戶 Visual Gate 核准。
+- **編號**：origin/main（eff23f48）已用至 DEC-202／§79；合併時若被佔則順延。
+
+- **DEC-203 補註（修正輪，不新增編號；2026-11-19；非 QA PASS）**：依獨立 UX 審查與工程 QA 修正原型——9003 部分缺值改琥珀「部分欄位未取得」、9005 未來日改獨立 chip「資料日期不可信」（紅，對齊 #1202；與 9004 來源不可用區分）、字串登錄表＋README PROPOSED 清單一致性測試、placeholder「輸入代碼」、查無隱藏加入觀察、手機結果置於範例之上、示範值打亂並註明無單位、規則 7 天對映 `shared/staleness.py` STALE_DAYS_DAILY（前版 3 天無出處，已更正；仍為 PROPOSED）。仍為隔離示範、非正式施工、待 Visual Gate。
+
+- **DEC-203 補註二（最後小修；不新增編號；非 QA PASS）**：9005 展開區資料日列改「資料日期不可信，不顯示」並說明「來源有回應，但資料日晚於基準日」；README 9004 列對齊實作；9005 日期斷言改正則（排除示範基準日）並加突變；README 補 Gate 推薦、Visual Gate 需裁示點、示範限制；9002 數值改中性色。
+
+### DEC-204｜New UI2 標的「即時查一檔」隔離原型 V2 視覺候選（#1199 comment 7003017605 授權 B 線最小 PR；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **決定**：在同一隔離目錄新增 V2 候選（`index_v2.html`／`README_V2.md`／`screenshots_v2/`，含 V1｜V2 並排對照圖），V1 全部檔案原樣保留。落實裁示 (a) 9001 移除綠色 OK chip 與「資料日在規則內」詳述；(b) 9003 移除「部分欄位未取得」「N／6 欄有值」，逐欄沿用既有缺值字樣；(c) 9004／9005 維持紅色 fail-closed、以既有文字區分，移除需源頭可稽核訊號的理由句；第二層 Evidence 收斂為一行 `資料日 … ｜ 來源 …`；文案分三級（沿用正式／設計候選 PROPOSED／僅原型適用），registry 新增 `tier` 欄位並由 `tests/test_nui2_target_lookup_prototype_v2.py` 與 README_V2 比對。
+- **非正式施工**：**不得合併進正式 New UI2**；仍待**使用者最終 Visual 確認**；三個正式接線 Gate（個股權利／PIT／Schema → L3 lookup service contract → OneBrain 接線）維持 HOLD。未改 app／src／shared／既有測試／DEC-137 JSON／V1 檔案。
+- **編號**：origin/main a56406c9 已用至 DEC-203／§80；合併時若被佔則順延。
+
+- **DEC-204 補註（V2 小修輪，不新增編號；2026-11-19；非 QA PASS）**：工程 QA PASS、UX 審查無硬阻擋，採納建議項——9004／9005 版型一致（各只一個紅框，框內皆以既有 🔴 開頭，移除重複標題 chip）；展開區只掛一枚 PROPOSED 標籤且各段不斷行；示範值註記移到六格上方並提高對比；compare 圖改裁切結果區放大並標註 V1／V2 差異項；README_V2 補「仍待確認」（OK 態不判新舊、單一資料日是否暗示各維共用 as_of、9004／9005 展開相同屬刻意、過期 9 天為夾具）。V1 檔案未動；仍不得併入正式 New UI2、待使用者 Visual 確認。
+
+### DEC-205｜使用者正式決議：方案② DG-PIT＝B＋X、DG-LIC＝A；授權最小唯讀取證與「查一檔 MVP」安全前置，不授權施工接線（#1199 comment 7007425153；2026-11-19；只追加；docs-only；非 QA PASS；單組作者環境）
+- **使用者原話（逐字，#1199 comment 7007425153 §1）**：「我同意你推薦的方案②：DG-PIT B＋X、DG-LIC A。請正式記錄決定，安排官方資料集唯讀取證及查一檔 MVP 的安全前置工作，不授權正式資料發布或 UI2 接線。」
+- **DG-PIT＝B＋X 的限定射程**（依 `DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 決策 3）：僅顯示最新值的**資料日**；`fetched_at` 僅內部稽核證據，**絕不**作官方公布日；**不得**拿缺 `published_at` 的資料做歷史序列、比較、回測、訊號或事後當時已知判斷；畫面未證實官方發布時點須保持 NOT VERIFIED。對個股季報 MVP：僅「最新已證季報事實＋報表年季／期別、期間截止日」，不得把期末日、`fetched_at`、metadata 出表日（首次發布語意未核查）冒充可得／公布時間；季度別 PIT／修訂語意須具名審核。**這是限制可呈現範圍，不是證明季度 PIT 已通過。**
+- **DG-LIC＝A 的限定射程**（決策 4）：先查官方原始資料集頁、授權條款原文／必要法務意見、各資料集實際取得方式；**逐資料集三層證據分列**——A 條款可回查、B 條款適用所使用的實際資料資源／下載路徑、C 對本專案公開／儲存／顯名義務的適用及符合。**不得以使用者承擔風險取代授權**；**不得拿 A 層證據宣稱 C 層獲核准**；**DG-LIC 權利 Gate 仍 HOLD，直到逐資料集符合使用條件的證據完成裁定**。既有公開 repo 中 MOPS／FinMind／TWSE／TPEX／Yahoo 歷史資料的授權疑慮，**不因另一份開放資料集標有開放條款而自動解除**。
+- **絕不推定授權（全部維持原 Gate HOLD）**：正式資料下載／定期取用／發布／再散布；改資料 cache；Cloud／NAS／Secrets；workflow 啟用；`src/ui2/**`／`real_feed`／G2F 白名單接線；正式 production；真 OneBrain Provider／模型費用／caller；System Action／Risk Cap／Schema 變更。
+- **本批授權範圍**：Work 唯讀取證（data.gov.tw 91998、94865；91995 金融業僅列另 Schema 候選；政府資料開放授權條款第 1 版）＋ B 線 L3 契約**候選**文件（`docs/vnext/LOOKUP_MVP_L3_CONTRACT_CANDIDATE_2026-11-19.md`）。**NO CODE／NO 測試／NO UI caller／NO 下載。** 最短結論：以目前證據 headless 邊界 **NO-GO**（blocker 見該文件 §6、BACKLOG LOOKUP-MVP）。
+- **未解除**：#7006417845 的 PREGATE NO-GO 不因本決議翻轉；HEADLESS-MVP-IMPLEMENTATION 為**待另送**的 Decision Gate，證據達標前不得施工。
+- **不倒改舊 DEC**：DEC-165／171／179／184／185 等一字未動；PREGATE 推薦的 DG-PIT「第 (a) 層」與本決議的 B＋X 並存，以本決議的限定射程為準。
+- **編號**：origin/main（f1f199e5）已用至 DEC-204／§81；本批 DEC-205／§82；合併時若被佔則順延。
+
+### DEC-206｜Issue #1202 後續：UI2「安全降級」現況回歸守衛（tests-only；#1199 comment 7011328051 授權新工作 1＋Issue #1202；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **做了什麼**：新增 `tests/test_ui2_safe_degrade_regression_1202.py`（只新增測試檔；⛔ 未改任何 src／shared／app／既有測試／DEC-137 JSON／workflow；測試不觸網）。釘住兩組獨立調查（覆蓋盤點＋對抗式探測）確認「現況已安全、僅缺回歸守衛」的四項＋一項現況：
+  - **G-1** Real×🎯 查一檔冷啟（AppTest；Real 軸，≠ 既有 FAKE 軸 `test_f3_lookup_cold_in_real_app`）：只有 disabled 搜尋示意＋灰色說明；無 Snapshot／加入觀察／市場環境六維／FAKE 字樣／expander／text_input。
+  - **G-2** Hostile session 注入（`holdings`／`portfolio_df`／`gsheet_tokens`／`portfolio_sheet_id`＋`?ticker=…&ui2_account=signed_in`）：五頁（＋查一檔模式）可見文字不含 2330／台積電／SECRETTOK／abcdef123456／已登入／FAKE，無 text_input，髒 session 不被改寫。
+  - **G-3** 壞 parquet 形狀端到端（L1→L3→UI2；零列／全 NaN close／close 含非數字字串）：卡片＝「資料未備」（ok=False、failed=False；⛔ OK、⛔ 紅）、日 K 不畫且灰態、🗂 台股計「資料未備」且計數自洽、無數值外洩；附好資料控制組。
+  - **G-4** whitelist／位階殘留檢查器擴大組合（`as_of_future=True`、`FETCH_FAILED`、`NO_NEW_DATA`、日 K `INCOMPLETE_BAR`／`DUPLICATE_DATE`，另與位階三態交叉）：`check_only_wired_fields_carry_data` 全回 `[]`——**未發現新缺陷**。
+  - **G-7**（現況釘住）`TwiiFact(ok=True,is_stale=False,as_of=None)`：卡片 OK 且無資料日、🗂 計「資料未備」（real_canonical 註解「None 維持『資料日未提供』誠實呈現」＋`test_ui2_data_freshness_overview` 的 `no_date` 已釘 🗂 部分，故視為現行刻意設計）。
+- **「牙」**：每項皆以暫時突變驗證（讓 Real 查一檔多輸出「加入觀察」、讓髒 session／query 漏進頁面、讓 EMPTY 被當 OK／當紅、讓 🗂 把無資料日算進規則內、讓 as_of_future／FETCH_FAILED 組合冒出 VIX 值）→ 測試轉紅 → 還原；結果見 PR 描述。
+- **已涵蓋矩陣結論**：上述四項＋G-7 現況安全；本批證明的是「現況行為」，**不是**契約完備。
+- **未施工的缺口（待總管裁示，非本 PR；詳 BACKLOG `UI2-SAFE-DEGRADE-GAPS-1202`）**：D1 日 K y 軸可出現負刻度（程式需修）；D2 日 K 日期僅 regex 不查曆法；D3 極端數值無範圍檢查；G-5 卡片遇重複日期列仍 OK；G-6 `INCOMPLETE_BAR` 卡片 OK 為釘住設計；G-7 契約是否收緊；G-8 FAKE 軸資料頁含真探測；G-9 FAKE 固定欄無 FAKE 前綴；髒 session 的未知頁／場景／帳戶／模式會整頁崩潰（UI2-OFF-1 同族）。**本 PR 一個都沒修、沒有以測試放寬或繞過它們。**
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI；本決議的矩陣結論為單組自跑。
+- **編號**：origin/main（f86e62e7）已用至 DEC-205／§82；本批 DEC-206／§83；合併時若被佔則順延。
+
+### DEC-207｜UI2 D1（日 K y 軸負刻度）＋G-5（最新日重複 → 卡片 fail-closed）最小修補（#1199 comment 7011701691 裁示 1、2 授權；2026-11-19；只追加；非 QA PASS；單組作者環境）
+- **授權範圍**：總管裁示 1（D1）、裁示 2（G-5）皆 APPROVED「最小修補」；缺陷重現見 #1199 comment 7011571747。兩項**皆在授權射程內完成，沒有 STOP 項**（G-5 沿用既有灰色「無法判定」態，未新增 FieldState／凍結 schema／可見文案；若日後想給該卡片加一句原因，屬新文案 Gate，見下「未做」）。
+- **D1 old → new**：`src/ui2/components/html.py::_kbar_svg` 的 y 軸 domain 由 `[lo - pad, hi + pad]` 改為 `[max(0.0, lo - pad), hi + pad]`。ticks／座標一律以**新 domain** 重算（刻度仍為 5 點、等距、由高到低；K 棒日期／色彩方向／根數／價格／布局／label 不變）。`lo - pad ≥ 0` 的正常窗輸出**逐字不變**。極端離群例 `close=[23000.0]*10+[230.0]+[23100.0]*9`：舊刻度 `24,472／18,069／11,665／5,261／-1,142` → 新 `24,472／18,354／12,236／6,118／0`（0 只是軸刻度，不代表實際指數值為 0）。全常數（零寬 span）pad 恆 > 0，不除以零。**不改**真數據、取樣、比例政策、K 根數、L0 價格／離群驗證；離群自動棄用屬另案（BACKLOG D2／D3 仍 OPEN）。
+- **G-5 old → new**：
+  - **舊**：L1 `load_twii_close` 保留重複日期；L3 `get_twii_trend_view` 只看尾端單一收盤 ⇒ 最新日兩列時卡片 `ok=True` 顯示最後一列的值（實證：`close=[100,200,300,400]`、最後兩列同日 → 卡片 400.0）；`with_ohlc=True` 且 n=1 時視窗只含兩列中的一列、L0 看不到重複 ⇒ 日 K 以單根合格。
+  - **新**：L3 新增 `_latest_date_ambiguity(_s)`（唯讀 `Series.index`：只看**卡片實際採用的最新觀測日**在輸入收盤序列是否有多列；⛔ 不去重、⛔ 不看值，值相同或不同皆歧義）與 `TwiiTrendView.as_of_ambiguous`（加性尾欄，預設 False）。卡片路徑命中 ⇒ `ok=False`、`close`／`xs` 空、`as_of_ambiguous=True`、具體原因只進 log；`with_ohlc=True` 對同一個 `_s` 做同一個判定並設同一旗標，但該路徑 `ok` 不變（日 K 不被連動成「資料未取得」），且視窗未含另一重複列時（n 很小）仍強制 `DUPLICATE_DATE`（日 K 與卡片一致保守不畫）。UI2：`TwiiFact.as_of_ambiguous`（加性尾欄）← feed 只拷貝；`validate_twii_fact` 只收真布林；`twii_card_spec` 命中 ⇒ `state="undeterminable"`。
+  - **L1 不去重、不增欄位、`load_twii_close` 全域行為不變；L0 OHLC 契約不放寬；G2／G2F 守衛固定（未增 import 名稱）。**重複只在遠端歷史而最近收盤唯一 ⇒ 卡片照常（隔離語意保留，日 K 仍依自身視窗拒畫）。
+- **卡片採用哪個既有 state、依據**：`JudgementState.UNDETERMINABLE`（畫面 `⬜ 無法判定`；`vm_common.field_from_spec` 的 `undeterminable`，預設字樣＝`TEXT_RISK_CAP_UNDETERMINABLE`，在 `shared/ui2_contract/text.py::JUDGEMENT_STATUS_PREFIXES` 白名單內）。依據：(1) `vm_common` docstring 定義 undeterminable＝「已進入判定、必要輸入不足／不可得／**無效**」，最新日歧義正是輸入無效；(2) 日 K 的 `DUPLICATE_DATE` 本就走同一個灰態，卡片與圖語意一致；(3) 排除 `missing/not_fetched`（`⬜ 資料未取得`＝「應有輸入但這次沒拿到」，歧義來源是**拿到了但不可採用**，偷換成未抓取不準確）、排除 `unavailable`（紅＝系統真錯誤，違 §1.A 灰紅分離）、排除 `FUTURE_AS_OF` 專用句（只用於已確認未來日）。不帶 `reason`／`as_of`／值（⛔ 新文案）；因此卡片資料日欄顯示既有的 `⬜ 資料日未提供`。Legacy（`src/ui/views/_market_blocks.py`）因 `ok=False` 沿用既有灰字「讀不到（…）」，與 #1140 C1 價格無效／NaN 最新日的既有處置同一路徑，不新增使用者可見文案。
+- **測試**：新增 `tests/test_ui2_d1_kbar_yaxis_floor.py`（17）與 `tests/test_ui2_g5_latest_date_duplicate.py`（46）。D1：極端離群／全常數（含 0.01 等小價）／單根／正常窗（手算固定刻度防兩邊同錯）／端到端真 parquet→真 feed→VM→html，斷言刻度 ≥ 0、等距、座標有限且落在繪圖區、domain 與座標線性一致。G-5：最新日兩列不同值／相同值（n=1/2/5/252）→ 卡片不顯數且日 K 仍拒畫；唯一最新日不誤殺；歷史重複但最新日唯一 → 卡片正常；NaN 最新日、future_as_of、stale、無資料、上游失敗、FAKE 軸控制組不回歸；feed 拷貝旗標、🗂 計「無法判定」、渲染頁面不含任何歧義值。**突變驗證（還原／改壞修法即轉紅）**：D1 還原夾底 6 紅、只藏負字串維持負域 3 紅、只夾 tick 不夾投影 5 紅、夾 1 而非 0 3 紅；G-5 拿掉偵測 19 紅、改成「序列任一重複」3 紅、spec 忽略旗標 5 紅、改走 missing 5 紅、改走紅 unavailable 5 紅、feed 丟旗標 3 紅、ohlc 不強制 DUPLICATE 2 紅、ohlc 不設旗標 3 紅、卡片仍 ok=True 14 紅、validate 放行非布林 5 紅。
+- **DEC-137**：`src/ui2/**` 變動使 `source_hash` 改變（`4a207395…` → `da279797…`），已依文件程序重跑 4 份存證（realfeed／batch3b × Streamlit 1.59.2／1.56.0，`--shots none`；1.56.0 用暫時 venv `streamlit==1.56.0`）：FAKE 82／82、Real 13／13 全過；**四份 JSON 除 `meta`（git_sha／source_hash／generated_at）外與舊證據逐值零差異**。未手改 JSON、未調任何 viewport 門檻。
+- **未做／仍 OPEN（不施工）**：D2（日 K 日期不查曆法）、D3（極端數值範圍）、G-6～G-9、髒 session 崩潰。離群自動棄用屬另案 Domain Gate。G-5 卡片的「原因句」屬新文案 Gate（目前無原因句）。不決定 cron 寫入端、不重建 parquet、不改現存公開資料；cron 是否真會寫入重複日仍 NOT VERIFIED。
+- **已知邊界（單組判斷，登記）**：卡片的輸入是 L1 dropna 之後的收盤序列；最新日兩列但其中一列 `close=NaN` 時，卡片輸入只剩一列、不判歧義（L1 已 log 剔除筆數），日 K 看原始視窗仍拒畫（`tests/test_ui2_g5_latest_date_duplicate.py::test_documented_boundary_…` 釘住此現況）。
+- **NOT VERIFIED**：非作者 QA、exact-head CI、main CI、Cloud deployed SHA（Cloud 驗收 NOT VERIFIED）；真實 cron 產物是否出現重複日；以上測試與突變為作者環境單組自跑。
+- **編號**：origin/main（e855a5f9）已用至 DEC-206／§83；本批 DEC-207／§84；合併時若被佔則順延。
+
+### DEC-208｜UI2 UX-1／UX-2：disabled「更新／搜尋」誘導字樣清除（U-1＋G-3＋UX-1＋G-1(b) 單一情境例外；#1199 comment 7021221449／7021388731／7021701891；2026-11-20；只追加；非 QA PASS；單組作者環境）
+- **授權**：總管 UX Gate 裁示 [#7021221449](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7021221449)（G-2 有條件 APPROVED、U-1 APPROVED、G-3 APPROVED、G-4 DEFER、G-1 當時 HOLD）；精確 old/new 表 [#7013013852](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7013013852)；使用者對「DEC-117 Q6 之 FAKE cold＋更新 disabled 單一情境例外」的回答 **「同意」**，見 [#7021388731](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7021388731)（該留言轉述使用者回答；本 DEC 不另編造使用者原話）；總管確認 [#7021701891](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7021701891)。G-1(b) 原 HOLD 因此**解除，僅限下列範圍**，併入同一 PR。
+- **G-1(b) 覆蓋範圍（對 DEC-117 Q6 的 supersession scope，唯一）**：**僅** New UI2＋**FAKE**＋**SCENARIO_COLD**＋「🚀 更新」CTA disabled 的 📊 市場頁「今日主要風險」灰態 chip，**覆蓋 DEC-117 Q6 原凍結句的外露要求**：`⬜ 尚未載入，請按更新` → `⬜ 尚未載入`（既有 `TEXT_NOT_LOADED`），detail＝既有 `FAKE 示意：尚未載入`。**未覆蓋、一字不動**：`shared/ui2_contract/text.py::RISK_SENTENCE_NOT_LOADED` 全域常數（仍為 `⬜ 尚未載入，請按更新`）、Legacy `src/ui/views/_market_blocks.py::NOT_LOADED`、其他 FAKE 場景（missing／not_evaluated／unavailable／loaded／stale）與 Real 的主要風險字句、灰態語意（⛔ 紅、⛔ 風險項列）、主要風險區塊本身。該常數在「更新 CTA 真可操作」的情境仍為有效規格（本批不存在這種情境；日後若 CTA 啟用，須重新評估而非沿用本例外）。⚠ 本例外**不構成**真資料／正式 UI／AI 授權解除。
+- **old → new（全部使用既有字串、零新文案）**
+  - **U-1／UX-2**（`src/ui2/components/html.py::search_html`，FAKE／Real 共用）：`search.cta.enabled=False` 時 hint 由「`⬜ 尚未提供` chip＋detail『請輸入代碼（名稱搜尋尚未提供）』」改為「`名稱搜尋` label（取 `name_search.label`）＋同一 chip `⬜ 尚未提供`」；`enabled=True` **逐字不變**。條件式、非字串過濾；canonical 字串（`scenarios.py`、`real_canonical.py`）不動；不啟用搜尋；搜尋框 `aria-disabled`、CTA 理由「尚未開放查詢…」、dual-mode 不變。
+  - **G-3**：`scenarios.py::_LOOKUP_COLD` `FAKE 示意：輸入代碼並查詢後顯示` → `FAKE 示意：尚未載入`（FAKE／cold／查詢 disabled）。
+  - **UX-1 #1–#4/#6–#7**：`_transform`／`_transform_current` 預設值、`_fake_conclusion`、`cold_reason` 三元：`按 🚀 更新後載入（FAKE 示意）` → `FAKE 示意：尚未載入`（🎯 保留 `FAKE 示意：精選尚未載入`）。**#5**：📊 FAKE cold 下一步 override `按 🚀 更新` 刪除 → `next_step=None` 由 `vm_common` 既有 `aggregator_pending_field("下一步")` 產生 `⬜ 尚未提供（待系統動作整合）`＋`動作判斷功能尚未開放`（「下一步」問句與列保留；💼 本就不渲染該列，VM-only）。
+  - **G-1(b)**：`scenarios.py::_fake_main_risk` cold 分支 `sub_reason=RISK_SENTENCE_NOT_LOADED` → `sub_reason=TEXT_NOT_LOADED, reason="FAKE 示意：尚未載入"`（其餘分支不動；`scenarios.py` 不再 import `RISK_SENTENCE_NOT_LOADED`，常數本身仍在 text.py）。
+- **UX-1 狀態：完成（含上述單一凍結例外）**。disabled CTA／`disabled_reason`／`⬜ 尚未載入` chip／FAKE banner／四問框架未動；📊／💼 FAKE cold 整頁不再有「按…更新／更新後載入／請按更新」。**G-4（👤 帳戶 signed_out／unavailable 的「請先登入／重新讀取」）DEFER，不在本批**（不改 `_me_account_variant`／帳戶 VM／Real 帳戶）。A11Y-F4（尚未載入 vs 尚未評估）仍未決，不順手統一。
+- **P3 evidence baseline 重生（G-2 有條件核准；`tests/fixtures/ui2_p3_evidence_baseline.json`）**：用既有產生器 `python -m tests.test_ui2_p3_evidence_preservation --regen`；regen 前先存舊檔做逐 key diff。87 個 key 中**僅 3 個變**：`fake/p4_market/cold/None`（15 欄位指紋）、`fake/p4_hold/cold/None`（9）、`fake/p4_target/cold/None`（1）；其餘 84 個（含全部 Real、全部 L2／L3 `sections`／`lookup_sections`）逐值不變。變動欄位只有 `cards`／`first_screen`／`context_rows` 的 detail 雜湊與下一步欄：`sha1(detail)` `2d18d451…`（`按 🚀 更新後載入（FAKE 示意）`）→ `9bc11eb0…`（`FAKE 示意：尚未載入`）；📊／💼 `first_screen[2]`（下一步）layer `data`→`capability`、state `ok`→`None`、value_text 雜湊 `794c79bb…`（`按 🚀 更新`）→ 無、detail 雜湊 無→`2abb517c…`（`動作判斷功能尚未開放`）、status_text 雜湊 無→`a1f1d162…`（`⬜ 尚未提供（待系統動作整合）`）。G-3 與 G-1(b) **不在指紋內**（`lookup.summary`／`main_risk` 不被指紋涵蓋；已實測 G-1(b) 前後 regen 結果相同）。`_P3_BASELINE_SHA256`：`fedfa62d37d63eead7be47844d06f1667544d541d071d717d4ced5ed93dcb2a6` → `ba1abae601fa34f42baf49bcced933ab3ad92ea5203fd6afed5c430b935419ba`。未縮小 evidence、未改檢查範圍或門檻。
+- **DEC-137**：`src/ui2/components/html.py` 變 → `source_hash` `da279797…` → `60d060be…`；依文件以 `python -m tests.ui2_viewport.measure_viewport --shots none` 重生四份（batch3b／realfeed × 1.59.2／1.56.0；1.56.0 用暫時 venv `streamlit==1.56.0`），FAKE 82／82、Real 13／13 全過，未手改、未調門檻。**逐值差異**：Real 兩份僅「台股日 K 過期 10→11 天」（時鐘；以未改動 origin/main 同日重量 Real 1.59.2 與本批逐值相同）；FAKE 兩份（1.59.2／1.56.0 相同）僅 📊 cold（手機／壓力／桌機）、🎯 cold 查一檔、💼 cold 的文字節點與高度：📊 手機 cold 的 q3 由單行變「chip＋一行 detail」（35→54.9px）、今日主要風險由單行變「chip＋detail」（57.5→76.7px）、6 張卡 detail 變短（159→139px）；`nav_margin_after_risk`（門檻 160）227.1→188.0，仍過；`first_screen_within_usable_height`、`cta_before_conclusion` 等全數通過。**390×844／1440×900 為 headless 模擬量測，不是 Cloud 驗證**；Streamlit Cloud deployed SHA 未知。
+- **測試**：新增 `tests/test_ui2_ux_cold_copy_dec208.py`（65；R1 整頁／VM 矩陣無誘導字樣、R2 誠實呈現不退化、R3 🎯 FAKE 6 場景×2 模式＋Real×2 模式無「請輸入代碼」、R4 `search_html` enabled 條件式、R5 Real 五頁不退化、G1 例外範圍與反向邊界、轉換預設值）。`tests/test_ui2_batch3.py::test_main_risk_per_scenario_uses_the_right_axis_and_verbatim_sentence` 僅精確更新 cold 一行（改為 `TEXT_NOT_LOADED`＋無「請按更新」），其餘斷言一字不動；`test_dec117_q6_sentences_are_verbatim_with_legacy_source` **一字未動**（常數與 Legacy 逐字守衛保留 teeth）。先紅後綠：修前（origin/main d3ab92db 上）新測試 65 條中 29 條紅（其餘為釘住不變行為的對照，本質上修前即綠）。
+- **突變驗證（作者環境自跑；改壞即紅、已還原）**：`search_html` 恆走 enabled 分支（17 紅）；`_transform`／`_transform_current` 預設值還原（各 1～2 紅）；`_fake_conclusion` 還原（2 紅）；`cold_reason` 三元還原（5 紅）；下一步 override 還原（6 紅）；`_LOOKUP_COLD` 還原（2 紅）；`_fake_main_risk` cold 還原成凍結句（5 紅）；例外洩漏到 missing 場景（5 紅）；改全域 `RISK_SENTENCE_NOT_LOADED` 常數（5 紅，含 DEC-117 Legacy 逐字守衛）。
+- **未做／仍 OPEN**：G-4（DEFER）；A11Y-F4 未決；Cloud 驗收；非作者 QA、exact-head 五項原生 CI、0 unresolved threads、main CI。
+- **NOT VERIFIED**：以上測試、突變、viewport 皆作者環境單組自跑，未經第二組驗證；Streamlit Cloud 實機；真瀏覽器（非 headless 模擬）390／1440。
+- **編號**：origin/main（d3ab92db）已用至 DEC-207／§84；本批 DEC-208／§85；合併時若被佔則順延。
+- **QA 回修（2026-11-20；只動文件與測試，未動 src／fixture／viewport JSON）**：兩組非作者 QA PASS、無 Must-fix；should-fix 已處理：(1) Active Contract §3.1 與 S25 引用處、`FINAL_UI_CONTRACT_FREEZE` 「DEC-117 Q1／Q6 仍有效」處、`NEWUI2_FIVE_PAGE_DATA_CONTRACT_AUDIT` N2 列各加一則 append-only 註記（原文不改），指向 DEC-208 與 #1199 comment 7021388731，範圍僅 New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險；(2) 新增 `test_r4_disabled_branch_escapes_the_name_search_label`（新測試檔共 66 條；拿掉 `escape()` 即紅，已還原）；(3) BACKLOG `DEC180-UI2-FAKE-COLD-COPY-GATE` 的 next action 改刪除線＋完成語意。`tests/test_ui2_active_contract_docs.py` 對上述文件無逐字釘住，仍全綠。

@@ -61,6 +61,8 @@
 | **S43** | Wireframes §7 W-1 桌機 4 項、W-6 下沉 L2；Freeze §5.1／§5.3「留 L2」 | Account Area；L2 落點→資料健康度 Level 2 | 手機四格、W-6 欄位集 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
 | **S44** | Legacy 時代 5 份未加橫幅文件（INTERACTION_COVERAGE_MATRIX、NEWUI_STAGE_B_DRAFT、MARKET_PAGE_DECISION_GATE、NEWUI_D25_B_COVERAGE、VNEXT_PRODUCT_BLUEPRINT） | 對 New UI2 非 active | Legacy 凍結 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
 
+> 📌 **2026-11-20 指向性註記（針對上表 S25「Q6 退化句外露 KEEP」；DEC-208；append-only，上表一字未動；有意識的範圍性覆蓋，不是漏刪；決策者 使用者「同意」，#1199 comment 7021388731）**：S25 的 Q6 退化句外露 KEEP **僅**在 New UI2＋FAKE＋SCENARIO_COLD＋更新 CTA disabled 的 📊 今日主要風險有例外：外露由 `⬜ 尚未載入，請按更新` 改為 `⬜ 尚未載入`（detail『FAKE 示意：尚未載入』）；全域 `RISK_SENTENCE_NOT_LOADED` 與 Legacy `_market_blocks.py` 逐字保留；其餘場景（含 Real）不變。見 `docs/DECISIONS.md` DEC-208。
+
 
 > 📌 **S10／S11 裁示前原列全文（刪除線保留，2026-11-02 Q3=A 後已過期；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示））**：
 > - S10 原列：~~**S10**（**條件式，待 Q3**）~~｜~~**DEC-118 問題 1=A**（手機 ⚡ mobile exception：位於第一屏之後、緊接 3 核心狀態；客戶 2026-10-30 看過「手機第一屏一定看得到是否需行動」選項後知情選 A〔總管轉述〕）~~｜~~**僅在 Q3=A 時**：📊 市場頁**手機**「是否行動」進第一屏（不用滑），並連帶改 DEC-117 Q1 手機 2＋1；Q3=B 則不取代、§40 在市場頁改讀為「緊接第一屏」；**裁示前 DEC-118 問題 1=A 照舊有效**~~｜~~問題 2=D1（更新真錯誤放今日結論正下方）、Customer Decision Gate 輸出硬限制、GitHub Verification Gate 以當下 `origin/main` 為準；桌機不受影響~~｜~~〔客戶 §40〕「市場 不用滑：市場狀態、Risk Cap、是否行動、refresh」~~｜~~客戶原文明示~~｜~~✅ DEC-118 條頭 📌~~
