@@ -64,6 +64,8 @@
 
 > **形態規則**（📊🎯💼 整頁 0 個完整 evidence expander；👤 的稽核面入口〔Digest Viewer L1、Rule Registry，預設收合〕為明列例外〔Active：DEC-130 (b)，預設收合、不搶主 UI；~~⚠ PROVISIONAL (b)①~~ 📌 已升格〕，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander）：四頁 Human VM 的 `SectionVM.level` 只允許 `L1` 與「關鍵 evidence 精簡層」；**⛔ 不得出現任何標示 L2／L3 的 expander、標題或標籤**（資料健康度的 Level 3 developer diagnostics 除外，見 §5）。「精簡 evidence」＝單行／小 chip／圖下方 SPEC 行／必要數字旁的 micro-tag，**不是**被摺起來的段落。
 
+> 📌 **2026-11-20 指向性註記（DEC-209；append-only，上文一字未動；有意識的範圍性例外，不是漏刪；決策者 客戶「同意」，#1199 comment [7025346343](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7025346343)，該留言為 GPT 總管對客戶直接回答的轉錄）**：上段「📊🎯💼 整頁 0 個完整 evidence expander」＋「👤 為明列例外」維持；另有**客戶特定例外**：🗂 資料頁 **僅 Real-data Preview** 多一個預設收合 L2「各項明細」（`data_freshness_items`；八項固定順序），`SHOWN_FOLDS` 因此為 4 項。FAKE 軸無此區塊；不是全域解凍，不開放其他頁／其他 section。見 `docs/DECISIONS.md` DEC-209。
+
 ### 3.1 📊 市場
 
 | 應有（順序依 Wireframes §2.1／§2.2 與 DEC-127；`KEEP`） | 不應有（Human UI） | 移出內容的新去處 |
