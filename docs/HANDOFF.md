@@ -1654,3 +1654,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **B 線版本列＝DEFER**（#1199 comment 7033108095）：見 BACKLOG `B-PREVIEW-VERSION-DEFER`；Work 只用功能指紋判版本，不得冒充精確 SHA。
 - **下一步**：(1) 兩組非作者 QA、exact-head 五項原生 CI、merge、main push CI；(2) **Work OneBrain**：合併且部署可辨識後，對新 FAKE Audit 畫面驗**一次**差額（不重跑 #1233 CLI）；(3) 真 runtime caller（Stage F）仍須另開單一 caller 的 Gate，本批未開。
 - 殘留（待評估，不施工）：節錄句 OK 態內含 ⬜、第二個新字串、示意聲明無視覺強調、OB-1-D3／stale 區分缺口；詳見 DEC-211。
+
+## 2026-11-20 B-UI2-STALE-COPY-1（DEC-214；append-only；非 QA PASS）
+- 現況：Draft PR 分支 `b-ui2-stale-copy-1`（base main `5ea2f5fc`）。方案 B（#1199 comment 7040889025）：台股卡／日 K 不再外露 L1 `stale_reason`。P3 baseline 與 `_P3_BASELINE_SHA256` 已在本 PR 重產（僅 `real/p4_market/stale`）；DEC-137 `source_hash` 不變，Real viewport 兩份已重產（FAKE 兩份未動）。
+- **下一步**：兩組非作者 QA（一組驗技術詞從 Real 原始輸入到 UI 消失＋測試殺突變；一組驗 baseline／viewport／a11y、範圍與治理）、exact-head 五項原生 CI、0 unresolved threads、merge、main push CI；Cloud 部署畫面仍 `NOT VERIFIED`。

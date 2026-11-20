@@ -322,7 +322,9 @@ def test_stale_draws_bars_with_the_same_badge_as_the_card(monkeypatch):
     chart, card = _chart(snap), _card_field(snap)
     assert chart.field.state is FieldState.STALE and len(chart.candles) == 20
     assert chart.field.status_text == card.status_text == "⚠ 過期 4 天"
-    assert chart.field.detail == card.detail == "已 4 天沒有新資料"
+    # B-UI2-STALE-COPY-1（DEC-214）：L1 `stale_reason` 不上畫面（卡片與日 K 同規則）；天數由 chip 呈現。
+    assert chart.field.detail == card.detail is None
+    assert "已 4 天沒有新資料" not in (chart.field.detail or "") + (card.detail or "")
 
 
 def test_unknown_freshness_is_stale_never_ok(monkeypatch):

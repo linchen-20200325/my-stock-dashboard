@@ -256,8 +256,9 @@ def test_ui2_card_no_state_no_sentence(monkeypatch):
 def test_ui2_card_stale_and_no_new_data_keep_both_facts(monkeypatch):
     spec = _card_reason(monkeypatch, is_stale=True, age_days=40, stale_reason="快取超過 40 天",
                         upstream_error=EMPTY_FETCH_MARKER, upstream_state="NO_NEW_DATA")
-    assert spec["state"] == "stale"
-    assert "快取超過 40 天" in spec["reason"] and UPSTREAM_TEXT_NO_NEW_DATA in spec["reason"]
+    assert spec["state"] == "stale" and spec["stale_days"] == 40      # 「過期」由 state／天數（chip「⚠ 過期 40 天」）表達
+    # B-UI2-STALE-COPY-1（DEC-214）：L1 `stale_reason` 原句不再進 detail；上游「無新資料」句仍保留（兩個事實各自可見）。
+    assert "快取超過 40 天" not in spec["reason"] and spec["reason"] == UPSTREAM_TEXT_NO_NEW_DATA
 
 
 def test_ui2_fact_rejects_unknown_upstream_state():
