@@ -1547,3 +1547,13 @@
 - **BACKLOG 新登記（皆待決策，不施工）**：`UI2-DATA-ITEMS-POSITION-1`、`UI2-DATA-ITEMS-REGIME-LOADED-WORDING`、`UI2-DATA-ITEMS-STALE-UNKNOWN`、`OB-DEMO-QA-RESIDUAL-S1-S6`；並依 #1199 comment 7014878496 原文**更正殘留項編號**（共 5 項）。
 - **NOT VERIFIED**：本檔單組撰寫；#1234 main push CI 待確認（結案證據見 #1199，本檔不宣稱結果）；Cloud。
 - **編號**：origin/main（52b628e6）已用至 DEC-209／§86；本批 DEC-210／§87；合併時若被佔則順延。
+
+
+## 88. C-OB-UI-FAKE-A1：👤 FAKE「Audit：Decision Digest」靜態規則摘要節錄（2026-11-20；DEC-211；只追加；非 QA PASS；單組作者環境）
+- 分支 `c-onebrain-fake-audit-excerpt`（base origin/main `535c1484`），Draft PR。授權：#1199 comment 7032645702 §2（客戶設計確認 #7030418754）。**靜態示意節錄，非 runtime；不稱 OneBrain 已可使用。**
+- **內容**：`src/services/ui2/scenarios.py::_digest_excerpt_fields()` 8 欄（示意聲明＋「節錄，並非完整摘要」＋6 句 ⬜ 缺值句）；Real 保持原空槽；省略 Risk Cap／本期行動／位階燈號健康度／資料日。parity 測試 `tests/test_ui2_digest_excerpt_parity.py`（以 #1233 同一份合成 evidence 現算 `build_rule_summary` 逐字比對）。
+- **P3 baseline 重產**：僅 `fake/p4_me/*`（18 key）的 `sections.digest` 變動；`_P3_BASELINE_SHA256` → `235770bb…7df0`。DEC-137 `source_hash` 不變（`src/ui2/**`／`app_ui2.py` 未動）。
+- **#1233 demo 措辭**已如實更新（斷言只增不減）；vnext demo 說明檔追加 §8。
+- **B-PREVIEW-VERSION-DEFER**：B 線版本列暫緩（#1199 comment 7033108095；G4B 零變更），登記於 BACKLOG；Work 只用功能指紋判版本。
+- **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、0 threads、merge／main CI；Cloud 與實機排版（未跑 Playwright）。殘留四點見 DEC-211。
+- **編號**：origin/main（535c1484）已用至 DEC-210／§87；本批 DEC-211／§88；合併時若被佔則順延。

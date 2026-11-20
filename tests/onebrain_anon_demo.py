@@ -8,7 +8,9 @@
 來源（coverage 的 source／資料日）／缺值（原因）／規則判斷（規則式摘要五段）／fallback（effective 與 Provider 是否被採用）。
 
 ═══ 這**不是**什麼（硬邊界）════════════════════════════════════════════
-- ⛔ **不是** UI：UI2 的 OneBrain／Digest 位置仍是「⬜ 尚未提供」空殼；使用者在畫面上**看不到**這裡的任何輸出。
+- ⛔ **不是** UI：使用者在畫面上**看不到**這裡即時產生的任何輸出。UI2 只有 FAKE 示意模式的 👤「Audit：Decision Digest」收合區
+  有一份**固定、寫死的靜態規則摘要節錄**（C-OB-UI-FAKE-A1；字面常數，非 runtime、無 caller；與本檔以 parity 測試逐字對齊）；
+  📊／💼 的 OneBrain 位置與 Real 模式仍是「⬜ 尚未提供」空殼。
 - ⛔ 不是 production caller：本檔放在 tests/（非 `test_` 開頭），不被任何 src／app／scripts import；
   Stage F Gate（`ALLOWED_CALLERS=∅`）仍關閉。
 - ⛔ 零網路、零 Secrets、零時鐘（`generated_at` 為固定常數）、不讀真持股／Google Sheet／OAuth；
@@ -37,8 +39,8 @@ from src.services.onebrain_shadow import run_shadow
 from tests.onebrain_fake_provider import MODE_PAYLOAD, FakeProvider
 
 BANNER = "示意：匿名合成輸入，非真實持股、非投資建議"
-UI_DISCLAIMER = ("本輸出為離線 CLI 示意；UI2 的 OneBrain／Digest 位置仍是「⬜ 尚未提供」空殼，"
-                 "使用者在畫面上看不到這些內容。")
+UI_DISCLAIMER = ("本輸出為離線 CLI 示意；UI2 只有 FAKE 示意模式的 👤 Audit 區有一份固定靜態節錄（寫死的字面常數，非 runtime、無 caller），"
+                 "📊／💼 的 OneBrain 位置與 Real 模式仍是「⬜ 尚未提供」空殼；使用者在畫面上看不到這裡即時產生的內容。")
 
 #: 已知缺口（如實標示，不得美化；修法屬 Digest 詞彙／簽章變更，Gate-needed，本檔不動）。
 LIMIT_STALE = ("注意：摘要字面未區分「過期」與「尚無輸入」（Digest v1 無缺值原因欄的已知缺口）；"
