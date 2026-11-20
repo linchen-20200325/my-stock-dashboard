@@ -11011,6 +11011,7 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 
 兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI 均未完成；客戶原文為 #1199 留言轉錄，逐字存檔不在 repo；本條與 DEC-166／167／213 的比對為單組讀文；「可評分全集」與既有契約術語的對應、「既有可評分資格判準」的指認、板塊通道母體映射、`excluded_invalid_rows` 與不可評分原因的涵蓋範圍皆＝NV。本條零 `src/**`、`tests/**`、`shared/**`、`scripts/**`、schema、L1、PIT、workflow、`data_cache`、Secrets 變更；不碰 `docs/BACKLOG.md` 與 `docs/HANDOFF.md`。
 
+- **字母不通用（QA 措辭補註）**：本條的 A／B／C 取自 #1199 comment 7043592872，與 `docs/vnext/DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 的 DG-COV 決策 2 之 A～E 字母**不通用**（決策單 B＝標註未驗證類別）；決策單該段（板塊顯示規則／門檻）**仍 HOLD**；客戶「DG-COV 選 B」在此指本條的 B。
 - **編號**：origin/main（`b522ecf3`）已用至 DEC-214；Open PR 僅 #1237（未使用 DEC 號）；本批 DEC-215；合併時若被佔則順延。
 
 單組撰寫。
