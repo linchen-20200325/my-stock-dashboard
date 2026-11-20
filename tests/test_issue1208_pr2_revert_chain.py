@@ -276,6 +276,10 @@ def _rel(file_path) -> str:
 def i1208pr2_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 #1208 PR2 之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 A-SEC-1110（#1110，2026-11-20；有意識的接鏈，⛔ 不是漏改）：A-SEC-1110 改了 `src/data/proxy/nas_server.py`
+    #   （被 Z40 還原鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；`a_sec1110_revert_for` 只套一次；⛔ 不動本表與基底 sha）。
+    from tests.test_a_sec1110_revert_chain import a_sec1110_revert_for
+    code = a_sec1110_revert_for(rel, code)
     pairs = I1208PR2_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code
