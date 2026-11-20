@@ -1536,3 +1536,14 @@
 - **未動**：`real_feed.py`、L1／L3 欄位、G2／G2F／G4B、D-5 `regime_label_residue`、原四個首屏 allowlist、Old UI、其他頁、新資料來源／投資訊號／登入／Risk Cap／cron／OneBrain／Secrets／workflow；G-4 DEFER 不變。
 - **NOT VERIFIED**：非作者 QA、PR 最新 head 五項原生 CI、0 unresolved threads、main push CI；Cloud deployed SHA 與 🗂 實機 390／1440（headless 模擬 ≠ Cloud）。不得標 DONE。
 - **編號**：origin/main（273da902）已用至 DEC-208／§85；本批 DEC-209／§86；合併時若被佔則順延。
+
+
+## 87. W3-P1／C-OB-USABLE 合併後閉環補登（純文件；2026-11-20；DEC-210；只追加；非 QA PASS）
+- 分支 `b-docs-w3p1-closure-followup`（base origin/main `52b628e6`），Draft PR（純文件：不碰 `src/`、`tests/`、viewport JSON、fixture）。
+- **現況（依總管派工訊息）**：main＝`52b628e6214732a5fdfaa49ff65570f702ba2390`（#1234 W3-P1「各項明細」，head `7e80c002`，五項 CI run 44650159846 success，三組非作者 QA PASS）；其前為 `401bcd4f`（#1233 C-OB-USABLE，final head `6d06d242`，CI run 44645554977、main push run 44647887409 success，兩組非作者 QA PASS）。
+- **#1233 事實**：tests/ 離線 CLI 示意（匿名合成；非 UI／非 runtime）；UI2 OneBrain 仍空殼；Work NOT TESTABLE AT RUNTIME 不因此解除；下一個最小 Gate（推論，非授權）＝客戶核准「rule-only 摘要掛入 UI2 FAKE feed」＋UI 線框草稿＋登記 `ALLOWED_CALLERS`。QA 殘留 S1–S6（S6＝① 來源區「採用／未採用」可被寫死成「採用」，B／C／D 的 stale 與 fetch_failed 段會被印成「採用」而測試仍綠，六項中最值得補）登記為 `OB-DEMO-QA-RESIDUAL-S1-S6`。
+- **#1234 仍 NOT VERIFIED**：Cloud deployed SHA／🗂 實機。
+- **更正**：DEC-209 的 `last_content_bottom` −56 解釋已就地刪除線並於 DEC-210 更正（頁面總高 +56，1698→1754，UX QA 以 DOM 實量、作者未自行重量；捲到底座標位移，非版面變矮）。
+- **BACKLOG 新登記（皆待決策，不施工）**：`UI2-DATA-ITEMS-POSITION-1`、`UI2-DATA-ITEMS-REGIME-LOADED-WORDING`、`UI2-DATA-ITEMS-STALE-UNKNOWN`、`OB-DEMO-QA-RESIDUAL-S1-S6`；並依 #1199 comment 7014878496 原文**更正殘留項編號**（共 5 項）。
+- **NOT VERIFIED**：本檔單組撰寫；#1234 main push CI 待確認（結案證據見 #1199，本檔不宣稱結果）；Cloud。
+- **編號**：origin/main（52b628e6）已用至 DEC-209／§86；本批 DEC-210／§87；合併時若被佔則順延。
