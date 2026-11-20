@@ -52,7 +52,7 @@
 **結論與限制（必須同時讀）**：
 1. **僅單側截斷時，現有雙向對帳（`holdings_without_station_row`／`station_rows_unmatched`）能擋**；不可概稱「所有截斷都擋不住」。
 2. 擋不住的是：**對稱截斷**，以及**「兩通道同時預濾、且濾後 eligible ≤ `MAX_ACTIONS`」的預過濾**（含 invalid 列、unkeyed 列；只預濾單一通道會被對帳擋下，濾後 eligible 超過上限則仍因 omitted 而 False）。兩者共同點：被截掉的列從所有通道**同時**消失，coverage 沒有任何「應有多少」的獨立參照（見 I3）。
-3. **證據強度聲明**：〔F〕本表來自 C 線以空命名空間（避開 streamlit import）載入 `src/services` 的**本機原型**；GPT 總管裁示 #7040939424 稱已重現；C 線作者端及一組非作者 QA 另各自獨立重現一致（結果以 #1199 回存為準）；本文撰寫者另以同法在 repo 外暫存目錄重跑一次，數值一致（單組、非 QA）。**不是** native pytest、**不是** production integration QA。原型腳本**未入庫**（本文 NO CODE）；需重現者依 `tests/onebrain_anon_demo.py::_kwargs` 的固定合成輸入形狀自建。
+3. **證據強度聲明**：〔F〕本表來自 C 線以空命名空間（避開 streamlit import）載入 `src/services` 的**本機原型**；〔F〕總管裁示 #7040939424 稱已重現（可於該留言核對）；〔NV〕C 線作者端及非作者 QA 另各自重現一致——此結果不在 repo 內，待 #1199 回存，在回存前不得當作已驗事實，且與「QA 均未完成」（§7）一致；本文撰寫者另以同法在 repo 外暫存目錄重跑一次，數值一致（單組、非 QA）。**不是** native pytest、**不是** production integration QA。原型腳本**未入庫**（本文 NO CODE）；需重現者依 `tests/onebrain_anon_demo.py::_kwargs` 的固定合成輸入形狀自建。
 
 ## 3. 不變量 I1–I7（驗收準則候選）
 
