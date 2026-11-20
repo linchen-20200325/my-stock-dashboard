@@ -1561,3 +1561,8 @@
 ## 2026-11-20 B-UI2-STALE-COPY-1（DEC-214；append-only；非 QA PASS）
 - UI2 Real 台股卡與日 K 的過期 detail 不再原樣輸出 L1 `stale_reason`（工程字樣 `twii_ohlcv`／`門檻`）；chip「⚠ 過期 N 天」、資料日、來源不變。僅 `real_canonical.py` 兩處＋守衛測試＋P3 baseline 1 key（`real/p4_market/stale`）＋Real viewport 兩份。
 - Draft PR 分支 `b-ui2-stale-copy-1`（base main `5ea2f5fc`）。**NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI、Cloud 畫面（#1107 `BLOCKED_EXTERNAL_AUTH`）。Gate 全部不變（`I1144-WIRING-GATE`、DG-SCOPE／COV／LIC、融資／板塊接線 BLOCKED）。
+
+## 2026-11-20 DG-COV 客戶裁示方案 B「可評分全集」登記（DEC-215；docs-only；只追加；非 QA PASS）
+- 客戶於 #1199 comment 7043929256 選定 DG-COV 方案 B：母體＝Top-N 截斷與市場條件篩選之前、經既有可評分資格判準後的完整集合；不可評分／排除列另行揭露；不採 A、C 作完整性分母。**只決定母體口徑**，細節與逐項比對見 `docs/DECISIONS.md` DEC-215。
+- 已批准 ≠ 完整性已驗證：0 production caller、無獨立 expected count、上游預剔除不回報；OneBrain `NOT READY`、正式市場廣度 `NOT EVALUATED`。`I1144-WIRING-GATE`、DG-LIC、DG-PIT、Digest v2、G-F2、Stage F／G、真 Provider／W8／Risk Cap、#1107、#1237 全部維持，**一個都沒解鎖**。
+- **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI；「可評分全集」與既有契約術語的對應未核實。

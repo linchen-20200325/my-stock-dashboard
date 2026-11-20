@@ -10962,3 +10962,55 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未解鎖／不變**：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、融資／板塊 UI2 接線（BLOCKED）、Cloud deployed SHA（#1107 `NOT VERIFIED`／`BLOCKED_EXTERNAL_AUTH`）、#1237 NAS Draft／HOLD、C 線 OneBrain forward-only PIT、Stage F／G、真 Provider、W8、Risk Cap、Digest v2 皆維持。**不宣稱 Cloud 已驗。**
 - **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI、Cloud 部署畫面；突變與 viewport 皆單組作者環境、未經第二組驗證。
 - **編號**：作者起點 main 5ea2f5fc 已用至 DEC-212；合併 main 685db89c（#1239）後該號已被 DEC-213 佔用，故本批改編為 DEC-214（有意識的改號，不是漏刪）。
+
+
+### DEC-215｜DG-COV 客戶裁示方案 B「可評分全集、排除列另行揭露」：只決定母體口徑，不解鎖任何 Gate（#1199 comment 7043929256；客戶本輪明示；2026-11-20；只追加；docs-only；非 QA PASS；單組撰寫）
+
+> **本條只登記「母體口徑」這一個業務語意。** 已批准 ≠ 完整性已驗證；不是功能上線、不是施工授權、不使 OneBrain 可用。
+
+- **決策者／來源**：客戶。依據 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7043929256 所載「客戶本輪明示」（轉錄，非逐字對話存檔）：「DG-COV 正式裁示：選擇方案 B。請依 GitHub #1199 最新總管紀錄落盤，維持既有安全 Gate 並安排後續合法平行任務。」脈絡：C 線唯讀差額 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7043592872（含 A／B／C 三方案與 AI 推薦 B，推薦非裁示）、總管交接 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7043890334（「必須由客戶明示選 A/B/C」）。基準 main `b522ecf39e417460c110e3a952e5cb2faeb0e943`。
+- **狀態**：客戶已選定的業務語意（母體口徑）；**尚無任何對應實作**。本條由獨立 docs-only PR 登記，合併前不得稱已入 main。
+
+#### 一、裁示內容（四點，逐點對照 #7043929256）
+
+1. **母體＝可評分全集**。完整性分母取「**Top-N 顯示截斷、投資市場條件篩選之前**，經**既有、正式核准之可評分資格判準**後的完整集合」；**不得**由已截斷或預濾後的 `station_rows`／`holdings_rows`／`ranked` 反推。
+2. **不可評分／被排除列另行揭露**：至少明確區分「計入可評分全集」與「未計入的排除列」之**數量與原因**；不得隱藏，不得視為 0／中性／SAFE。因上游 `parse_portfolio_records`／`build_station_rows` 有預先剔除但不回報（見三），**目前不能聲稱已滿足此口徑**；現有資料無法驗證排除數者標 `NOT VERIFIED`／缺口，不得捏造。
+3. **不採 A、不採 C**：不以 A「篩選前全集」作完整性分母（僅可作**總輸入數／排除數的稽核輔助**）；不以 C「市場條件通過者」作完整性分母（它只是投資篩選結果；市場決策篩選與證據完整性不得混淆）。
+4. **只決定母體口徑**。未授權：新 `expected_*` schema、來源、`DigestCoverage` 變更、`available_at`／PIT、上游 L1 剔除計數改碼、Provider／producer 接線、Digest v2、Stage F／G、正式市場廣度、私人持股、任何 production 行為。「可評分」的細部資格、排除原因分類、時間點、各通道母體若出現**新**業務語意，須先對照既有 DEC，仍不足時**另開 Decision Gate**。
+
+#### 二、與既有 DEC 的逐項比對（單組讀文，結論如下；有疑義標 NV）
+
+| 對象 | 比對結論 |
+|---|---|
+| **DEC-166**（DG-COV 列為待客戶裁示） | **無衝突**。DEC-166 將 `DG-COV` 列在「仍待客戶裁示」；本條只就其中「母體口徑」一項取得裁示。DEC-166 同列的其他待裁示項（最低 coverage 門檻等）**未被本條處理，仍待裁示**。DEC-166 的「AI 推薦方案 B」指另一組方案（UI2 先關 Gate），與本條 A／B／C 的同名「B」**不是同一組選項**，勿混讀。 |
+| **DEC-167**（客戶「同意 B」＝唯讀證據補強、不接線；`DG-COV`＝最低 coverage 含母體口徑） | **無衝突**。DEC-167 的限制（不接線、不自設 coverage 百分比、`I1144-WIRING-GATE` 未授權）原樣有效；本條不授權任何門檻值。**NV／範圍界線**：DEC-167 及 `docs/vnext/DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 決策 2 的 `DG-COV` 脈絡是 **UI2 板塊資金的覆蓋率、怪標籤、合計顯示**；本條的 B 來自 C 線針對 **OneBrain 證據完整性分母**的差額盤點（#7043592872）。客戶裁示原文只寫「DG-COV 方案 B」；本條**不擅自延伸**到板塊覆蓋率門檻／合計顯示規則，該通道的母體映射**NV**，依裁示第 4 點須先對照既有 DEC、不足則另開 Gate。 |
+| **DEC-213／#1239 I1–I7** | **未發現硬衝突，三處需留意**：(1) **I1**（不得由 UI Top-N／Digest 反推）與本條第 1 點同向，本條補上「母體取在 Top-N 與市場條件篩選之前」的正面口徑。(2) **I3**（獨立 `expected_*`）：本條決定「expected 應指什麼母體」，但 I3 仍是 **G2 未核准 Gate**，欄位、來源、位置一概未授權。(3) **I4**（禁止預過濾 invalid／unkeyed，一律交 builder 分類計數）與本條第 2 點「排除列另行揭露」方向一致；C 線稱「B 與 `excluded_invalid_rows` 語意一致」為單組推論，`excluded_invalid_rows` 目前僅涵蓋 `_invalid_lights`／`_invalid_inputs`／`_detail.error` 的站內持有列，是否等同「不可評分」全部原因＝**NV**。另 **I2** 的「兩通道各自由同一母集導出」與真實上游（station 由 holdings 派生）不符，C 線已指為 #1239 文字缺口（#7043592872）；本條**不修訂** I2、DEC-213 一字未動，是否改寫待總管另行指派。 |
+
+**術語核實（名稱「可評分全集」對應既有契約）**：以 grep 查 `shared/`、`src/`：(a) `shared/decision_digest_coverage.py::DigestCoverage.actions_total_eligible` 的 docstring 為「全部合格行動候選數（未截斷）」，指**行動候選**，不是持股／證券的可評分母體；(b) `shared/input_provenance_policy.py` 的 `scoring_eligible` 自述射程**只限 Risk Cap 引擎**的輸入資格，規則目前與 `riskcap_eligible` 相同；(c) `shared/dated_value.py::_is_scorable` 是**單一值**層級的私有判斷。**結論：repo 內查無已核實等同「可評分全集」的現成契約名詞；其與 `eligible`／`scoring_eligible` 的精準對應＝NV**，不得擅自等同。客戶裁示第 1 點「既有、正式核准之可評分資格判準」本身是哪一份判準，亦＝NV（本條未能指認，不可編造）。
+
+#### 三、「已批准 ≠ 完整性已驗證」（強制保持；證據分級沿用 #7043592872／#7043890334，未重驗者標明）
+
+- 現行 `assemble_digest`／`EvidenceInput`／`run_shadow`／`build_rule_summary` **0 production caller**（C 線 grep、總管 grep 自驗；本組未重跑）。
+- **獨立 expected count 缺失**：`DigestCoverage` 無 expected 欄；actions 分母 `actions_total_eligible` 與分子同一份輸入。
+- **上游預剔除不回報**：`gsheet_portfolio.py::parse_portfolio_records`（預設 `keep_blank=False`）丟棄空代號／lots≤0／avg≤0／非數字列，`build_station_rows` 於空代號 `continue`，皆不回報丟棄數（讀碼）。
+- **station 由 holdings 派生**，故現有雙向對帳在該路徑可能恆等（**讀碼推論，原型 NV**）；`fetch_metrics` 內部是否另有截斷＝NV。
+- OneBrain **NOT READY**；正式市場廣度 **NOT EVALUATED**。
+
+#### 四、全部不因本條解鎖
+
+`I1144-WIRING-GATE`；`DG-LIC`；`DG-PIT`；Digest v2；`G-F2`（私人持股）；Stage F／G；真 Provider／W8／Risk Cap；官方詢問草稿 v2＝`NO SEND`；#1107 Cloud 部署版本＝`NOT VERIFIED`；#1237＝Draft／HOLD（不合併、不部署）。另：新 `expected_*` schema、`DigestCoverage` 變更、`available_at`／PIT、上游 L1 剔除計數改碼、Provider／producer 接線、私人持股皆**未授權**。
+
+#### 五、後續候選 Gate（僅規格需求，不施工、不啟動；各需另行授權）
+
+- **I3 expected**：`expected_*` 須在任何 Top-N／市場條件篩選前記下，且不由被截斷或預濾的輸入推出；欄位、來源、版本屬 schema／Digest v2 Gate（G2）。
+- **I4 排除數**：上游預剔除須可回報（數量＋原因分類）；屬 L1 變更，須獨立授權；原因分類與「可評分資格」若出現新業務語意，依裁示第 4 點先對照既有 DEC。
+- **I2 對帳恆等式**：現實路徑下兩通道須共用同一個尚未被預剔除的母集（#7043592872 候選措辭，未核准）；僅修訂 #1239 I2 措辭或新增 tests-only 契約皆需總管另行指派，且不增加可用性。
+- 建議次序（沿 #7043592872，非授權）：口徑（本條）→ expected 欄位／來源 → 上游排除數回報 → headless producer 的「先證明完整輸入」驗收 → Stage F。
+
+#### 六、NOT VERIFIED／限制
+
+兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI 均未完成；客戶原文為 #1199 留言轉錄，逐字存檔不在 repo；本條與 DEC-166／167／213 的比對為單組讀文；「可評分全集」與既有契約術語的對應、「既有可評分資格判準」的指認、板塊通道母體映射、`excluded_invalid_rows` 與不可評分原因的涵蓋範圍皆＝NV。本條零 `src/**`、`tests/**`、`shared/**`、`scripts/**`、schema、L1、PIT、workflow、`data_cache`、Secrets 變更；不碰 `docs/BACKLOG.md` 與 `docs/HANDOFF.md`。
+
+- **編號**：origin/main（`b522ecf3`）已用至 DEC-214；Open PR 僅 #1237（未使用 DEC 號）；本批 DEC-215；合併時若被佔則順延。
+
+單組撰寫。
