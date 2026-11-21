@@ -11042,6 +11042,12 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 - **未解（待裁）**：開發面 feed 選單標籤 `FAKE 場景（預設）`（`src/ui2/shell/app.py` 的 `_FEED_LABELS`）在預設改 Real 後字樣失真；總管裁示本批不改 shell（開發面專用文字、非產品內容）。
 - **測試**：指定範圍 pytest 3040 passed／57 deselected／3 xfailed／0 failed（基準 3032 passed）。突變（移除播種）使新檔 5 項與改寫後的預設測試轉紅，已還原。
 
+#### 四之一、PR #1243 CI 發現的 browser lane 相容修正（`ui2-browser (streamlit 1.56.0)`：57 tests／12 failed）
+
+- **根因（全為同一個）**：預設改 Real 後，`tests/test_ui2_drawer_browser.py` 的共用 `Ui` helper 開 `?ui2_dev=1` 即假設 FAKE 起點，場景／帳戶狀態選單在 Real 下 disabled（`Locator.click: element is not enabled`，30 秒逾時），或斷言 FAKE 標示／FAKE 的 👤 帳戶 CTA。本機重現（舊 helper，1.59.2）13 failed／44 passed，其中 12 項即 CI 清單、第 13 項 `test_t17_streamlit_version_matches_matrix` 僅因本機未設 `UI2_EXPECT_STREAMLIT`（CI 有設，非缺陷）：`test_first_screen_margin_160_every_fake_scenario` ×6（場景選單 disabled）、`test_row1_sheet_and_account_are_fixed_placeholders_not_login`（帳戶選單 disabled）、`test_row1_fake_mode_label_is_complete_single_line`（斷言 FAKE 標示，實為 Real 標示）、`test_a11y_disabled_cta_cursor_on_every_page` ×2（👤 頁 5 顆帳戶 CTA 在 Real 下不存在）、`test_a11y_headings_every_page_every_fake_scenario` ×2（場景選單 disabled）。`tests/test_ui2_batch2.py` 的 browser 測試走 `measure_viewport`（已於上節修正），本身無失敗。
+- **修正清單**：僅 `tests/test_ui2_drawer_browser.py::Ui.__init__` 一處——新增參數 `fake_start=True`；開頁帶 `ui2_dev=1` 時，先在開發面把「資料來源（feed）」選為 FAKE（`_FEED_LABELS[FEED_FAKE]`，等待 `[data-ui2-scenario="cold"]`，與 `measure_viewport` 同法），再以 `body.focus()+blur()` 重設瀏覽器 sequential-focus 起點（否則 Streamlit 1.56 下，選單互動後的 Tab 測試 `test_tab_enters_nav_first_and_leaves_it`、`test_a11y_first_tab_stop_has_visible_focus_ring`、`test_teeth_a11y_css_fixes[stMain…]` 會從選單之後起算而紅；1.59.2 不受影響）。無 `ui2_dev=1` 的 `Ui`（reload／resize 測試）保持一般入口預設 Real，行為不變。明確測 Real 的測試（自行切 Real）不變。未刪改任何斷言、未放寬任何門檻、未動 Real 流程。
+- **結果**：兩個檔、兩個 Streamlit 版本（1.59.2、1.56.0；暫時 venv、playwright 1.64.1、`UI2_BROWSER_LANE=required`、`UI2_EXPECT_STREAMLIT` 同 CI）本機 browser lane 全綠：1.59.2＝57 passed、1.56.0＝57 passed（0 failed）；`tests/test_ui2_drawer_browser.py` 不在 `source_hash` 範圍，故 DEC-137 四份存證不需再重產。
+
 #### 五、NOT VERIFIED
 
 Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud 已更新；Real 資料可能停在 2026-11-09 而顯示 STALE；為非正式行情，可用於預覽。QA、CI、merge 均未完成；本條為單組作者自跑結論。

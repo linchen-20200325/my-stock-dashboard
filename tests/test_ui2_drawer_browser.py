@@ -63,7 +63,7 @@ def url():
 
 
 class Ui:
-    def __init__(self, browser, url, vp, query="", mobile=True, reduced=False):
+    def __init__(self, browser, url, vp, query="", mobile=True, reduced=False, fake_start=True):
         touch = mobile and vp["width"] <= 768
         self.ctx = browser.new_context(viewport=vp, is_mobile=touch, has_touch=touch,
                                        reduced_motion="reduce" if reduced else "no-preference")
@@ -83,6 +83,16 @@ class Ui:
           })();""")
         self.pg.goto(url + ("?" + query if query else ""))
         self.pg.wait_for_selector(".ui2-qa", timeout=40000)
+        if "ui2_dev=1" in query and fake_start:
+            # D2-A（DEC-216）：一般入口預設改 Real → 本檔既有測試假設 FAKE 起點，開發面開頁後先明示把資料來源選為 FAKE
+            # （沿用 measure_viewport 作法）；明確測 Real 的測試之後自行切回 Real。`fake_start=False`＝保留預設 Real。
+            from shared.ui2_contract.pages import FEED_FAKE
+            from src.ui2.shell.app import _FEED_LABELS
+            MV._select_box(self.pg, "資料來源（feed）", _FEED_LABELS[FEED_FAKE], '[data-ui2-scenario="cold"]')
+            # 選單互動會把瀏覽器的 sequential focus 起點留在選單（Streamlit 1.56 的 Tab 測試因此從選單之後開始）：
+            # 以 body focus()+blur() 把焦點起點重設回文件開頭，使後續 Tab 序列等同「剛開頁」。
+            self.pg.evaluate("""() => { const b = document.body; const t = b.getAttribute('tabindex'); b.setAttribute('tabindex', '-1');
+              b.focus(); b.blur(); if (t === null) b.removeAttribute('tabindex'); else b.setAttribute('tabindex', t); window.scrollTo(0, 0); }""")
         self.pg.wait_for_timeout(500)
 
     def close(self):
