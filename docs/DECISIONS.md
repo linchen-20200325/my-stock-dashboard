@@ -11177,3 +11177,36 @@ FAKE 標的頁（`scenarios.py`）與資料頁（`data_page.py`）同字串**未
 #### 四、未解（NOT VERIFIED）
 
 Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`〔Streamlit 1.59.2〕與 `viewport_measurements_streamlit156.json`〔1.56.0〕）已依 DEC-214 程序重產（`python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out docs/vnext/newui2_realfeed`；1.56 另加 `--python <隔離 venv>/bin/python --json-name viewport_measurements_streamlit156.json`；Real 13／13，兩版皆是）：Real 標的頁 `results[2]、[3]、[8]、[9]` 元素 `text` 已改為新句，不再含「動作權威＝💼 持股」；`source_hash` 不變，僅 `git_sha`／`generated_at` 更新；資料頁 `results[6]、[12]` 與 FAKE 存證（`newui2_batch3b`）未重產、不變。版面變化（新句較長而換行）：手機第一屏 `results[2]、[3]` 的 q2 元素高度 54.9→74.1 px，其下元素與 grid 下移約 19.2 px，`nav_margin_after_risk` 276.3→257.1（門檻 160 不變，仍過）；桌機 `results[8]、[9]` 僅 `text` 變動。13／13 判定仍全過。重產環境：Chromium headless shell 1243；1.56.0 於隔離 venv。png 未重產（`--shots none`）。〔I〕觀察：`results[12]`（資料頁桌機）的 `expander_box` 在 Streamlit 間／重跑間偶有量測抖動（DEC-210 已記載），本次最終存證該列與重產前一致。Cloud 實際畫面＝NOT VERIFIED。QA、CI、merge 均未完成；本條不是 QA PASS，不解鎖任何 Gate。編號：origin/main 已用至 DEC-219（C 線 G-X1，其內容一字未動），故本批改編為 DEC-220；有意識的改號，不是漏刪；合併時若被佔則順延。
+
+
+### DEC-221｜B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1：新增 L0「公開股票選取／跨頁代號 identity」純離線小契約＋合成測試（#1199 comment 7057338506；2026-11-21；只追加；非 QA PASS；單組撰寫）
+
+#### 一、授權依據與範圍
+
+依 #1199 comment 7057338506（B 線），新增 `shared/ui2_contract/target_selection.py`（L0；純離線、無 I/O）與 `tests/test_ui2_target_selection_contract.py`（純合成資料）。**只定義契約，沒有任何 production caller**；不觸及 Streamlit session、導航、按鈕、real_canonical／real_feed、gsheet_portfolio，不改動、不取代既有任何 normalize 函式；不把 FAKE 變 Real。
+
+#### 二、契約決策（細節與理由見模組 docstring D1～D9）
+
+- `TICKER_PATTERN`＝`[0-9][0-9A-Z]{3,5}`（總長 4～6、首字元數字；涵蓋 0050、2330、00631L、00980A），以 `fullmatch` 驗證。
+- `parse_ticker_input(raw) -> TickerSelection`（frozen；`raw／symbol／status／reason`）：只做 `strip`＋（先驗 ASCII 後）`upper`。不補零、不去零（"50"→invalid `too_short`）；帶 `.TW`／`.TWO` 一律 invalid（`suffix_not_accepted`，由上游先明確處理）；全形、非法字元、過長、過短、內部空白、首字元非數字皆 invalid 並給具名 reason；`None`／空／全空白→EMPTY；非 str→invalid(`not_text`)，不 raise、不 `str()` 強轉。小寫 ASCII 規格化為大寫（"2330a"→"2330A"）為唯一規格化。先驗 ASCII 是因 `upper()` 會把部分非 ASCII 字元（如 'ı'）映射成 ASCII，先 upper 會形成自動修正。
+- `parse_ticker_list(raws) -> TickerSelectionSet`（frozen、保序）：`selected`、`duplicates`（重複必須揭露，每個重複代號列一次）、`invalid`、`empty_count`。僅接受 list／tuple，其他型別整體 invalid（`not_a_list`），不猜。
+- `quote_readiness(selection, *, loaded, source_present, as_of_known, is_stale)`：固定優先序「選取無效 > 未載入 > 來源缺席 > as_of 未知 > 過期 > 就緒」，旗標全由呼叫端傳入，無時鐘無網路；非 bool 旗標 `TypeError`。任一缺失不得 READY。
+- 自有 str Enum（`SelectionStatus`、`QuoteReadiness`，後者值帶 `quote_` 前綴避免與 FieldState 值同字串）；**未新增 FieldState**、未用 DEC-124 capability marker 字樣。
+- **無任何「是否持有」欄位／函式／推論**，不碰私人 Sheet，不 import `src.*`。
+
+#### 三、與既有四個 normalize 函式的語意差異（新契約的設計決策；非改動、非取代）
+
+既有函式維持原樣、未被觸碰，逐函式據實描述：`normalize_holding_ticker`＝只 `strip().upper()`、非 str 拋 TypeError、不加減 `.TW`、不補零（與新契約在 strip＋upper／不補後綴／不去後綴上同向，差異僅在新契約多了格式驗證、後綴一律 invalid、重複顯式揭露、可用性判定）；`normalize_etf_ticker`＝4～6 碼純台股代號補 `.TW`、已含後綴原樣、空值回 ''、非字串 `str()` 強轉；`dividend_station_thresholds.normalize_ticker`＝去 `.TW`／`.TWO` 並大寫、`str()` 強轉；`etf_smart_analysis._normalize_ticker`＝無 '.' 就補 `.TW`。「數字化（0050→50）」是 DEC-218 §D-1 所述 SA 推播路徑的另一處行為，**不屬**這四個函式。新契約：不補 `.TW`、不去 `.TW`、不數字化、後綴須由上游明確處理、重複須揭露、非 str 不強轉；這是新契約的設計決策，不是對既有函式的更正，也不要求它們趨同。補充：`strip()` 修剪首尾 Unicode 空白（含 NBSP、全形空格、換行），內部空白仍 invalid；`duplicates` 每個代號只列一次、不含次數；`quote_readiness` 只檢查 `status`／`symbol` 非 None、不重驗格式，信任邊界在 `parse_ticker_input`。
+
+#### 四、守衛與驗證
+
+模組位於 `shared/ui2_contract/`，自動納入 `tests/test_ui2_guards.py` 的 G2 VM 純度、DEC-124 capability marker 範圍守衛與 c3 分層守衛（皆未修改、皆綠）。新測試含 AST 純度守衛（有牙齒：注入 streamlit／time／datetime／os／requests／src.*／session_state／open／相對 import 皆轉紅）、結構守衛（欄位與識別字不含持有類字樣）、readiness 全組合表格、突變式測試（補零、靜默去重的突變實作會被斷言分辨）。
+
+#### 五、未解（NOT VERIFIED）與明確不做
+
+- **完成後使用者仍不能在 Real 查股**；正式接線需另行授權：I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、Real 標的查詢啟用、跨頁 production wiring。本條**不解除任何 Gate**，不授權 runtime 接線。
+- 「pattern 放寬突變」測試僅證明測試能分辨寬鬆／嚴格 pattern；因 parse 先以分支擋下非法輸入，pattern 僅為縱深防禦，單獨替換 pattern 不會使 parse 行為改變——此為設計上的冗餘，非缺口。
+- 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
+- 編號：origin/main 已用至 DEC-220（grep origin/main 無 DEC-221）；合併時若被佔則順延。
+
+單組撰寫。

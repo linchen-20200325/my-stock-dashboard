@@ -3151,3 +3151,10 @@
 
 > **仍開放（照列、不結案）**：#1237 NAS Draft／HOLD；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
 > 註：本 BACKLOG 先前無 D2-A／FAKE-LABEL／CI156／GX2／GX1 之獨立列（grep 無命中），上表為首次登記其現況，非改列。
+
+
+## 2026-11-21 B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1 登記（只追加）
+
+| ID | Owner | 狀態 | 授權來源 | 內容與邊界 |
+|---|---|---|---|---|
+| **B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1** | Claude B | **PR OPEN／NOT VERIFIED** | #1199 comment 7057338506 | 新增 L0 `shared/ui2_contract/target_selection.py`（公開股票選取／跨頁代號 identity 純離線契約）＋ `tests/test_ui2_target_selection_contract.py`（合成資料）；DEC-221。**完成後使用者仍不能在 Real 查股；正式接線需另行授權：I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、Real 標的查詢啟用、跨頁 production wiring。** 不解除任何 Gate；無 production caller；不改既有 normalize 函式；無「是否持有」概念。QA／CI／merge 未完成 |
