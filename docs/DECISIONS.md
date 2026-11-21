@@ -11211,18 +11211,60 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 
 單組撰寫。
 
+### DEC-222｜NUI2-AGGREGATOR-IMPL M-A2：System Action Aggregator 的 L0 契約＋L3 Aggregator＋A-T1～A-T10（未接任何 consumer；#1199 comment 7060912371 範圍；客戶核准 M-A1；2026-11-21；只追加；非 QA PASS；單組作者撰寫）
 
-### DEC-222｜B-UI2-LOOKUP-P1-INPUT-1：New UI2 標的頁「股票代號輸入」P1——功能開關預設關、只做輸入元件＋代號驗證＋灰色狀態、不接任何資料（客戶核准 A1 五項與 A3-lite；#1199 comment 7062580179 方案與本輪核准；2026-11-21；只追加；非 QA PASS；單組撰寫）
+#### 一、授權依據與範圍
+
+客戶核准 M-A1（Architecture Gate §4.6.9），本批只做 **M-A2**：依凍結契約（Gate §4.6）新增 `shared/system_action_contract.py`（L0：枚舉＋frozen dataclass＋建構期驗證）、`src/services/system_action_aggregator.py`（L3：`aggregate_system_actions(...)` 純函式＋`risk_cap_state_from_allocation(...)`），與測試 `tests/test_system_action_aggregator{,_contract,_parity,_mutation}.py`＋共用 `tests/_system_action_checks.py`。**沒有任何 production caller**；未改任何既有 `src/`、`shared/` 檔；未接 UI2 VM／舊 UI／Digest／OneBrain／LINE／scripts（M-A3～M-A6 另依原 Gate）；A-T11（Stage H）不在本批。
+
+#### 二、實作決策（AI 總管／實作者內部決定，非客戶裁示；客戶可推翻）
+
+1. **規則來源只沿用既有**：ETF 七分支碼（`action_branch.v1`）、個股 `swap_level` 四級、`RULE_ID_ALLOWLIST`、`holdings_data_short`。L0 不得 import `src.*` → 分支碼 `premium`／`cruise`、`LEVEL_UNJUDGED`、「系統風險上限」字面以複本登記，測試 pin 住與來源相等（同 DEC-094 慣例）；`RULE_ID_ALLOWLIST` 亦以鍵複本登記 —— L0 契約**不** import `shared.decision_digest_rules`，因 Digest 家族在 Stage F production caller Gate（DEC-159／DEC-160）未開前不得有 production importer（`tests/test_decision_digest_invariants_guard.py`）。Aggregator 刻意不 import L2 `dividend_station`（其套件 `__init__` 連帶載入 streamlit／`src.data`）。
+2. **PORT（新位置另建＋parity，Old UI 原檔一字不改）**：`station_cards` 的 `_in_judged_denominator`／`judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`／`CRUISE_TEXT`，與 `risk_cap_gate.has_system_risk_cap`，逐字移植到 L3 Aggregator 模組（不是 Gate §5.2 M1 的 L0 `risk_cap_gate` 全檔 PORT；該項仍屬 `NUI2-PORT-PREREQ`）。
+3. **觀察清單（held=False）不計入今日需處理**（同 digest「watch_adds 不計入今日要動作」；W-5 的 portfolio action 讀法）。⚠️ 與既有 `page_hold` 卡③ `cut_n=len(digest["reds"])`（含觀察清單）不同，見第四節。
+4. **Gate §4.6.6 對映表照做**：`row_short_kind=unjudged` 一律 `undeterminable`、不計入、不分組 —— 含「分支是 cut／add 但持股輸入資料異常」的列（digest 的 reds／adds 仍算它，見第四節）。
+5. **`day_status`**＝`needs_action`（today_n>0）／`no_adjustment_today`（today_n=0 且 PORT 的巡航 gate 放行且 `digest_data_short` 為 False 且三類判不出計數皆 0）／其餘 `undeterminable`；L0 `SystemActionState` 建構時再守一次（縱深）。
+6. **公開輸出嚴格＝Gate O1～O5**（#1199 comment 7062290629 總管裁定）：`SystemActionState` 欄位只有 items／counts／day_status／risk_cap_state／exposure_gate／provenance。`day_status` 的依據 `DayBasis`（judged／total／tally／all_rows_judged／cruise gate／digest_data_short）**只留內部**：L3 `_aggregate_with_basis(...)` 以**同一份**計算回 `(state, basis)`，公開 `aggregate_system_actions(...)` 取其 state（⛔ 第二套判定）；`DayBasis` 不在 `SystemActionState`、不在 `__all__`，只供 A-T8 parity／對照測試觀測，consumer ⛔ 取用。守衛 `test_public_state_fields_exactly_o1_o5` 明列 O1～O5 欄位集合（多一欄即紅），2 個突變（把 `day_basis` 加回）轉紅。
+7. **`risk_cap_tag`**：只標在 `action_branch=add` 且 actionable 的 item，恆「Risk Cap 無法判定」（O4b 數值 Gate 前恆 undeterminable，與 Risk Cap state 三態無關）；`RiskCapState` 原樣傳遞（同一物件），`ExposureGate` 建構只接受 `undeterminable`。
+8. **`not_evaluated`** 型別與計數已實作、與 `undeterminable` 分列，但現有輸入（戰情表列）**沒有任何對映路徑會產生它**（戰情表未算時由 consumer 以 capability state 處理，本函式要求 rows 必為 list／tuple）。
+9. **A-T5 與 A-T7 的張力**：`formal_label` 逐字帶來源 `建議動作`，其中既有 add 句含「加碼 N%」（`deploy_pct`，既有規則原文）；A-T5 的比例字樣禁令套在 Aggregator 自寫欄位，「減碼 1/2」「全出」則全輸出禁止。
+
+#### 三、驗證（作者環境，Python 3.13；非 QA PASS）
+
+新測試 123 passed＋3 xfailed（strict）；突變 38 個（A-T2 6／A-T3 4／A-T4 4／A-T5 3／A-T6 2／A-T7 2／A-T8 9／A-T9 3／A-T10 3／O1-O5 2）＋A-T1 注入 10 種 × 2 檔，全部轉紅；A-T8 golden parity 含真的 `page_hold.load_station`（只替換 L3 取數）。
+
+#### 四、已知差異（⛔ 自行改哪一邊；送總管裁定；以 strict xfail 釘住）
+
+- 觀察清單 🔴（ETF 汰弱／個股換出）：`page_hold` cut_n＝2 vs Aggregator 換＋減計入＝0。
+- 持股輸入資料異常的 cut 列：cut_n＝1 vs 0（Aggregator→undeterminable）。
+- 停利（force／partial）：digest reds 不含 → cut_n＝0 vs Aggregator 減＝2。
+
+#### 五、未解（NOT VERIFIED）
+
+兩組非作者 QA、PR exact-head CI（Python 3.11）、merge 均未完成；本條不是 QA PASS。編號：origin/main 與 refs/pull/1250～1254 皆止於 DEC-221；合併時若被佔則順延。
+
+#### 六、A-T5／A-T7 採選項 1（總管技術裁定；決策者：GPT 接任總管〔技術驗收口徑，2026-11-21，#1199 comment 7062910532〕；證據包＝#1199 7062611025〔A 送裁〕；只追加）
+
+> 歸因註明：此為總管技術裁定，非客戶裁示；客戶未就選項 1 另行表態（無一手證據）。原標題「客戶／總管 2026-11-21 核定」的『客戶』歸因已依 #1199 comment 7062910532 撤除（有意識的更正，不是漏刪）。
+
+1. **A-T5 比例禁令只適用 Aggregator 自產欄位**（action_class／group／day_status／risk_cap_tag／counts〔含 by_group 鍵〕及其他 Aggregator 自己組出的字串）；比例正則補全形「％」、「半」、中文數字「N 成」、「分之」。豁免只限來源透傳欄位（`tests/_system_action_checks.py::T5_PASSTHROUGH_FIELDS`：formal_label／ticker／name／item stamp／risk_cap_state／provenance 各輸入 stamp），其餘預設全掃（provenance 的版本與輸入名由原本整段豁免收緊為受掃）。
+2. **A-T7**：O1 `formal_label` 逐字透傳正式來源「建議動作」，含「加碼 20／30／50%」（N≡`shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT`）、汰弱「賺息賠本：年報酬 x% < 配息率 y%」、高溢價「高溢價 p% > PREMIUM_ALERT_PCT%」既有百分比；⛔ 增刪改任一字元。規則複本（DEPLOY 三值、PREMIUM_ALERT_PCT、三種句型）由 `check_t7_option1_real_labels` 釘住，來源改動即轉紅、人工複核。
+3. **整份輸出（含 formal_label）**仍 ⛔「減碼 1/2」「全出」（另補全形 1/2 變體）與新 action code；公開 `SystemActionState` 仍＝O1～O5、`day_basis` 只留內部。Aggregator 判定邏輯未改；3 個 strict xfail 與既有防線、突變全部保留。
+4. 驗收 (a)～(g) 補測：golden 新增 `add_three_lights`／`real_format_cut_premium`（字串由來源函式／常數組出）；突變 38→48（A-T5 3→8、A-T7 2→7）。作者環境驗證，非 QA PASS。
+
+
+
+### DEC-223｜B-UI2-LOOKUP-P1-INPUT-1：New UI2 標的頁「股票代號輸入」P1——功能開關預設關、只做輸入元件＋代號驗證＋灰色狀態、不接任何資料（客戶明示核准 A1 五項與 A3-lite：#1199 comment 7063828637，連同總管裁定 7063710260；方案見 7062580179；2026-11-21；只追加；非 QA PASS；單組撰寫）
 
 #### 一、授權與範圍
 
-依客戶核准（#1199 comment 7062580179 的方案與本輪核准：A1 五項＋A3-lite），只做標的頁「輸入元件＋代號驗證＋灰色狀態」。**不接任何資料**、不產生 OK／STALE／MISSING／FETCH_FAILED 態、不新增 L3 service、不動 `real_feed`／`real_canonical` 的資料欄位與 G2F 白名單、不判持有、不寫入持股／Sheet、不動 FAKE。
+依客戶明示核准（#1199 comment 7063828637，連同總管裁定 7063710260；方案見 7062580179：A1 五項＋A3-lite），只做標的頁「輸入元件＋代號驗證＋灰色狀態」。**不接任何資料**、不產生 OK／STALE／MISSING／FETCH_FAILED 態、不新增 L3 service、不動 `real_feed`／`real_canonical` 的資料欄位與 G2F 白名單、不判持有、不寫入持股／Sheet、不動 FAKE。
 
 A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）：輸入框置於標的頁頂端（取代現行純 HTML disabled searchbox 位置，P1 實作）；抓取時間屬次要列（P1 無行情，不顯示）；過期以 ⚠ chip 沿用 7 日門檻；價格顯示範圍 0.005～1,000,000；過期底色沿用既有警示色（後三項屬 P2）。
 
 #### 二、機制
 
-- **功能開關預設關**：讀取位置在 `app_ui2.py`（L6）——`st.secrets` 鍵 `ui2_lookup_input` 或環境變數 `UI2_LOOKUP_INPUT`；值 `'1'`／`'true'`（大小寫不拘）才開（判讀純函式 `src/ui2/shell/app.py::lookup_flag_on`），其餘一律關；任何讀取失敗＝該來源視為不存在（不會因失敗而開啟）。⛔ 不使用 `?ui2_dev`（它不是授權）。以參數注入 `shell/app.py::run(lookup_input=)` → `views/target.py::render(vm, *, lookup_input=)`；L5 自己不讀 secrets／環境。
+- **功能開關預設關**：讀取位置在 `app_ui2.py`（L6）——`st.secrets` 鍵 `ui2_lookup_input` 或環境變數 `UI2_LOOKUP_INPUT`；值 `'1'`／`'true'`（大小寫不拘）才開（判讀純函式 `src/ui2/shell/app.py::lookup_flag_on`），其餘一律關；任何讀取失敗＝該來源視為不存在（不會因失敗而開啟）。⛔ 不使用 `?ui2_dev`（它不是授權）。以參數注入 `shell/app.py::run(lookup_input=)` → `views/target.py::render_with_lookup(vm)`（獨立入口；`render(vm)` 簽名不變，由 `shell/app.py` 在旗標開時改呼叫）；L5 自己不讀 secrets／環境。
 - **開關關**：`run()` 對 P4_TARGET 仍呼叫 `VIEWS[page](vm)`、`target.render` 走原 `search_html` 路徑，不呼叫任何新函式；以改動前擷取的 AppTest golden（`tests/fixtures/ui2_lookup_p1_flag_off_golden.json`，FAKE 四場景×兩模式）逐元素比對。
 - **開關開**：`st.form`（key `ui2_lookup_form`）內 `st.text_input`＋`st.form_submit_button("查詢")` 置於模式切換之下、取代 disabled searchbox 的位置。僅在 submit 時以 `target_selection.parse_ticker_input`（#1250）驗證一次、經 `quote_view.build_quote_view`（#1253，`loaded=False`）得到狀態：無效／空→SELECTION_INVALID（灰，非紅）；有效→顯示代號（原樣，0050 保留前導零）＋NOT_LOADED 灰色說明；未提交→NOT_LOADED 灰色說明。狀態列 `html.py::lookup_status_html` chip／說明逐字取自 `quote_view.CHIP_TEXT`／`NOTICE_TEXT`；只接受 NOT_LOADED／SELECTION_INVALID（其餘 fail closed 為 NOT_LOADED）；同時是 q4 版面錨點。新字串僅兩個輸入標籤（`shared/ui2_contract/text.py`：`LOOKUP_INPUT_LABEL`＝股票代號、`LOOKUP_SUBMIT_LABEL`＝查詢）。『加入觀察』仍 disabled、isolation_note 維持（未動）。
 - **session key**：`ui2_lookup_text`（widget 字串）、`ui2_lookup_state`（`QuoteViewState.value` 字串）、`ui2_lookup_symbol`（已解析代號字串）；皆 `ui2_` 前綴、只存字串，不流入持股／strategy／Sheet。
@@ -11237,9 +11279,9 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 
 #### 五、未解（NOT VERIFIED）與明確不做
 
-- **使用者仍不能查股**：本批沒有任何資料路徑；P2（行情顯示）仍待 A2／A3／A4。不解除任何 Gate（I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、跨頁 production wiring 皆不變）。
+- **使用者仍不能查股**：本批沒有任何資料路徑；P2（行情顯示）仍 HOLD（待 A2／A3／A4）。不解除任何 Gate（I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、跨頁 production wiring 皆不變）。
 - 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；1.56 未量測開關開。
 - 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
-- 編號：origin/main 範圍內 DEC-221 為最大；合併時若被佔則順延。
+- 編號：本條原編 DEC-222；origin/main（#1255）已用 DEC-222（System Action Aggregator M-A2），故有意識改號為 DEC-223，不是漏刪；合併時若再被佔則順延。
 
 單組撰寫。
