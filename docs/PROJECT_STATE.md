@@ -1593,3 +1593,19 @@
 - 客戶 G-X1 裁示（#1199 comment 7055751465）：Q1 僅 L1 純加性計數＋合成資料測試、Q2 延後；**不是** OneBrain 整體解除 HOLD；下一個已授權唯一任務 C-OB-GX1-L1-ADDITIVE-TALLY-1（Owner 新 Claude C Session，尚未開工）。
 - **HOLD／未解鎖（皆不變）**：截至 main a862fae 時點，Open PR 僅 #1237（不含本同步 PR #1246；Draft／HOLD；NAS）；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
 - **NOT VERIFIED**：Cloud 實際部署畫面；上列 CI run 結論未於本沙箱重查；非作者 QA 尚未進行。
+
+## 2026-11-21 DEC-219／220／221 與 #1248～#1251 索引（append-only；非 QA PASS；單組撰寫，待兩組非作者 QA；任務 B-SSOT-POST1248-1251-SYNC-1）
+- **更正說明**：上一段「DEC-213～218」索引以 main `a862fae` 為界；其後合併見本段。舊段不改，現況以本段與 GitHub 為準。main＝`bff4a626630992284a7098e347648f808037310d`（`git fetch` 後 `origin/main` 實證）。
+- **DEC 號去重**（`git grep '^### DEC-2' docs/DECISIONS.md` 核對標題）：**DEC-219＝C #1249（G-X1 L1 加性計數）**；**DEC-220＝B #1248（Real 標的頁文案；由原 219 有意識改號，不是漏刪）**；**DEC-221＝B #1250（公開代號選取契約）**；#1251 無 DEC。
+
+| DEC／項目 | PR | merge SHA | main push CI（`gh api …/commits/<sha>/check-runs`） |
+|---|---|---|---|
+| DEC-219（C-OB-GX1-L1-ADDITIVE-TALLY-1） | #1249 | `40abe505` | run 44863884140 五項 success |
+| DEC-220（B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1） | #1248 | `5963cc46` | run 44866087366 五項 success |
+| DEC-221（B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1） | #1250 | `702918c0` | run 44869410722 五項 success |
+| （無 DEC；C-OB-L1-DIGEST-ELIGIBILITY-HEADLESS-QA-1，tests-only） | #1251 | `bff4a626` | run 44871350535 五項 success（核實於 2026-11-21，gh api check-runs；run completed／success） |
+
+- **dormant／無正式 caller 邊界**：#1249 L1 tally **dormant、0 production caller**，不是 completeness PASS、不是獨立 expected；#1250 為純離線契約，**無 production caller，使用者仍不能在 Real 查股**；#1248 僅一處 Real 標的頁文案（Cloud 畫面 NOT VERIFIED）；#1251 僅 tests-only 負測。四者皆**不解除任何 Gate**，**不代表 OneBrain 或 Real 查股可用**（OneBrain 仍 `NOT READY`）。
+- **#1247**（A，C3 gspread tests-only）：Draft、未合併、落後 main（head `e40faf7f`）；如實記為未合併。C1／C2／#1237 NAS 維持 HOLD。
+- **#1199 結案 comment**：#1248／#1250＝B 7057937922；#1249＝C 7057201818、GPT 接收 7057317293；#1251 引用 GPT 總管 7058201887，**C 結案留言 NOT VERIFIED**（查無）。
+- **NOT VERIFIED**：Cloud 實際部署畫面；非作者 QA 尚未對本段進行。
