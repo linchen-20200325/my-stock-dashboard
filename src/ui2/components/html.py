@@ -14,6 +14,7 @@ from shared.ui2_contract.models import (
     JudgementState, KbarChartVM, LookupResultVM, SearchBoxVM,
 )
 from shared.ui2_contract import text as _T
+from shared.ui2_contract.quote_view import CHIP_TEXT, CHIP_TONE, NOTICE_TEXT, QuoteViewState
 from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_NOT_PROVIDED, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
@@ -413,6 +414,27 @@ def lookup_result_html(lk: LookupResultVM) -> str:
             f'{chips}</div>{snapshot_html(lk.snapshot)}'
             f'<div class="ui2-lookup__add">{cta_html(lk.add_watch_cta)}</div>'
             f'<div class="ui2-row__detail">{escape(lk.isolation_note)}</div></div>')
+
+
+#: P1 輸入元件只可能呈現的兩個狀態（P1 不接資料：⛔ OK／STALE／MISSING／FETCH_FAILED）。
+LOOKUP_P1_STATES = (QuoteViewState.NOT_LOADED, QuoteViewState.SELECTION_INVALID)
+
+
+def lookup_status_html(state: QuoteViewState, symbol: str | None = None) -> str:
+    """標的頁輸入元件的狀態列（B-UI2-LOOKUP-P1-INPUT-1）：chip／說明逐字取自 `quote_view`（不新增第二套文案）。
+
+    只接受 NOT_LOADED／SELECTION_INVALID（其餘一律當 NOT_LOADED：fail closed，不顯示任何資料態）；兩者皆為灰色（neutral），
+    ⛔ 紅色。`symbol` 原樣顯示（保留前導零，0050 不變 50）；無效輸入不回顯原字串。同時是標的頁的 q4 錨點（版面量測用）。
+    """
+    if state not in LOOKUP_P1_STATES:
+        state, symbol = QuoteViewState.NOT_LOADED, None
+    if state is QuoteViewState.SELECTION_INVALID:
+        symbol = None
+    sym = f'<strong class="ui2-lookup-status__symbol">{escape(symbol)}</strong> ' if symbol else ""
+    notice = NOTICE_TEXT[state]
+    return (f'<div class="ui2-search ui2-lookup-status" data-ui2-q="q4" data-ui2-l1="search" '
+            f'data-ui2-lookup-state="{escape(state.value)}">{sym}{chip_html(CHIP_TEXT[state], CHIP_TONE[state])} '
+            f'<span class="ui2-row__detail">{escape(notice or "")}</span></div>')
 
 
 #: 帳戶示意態的人話標示（FAKE 場景；⛔ 不是登入證據，真實 auth 狀態另案 `NUI2-AUTH-CONTRACT-GATE`）。

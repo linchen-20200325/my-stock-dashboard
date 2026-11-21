@@ -3173,3 +3173,14 @@
 
 > 未解鎖（皆不變）：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、Real 查股／跨頁 production wiring、#1237 NAS Draft／HOLD、#1119 workflow 清理 HOLD、OneBrain `NOT READY`、Stage F／G、Digest v2、G-F2、私人 Sheet、G-X1 Q2 延後。
 > **#1247**（A-SA-GSPREAD-621-REGRESSION-EVIDENCE-1，C3 tests-only）：查核時 **Draft、未合併**（head `e40faf7f`、base 仍 `5963cc46`、落後 main、mergeable_state＝behind），**不得寫成完成**；C1／C2 維持 HOLD。
+
+
+## 2026-11-21 B-UI2-LOOKUP-P1-INPUT-1 登記與 B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1 補登（只追加）
+
+| ID | Owner | 狀態 | 授權／證據來源 | 內容與邊界 |
+|---|---|---|---|---|
+| **B-UI2-LOOKUP-P1-INPUT-1** | Claude B | **PR OPEN／NOT VERIFIED** | 客戶明示核准 A1 五項＋A3-lite（#1199 comment 7063828637，連同總管裁定 7063710260；方案見 7062580179）；DEC-223（原編 DEC-222，因 origin/main 已用而有意識改號） | 標的頁「股票代號輸入」P1：功能開關預設關（`st.secrets` `ui2_lookup_input` 或環境變數 `UI2_LOOKUP_INPUT`＝'1'／'true' 才開；由 `app_ui2.py` 讀取、參數注入）；開時以 `st.form` 取代 disabled searchbox，提交時 `parse_ticker_input` 驗證，狀態僅 NOT_LOADED／SELECTION_INVALID（灰）；**不接任何資料、不判持有、無新 L3 service**。**使用者仍不能查股**；P2 行情顯示仍待 A2／A3／A4。不解除任何 Gate。QA／CI／merge 未完成 |
+| **B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1**（補登） | Claude B | **已合併**：#1253 → `7917a818` | #1199 comment 7060205009；線框 A1 五項已核准 | L0 `shared/ui2_contract/quote_view.py`＋合成測試＋文字線框；**本身無 production caller**（P1 輸入元件為其第一個使用者，僅用 NOT_LOADED／SELECTION_INVALID 兩態）。補登先前延後的列，非改列 |
+
+> **A1 已核准、供 P2 使用（P1 不實作）**：過期以 ⚠ chip 沿用 7 日門檻；價格顯示範圍 0.005～1,000,000；過期底色沿用既有警示色；抓取時間屬次要列。
+> **開關開時的版面量測**：以環境變數 `UI2_LOOKUP_INPUT=1` 啟動 `measure_viewport --feed real`（scratch、不入庫）Real 13／13 pass（含 `p2_nav_margin_160`；手機 q4 底緣 321、q1 頂 336，第一屏內；詳見 DEC-223 §五）；提交互動僅 AppTest 驗，Streamlit 1.56.0 開關開亦 13／13 pass；**真瀏覽器的提交互動（輸入→按查詢）＝NOT VERIFIED**。

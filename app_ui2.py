@@ -12,16 +12,35 @@ Real 缺值如實顯示（⬜／STALE），⛔ 不自動 fallback 到 FAKE。FAK
 `st.set_page_config()` 必須是第一個 Streamlit 呼叫（host 設定，不屬頁面邏輯）。
 入口放 repo 根以避開 `sys.path` 問題（Gate §7.2）。
 """
+import os
+
 import streamlit as st
 
 st.set_page_config(page_title="New UI2 Preview", page_icon="🧪", layout="wide")
 
 from src.services.connection_diag_service import run_connection_check  # noqa: E402  (唯一允許的非 src.ui2 import；#1110 D-T2)
 from src.ui2.shell import run  # noqa: E402
-from src.ui2.shell.app import FEED_REAL  # noqa: E402  (常數取自 src.ui2；與 shared.ui2_contract.pages.FEED_REAL 同值，測試釘相等)
+from src.ui2.shell.app import FEED_REAL, lookup_flag_on  # noqa: E402  (常數取自 src.ui2；與 shared.ui2_contract.pages.FEED_REAL 同值，測試釘相等)
 
 # D2=A：session 尚無 feed 選擇才播種為 Real（使用者／開發面已選的值與 rerun 持久性不被覆蓋）。
 if "ui2_feed" not in st.session_state:
     st.session_state["ui2_feed"] = FEED_REAL
 
-run(diag_check=run_connection_check)
+
+
+def _read_lookup_flag() -> bool:
+    """標的頁股票代號輸入的功能開關（預設關）。來源：st.secrets 鍵 `ui2_lookup_input`，否則環境變數 `UI2_LOOKUP_INPUT`；
+    值 '1'／'true' 才開（判讀見 `lookup_flag_on`）。任何讀取失敗＝視為該來源不存在（不會因失敗而開啟）。
+    ⛔ 不使用 `?ui2_dev`（它不是授權）；開關只經參數注入 L5，L5 自己不讀 secrets／環境。"""
+    try:
+        if "ui2_lookup_input" in st.secrets:
+            return lookup_flag_on(st.secrets["ui2_lookup_input"])
+    except Exception:  # noqa: BLE001 — 無 secrets 檔／讀取失敗＝該來源不存在
+        pass
+    try:
+        return lookup_flag_on(os.environ.get("UI2_LOOKUP_INPUT"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+run(diag_check=run_connection_check, lookup_input=_read_lookup_flag())
