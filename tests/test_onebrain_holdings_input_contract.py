@@ -27,6 +27,7 @@ import dataclasses
 import json
 import pathlib
 import socket
+import types
 from datetime import date, datetime, timezone
 
 import pytest
@@ -34,9 +35,11 @@ import pytest
 import src.data.portfolio.gsheet_portfolio as GSP
 import src.services.decision_digest_assembly as ASM
 import src.services.decision_digest_builder as B
+import src.services.decision_digest_summary as S
 from shared.allocation_decision import build_allocation_decision
 from shared.decision_digest import Availability, HoldingKey
 from shared.freshness_policy import FreshnessStatus
+from shared.regime_arbiter import REGIME_LIGHT
 from shared.risk_cap_policy import RiskCapDisclosure
 from src.services.decision_digest_assembly import EvidenceInput, assemble_digest
 from src.services.decision_digest_builder import SourceStamp, build_decision_digest, plan_action_selection
@@ -58,6 +61,9 @@ H = GSP._HEADERS
 ZERO_HOLDING_CLAIMS = ("0 檔", "0檔", "零檔", "無持股", "沒有持股", "空倉", "持股為零", "零持股", "持股 0")
 #: UNKNOWN 不得被說成中性／正常／安全（DEC-215 §一 第 2 點「不得視為 0／中性／SAFE」；契約 §B1）。
 NEUTRAL_SAFE_CLAIMS = ("中性", "正常", "安全", "SAFE", "safe", "neutral")
+#: 持股與相關行動段（摘要五段 market／industry／buy_and_hold／capital_gain／actions 中，只有這三段描述持股／行動；
+#: market 是總經事實＋定義狀態、industry 是產業趨勢定義狀態，皆不描述持股）。
+HOLDINGS_RELATED_SECTIONS = ("buy_and_hold", "capital_gain", "actions")
 
 
 @pytest.fixture(autouse=True)
@@ -216,6 +222,21 @@ def test_norm_unknown_l1_states_map_to_none_not_empty_list(monkeypatch):
     _check_unknown_maps_to_none(monkeypatch)
 
 
+def _assert_lines_not_neutral_safe(lines_by_section: dict) -> None:
+    """§B1（DEC-215 §一 第 2 點）：持股未知時，**持股與相關行動段**不得以中性／正常／安全描述。
+    只掃 `HOLDINGS_RELATED_SECTIONS`；市場段的 regime 原文（例：`neutral`）是總經事實的逐字引用，不在此限。
+    `lines_by_section`：{段名: 句子序列}（同 `SummaryResult.lines` 的 dict 形式）。"""
+    for sec in HOLDINGS_RELATED_SECTIONS:
+        for line in lines_by_section.get(sec, ()):
+            for w in NEUTRAL_SAFE_CLAIMS:
+                assert w not in line, f"規範 §B1（DEC-215 §一 第 2 點）：持股未知不得被說成 0／中性／SAFE：{sec} 段含 {w!r}"
+
+
+def _assert_holdings_sections_not_neutral_safe(digest) -> None:
+    """由 Digest 產生規則式摘要（經 `S.build_rule_summary`，可被突變替換）後檢查持股與行動段。"""
+    _assert_lines_not_neutral_safe(dict(S.build_rule_summary(digest).lines))
+
+
 def _check_none_input_is_unknown_everywhere() -> None:
     """§B1：holdings_rows=None 時 Digest／coverage／摘要皆為「未知」，且不宣稱零持股。"""
     variants = (dict(generated_at=NOW, holdings_rows=None),
@@ -231,8 +252,7 @@ def _check_none_input_is_unknown_everywhere() -> None:
         text = "\n".join(_lines(d))
         for w in ZERO_HOLDING_CLAIMS:
             assert w not in text, f"規範 §B1：摘要不得宣稱零持股：{w!r}"
-        for w in NEUTRAL_SAFE_CLAIMS:
-            assert w not in text, f"規範 §B1（DEC-215 §一 第 2 點）：UNKNOWN 不得被說成 0／中性／SAFE：{w!r}"
+        _assert_holdings_sections_not_neutral_safe(d)
         for sec in ("buy_and_hold", "capital_gain", "actions"):
             ls = _section(d, sec)
             assert ls and all("無法判定" in x for x in ls), f"規範 §B1：{sec} 段須只說無法判定：{ls}"
@@ -240,9 +260,59 @@ def _check_none_input_is_unknown_everywhere() -> None:
 
 def test_norm_none_input_digest_coverage_summary_all_unknown():
     """§B1：依契約餵 None（即使 macro／站內證據齊備、站內有行動）⇒ UNAVAILABLE、coverage 計數 None、
-    is_complete False、摘要無零持股字樣、UNKNOWN 不被說成 0／中性／SAFE（DEC-215 §一 第 2 點），
-    且持股／行動段只說「無法判定」。"""
+    is_complete False、整份摘要無零持股字樣、持股與行動段不把 UNKNOWN 說成中性／正常／SAFE（DEC-215 §一 第 2 點），
+    且持股／行動段只說「無法判定」。
+    範圍說明：零持股字樣仍掃**整份**摘要——「0 檔／無持股／空倉」在任何段出現都是對持股的宣稱，且非持股段
+    （市場事實、定義狀態）正常不會產生這些字，限縮只會放寬；中性／安全類字樣只掃持股與行動段，因市場段可合法
+    逐字引用 regime（例：`neutral`），見 `test_neutral_safe_check_passes_when_only_market_section_says_neutral`。"""
     _check_none_input_is_unknown_everywhere()
+
+
+def _market_kwargs(regime: str) -> dict:
+    m = {**macro_state(), "regime": regime, "light": REGIME_LIGHT[regime]}
+    return dict(generated_at=NOW, macro_state=m, macro_evidence=fresh(MACRO_STAMP),
+                allocation=build_allocation_decision(m), holdings_rows=None)
+
+
+def test_neutral_safe_check_passes_when_only_market_section_says_neutral():
+    """對照（a）——市場中性＋持股未知 ⇒ 通過。兩種方式：
+    (a1) **真摘要**：合法 regime `neutral` 經 `assemble_digest`＋`build_rule_summary`，市場段逐字出現 `neutral`
+         （先斷言它確實在非持股段、且持股段沒有），helper 不得 raise；
+    (a2) **合成分段文字**：「正常」無法由 production 自然產生（market 事實文字受 regime 詞彙 bull／neutral／caution／bear
+         限制，模板另有洗白字眼 lint），故對 `_assert_lines_not_neutral_safe` 餵合成分段：市場段含「正常」、持股段「無法判定」。"""
+    a = assemble_digest(**_market_kwargs("neutral"))
+    secs = dict(build_rule_summary(a.digest).lines)
+    assert any("neutral" in x for x in secs["market"]), secs["market"]          # 對照有效：字確實在非持股段
+    assert not any(w in x for sec in HOLDINGS_RELATED_SECTIONS for x in secs[sec] for w in NEUTRAL_SAFE_CLAIMS)
+    assert a.digest.holdings.availability is Availability.UNAVAILABLE
+    _assert_holdings_sections_not_neutral_safe(a.digest)                        # (a1) 不 raise
+
+    synthetic = {"market": ("市場燈號：正常（合成）", "整體安全（合成）"),
+                 "buy_and_hold": ("⬜ 存股：持股資料不足，無法判定（合成）",),
+                 "capital_gain": ("⬜ 資本利得：持股資料不足，無法判定（合成）",),
+                 "actions": ("⬜ 本期行動：資料不足，無法判定（合成）",)}
+    assert any("正常" in x for x in synthetic["market"])
+    _assert_lines_not_neutral_safe(synthetic)                                   # (a2) 不 raise
+
+
+def test_neutral_safe_check_fails_when_unknown_holdings_described_as_safe(monkeypatch):
+    """對照（b）——持股未知卻被描述為安全 ⇒ 失敗。monkeypatch production `build_rule_summary`（模組屬性，fixture 自動還原），
+    在 holdings_rows=None 的真摘要上把「安全」注入持股段／行動段，helper 必須 raise。"""
+    orig = S.build_rule_summary
+
+    def _inject(target):
+        def _mut(digest):
+            lines = dict(orig(digest).lines)
+            lines[target] = (*lines[target], f"⬜ {target}：目前安全（突變注入）")
+            return types.SimpleNamespace(lines=tuple(lines.items()))
+        return _mut
+    d = assemble_digest(**_market_kwargs("bull")).digest
+    for target in HOLDINGS_RELATED_SECTIONS:
+        monkeypatch.setattr(S, "build_rule_summary", _inject(target))
+        with pytest.raises(AssertionError, match=f"規範 §B1.*{target} 段含 '安全'"):
+            _assert_holdings_sections_not_neutral_safe(d)
+    monkeypatch.setattr(S, "build_rule_summary", _inject("market"))               # 注入市場段 ⇒ 不在範圍、不 raise
+    _assert_holdings_sections_not_neutral_safe(d)
 
 
 def test_norm_none_and_empty_list_are_distinguishable_in_coverage():

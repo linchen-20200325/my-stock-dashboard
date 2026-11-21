@@ -50,7 +50,7 @@
 - 理由（FACT）：`[]` 會讓 coverage `unkeyed_held_count` 由 None（未知）變成 0（已知），把「不知道」偽裝成「已知沒有」（`test_norm_none_and_empty_list_are_distinguishable_in_coverage`）。
 - 摘要**不得**宣稱零持股（「0 檔／無持股／空倉」等）；持股兩段與行動段只能說「無法判定」。
 - coverage 的持有側計數為 None、`is_complete=False`。
-- **UNKNOWN 不得視為 0／中性／SAFE**（DEC-215 §一 第 2 點「不得隱藏，不得視為 0／中性／SAFE」）：摘要不得以中性、正常、安全描述未知（`test_norm_none_input_digest_coverage_summary_all_unknown`）。
+- **UNKNOWN 不得視為 0／中性／SAFE**（DEC-215 §一 第 2 點「不得隱藏，不得視為 0／中性／SAFE」）：持股與相關行動段（buy_and_hold／capital_gain／actions）不得以中性、正常、安全描述未知；市場段逐字引用的 regime（如 `neutral`）不在此限（`test_norm_none_input_digest_coverage_summary_all_unknown`；對照 `test_neutral_safe_check_*`）。零持股字樣則仍掃整份摘要。
 - 現況：依契約餵 None 時以上全部成立（規範測試皆綠）。
 
 ### §B2 缺獨立母體 ⇒ incomplete；無法評估列保留部位與原因
