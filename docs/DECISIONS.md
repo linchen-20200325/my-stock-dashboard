@@ -11051,3 +11051,53 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 #### 五、NOT VERIFIED
 
 Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud 已更新；Real 資料可能停在 2026-11-09 而顯示 STALE；為非正式行情，可用於預覽。QA、CI、merge 均未完成；本條為單組作者自跑結論。
+
+
+### DEC-218｜OneBrain 雙母體客戶正式裁示：Q1=B「持有部位全集」、Q2=(a)「選定單一本組合」；持有全集與 DEC-215 可評分全集分開計數（#1199 comment 7054425559；2026-11-21；只追加；docs-only；非 QA PASS；單組撰寫）
+
+> **本條只登記客戶已核准的業務語意。** 決策落盤 ≠ G-X1 施工授權 ≠ OneBrain 可用；不是功能上線、不是任何 runtime／schema／caller 變更。
+
+- **決策者**：客戶。**日期**：2026-11-21。**狀態**：已裁示；**無對應實作**。本條由獨立 docs-only PR 登記，合併前不得稱已入 main。
+- **客戶原文**（依 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7054425559 所載逐字引用；該留言自述「本輪客戶已明示正式批准，不是總管代簽」；原始對話不在 repo，屬 issue 轉錄）：
+  > 我正式同意 OneBrain Q1=B 持有部位全集、Q2=(a) 選定單一本組合，並要求持有全集與可評分全集分開計數；過期不得自動當已評估，重複代號需揭露。請記錄正式決策並安排下一步。
+- **來源**：裁示與派工 #7054425559（上連結）；決策單 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7054362484 （Claude C 唯讀決策單，含 Q1 A／B／C 與 Q2 (a)／(b)）；總管解讀與推薦 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7054409431 （推薦非裁示）。基準 main `2cc632ff3dd05350820f6c0db7a3a971c8e42347`。
+- **字母不通用**：本條的「B」**只指** #7054362484 的 Q1 方案 B（持有部位全集），**不等於** DEC-215 的 DG-COV 方案 B（可評分全集），也不等於 `docs/vnext/DATA_WIRING_GATE_DECISION_SHEET_2026-11-12.md` 或其他決策單的 A～E。
+
+#### 一、已正式核准的業務語意（逐點對照 #7054425559「已正式核准業務語意」1–6）
+
+1. **Q1=B 持有部位全集**：計數完整性母體以**目前選定組合的持有部位**為起點，**ETF 與個股均屬盤點範圍**。張數／均價空白的合法持有列保留為 **IN-U（在母體、未能評估）**，不得默默刪除；行情取數或下游評估失敗**不得**讓該部位自母體消失。無法取得來源或未選定組合時，總量為 **UNKNOWN／None，禁止顯示為 0**。**觀察清單不計入**。
+2. **Q2=(a)**：僅「👤 我的」目前選定的**單一本組合**；不混同一本 Sheet 的其他組合，也不混 SA headless cron 合併多 Sheet 的母體或其不同的去重規則。DEC-083 對頁面選定組合的契約保留。
+3. **雙母體分開**：`持有全集`（資料來源／完整性母體）**≠** DEC-215 `可評分全集`（正式資格判準後、Top-N／市場條件篩選前）。另須揭露「已評估」「未能評估＋原因」「不納入＋原因」「未知」。**不可**把所有 held 直接叫 scoreable；**不得**以既有 `actions_total_eligible`、`scoring_eligible`、`_is_scorable` 冒充統一可評分母體；未知不得轉成 0；分母不得由輸出截斷倒推。
+4. **過期**：過期資料**可**留在持有完整性母體並標 STALE／資料日，但**不因有過期數值就自動算已評估**；是否具可信評分仍受新鮮度、PIT、資料品質與適用規則 Gate 約束，不得偽造判斷。
+5. **重複代號**：須先揭露來源重複列數與代號（對使用者安全呈現）；**不得**默默去重、**不得**覆寫持有批次、**不得**讓同一母體重複灌水。同代號不同購買批次的**合併粒度與張數／均價計算公式未授權**，待明確技術契約；本裁示**不授權**自選加權平均或合併公式。來源無效值（NaN／±inf／非數值／≤0／空代號）不得作為有效評分值；剔除須可回報，詳細的 G-X1 原因鍵與既有相容邊界後續另行驗證。
+6. **被排除的先前提案**：決策單 #7054362484 中 C 提案的預設「過期資料算已評估並標註」**被客戶明確排除**，以本次裁示為準（見第 4 點）。
+
+#### 二、與既有 DEC 的關係（單組讀文；有疑義標 NV）
+
+| 對象 | 關係 |
+|---|---|
+| **DEC-215**（DG-COV B 可評分全集） | **「可評分全集」語意不變**，DEC-215 一字未動。本條補上另一個母體（持有全集），並要求兩者**分開計數、不得相混**。DEC-215 第 1 點所指「既有、正式核准之可評分資格判準」**仍未指認**；**統一可評分資格判準＝NOT VERIFIED／待另行決策**，本條**不**以 Q1=B 充當該判準。DEC-215 第 2 點「排除列另行揭露」與本條第 3、5 點同向。DEC-215 第 4 點的未授權項（上游 L1 剔除計數改碼等）維持未授權。兩者關係（子集／交集）本條不定義＝NV。 |
+| **DEC-213**（I1–I7 候選） | I1（不得由 Top-N／Digest 反推）與本條第 3 點「分母不得由截斷倒推」同向。I2（兩通道由同一母集導出）：持有全集是否即該「同一母集」＝NV，本條不修訂 I2。I3（獨立 `expected_*`）仍是 G2 未核准 Gate，本條只定語意、不定欄位。I4（禁止預過濾）與本條第 1、5 點「失敗不得自母體消失、剔除可回報」同向。I5（`is_complete` 只能證偽）不受影響，本條不使完整性可被證明。I6（列層級 as_of）仍未決；本條第 4 點的 STALE／資料日標示**不**定義 stamp 欄位，是否觸及 I6 邊界＝NV。I7 與本條無直接關係。**未見硬衝突。** |
+| **DEC-083**（👤 我的 Q7 共用 active portfolio） | 一致。Q2=(a) 以頁面選定組合為範圍，DEC-083 保留。DEC-083 Q6（組合與觀察清單同一本 Sheet）規範選擇來源，與本條「觀察清單不計入母體」不衝突。 |
+| **DEC-160**（headless 唯讀 Gate、A2 stale） | 一致。裁示 1 不以 SA 讀私人 Sheet 冒充 headless 來源，與 Q2=(a) 排除 SA 多 Sheet 規則同向；裁示 2「stale 可保留在隔離記錄、不得當 fresh 用於決策」與本條第 4 點同向。G-F2（私人持股）仍未授權。 |
+| **DEC-150**（財報／缺貨篩選的無法評估檔數揭露） | 類比、不同射程：其第 6 點「分母與互斥分類須先定義、未取得分母不得顯示 0、不得繞過 Layout Gate」屬財報／缺貨篩選，不是 OneBrain 裁示；方向與本條第 1、3 點一致。日後若在畫面顯示本條各計數，仍須先過 UI 線框草稿 Gate（`CLAUDE.md` §-1.5.D §03-2 ①），本條未授權任何畫面。 |
+
+#### 三、三件事必須分開讀
+
+1. **決策已落盤**：本 DEC（合併後）只記錄上列業務語意。
+2. **G-X1 尚待施工授權**：G-X1（L1 同一批原始輸入的 raw／kept／dropped-by-reason 加性計數）**未授權實作**。下一合法任務為 `C-OB-GX1-IMPLEMENTATION-GATE-PACKET-1`，限唯讀提出規格／Gate，不開實作 PR，須待本 DEC 的 docs-only PR 驗收結案後才準備工程請示。
+3. **OneBrain 尚未正式可用**：OneBrain **NOT READY**；`decision_digest_builder`／`decision_digest_assembly`／`onebrain_shadow` 在 `src/`（OneBrain 模組自身之外）、`scripts/`、`app.py`、`app_ui2.py` **0 production caller**（本組於 main `2cc632ff` grep，單組）；正式市場廣度 **NOT EVALUATED**。
+
+#### 四、明確 HOLD（照 #7054425559「明確 HOLD」逐項）
+
+不授權：G-X1 runtime 實作；第二次真 Sheet／CSV 讀取；私人資料；schema／Digest v2；正式 production caller；OneBrain Stage F／G；`I1144-WIRING-GATE`；Risk Cap；API／Secrets／NAS；資料來源／`DG-PIT`；正式 Cloud。OneBrain 仍 NOT READY，廣度 NOT EVALUATED。
+
+- **另屬 Data／A Gate、不在本條處理**：D-1（SA 推播路徑將 `0050` 數字化為 `50`）與 D-2（SA 欄名不符時靜默回空清單），見 #7054362484 §6；本條只提及，不登記修補、不改任何程式。
+
+#### 五、範圍與 NOT VERIFIED
+
+- **本批改動**：本條；`docs/PROJECT_STATE.md` 最小索引；`docs/vnext/ONEBRAIN_DUAL_UNIVERSE_TABLE_2026-11-21.md`（雙母體表與狀態互斥，語意示意，非 schema）。零 `src/**`、`tests/**`、`shared/**`、`scripts/**`、schema、workflow、`data_cache`、Secrets 變更；不碰 `docs/BACKLOG.md`、`docs/HANDOFF.md`、DEC-215、DEC-216 與 #1242 檔案。
+- **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI 均未完成；與 DEC-083／150／160／213／215 的比對為單組讀文；客戶原文為 issue 轉錄；統一可評分資格判準、持有全集與可評分全集的集合關係、重複代號聚合粒度皆＝NV。
+- **編號**：origin/main（`2cc632ff`）已用至 DEC-216；Open PR #1237（未使用 DEC 號）；DEC-217 已由 #1244（B-UI2-FAKE-LABEL-ACCURACY-1）占用，故順延；本批 DEC-218；合併時若被佔則再順延。
+
+單組撰寫。
