@@ -378,8 +378,9 @@ def test_gap_unevaluable_row_identity_and_reason_preserved():
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "DEC-218 第 5 點（來源無效值不得作為有效評分值、須可回報）＋契約 §C-4：L1 只以 kept_non_finite 揭露，"
-    "NaN／+inf 列仍以一般持有列進 Digest，Digest／coverage／摘要與乾淨值逐字相同。歸 IN-U 或 EX 待裁示。"))
+    "DEC-218 §一 第 5 點（來源無效值不得作為有效評分值、剔除須可回報；歸類已定＝EX，雙母體表 §2 同）＋契約 §C-4："
+    "差距在 L1 現況仍把 NaN／+inf 保留於 rows（DEC-219 第 4 點），以一般持有列進 Digest，Digest／coverage／摘要與乾淨值"
+    "逐字相同。NaN／+inf 過濾修補屬 DEC-219 HOLD 項的放行問題。"))
 def test_gap_non_finite_source_value_disclosed_downstream():
     def run(lots):
         rows = [{"ticker": "0050", "held": True, "lots": lots, "avg_price": 10.0}, *held("0056")]
@@ -521,14 +522,48 @@ def test_mutation_harness_baselines_are_green(monkeypatch):
 # ══════════════════════════════════════════════════════════════════════
 # 邊界守衛
 # ══════════════════════════════════════════════════════════════════════
+_SKIP_DIRS = {"tests", ".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", "data_cache"}
+
+
+def _non_test_py_files() -> list:
+    """repo 內所有不在 tests/ 下的 .py（含 src／shared／scripts／mcp_server／tools／infra／根目錄）。"""
+    out = []
+    for p in REPO.rglob("*.py"):
+        rel = p.relative_to(REPO)
+        if rel.parts and rel.parts[0] in _SKIP_DIRS or any(part in _SKIP_DIRS for part in rel.parts[:-1]):
+            continue
+        out.append(p)
+    return out
+
+
 def test_oracle_is_not_referenced_by_production():
-    """契約規格表不得被 production 引用（它不是 adapter）。"""
-    needles = ("contract_expected_holdings_input", "test_onebrain_holdings_input_contract")
-    paths = [*REPO.joinpath("src").rglob("*.py"), *REPO.joinpath("shared").rglob("*.py"),
-             *REPO.joinpath("scripts").rglob("*.py"), *REPO.glob("app*.py")]
-    assert paths
-    hits = [str(p.relative_to(REPO)) for p in paths
-            if any(n in p.read_text(encoding="utf-8", errors="ignore") for n in needles)]
+    """契約規格表不得被 production 引用（它不是 adapter）。
+
+    掃描 repo 內所有非 tests/ 的 .py：(1) AST 掃 import／from-import，模組名不得指向本測試模組，
+    import 的名稱不得是 oracle；(2) 字串名比對（含註解、字串常數）。
+    ⚠️ 據實限制：防不了動態拼接（`importlib.import_module("tests." + x)`、`getattr(mod, "contract_" + y)`）
+    與 exec／eval；只擋直接引用。"""
+    oracle, this_mod = "contract_expected_holdings_input", THIS_FILE.stem
+    paths = _non_test_py_files()
+    assert any(p.relative_to(REPO).parts[0] == "src" for p in paths)
+    hits = []
+    for p in paths:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+        rel = str(p.relative_to(REPO))
+        if oracle in text or this_mod in text:
+            hits.append(f"{rel}: 字串命中")
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            hits.append(f"{rel}: 無法解析（不得默默略過）")
+            continue
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                hits += [f"{rel}: import {a.name}" for a in n.names if this_mod in a.name]
+            elif isinstance(n, ast.ImportFrom):
+                if n.module and this_mod in n.module:
+                    hits.append(f"{rel}: from {n.module}")
+                hits += [f"{rel}: import 名 {a.name}" for a in n.names if a.name in (oracle, this_mod)]
     assert hits == []
 
 
@@ -548,6 +583,6 @@ def test_this_file_is_offline_and_clockless_by_ast():
 
 def test_contract_doc_exists_and_names_each_section():
     text = CONTRACT_DOC.read_text(encoding="utf-8")
-    for needle in ("§A", "§B1", "§B2", "§B3", "§C-1", "§C-3", "§C-4", "§C-5", "§C-6", "§C-7", "§D",
+    for needle in ("§A", "§B1", "§B2", "§B3", "§C-1", "§C-3", "§C-4", "§C-5", "§C-6", "§C-7", "§C-10", "§D",
                    "NOT READY", "DEC-218", "contract_expected_holdings_input"):
         assert needle in text, needle
