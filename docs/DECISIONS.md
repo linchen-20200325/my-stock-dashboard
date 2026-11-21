@@ -11210,3 +11210,37 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 - 編號：origin/main 已用至 DEC-220（grep origin/main 無 DEC-221）；合併時若被佔則順延。
 
 單組撰寫。
+
+### DEC-222｜NUI2-AGGREGATOR-IMPL M-A2：System Action Aggregator 的 L0 契約＋L3 Aggregator＋A-T1～A-T10（未接任何 consumer；#1199 comment 7060912371 範圍；客戶核准 M-A1；2026-11-21；只追加；非 QA PASS；單組作者撰寫）
+
+#### 一、授權依據與範圍
+
+客戶核准 M-A1（Architecture Gate §4.6.9），本批只做 **M-A2**：依凍結契約（Gate §4.6）新增 `shared/system_action_contract.py`（L0：枚舉＋frozen dataclass＋建構期驗證）、`src/services/system_action_aggregator.py`（L3：`aggregate_system_actions(...)` 純函式＋`risk_cap_state_from_allocation(...)`），與測試 `tests/test_system_action_aggregator{,_contract,_parity,_mutation}.py`＋共用 `tests/_system_action_checks.py`。**沒有任何 production caller**；未改任何既有 `src/`、`shared/` 檔；未接 UI2 VM／舊 UI／Digest／OneBrain／LINE／scripts（M-A3～M-A6 另依原 Gate）；A-T11（Stage H）不在本批。
+
+#### 二、實作決策（AI 總管／實作者內部決定，非客戶裁示；客戶可推翻）
+
+1. **規則來源只沿用既有**：ETF 七分支碼（`action_branch.v1`）、個股 `swap_level` 四級、`RULE_ID_ALLOWLIST`、`holdings_data_short`。L0 不得 import `src.*` → 分支碼 `premium`／`cruise`、`LEVEL_UNJUDGED`、「系統風險上限」字面以複本登記，測試 pin 住與來源相等（同 DEC-094 慣例）；`RULE_ID_ALLOWLIST` 亦以鍵複本登記 —— L0 契約**不** import `shared.decision_digest_rules`，因 Digest 家族在 Stage F production caller Gate（DEC-159／DEC-160）未開前不得有 production importer（`tests/test_decision_digest_invariants_guard.py`）。Aggregator 刻意不 import L2 `dividend_station`（其套件 `__init__` 連帶載入 streamlit／`src.data`）。
+2. **PORT（新位置另建＋parity，Old UI 原檔一字不改）**：`station_cards` 的 `_in_judged_denominator`／`judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`／`CRUISE_TEXT`，與 `risk_cap_gate.has_system_risk_cap`，逐字移植到 L3 Aggregator 模組（不是 Gate §5.2 M1 的 L0 `risk_cap_gate` 全檔 PORT；該項仍屬 `NUI2-PORT-PREREQ`）。
+3. **觀察清單（held=False）不計入今日需處理**（同 digest「watch_adds 不計入今日要動作」；W-5 的 portfolio action 讀法）。⚠️ 與既有 `page_hold` 卡③ `cut_n=len(digest["reds"])`（含觀察清單）不同，見第四節。
+4. **Gate §4.6.6 對映表照做**：`row_short_kind=unjudged` 一律 `undeterminable`、不計入、不分組 —— 含「分支是 cut／add 但持股輸入資料異常」的列（digest 的 reds／adds 仍算它，見第四節）。
+5. **`day_status`**＝`needs_action`（today_n>0）／`no_adjustment_today`（today_n=0 且 PORT 的巡航 gate 放行且 `digest_data_short` 為 False 且三類判不出計數皆 0）／其餘 `undeterminable`；L0 `SystemActionState` 建構時再守一次（縱深）。
+6. **輸出比 Gate O1～O5 多一個加性欄位 `day_basis`**（judged／total／tally／all_rows_judged／cruise gate／digest_data_short）：A-T8 parity 需要可觀測，也避免 consumer 各自重算（§4.6.7）。
+7. **`risk_cap_tag`**：只標在 `action_branch=add` 且 actionable 的 item，恆「Risk Cap 無法判定」（O4b 數值 Gate 前恆 undeterminable，與 Risk Cap state 三態無關）；`RiskCapState` 原樣傳遞（同一物件），`ExposureGate` 建構只接受 `undeterminable`。
+8. **`not_evaluated`** 型別與計數已實作、與 `undeterminable` 分列，但現有輸入（戰情表列）**沒有任何對映路徑會產生它**（戰情表未算時由 consumer 以 capability state 處理，本函式要求 rows 必為 list／tuple）。
+9. **A-T5 與 A-T7 的張力**：`formal_label` 逐字帶來源 `建議動作`，其中既有 add 句含「加碼 N%」（`deploy_pct`，既有規則原文）；A-T5 的比例字樣禁令套在 Aggregator 自寫欄位，「減碼 1/2」「全出」則全輸出禁止。
+
+#### 三、驗證（作者環境，Python 3.13；非 QA PASS）
+
+新測試 120 passed＋3 xfailed（strict）；突變 36 個（A-T2 6／A-T3 4／A-T4 4／A-T5 3／A-T6 2／A-T7 2／A-T8 9／A-T9 3／A-T10 3）＋A-T1 注入 10 種 × 2 檔，全部轉紅；A-T8 golden parity 含真的 `page_hold.load_station`（只替換 L3 取數）。
+
+#### 四、已知差異（⛔ 自行改哪一邊；送總管裁定；以 strict xfail 釘住）
+
+- 觀察清單 🔴（ETF 汰弱／個股換出）：`page_hold` cut_n＝2 vs Aggregator 換＋減計入＝0。
+- 持股輸入資料異常的 cut 列：cut_n＝1 vs 0（Aggregator→undeterminable）。
+- 停利（force／partial）：digest reds 不含 → cut_n＝0 vs Aggregator 減＝2。
+
+#### 五、未解（NOT VERIFIED）
+
+兩組非作者 QA、PR exact-head CI（Python 3.11）、merge 均未完成；本條不是 QA PASS。編號：origin/main 與 refs/pull/1250～1254 皆止於 DEC-221；合併時若被佔則順延。
+
+單組撰寫。
