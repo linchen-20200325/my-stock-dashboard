@@ -3183,4 +3183,4 @@
 | **B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1**（補登） | Claude B | **已合併**：#1253 → `7917a818` | #1199 comment 7060205009；線框 A1 五項已核准 | L0 `shared/ui2_contract/quote_view.py`＋合成測試＋文字線框；**本身無 production caller**（P1 輸入元件為其第一個使用者，僅用 NOT_LOADED／SELECTION_INVALID 兩態）。補登先前延後的列，非改列 |
 
 > **A1 已核准、供 P2 使用（P1 不實作）**：過期以 ⚠ chip 沿用 7 日門檻；價格顯示範圍 0.005～1,000,000；過期底色沿用既有警示色；抓取時間屬次要列。
-> **開關開時的版面量測**：以環境變數 `UI2_LOOKUP_INPUT=1` 啟動 `measure_viewport --feed real`（scratch、不入庫）Real 13／13 pass（含 `p2_nav_margin_160`；手機 q4 底緣 321、q1 頂 336，第一屏內；詳見 DEC-223 §五）；提交互動僅 AppTest 驗，**真瀏覽器互動、Streamlit 1.56 開關開＝NOT VERIFIED**。
+> **開關開時的版面量測**：以環境變數 `UI2_LOOKUP_INPUT=1` 啟動 `measure_viewport --feed real`（scratch、不入庫）Real 13／13 pass（含 `p2_nav_margin_160`；手機 q4 底緣 321、q1 頂 336，第一屏內；詳見 DEC-223 §五）；提交互動僅 AppTest 驗，Streamlit 1.56.0 開關開亦 13／13 pass；**真瀏覽器的提交互動（輸入→按查詢）＝NOT VERIFIED**。

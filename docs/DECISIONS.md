@@ -11280,7 +11280,7 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 #### 五、未解（NOT VERIFIED）與明確不做
 
 - **使用者仍不能查股**：本批沒有任何資料路徑；P2（行情顯示）仍 HOLD（待 A2／A3／A4）。不解除任何 Gate（I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、跨頁 production wiring 皆不變）。
-- 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；1.56 未量測開關開。
+- 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；Streamlit 1.56.0 開關開同樣 13／13 pass、數值相同（手機 q4 298／321、q1 頂 336；桌機 q4 289／312、q1 頂 327）。量測視窗為手機 390×844、桌機 1440×900。
 - 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
 - 編號：本條原編 DEC-222；origin/main（#1255）已用 DEC-222（System Action Aggregator M-A2），故有意識改號為 DEC-223，不是漏刪；合併時若再被佔則順延。
 
