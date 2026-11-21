@@ -111,6 +111,22 @@ MUTANTS = [
        "else _r['_action'])")],
      [('BRANCH_PAUSE_ADD, BRANCH_ADD, BRANCH_PREMIUM, BRANCH_CRUISE)',
        'BRANCH_PAUSE_ADD, BRANCH_ADD, BRANCH_PREMIUM, BRANCH_CRUISE, "hold")')], K.check_t5_forbidden),
+    # ── A-T5 選項 1（#1199 7062611025）：自產欄位比例（含全形％／半）、整份「全出」 ──
+    ("A-T5", "day_status 注入全形比例「30％」（自產欄位；舊正則不認全形）",
+     [], [('DAY_UNDETERMINABLE: str = "undeterminable"', 'DAY_UNDETERMINABLE: str = "undeterminable（30％）"')],
+     K.check_t5_forbidden),
+    ("A-T5", "group 加 注入全形比例（自產欄位＋counts.by_group 鍵）",
+     [], [('GROUP_ADD: str = "加"', 'GROUP_ADD: str = "加 30％"')], K.check_t5_forbidden),
+    ("A-T5", "Risk Cap 標註改成全形比例「建議持股 50％」",
+     [], [('RISK_CAP_TAG_UNDETERMINABLE: str = "Risk Cap 無法判定"',
+           'RISK_CAP_TAG_UNDETERMINABLE: str = "Risk Cap 無法判定，建議持股 50％"')], K.check_t5_forbidden),
+    ("A-T5", "Risk Cap 標註改成「先減半」",
+     [], [('RISK_CAP_TAG_UNDETERMINABLE: str = "Risk Cap 無法判定"',
+           'RISK_CAP_TAG_UNDETERMINABLE: str = "Risk Cap 無法判定，先減半"')], K.check_t5_forbidden),
+    ("A-T5", "強制停利 formal_label 加「全出」（整份禁令含 formal_label）",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=_label + ('（全出）' if _rule == C.BRANCH_TAKE_PROFIT_FORCE else ''), action_class=_cls,")],
+     [], K.check_t5_forbidden),
     # ── A-T6 rule_id allowlist ──
     ("A-T6", "高溢價帶 rule_id premium（契約守衛亦拔）",
      [("C.BRANCH_PREMIUM: (C.ACTION_CLASS_NON_ACTIONABLE, C.GROUP_HOLD, False, \"\"),",
@@ -127,6 +143,25 @@ MUTANTS = [
     ("A-T7", "formal_label 去前後空白＋截 20 字",
      [("formal_label=_label, action_class=_cls,", "formal_label=_label.strip()[:20], action_class=_cls,")],
      [], K.check_t7_verbatim),
+    # ── A-T7 選項 1：formal_label 的來源比例 ⛔ 增刪改任一字元 ──
+    ("A-T7", "加碼 20% 改寫成 25%（verbatim 比對）",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=_label.replace('加碼 20%', '加碼 25%'), action_class=_cls,")], [], K.check_t7_verbatim),
+    ("A-T7", "加碼 20% 改寫成 25%（真實格式 add 三燈＋規則複本）",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=_label.replace('加碼 20%', '加碼 25%'), action_class=_cls,")], [],
+     K.check_t7_option1_real_labels),
+    ("A-T7", "加碼 50% 改寫成 加碼 30%（真實格式 add 三燈）",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=_label.replace('加碼 50%', '加碼 30%'), action_class=_cls,")], [],
+     K.check_t7_option1_real_labels),
+    ("A-T7", "半形 % 改全形 ％（真實格式 cut／premium 資料百分比）",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=_label.replace('%', '％'), action_class=_cls,")], [], K.check_t7_option1_real_labels),
+    ("A-T7", "賺息賠本資料百分比四捨五入成整數",
+     [("formal_label=_label, action_class=_cls,",
+       "formal_label=__import__('re').sub(r'(\\d+)\\.\\d%', r'\\1%', _label), action_class=_cls,")], [],
+     K.check_t7_verbatim),
     # ── A-T8 parity（PORT 函式） ──
     ("A-T8", "judged_count 拔 state 白名單",
      [("    _num = sum(1 for c in _cs\n               if c.state in (SS.STATE_LIVE, SS.STATE_DEGRADED)\n"
@@ -207,6 +242,16 @@ def test_unmutated_baseline_passes_every_check():
     """對照組：未突變的模組，上面用到的每個檢查都通過（否則突變「轉紅」沒有意義）。"""
     for chk in {m[4] for m in MUTANTS}:
         chk(REAL_A, REAL_C)
+
+
+def test_option1_division_of_labour_formal_label_ratio_is_a_t7_not_a_t5():
+    """選項 1 分工：formal_label 的來源比例被改寫（20%→25%）時 A-T5 不判（不屬自產欄位），由 A-T7 擋下；
+    同一突變 A-T5 通過、A-T7 轉紅 —— 證明比例正則確實只套自產欄位、formal_label 由逐字比對守護。"""
+    A, C = _build([("formal_label=_label, action_class=_cls,",
+                    "formal_label=_label.replace('加碼 20%', '加碼 25%'), action_class=_cls,")])
+    K.check_t5_forbidden(A, C)
+    with pytest.raises(AssertionError):
+        K.check_t7_verbatim(A, C)
 
 
 def test_mutant_count_per_at():

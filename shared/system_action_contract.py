@@ -21,6 +21,18 @@
 ⛔ 新投資規則／新門檻／新比例／AI action／改寫既有結果／覆寫 Risk Cap／「減碼 1/2」「全出」／寫入。
 `ExposureGate` 只接受 `undeterminable`（`FUI-RC-NUMERIC-GATE` 啟用前；Q1=A）。
 
+═══ A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；客戶核定總管建議 2026-11-21） ═══════
+1. 「⛔ 新比例／比例字樣」只適用 Aggregator **自產欄位**：`action_class`／`group`／`day_status`／
+   `risk_cap_tag`／`counts`（含 `by_group` 鍵）及其他 Aggregator 自己組出的字串（`source_kind`／
+   `source_rule`／`rule_id`／`data_short_kind`／`exposure_gate`／`contract_version` 等）。
+2. O1 `ActionItem.formal_label` 依 A-T7 **逐字**透傳正式來源「建議動作」，包含其中既有的百分比 ——
+   「加碼 20／30／50%」（N≡`shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT`）、汰弱
+   「賺息賠本：年報酬 x% < 配息率 y%」、高溢價「高溢價 p% > PREMIUM_ALERT_PCT%」；這些不屬 Aggregator
+   產生，⛔ 增刪改任一字元（byte-identical）。
+3. **整份輸出（含 `formal_label`）**仍 ⛔「減碼 1/2」「全出」與新 action code。
+守衛：`tests/_system_action_checks.py::check_t5_forbidden`（`T5_PASSTHROUGH_FIELDS`／`_RATIO_RE`）、
+`check_t7_verbatim`、`check_t7_option1_real_labels`（規則複本釘住來源句型與常數）＋突變。
+
 分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫與 `shared.*`；零 I/O、零 streamlit、零 `src.*`。
 """
 from __future__ import annotations

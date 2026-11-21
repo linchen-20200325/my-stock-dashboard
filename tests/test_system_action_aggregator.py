@@ -157,3 +157,109 @@ def test_risk_cap_state_from_allocation_edges():
     rc = A.risk_cap_state_from_allocation(_Zero())
     # 0 是真的 0（⛔ 當成缺）；reason 原樣
     assert (rc.status, rc.system_cap_pct, rc.system_cap_reason) == (C.RISK_CAP_VALID, 0, "全面防守")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# A-T5／A-T7 選項 1（#1199 comment 7062611025；客戶核定總管建議 2026-11-21）驗收案例 (a)～(g)
+# 突變證明見 test_system_action_aggregator_mutation.py（A-T5／A-T7 新增項）。
+# ══════════════════════════════════════════════════════════════════════
+def test_option1_a_add_three_lights_and_g_real_format_cut_premium_verbatim():
+    """(a) add 三盞燈「加碼 20／30／50%」、(g) 真實格式 cut（賺息賠本 x%／y%）與 premium（高溢價 p%）：
+    formal_label 與來源 byte-identical、符合規則複本句型、A-T5 通過（字串全由來源函式／常數組出）。"""
+    assert K.check_t7_option1_real_labels(A, C) == 5
+
+
+def test_option1_f_rule_copies_pinned_to_source_constants():
+    """(f) DEPLOY_LIGHT*_PCT 值、LIGHT_META 對映、PREMIUM_ALERT_PCT 與規則複本相等（來源改動即紅、人工複核）。"""
+    from shared import dividend_station_thresholds as T
+    K.check_rule_copies_pinned()
+    assert K.PINNED_DEPLOY_PCT == {"DEPLOY_LIGHT1_PCT": 20.0, "DEPLOY_LIGHT2_PCT": 30.0, "DEPLOY_LIGHT3_PCT": 50.0}
+    # 句型複本自我檢查：複本確實區分「改字樣」
+    assert K.PINNED_ADD_RE.match(f"🟢 加碼 {T.DEPLOY_LIGHT1_PCT:.0f}%：x")
+    assert not K.PINNED_ADD_RE.match("🟢 加碼 25%：x") and not K.PINNED_ADD_RE.match("🟢 加碼 20％：x")
+    assert not K.PINNED_CUT_RE.match("🔴 汰弱：賺息賠本：年報酬 3.2% < 配息率 5.0%")
+    assert not K.PINNED_PREMIUM_RE.match("🟡 高溢價 1.87% > 2.0% → 不追高")
+
+
+_SELF_PRODUCED_RATIOS = ("30%", "30％", "３０％", "1/3", "1／3", "三成", "3成", "減半", "三分之一")
+
+
+def _fresh_state():
+    return K.run(A, C, K.golden_scenarios()["seven_branches"], risk="valid")
+
+
+@pytest.mark.parametrize("bad", _SELF_PRODUCED_RATIOS)
+@pytest.mark.parametrize("where", ["item.action_class", "item.group", "item.risk_cap_tag", "item.source_kind",
+                                   "item.source_rule", "item.rule_id", "item.data_short_kind", "state.day_status",
+                                   "counts.today_n", "counts.by_group<key>", "exposure_gate.status",
+                                   "provenance.contract_version", "provenance.inputs<name>"])
+def test_option1_b_ratio_in_any_self_produced_field_is_red(where, bad):
+    """(b) 任一自產欄位被注入比例（含全形％、半、N 成、分之）→ A-T5 紅。以 object.__setattr__ 繞過契約建構
+    驗證，直接驗掃描器的範圍（契約驗證是另一層縱深）。"""
+    st = _fresh_state()
+    it = st.items[4]                      # add 列
+    if where.startswith("item."):
+        object.__setattr__(it, where.split(".")[1], f"x {bad}")
+    elif where == "state.day_status":
+        object.__setattr__(st, "day_status", f"undeterminable {bad}")
+    elif where == "counts.today_n":
+        object.__setattr__(st.counts, "today_n", f"{bad}")
+    elif where == "counts.by_group<key>":
+        object.__setattr__(st.counts, "by_group", {f"加 {bad}": 1, "留": 0, "換": 0, "減": 0})
+    elif where == "exposure_gate.status":
+        object.__setattr__(st.exposure_gate, "status", f"undeterminable {bad}")
+    elif where == "provenance.contract_version":
+        object.__setattr__(st.provenance, "contract_version", f"system_action.v1 {bad}")
+    else:
+        object.__setattr__(st.provenance, "inputs", ((f"station {bad}", st.provenance.inputs[0][1]),))
+    v = K.t5_violations(st)
+    assert any(r == "ratio" for _p, _s, r in v), (where, bad, v)
+
+
+def test_option1_b_passthrough_scope_is_exactly_the_declared_fields():
+    """比例豁免只落在宣告的來源透傳欄位；其餘（自產）路徑一律受掃（預設全掃，⛔ 放寬）。"""
+    import re as _re
+    assert K.T5_PASSTHROUGH_FIELDS == ("items[*].formal_label", "items[*].ticker", "items[*].name",
+                                       "items[*].stamp.*", "risk_cap_state.*", "provenance.inputs[*][1].*")
+    st = _fresh_state()
+    # 宣告字串 → 獨立 regex（[*]＝任一索引、尾端 .*＝任一子欄位）；與檢查碼的 _PASSTHROUGH_PATH_RE 對照
+    pats = [_re.compile("^state\\." + _re.escape(p).replace(r"\[\*\]", r"\[\d+\]").replace(r"\.\*", r"\..+") + "$")
+            for p in K.T5_PASSTHROUGH_FIELDS]
+    seen_pass, seen_self = set(), set()
+    for path, _s in K._strings(st):
+        norm = _re.sub(r"\[\d+\]", "[#]", path[len("state."):])
+        declared = any(p.match(path) for p in pats)
+        assert K.is_t5_passthrough(path) == declared, (path, declared)
+        (seen_pass if declared else seen_self).add(norm.split("<")[0])
+    for must in ("items[#].action_class", "items[#].group", "items[#].risk_cap_tag", "day_status",
+                 "counts.by_group", "exposure_gate.status", "provenance.contract_version",
+                 "provenance.inputs[#][#]"):
+        assert must in seen_self, (must, seen_self)
+    assert "items[#].formal_label" in seen_pass
+
+
+def test_option1_c_formal_label_rewritten_to_other_ratio_passes_t5_but_fails_t7():
+    """(c) formal_label「加碼 20%」被改成「加碼 25%」：A-T5（選項 1）不管 formal_label 的來源比例，
+    由 A-T7 逐字比對擋下（專門突變見 mutation 檔）。"""
+    rows = K.golden_scenarios()["add_three_lights"]
+    st = K.run(A, C, rows)
+    it = st.items[0]
+    assert "加碼 20%" in it.formal_label
+    object.__setattr__(it, "formal_label", it.formal_label.replace("加碼 20%", "加碼 25%"))
+    assert K.t5_violations(st) == []
+    assert it.formal_label.encode("utf-8") != rows[0]["建議動作"].encode("utf-8")
+    assert not K.PINNED_ADD_RE.match(it.formal_label)
+
+
+@pytest.mark.parametrize("bad", ["（減碼 1/2）", "減碼1/2", "（全出）", "½", "１/２"])
+@pytest.mark.parametrize("where", ["formal_label", "group", "risk_cap_tag", "day_status"])
+def test_option1_d_forbidden_anywhere_including_formal_label(where, bad):
+    """(d) 整份輸出（含 formal_label）出現「減碼 1/2」「全出」等 → A-T5 紅。"""
+    st = _fresh_state()
+    it = st.items[2]
+    if where == "day_status":
+        object.__setattr__(st, "day_status", st.day_status + bad)
+    else:
+        object.__setattr__(it, where, getattr(it, where) + bad)
+    v = K.t5_violations(st)
+    assert any(r.startswith("forbidden:") for _p, _s, r in v), (where, bad, v)

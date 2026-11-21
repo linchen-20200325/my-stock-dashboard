@@ -11243,4 +11243,11 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 
 兩組非作者 QA、PR exact-head CI（Python 3.11）、merge 均未完成；本條不是 QA PASS。編號：origin/main 與 refs/pull/1250～1254 皆止於 DEC-221；合併時若被佔則順延。
 
+#### 六、A-T5／A-T7 採選項 1（客戶／總管 2026-11-21 核定，#1199 comment 7062611025；只追加）
+
+1. **A-T5 比例禁令只適用 Aggregator 自產欄位**（action_class／group／day_status／risk_cap_tag／counts〔含 by_group 鍵〕及其他 Aggregator 自己組出的字串）；比例正則補全形「％」、「半」、中文數字「N 成」、「分之」。豁免只限來源透傳欄位（`tests/_system_action_checks.py::T5_PASSTHROUGH_FIELDS`：formal_label／ticker／name／item stamp／risk_cap_state／provenance 各輸入 stamp），其餘預設全掃（provenance 的版本與輸入名由原本整段豁免收緊為受掃）。
+2. **A-T7**：O1 `formal_label` 逐字透傳正式來源「建議動作」，含「加碼 20／30／50%」（N≡`shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT`）、汰弱「賺息賠本：年報酬 x% < 配息率 y%」、高溢價「高溢價 p% > PREMIUM_ALERT_PCT%」既有百分比；⛔ 增刪改任一字元。規則複本（DEPLOY 三值、PREMIUM_ALERT_PCT、三種句型）由 `check_t7_option1_real_labels` 釘住，來源改動即轉紅、人工複核。
+3. **整份輸出（含 formal_label）**仍 ⛔「減碼 1/2」「全出」（另補全形 1/2 變體）與新 action code；公開 `SystemActionState` 仍＝O1～O5、`day_basis` 只留內部。Aggregator 判定邏輯未改；3 個 strict xfail 與既有防線、突變全部保留。
+4. 驗收 (a)～(g) 補測：golden 新增 `add_three_lights`／`real_format_cut_premium`（字串由來源函式／常數組出）；突變 38→48（A-T5 3→8、A-T7 2→7）。作者環境驗證，非 QA PASS。
+
 單組撰寫。

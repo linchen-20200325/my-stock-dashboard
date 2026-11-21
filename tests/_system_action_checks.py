@@ -45,20 +45,42 @@ def _light(base: ds.Light235, light_key: str, **over) -> ds.Light235:
                                deploy_pct=_m["deploy_pct"], reasons=["fixture"], **over)
 
 
-def etf_assessment(branch: str, ticker: str, *, peers: bool = True) -> ds.HoldingAssessment:
-    """用真的 assess_holding 產生 8 盞燈，再以 dataclasses.replace 走到指定分支（action_branch 自驗）。"""
+#: 真實格式夾具的**資料輸入**（不是比例字樣；百分比字樣一律由來源函式 `ds.health_a`／`ds.health_d`／
+#: `ds.suggest_action` 依來源常數組出，⛔ 測試手打）。賺息賠本＝年報酬 < 配息率；高溢價＝溢價 > 門檻。
+REAL_CUT_YIELD_PCT: float = 5.0
+REAL_CUT_RETURN_PCT: float = REAL_CUT_YIELD_PCT - 1.75
+REAL_PREMIUM_PCT: float = T.PREMIUM_ALERT_PCT + 0.37
+
+
+def etf_assessment(branch: str, ticker: str, *, peers: bool = True, light: str = T.LIGHT_1,
+                   real_text: bool = False) -> ds.HoldingAssessment:
+    """用真的 assess_holding 產生 8 盞燈，再以 dataclasses.replace 走到指定分支（action_branch 自驗）。
+
+    `light`：add／pause_add 分支用哪一盞 235 燈（`T.LIGHT_1／2／3` → 來源 `DEPLOY_LIGHT1／2／3_PCT`）。
+    `real_text=True`：cut／premium 的健檢旗標改由**真的** `ds.health_a`／`ds.health_d` 產生（真實格式
+    「賺息賠本：年報酬 x% < 配息率 y%」「高溢價 p% > 門檻%」；A-T5／A-T7 選項 1 驗收案例 (g)）。"""
     a = _base_assessment(ticker, peers=peers)
-    if branch == ds.ACTION_CUT:
+    if branch == ds.ACTION_CUT and real_text:
+        _fa = ds.health_a(total_return_1y_pct=REAL_CUT_RETURN_PCT, annual_yield_pct=REAL_CUT_YIELD_PCT)
+        assert _fa.level == "🔴", _fa
+        a = dataclasses.replace(a, health_a=_fa)
+    elif branch == ds.ACTION_PREMIUM and real_text:
+        _fd = ds.health_d(premium_pct=REAL_PREMIUM_PCT)
+        assert _fd.level == "🟡", _fd
+        a = dataclasses.replace(a, health_d=_fd)
+    elif real_text:
+        raise ValueError(f"real_text 只用於 cut／premium：{branch}")
+    elif branch == ds.ACTION_CUT:
         a = dataclasses.replace(a, health_a=ds.Flag("🔴", "近一年含息總報酬低於配息率（吃本金）"))
     elif branch == ds.ACTION_TAKE_PROFIT_FORCE:
         a = dataclasses.replace(a, light=dataclasses.replace(a.light, take_profit="force"))
     elif branch == ds.ACTION_TAKE_PROFIT_PARTIAL:
         a = dataclasses.replace(a, light=dataclasses.replace(a.light, take_profit="partial"))
     elif branch == ds.ACTION_PAUSE_ADD:
-        a = dataclasses.replace(a, light=_light(a.light, T.LIGHT_1),
+        a = dataclasses.replace(a, light=_light(a.light, light),
                                 health_c=ds.Flag("🟡", "季線下彎（趨勢轉弱）"))
     elif branch == ds.ACTION_ADD:
-        a = dataclasses.replace(a, light=_light(a.light, T.LIGHT_1))
+        a = dataclasses.replace(a, light=_light(a.light, light))
     elif branch == ds.ACTION_PREMIUM:
         a = dataclasses.replace(a, health_d=ds.Flag("🟡", "溢價偏高，不追高"))
     elif branch != ds.ACTION_CRUISE:
@@ -70,8 +92,9 @@ def etf_assessment(branch: str, ticker: str, *, peers: bool = True) -> ds.Holdin
 
 
 def etf_row(branch: str, ticker: str = "0050", *, held: bool = True, price: float | None = 10.0,
-            peers: bool = True, fx: bool = False, invalid_inputs: bool = False) -> dict:
-    r = svc.row_from_assessment(etf_assessment(branch, ticker, peers=peers))
+            peers: bool = True, fx: bool = False, invalid_inputs: bool = False, light: str = T.LIGHT_1,
+            real_text: bool = False) -> dict:
+    r = svc.row_from_assessment(etf_assessment(branch, ticker, peers=peers, light=light, real_text=real_text))
     r["held"] = held
     r["現價"] = price
     if invalid_inputs and held:
@@ -178,6 +201,12 @@ def golden_scenarios() -> dict:
         "watchlist": [etf_row(B.ACTION_ADD, "0050", held=False), etf_row(B.ACTION_CUT, "0056", held=False),
                       stock_row("🔴", "2330", held=False), etf_row(B.ACTION_CRUISE, "006208")],
         "add_and_undeterminable": [etf_row(B.ACTION_ADD, "0050"), stock_row("⚪", "2330")],
+        # A-T5／A-T7 選項 1 驗收 (a)：add 三盞燈（加碼 20／30／50%，比例由來源 DEPLOY_LIGHT*_PCT 組出）
+        "add_three_lights": [etf_row(B.ACTION_ADD, f"00{i}A", light=lk)
+                             for i, lk in enumerate((T.LIGHT_1, T.LIGHT_2, T.LIGHT_3))],
+        # A-T5／A-T7 選項 1 驗收 (g)：真實格式 cut（賺息賠本 x%／y%）與 premium（高溢價 p%）
+        "real_format_cut_premium": [etf_row(B.ACTION_CUT, "00878", real_text=True),
+                                    etf_row(B.ACTION_PREMIUM, "00919", real_text=True)],
         "empty": [],
     }
 
@@ -294,8 +323,31 @@ def check_t4_day_status(agg, C) -> None:
     assert basis.digest_data_short is True and st.day_status == "undeterminable"
 
 
-_FORBIDDEN_ANYWHERE = ("減碼 1/2", "減碼1/2", "1/2", "½", "全出")
-_RATIO_RE = re.compile(r"\d+\s*%|\d+\s*/\s*\d+|[0-9]+\s*成")
+# ── A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；客戶核定總管建議 2026-11-21） ─────────────
+# 1) 比例禁令（`_RATIO_RE`）**只**適用 Aggregator **自產欄位**：action_class／group／day_status／
+#    risk_cap_tag／counts（含 by_group 鍵）／source_kind／source_rule／rule_id／data_short_kind／
+#    exposure_gate／provenance 的版本與輸入名，及其他 Aggregator 自己組出的字串。採**預設全掃**：
+#    只有下列 `T5_PASSTHROUGH_FIELDS` 的來源透傳欄位不套比例正則（新增欄位自動落入自產範圍）。
+# 2) O1 `formal_label` 依 A-T7 **逐字**透傳來源「建議動作」，其中既有百分比 —— 「加碼 20／30／50%」
+#    （N≡`shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT`）、汰弱「賺息賠本：年報酬 x% <
+#    配息率 y%」、高溢價「高溢價 p% > PREMIUM_ALERT_PCT%」—— 不屬 Aggregator 產生；整欄改由 A-T7
+#    byte-identical 比對＋`check_t7_option1_real_labels` 規則複本守護（⛔ 增刪改任一字元）。
+# 3) **整份輸出（含 formal_label）**仍 ⛔「減碼 1/2」「全出」（`_FORBIDDEN_ANYWHERE`）與新 action code。
+_FORBIDDEN_ANYWHERE = ("減碼 1/2", "減碼1/2", "1/2", "１/２", "1／2", "１／２", "½", "全出")
+#: 比例字樣（只套自產欄位）：半形／全形百分號（`\d` 亦含全形數字）、分數、N 成（阿拉伯／中文數字）、半、分之。
+_RATIO_RE = re.compile(r"\d+\s*[%％]|\d+\s*[/／]\s*\d+|\d+\s*成|[一二兩三四五六七八九十]\s*成|半|分之")
+#: 來源透傳欄位（不屬 Aggregator 產生；比例正則豁免、禁令字樣照掃）。改這張表＝改 A-T5 範圍，須經 Gate。
+T5_PASSTHROUGH_FIELDS = (
+    "items[*].formal_label",        # O1 來源「建議動作」逐字（A-T7 守護）
+    "items[*].ticker", "items[*].name",
+    "items[*].stamp.*",             # I5 as_of／source
+    "risk_cap_state.*",             # O4a＝I4 原樣傳遞（A-T10 守護）
+    "provenance.inputs[*][1].*",    # O5 各輸入的 as_of／source
+)
+_PASSTHROUGH_PATH_RE = re.compile(
+    r"^state\.items\[\d+\]\.(?:formal_label|ticker|name|stamp\.[A-Za-z_]+)$"
+    r"|^state\.risk_cap_state\."
+    r"|^state\.provenance\.inputs\[\d+\]\[1\]\.")
 
 
 def _strings(obj, path="state"):
@@ -313,20 +365,31 @@ def _strings(obj, path="state"):
             yield from _strings(v, f"{path}[{k!r}]")
 
 
+def is_t5_passthrough(path: str) -> bool:
+    return bool(_PASSTHROUGH_PATH_RE.search(path))
+
+
+def t5_violations(st) -> list:
+    """A-T5 掃描（選項 1）：回傳 [(path, 字串, 原因)]。整份輸出掃禁令字樣；自產欄位另掃比例字樣。"""
+    out = []
+    for path, s in _strings(st):
+        for bad in _FORBIDDEN_ANYWHERE:
+            if bad in s:
+                out.append((path, s, f"forbidden:{bad}"))
+        if not is_t5_passthrough(path) and _RATIO_RE.search(s):
+            out.append((path, s, "ratio"))
+    return out
+
+
 def check_t5_forbidden(agg, C) -> None:
-    """A-T5：輸出 ⛔「減碼 1/2」「全出」；Aggregator 自寫的欄位 ⛔ 任何比例字樣；⛔ 新 action code。
-    `formal_label` 是來源字樣逐字（A-T7），其中既有的「加碼 N%」屬既有規則原文、不屬 Aggregator 產生。"""
+    """A-T5（選項 1）：整份輸出 ⛔「減碼 1/2」「全出」；Aggregator 自產欄位 ⛔ 任何比例字樣（含全形％）；
+    ⛔ 新 action code。`formal_label` 的既有來源百分比（加碼 N%／賺息賠本／高溢價）由 A-T7 逐字守護。"""
     allowed_rules = set(EXPECT_ETF) | set(EXPECT_SWAP) | {""}
     for name, rows in golden_scenarios().items():
         for risk in ("valid", "invalid", "missing"):
             st = run(agg, C, rows, risk=risk)
-            for path, s in _strings(st):
-                for bad in _FORBIDDEN_ANYWHERE:
-                    assert bad not in s, (name, path, s)
-                if ".formal_label" in path or path.endswith((".ticker", ".name")) or ".stamp." in path \
-                        or path.startswith("state.risk_cap_state.") or ".provenance" in path:
-                    continue
-                assert not _RATIO_RE.search(s), (name, path, s)
+            bad = t5_violations(st)
+            assert not bad, (name, risk, bad)
             for it in st.items:
                 assert it.source_rule in allowed_rules, it.source_rule
                 assert it.group in ("加", "留", "換", "減", ""), it.group
@@ -351,6 +414,68 @@ def check_t7_verbatim(agg, C) -> None:
         for it, r in zip(st.items, rows):
             assert it.formal_label.encode("utf-8") == r["建議動作"].encode("utf-8"), (name, it.formal_label)
             assert it.ticker == r["代號"] and it.name == r["名稱"]
+
+
+# ── A-T7 選項 1：formal_label 中來源既有百分比的**規則複本**（驗收案例 (f)；來源改動即轉紅、人工複核） ──
+#: `shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT` 的值複本（⛔ 從被測模組或來源反推）。
+PINNED_DEPLOY_PCT = {"DEPLOY_LIGHT1_PCT": 20.0, "DEPLOY_LIGHT2_PCT": 30.0, "DEPLOY_LIGHT3_PCT": 50.0}
+#: `shared/dividend_station_thresholds.PREMIUM_ALERT_PCT` 的值複本。
+PINNED_PREMIUM_ALERT_PCT = 1.5
+#: `dividend_station.suggest_action` add 分支句型複本：`{icon} 加碼 {deploy_pct:.0f}%：{reasons}{（深水註）}`。
+PINNED_ADD_RE = re.compile(r"^(?P<icon>🟢|🟡|🔴) 加碼 (?P<pct>20|30|50)%：(?P<rest>.+)$")
+#: cut 分支＋健檢 A 🔴 句型複本：`🔴 汰弱：賺息賠本：年報酬 {x:.1f}% < 配息率 {y:.1f}%（吃到本金）`。
+PINNED_CUT_RE = re.compile(r"^🔴 汰弱：賺息賠本：年報酬 -?\d+\.\d% < 配息率 -?\d+\.\d%（吃到本金）$")
+#: premium 分支＋健檢 D 🟡 句型複本：`🟡 高溢價 {p:.2f}% > {PREMIUM_ALERT_PCT}% → 不追高`。
+PINNED_PREMIUM_RE = re.compile(r"^🟡 高溢價 -?\d+\.\d{2}% > 1\.5% → 不追高$")
+
+
+def check_rule_copies_pinned() -> None:
+    """(f)：來源常數值＝規則複本（DEPLOY_LIGHT*_PCT 三值、LIGHT_META 對映、PREMIUM_ALERT_PCT）。"""
+    assert {k: getattr(T, k) for k in PINNED_DEPLOY_PCT} == PINNED_DEPLOY_PCT
+    assert [T.LIGHT_META[k]["deploy_pct"] for k in (T.LIGHT_1, T.LIGHT_2, T.LIGHT_3)] == list(
+        PINNED_DEPLOY_PCT.values())
+    assert T.PREMIUM_ALERT_PCT == PINNED_PREMIUM_ALERT_PCT
+
+
+def check_t7_option1_real_labels(agg, C) -> int:
+    """A-T5／A-T7 選項 1 驗收 (a)(f)(g)：真實格式 add（加碼 20／30／50%）、cut（賺息賠本 x%／y%）、
+    premium（高溢價 p%）的 formal_label ＝來源 `suggest_action` 逐字（byte-identical）、符合規則複本句型，
+    且整份輸出通過 A-T5（自產欄位無比例、全份無「減碼 1/2」「全出」）。回傳檢查的 label 數。"""
+    check_rule_copies_pinned()
+    n = 0
+    lights = (T.LIGHT_1, T.LIGHT_2, T.LIGHT_3)
+    rows = golden_scenarios()["add_three_lights"]
+    st = run(agg, C, rows)
+    assert not t5_violations(st), t5_violations(st)
+    for lk, it, r in zip(lights, st.items, rows, strict=True):
+        src = ds.suggest_action(etf_assessment(ds.ACTION_ADD, it.ticker, light=lk))
+        assert it.formal_label.encode("utf-8") == r["建議動作"].encode("utf-8") == src.encode("utf-8"), lk
+        _m = PINNED_ADD_RE.match(it.formal_label)
+        assert _m, it.formal_label
+        _pct = T.LIGHT_META[lk]["deploy_pct"]
+        assert float(_m["pct"]) == _pct and _m["icon"] == T.LIGHT_META[lk]["icon"], (lk, it.formal_label)
+        assert f"加碼 {_pct:.0f}%" in it.formal_label
+        assert it.source_rule == "add" and it.group == "加" and it.risk_cap_tag == "Risk Cap 無法判定"
+        n += 1
+    assert sorted(float(PINNED_ADD_RE.match(i.formal_label)["pct"]) for i in st.items) == sorted(
+        PINNED_DEPLOY_PCT.values())
+    rows = golden_scenarios()["real_format_cut_premium"]
+    st = run(agg, C, rows)
+    assert not t5_violations(st), t5_violations(st)
+    cut, prem = st.items
+    _a_cut = etf_assessment(ds.ACTION_CUT, cut.ticker, real_text=True)
+    _a_prem = etf_assessment(ds.ACTION_PREMIUM, prem.ticker, real_text=True)
+    for it, r, a, pat in ((cut, rows[0], _a_cut, PINNED_CUT_RE), (prem, rows[1], _a_prem, PINNED_PREMIUM_RE)):
+        src = ds.suggest_action(a)
+        assert it.formal_label.encode("utf-8") == r["建議動作"].encode("utf-8") == src.encode("utf-8")
+        assert pat.match(it.formal_label), it.formal_label
+        assert _RATIO_RE.search(it.formal_label)        # 確實含資料百分比（選項 1 允許、逐字）
+        n += 1
+    assert cut.formal_label == "🔴 汰弱：" + ds.health_a(total_return_1y_pct=REAL_CUT_RETURN_PCT,
+                                                         annual_yield_pct=REAL_CUT_YIELD_PCT).msg
+    assert prem.formal_label == "🟡 " + ds.health_d(premium_pct=REAL_PREMIUM_PCT).msg
+    assert (cut.source_rule, cut.group, prem.source_rule, prem.group) == ("cut", "減", "premium", "留")
+    return n
 
 
 def check_t9_slice_independent(agg, C) -> None:
