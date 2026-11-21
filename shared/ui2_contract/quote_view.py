@@ -10,11 +10,19 @@
 
 ═══ 狀態優先序（先命中者勝；固定）═══
 選取無效 > 讀取失敗（`fetch_error` 非 None）> 未載入 > 缺值 > 過期 > OK。
-- 缺值＝`close`／`trade_date`／`source` 任一缺，或 `close` 非有限數／≤0／為 bool／非數字型別，或 `trade_date`
-  不是合法 ISO 日期（YYYY-MM-DD 格式＋日曆有效性，如 2026-02-30 無效）。MISSING 一律帶具名 reason，**絕不顯示 0、不補值**。
+- 缺值＝`close`／`trade_date`／`source` 任一缺或無效，MISSING 一律帶具名 reason，**絕不顯示 0、不補值**：
+  - `close`：None→`close_missing`；bool／非數字型別／NaN／inf／≤0／大到無法轉成浮點（如 10**400，不 raise）→`close_invalid`；
+    正數但落在顯示範圍 [`CLOSE_DISPLAY_MIN`, `CLOSE_DISPLAY_MAX`] 之外→`close_out_of_display_range`。
+    範圍理由：下限 0.005＝顯示精度（2 位小數）的一半，再小的正數會被格式化成假的「0.00」；上限 1,000,000 是台股收盤價
+    遠不可能達到的保守值，用來擋單位錯誤（如把「元」當「分」）。兩者是具名常數，可由產品／客戶調整（見線框未決問題）。
+  - `trade_date`：不是合法 ISO 日期（YYYY-MM-DD 格式＋日曆有效性，如 2026-02-30 無效）。
+  - `source`：None／非字串／空白→`source_missing`；長度 >`SOURCE_MAX_LEN`（64）或含控制字元／換行／非 ASCII 空白→`source_invalid`。
 - 過期＝`is_stale` 為 True 且資料完整：仍顯示最後收盤，chip 標過期。
 - 只有 OK 與 STALE 可有 `value_text`（比照 `models.VALUE_BEARING_STATES` 慣例）；其餘態 `value_text` 必為 None。任何缺失不得得 OK。
-- `fetched_at` 缺或格式不可辨識 → **不影響 OK**，但文字固定為「抓取時間未知」（不得以交易日代替，也不顯示無法辨識的原字串）。
+- `fetch_error` 只決定狀態：`QuoteView.reason` 固定為 token `fetch_failed`，**呼叫端字串不會出現在任何輸出欄位**
+  （避免洩漏路徑／token／換行等；呼叫端請自行記錄 log）。
+- `fetched_at` 只接受 `YYYY-MM-DD`，或 `YYYY-MM-DD[T 空白]HH:MM[:SS[.fff]]` 加可選時區（`Z`／`±HH:MM`），日期須通過曆法驗證、
+  時分秒在範圍內；缺或格式不可辨識 → **不影響 OK**，但文字固定為「抓取時間未知」（不得以交易日代替，也不顯示無法辨識的原字串）。
 - 無時鐘：函式**不判斷交易日是否為未來日**，也不計算過期天數；`is_stale` 由呼叫端傳入。
 
 ═══ 與 `target_selection.quote_readiness` 的關係 ═══
@@ -80,11 +88,19 @@ REASON_CLOSE_MISSING = "close_missing"
 REASON_CLOSE_INVALID = "close_invalid"
 REASON_TRADE_DATE_MISSING = "trade_date_missing"
 REASON_TRADE_DATE_INVALID = "trade_date_invalid"
+REASON_CLOSE_OUT_OF_RANGE = "close_out_of_display_range"
 REASON_SOURCE_MISSING = "source_missing"
+REASON_SOURCE_INVALID = "source_invalid"
 REASON_FETCH_FAILED = "fetch_failed"
 
 _DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-_FETCHED_AT_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][0-9:.+Zz-]*)?")
+#: 顯示範圍（具名、可調）：下限＝2 位小數顯示精度的一半（再小會顯示成假 0.00）；上限＝保守的單位錯誤防線。
+CLOSE_DISPLAY_MIN = 0.005
+CLOSE_DISPLAY_MAX = 1_000_000
+SOURCE_MAX_LEN = 64
+_FETCHED_AT_RE = re.compile(
+    r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:[T ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]{1,9})?)?"
+    r"(?:Z|[+-]([0-9]{2}):([0-9]{2}))?)?")
 
 
 @dataclass(frozen=True)
@@ -127,19 +143,41 @@ def is_valid_iso_date(value: object) -> bool:
     return 1 <= d <= dim
 
 
-def _close_ok(close: object) -> bool:
+def _close_reason(close: object) -> str | None:
+    """None＝有效；否則回具名 reason。不得 raise（極大整數 float() 會 OverflowError，一律 close_invalid）。"""
+    if close is None:
+        return REASON_CLOSE_MISSING
     if isinstance(close, bool) or not isinstance(close, (int, float)):
-        return False
-    return math.isfinite(close) and close > 0
+        return REASON_CLOSE_INVALID
+    try:
+        x = float(close)
+    except OverflowError:
+        return REASON_CLOSE_INVALID
+    if not math.isfinite(x) or x <= 0:
+        return REASON_CLOSE_INVALID
+    if x < CLOSE_DISPLAY_MIN or x > CLOSE_DISPLAY_MAX:
+        return REASON_CLOSE_OUT_OF_RANGE
+    return None
 
 
 def _fetched_at_ok(value: object) -> bool:
-    return (isinstance(value, str) and _FETCHED_AT_RE.fullmatch(value) is not None
-            and is_valid_iso_date(value[:10]))
+    if not isinstance(value, str):
+        return False
+    m = _FETCHED_AT_RE.fullmatch(value)
+    if m is None or not is_valid_iso_date(m.group(1)):
+        return False
+    hh, mm, ss, th, tm = m.group(2), m.group(3), m.group(4), m.group(5), m.group(6)
+    if hh is not None and not (int(hh) <= 23 and int(mm) <= 59 and (ss is None or int(ss) <= 59)):
+        return False
+    return th is None or (int(th) <= 23 and int(tm) <= 59)
 
 
-def _source_ok(value: object) -> bool:
-    return isinstance(value, str) and value.strip() != ""
+def _source_reason(value: object) -> str | None:
+    if not isinstance(value, str) or value.strip() == "":
+        return REASON_SOURCE_MISSING
+    if len(value.strip()) > SOURCE_MAX_LEN or any(c != " " and not c.isprintable() for c in value):
+        return REASON_SOURCE_INVALID
+    return None
 
 
 def _bare(state: QuoteViewState, symbol: str | None, reason: str | None) -> QuoteView:
@@ -160,21 +198,20 @@ def build_quote_view(selection: TickerSelection, *, loaded: bool, fetch_error: s
         return _bare(QuoteViewState.SELECTION_INVALID, None, reason)
     symbol = selection.symbol
     if fetch_error is not None:
-        reason = fetch_error if isinstance(fetch_error, str) and fetch_error.strip() else REASON_FETCH_FAILED
-        return _bare(QuoteViewState.FETCH_FAILED, symbol, reason)
+        return _bare(QuoteViewState.FETCH_FAILED, symbol, REASON_FETCH_FAILED)   # 固定 token，不回顯呼叫端字串
     if not loaded:
         return _bare(QuoteViewState.NOT_LOADED, symbol, None)
     reasons = []
-    if close is None:
-        reasons.append(REASON_CLOSE_MISSING)
-    elif not _close_ok(close):
-        reasons.append(REASON_CLOSE_INVALID)
+    r = _close_reason(close)
+    if r is not None:
+        reasons.append(r)
     if trade_date is None:
         reasons.append(REASON_TRADE_DATE_MISSING)
     elif not is_valid_iso_date(trade_date):
         reasons.append(REASON_TRADE_DATE_INVALID)
-    if not _source_ok(source):
-        reasons.append(REASON_SOURCE_MISSING)
+    r = _source_reason(source)
+    if r is not None:
+        reasons.append(r)
     if reasons:
         return _bare(QuoteViewState.MISSING, symbol, "+".join(reasons))
     fa = fetched_at if _fetched_at_ok(fetched_at) else None

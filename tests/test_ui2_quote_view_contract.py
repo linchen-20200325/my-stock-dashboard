@@ -54,14 +54,35 @@ def test_not_loaded():
 
 def test_fetch_failed_is_danger_and_beats_not_loaded():
     v = bq(fetch_error="timeout", loaded=False)
-    assert v.state is V.FETCH_FAILED and v.reason == "timeout" and v.tone is ChipTone.DANGER
+    assert v.state is V.FETCH_FAILED and v.reason == "fetch_failed" and v.tone is ChipTone.DANGER
     assert bq(fetch_error="").reason == QV.REASON_FETCH_FAILED and bq(fetch_error="").state is V.FETCH_FAILED
+
+
+@pytest.mark.parametrize("err", [
+    "line1\nline2\r\n", "x" * 5000, "token=sk-LEAKME123", "password: hunter2", "/home/user/.secrets/key.json",
+    "HTTPError 401 Bearer abc.def.ghi", "C:\\Users\\a\\token.txt", "\x00\x1b[31m",
+])
+def test_fetch_error_text_never_leaks_into_any_output(err):
+    v = bq(fetch_error=err)
+    assert v.state is V.FETCH_FAILED and v.reason == "fetch_failed"
+    for f in dataclasses.fields(v):
+        out = getattr(v, f.name)
+        if isinstance(out, str):
+            for frag in ("token", "password", "hunter2", "sk-LEAKME123", "/home", "line1", "Bearer", "\x1b", "xxxxx"):
+                assert frag not in out.replace("fetch_failed", ""), (f.name, frag)
+            assert len(out) < 200
 
 
 def test_stale_shows_last_close():
     v = bq(is_stale=True)
     assert v.state is V.STALE and v.value_text == "188.55" and v.tone is ChipTone.WARNING
     assert v.chip_text == "資料過期" and "仍顯示最後收盤" in v.notice_text
+    # 過期分支不得以抓取日覆寫交易日；兩個日期各自出現且不同
+    v2 = bq("00980A", is_stale=True, trade_date="2026-11-12", fetched_at="2026-11-21T09:30:00+08:00")
+    assert v2.symbol == "00980A" and v2.fact.symbol == "00980A"
+    assert v2.trade_date_text == "交易日 2026-11-12" and v2.fetched_at_text == "抓取時間 2026-11-21T09:30:00+08:00"
+    assert "2026-11-21" not in v2.trade_date_text and "2026-11-12" not in v2.fetched_at_text
+    assert v2.source_text == "來源 合成來源" and v2.value_text == "188.55"
 
 
 @pytest.mark.parametrize("raw", ["", "   ", "x", None, 50, b"0050"])
@@ -92,6 +113,30 @@ def test_bad_close_is_missing_never_zero(close):
 def test_bad_trade_date_is_missing(td):
     v = bq(trade_date=td)
     assert v.state is V.MISSING and v.reason == QV.REASON_TRADE_DATE_INVALID and v.value_text is None
+
+
+@pytest.mark.parametrize("close", [10**400, -(10**400), float("1e309"), -float("1e309")])
+def test_huge_close_missing_never_raises(close):
+    v = bq(close=close)
+    assert v.state is V.MISSING and v.reason == QV.REASON_CLOSE_INVALID and v.value_text is None
+
+
+@pytest.mark.parametrize("close,ok", [
+    (0.004, False), (1e-300, False), (1e308, False), (0.005, True), (0.0049999, False),
+    (QV.CLOSE_DISPLAY_MAX, True), (QV.CLOSE_DISPLAY_MAX + 0.01, False), (QV.CLOSE_DISPLAY_MAX * 1.0000001, False),
+    (10**7, False), (1_000_000, True), (188, True),
+])
+def test_display_range(close, ok):
+    v = bq(close=close)
+    if ok:
+        assert v.state is V.OK and v.value_text not in (None, "0.00") and float(v.value_text.replace(",", "")) > 0
+    else:
+        assert v.state is V.MISSING and v.reason == QV.REASON_CLOSE_OUT_OF_RANGE and v.value_text is None
+
+
+def test_display_range_constants():
+    assert QV.CLOSE_DISPLAY_MIN == 0.005 and QV.CLOSE_DISPLAY_MAX == 1_000_000
+    assert f"{QV.CLOSE_DISPLAY_MIN:.2f}" != "0.00"          # 下限本身不會被顯示成假 0
 
 
 def test_iso_date_calendar_rules():
@@ -138,10 +183,45 @@ def test_trade_date_without_fetched_at_ok_but_flagged_unknown():
     assert "2026-11-20" not in v.fetched_at_text and v.fact.fetched_at is None
 
 
-@pytest.mark.parametrize("fa", ["", "  ", "garbage", 123, "2026-02-30T00:00:00", "昨天"])
+@pytest.mark.parametrize("fa", ["", "  ", "garbage", 123, "2026-02-30T00:00:00", "昨天", "2026-11-20T+++",
+                                "2026-11-20T", "2026-11-20T25:00", "2026-11-20T10:60", "2026-11-20T10:00:61",
+                                "2026-11-20T10:00+25:00", "2026-11-20T10:00+08", "2026-11-20 10", "2026-11-20Tx",
+                                "2026-11-20T10:00:00Zjunk", "2026-11-20T10:00:00.", "2026-11-20\n", b"2026-11-20"])
 def test_bad_fetched_at_unknown_not_echoed(fa):
     v = bq(fetched_at=fa)
     assert v.state is V.OK and v.fetched_at_text == "抓取時間未知"
+    assert "+++" not in v.fetched_at_text and v.fact.fetched_at is None
+
+
+@pytest.mark.parametrize("fa", ["2026-11-20", "2026-11-21T09:30", "2026-11-21 09:30:00", "2026-11-21T09:30:00.123",
+                                "2026-11-21T09:30:00Z", "2026-11-21T09:30:00+08:00", "2026-11-21T23:59:59-05:30"])
+def test_valid_fetched_at_formats(fa):
+    v = bq(fetched_at=fa)
+    assert v.fetched_at_text == f"抓取時間 {fa}" and v.fact.fetched_at == fa
+
+
+@pytest.mark.parametrize("src", ["x" * 65, "a\nb", "a\tb", "\x00", "a\u3000b", "line\r"])
+def test_source_invalid(src):
+    v = bq(source=src)
+    assert v.state is V.MISSING and v.reason == QV.REASON_SOURCE_INVALID and v.source_text is None
+
+
+def test_source_length_boundary():
+    assert bq(source="x" * 64).state is V.OK and bq(source="x" * 65).state is V.MISSING
+
+
+def test_tone_and_chip_table_per_state():
+    assert set(QV.CHIP_TONE) == set(V) == set(QV.CHIP_TEXT)
+    seen = {
+        V.OK: bq(), V.STALE: bq(is_stale=True), V.MISSING: bq(close=None), V.FETCH_FAILED: bq(fetch_error="e"),
+        V.NOT_LOADED: bq(loaded=False), V.SELECTION_INVALID: bq("50"),
+    }
+    for st, v in seen.items():
+        assert v.state is st and v.tone is QV.CHIP_TONE[st] and v.chip_text == QV.CHIP_TEXT[st]
+        assert (v.tone is ChipTone.POSITIVE) == (st is V.OK)
+    assert seen[V.MISSING].tone is ChipTone.WARNING and seen[V.STALE].tone is ChipTone.WARNING
+    assert seen[V.FETCH_FAILED].tone is ChipTone.DANGER
+    assert seen[V.NOT_LOADED].tone is ChipTone.NEUTRAL_INFO and seen[V.SELECTION_INVALID].tone is ChipTone.NEUTRAL_INFO
 
 
 def test_trade_date_and_fetched_at_independent():
