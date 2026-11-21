@@ -96,7 +96,9 @@ def test_onebrain_absent_means_no_empty_frame_and_no_duplicate(monkeypatch):
 
 def test_dom_order_in_the_real_streamlit_page_default_lane():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(APP_UI2), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
+    at.run(timeout=60)
     assert not at.exception
     blob = "\n".join(m.value for m in at.markdown)
     idx = [blob.index(k) for k in ('class="ui2-risk"', 'data-ui2-l1="primary_slot"', 'class="ui2-grid"', 'data-ui2-l1="onebrain"')]

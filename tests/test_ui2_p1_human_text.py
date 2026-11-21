@@ -293,6 +293,7 @@ def test_banner_constants_are_one_liners_without_engineering_words():
 def _at(dev: bool):
     from streamlit.testing.v1 import AppTest
     a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    a.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     if dev:
         a.query_params["ui2_dev"] = "1"
     return a.run(timeout=60)

@@ -548,17 +548,21 @@ def session_write_log(monkeypatch):
     return log
 
 
-def _at(dev: bool = False):
-    """`dev=True`：開啟開發面（`?ui2_dev=1`），才有資料來源／場景／帳戶控制可操作（P1）。"""
+def _at(dev: bool = False, seed_fake: bool = True):
+    """`dev=True`：開啟開發面（`?ui2_dev=1`），才有資料來源／場景／帳戶控制可操作（P1）。
+    `seed_fake=True`（預設）：明示 `ui2_feed="fake"`（D2-A 後 app_ui2.py 預設播種為 Real；本檔既有測試依賴 FAKE 起點）；
+    `seed_fake=False`＝不預填，驗入口真正的預設。"""
     from streamlit.testing.v1 import AppTest
     a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    if seed_fake:
+        a.session_state["ui2_feed"] = "fake"
     if dev:
         a.query_params["ui2_dev"] = "1"
     return a.run(timeout=60)
 
 
 def test_runtime_real_mode_writes_no_session_state_beyond_listed_ui2_keys(session_write_log):
-    at = _at(dev=True)
+    at = _at(dev=True, seed_fake=False)       # D2-A：不預填，讓入口的 Real 播種（__setitem__ ui2_feed）被紀錄器記到
     # 紀錄器確實掛在 AppTest runtime 上：殼首跑寫入的預設 ui2_ 鍵必須被記到（否則下面的「0 次」不算數）
     assert ("__setitem__", "ui2_feed") in session_write_log and ("__setitem__", "ui2_page") in session_write_log
     assert {k for _, k in session_write_log} <= ALLOWED_UI2_WRITES, session_write_log
@@ -666,10 +670,14 @@ def _blob(at) -> str:
     return "\n".join(m.value for m in at.markdown)
 
 
-def test_default_feed_is_still_fake():
-    at = _at()
-    assert not at.exception and at.session_state["ui2_feed"] == "fake"
-    assert T.PREVIEW_BANNER_TEXT in _blob(at) and T.REAL_PREVIEW_BANNER_TEXT not in _blob(at)
+def test_default_feed_is_real_after_d2a():
+    """D2-A（DEC-216／#1199 comment 7052908287）：無 query、無預填 session 的首跑，預設 `ui2_feed=='real'`（取代舊『預設 FAKE』）。
+    更嚴：不只 feed 值，Real 標示在、FAKE 標示不在，且一般入口仍無任何開發面控制。"""
+    at = _at(seed_fake=False)
+    blob = _blob(at)
+    assert not at.exception and at.session_state["ui2_feed"] == "real"
+    assert T.REAL_PREVIEW_BANNER_TEXT in blob and T.PREVIEW_BANNER_TEXT not in blob and "FAKE" not in blob
+    assert f'data-ui2-scenario="{SCENARIO_REAL}"' in blob and len(at.selectbox) == 0
 
 
 def test_real_mode_renders_every_page_with_the_real_banner(monkeypatch):

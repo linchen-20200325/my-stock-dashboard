@@ -173,6 +173,7 @@ def at():
     """開發面開啟（`?ui2_dev=1`）：本檔的場景輪詢測試要操作 `ui2_scenario`；預設道（0 控制）見 test_ui2_contract_teeth_pending。"""
     from streamlit.testing.v1 import AppTest
     a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    a.session_state["ui2_feed"] = "fake"   # D2-A：本測試依賴 FAKE 場景，明示指定（預設已改 Real）
     a.query_params["ui2_dev"] = "1"
     return a.run(timeout=60)
 

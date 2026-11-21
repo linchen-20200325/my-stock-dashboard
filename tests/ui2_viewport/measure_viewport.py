@@ -991,7 +991,8 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
         ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_LABELS, MODE_LOOKUP,
         P4_ME, P4_MARKET, P4_TARGET, PAGE_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
     )
-    from src.ui2.shell.app import _ACCOUNT_LABELS, _SCENARIO_LABELS
+    from shared.ui2_contract.pages import FEED_FAKE, SCENARIO_COLD
+    from src.ui2.shell.app import _ACCOUNT_LABELS, _FEED_LABELS, _SCENARIO_LABELS
 
     results: list[dict] = []
 
@@ -1005,6 +1006,8 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
             page = browser.new_page(viewport={"width": vw, "height": vh})
             page.goto(_dev_url(url))
             page.wait_for_selector(".ui2-qa", timeout=40000)
+            # D2-A（DEC-216）：一般入口預設改 Real → FAKE 量測流程開頭明示把資料來源選為 FAKE（其餘量測邏輯不變）
+            _select_box(page, "資料來源", _FEED_LABELS[FEED_FAKE], f'[data-ui2-scenario="{SCENARIO_COLD}"]')
             nav_click = lambda pid: click_nav(page, PAGE_LABELS[pid])
             for scenario in SCENARIO_IDS:
                 _select_box(page, "場景", _SCENARIO_LABELS[scenario], f'[data-ui2-scenario="{scenario}"]')
