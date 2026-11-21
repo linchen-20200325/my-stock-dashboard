@@ -1589,7 +1589,7 @@
 | C-OB-EVIDENCE-UNKNOWN-TESTS（tests-only；DEC-212 同名，PR 號取自 commit subject） | #1238 | `5ea2f5f` |
 
 - #1236、#1238 於 `git log origin/main` 可見且標題／任務名與 DEC-211／DEC-212 相符；DECISIONS.md 內無 `#1238` 字樣，DEC-212↔#1238 僅憑任務名對應。
-- main push CI 對 `a862fae`：五項 success（run 44851080530／44852544168；取自交付資訊，**NOT VERIFIED by 本段作者**）。B-UI2-CI156-DEPENDENCY-TRIAGE-1：RESOLVED／NO CHANGE（pip IncompleteRead 瞬斷；#1199 comment 7055607034）。
+- main push CI 對 `a862fae`：run 44851080530（PR Check）的 5 個 job——Fast、Slow、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate——皆 success；另 run 44852544168（export_db schedule）的 export job 亦 success，兩者分開（取自交付資訊，**NOT VERIFIED by 本段作者**）。B-UI2-CI156-DEPENDENCY-TRIAGE-1：RESOLVED／NO CHANGE（pip IncompleteRead 瞬斷；#1199 comment 7055607034）。
 - 客戶 G-X1 裁示（#1199 comment 7055751465）：Q1 僅 L1 純加性計數＋合成資料測試、Q2 延後；**不是** OneBrain 整體解除 HOLD；下一個已授權唯一任務 C-OB-GX1-L1-ADDITIVE-TALLY-1（Owner 新 Claude C Session，尚未開工）。
-- **HOLD／未解鎖（皆不變）**：Open PR #1237（Draft／HOLD；NAS）；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
+- **HOLD／未解鎖（皆不變）**：截至 main a862fae 時點，Open PR 僅 #1237（不含本同步 PR #1246；Draft／HOLD；NAS）；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
 - **NOT VERIFIED**：Cloud 實際部署畫面；上列 CI run 結論未於本沙箱重查；非作者 QA 尚未進行。

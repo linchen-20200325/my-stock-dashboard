@@ -1662,8 +1662,8 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-21 Resume Checkpoint 2026-11-21（append-only；非 QA PASS；單組撰寫，待兩組非作者 QA）
 - **說明**：本檔先前檔尾多條（例如 2026-11-20 B-UI2-STALE-COPY-1「Draft PR 分支」）為「Draft／非 QA PASS」歷史快照，**現況以本段與 GitHub 為準**；舊段不改。
 - **main**：`a862fae404c8ec9f21e8f9b4bc579a6f1d232c2e`（`git log origin/main` 實證為 #1245／DEC-218 之合併 commit）。
-- **Open PR 僅 #1237**：Draft／HOLD（head `c406fb5fe3c2c4d2f9a88140c5296615534ee1f9`，base `3163e49d` 已落後 main）；未授權 merge／部署／Secrets。（head SHA 與「Open PR 僅 #1237」取自任務交付資訊，本機 git 無該物件，**NOT VERIFIED by git**；base `3163e49d` 為 #1236 合併 commit，git 可驗。）
-- **main push CI**：run 44851080530 與 44852544168 對 `a862fae` 之五項（export、Fast、Slow、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate）皆 completed／success（取自交付資訊；本沙箱未重查 Actions，**NOT VERIFIED by 本段作者**）。前 run 44848246050（對 `cc9da756`）之 1.56.0 Install dependencies 步驟 pip `IncompleteRead` 瞬斷 → **B-UI2-CI156-DEPENDENCY-TRIAGE-1 RESOLVED／NO CHANGE**，未開 PR、未改檔（#1199 comment 7055607034）。
+- **截至 main a862fae 時點，Open PR 僅 #1237（不含本同步 PR #1246）**：Draft／HOLD（head `c406fb5fe3c2c4d2f9a88140c5296615534ee1f9`，base `3163e49d` 已落後 main）；未授權 merge／部署／Secrets。（head SHA 與「截至 main a862fae 時點 Open PR 僅 #1237」取自任務交付資訊，本機 git 無該物件，**NOT VERIFIED by git**；base `3163e49d` 為 #1236 合併 commit，git 可驗。）
+- **main push CI**：run 44851080530（PR Check）對 `a862fae` 的 5 個 job——Fast、Slow、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate——皆 success；另 run 44852544168（export_db schedule）的 export job 亦 success（兩者分開，export 不併入「五項」）（取自交付資訊；本沙箱未重查 Actions，**NOT VERIFIED by 本段作者**）。前 run 44848246050（對 `cc9da756`）之 1.56.0 Install dependencies 步驟 pip `IncompleteRead` 瞬斷 → **B-UI2-CI156-DEPENDENCY-TRIAGE-1 RESOLVED／NO CHANGE**，未開 PR、未改檔（#1199 comment 7055607034）。
 - **已合併證據表**（PR→merge SHA→DEC；SHA 與 PR 號以 `git log origin/main --oneline` 逐項核對）：
 
 | PR | merge SHA | DEC／備註 |
