@@ -1,0 +1,103 @@
+# OneBrain 持股讀取結果 → Digest 輸入：離線契約（C-OB-HOLDINGS-INPUT-CONTRACT-1；2026-11-21）
+
+> **性質**：契約**設計**＋離線驗收案例的對照文件。**不是 adapter 實作、不是 schema、不是接線、不是授權。**
+> **授權**：Issue #1199 comment 7060205009（契約設計＋離線驗收案例；最多一支 Draft PR；不合併）。
+> **依據**：DEC-215、DEC-218（Q1=B 持有部位全集；Q2=(a) 選定單一本組合）、DEC-219（L1 tally）；
+> `docs/vnext/ONEBRAIN_DUAL_UNIVERSE_TABLE_2026-11-21.md`、`docs/vnext/ONEBRAIN_UPSTREAM_EXCLUSION_POINTS_CONTRACT_EVIDENCE_2026-11-21.md`。
+> **量測基準**：main `29594c5a`；以符號為準，不寫行號。
+> **驗收測試**：`tests/test_onebrain_holdings_input_contract.py`（規範＝`test_norm_*`；現況≠契約＝`test_gap_*`，`xfail(strict=True)`；
+> 現況快照＝名稱含 `current_behavior`；突變＝`test_mutation_*`）。
+> **標記**：FACT＝原始碼或測試可直接核對；INFERENCE＝由 FACT 推得；NV＝NOT VERIFIED。
+> **狀態**：L1 可用（dormant，0 production caller）；**Digest NOT READY**；OneBrain 正式廣度 NOT EVALUATED。單組撰寫，非 QA PASS。
+
+## 0. 兩側的現況（FACT）
+
+- **L1**：`src/data/portfolio/gsheet_portfolio.py` 的 `load_portfolio_tallied(name, …)` 回 `PortfolioReadTally`；
+  `tally_portfolio_records` 為其純函式核心。非 `ok`／`not_selected` 時全部計數為 `None`。`raw` 與 `rows` 來自**同一份快照**，
+  **不是獨立應有母體**。`rows` 每列只有 `ticker`／`lots`／`avg_price`，**沒有 `held`**。`LoginRequiredError` 與權限／網路等例外**原樣上拋**。
+- **Digest**：`src/services/decision_digest_builder.py` 的 `build_decision_digest`／`plan_action_selection`，
+  `src/services/decision_digest_assembly.py` 的 `assemble_digest`，`shared/decision_digest_coverage.py` 的 `DigestCoverage.is_complete`，
+  `src/services/decision_digest_summary.py` 的 `build_rule_summary`。builder 只讀持有列的 `ticker`／`代號` 與 `held`（**不讀 lots／avg_price**）；
+  `held` 須為 `bool` 或缺／None（缺／None／False＝非持有），其他型別 `TypeError`。
+- **兩側之間沒有 adapter**（0 production caller；本文件也不建）。
+
+## §A 逐列對照表：L1 讀取狀態 → Digest 可用輸入 → coverage → 人可讀摘要
+
+「Digest 輸入」欄即測試內契約規格表 `contract_expected_holdings_input` 的輸出類別（測試專用，非 production adapter，
+有守衛確認 `src/`、`shared/`、`scripts/`、`app*.py` 未引用）。
+
+| # | L1 讀取狀態 | Digest 可用輸入（`holdings_rows`） | coverage（`assemble_digest`） | 人可讀摘要（`build_rule_summary`） | 驗收 |
+|---|---|---|---|---|---|
+| 1 | `not_selected`（name 空白；不讀 Sheet） | **None**（§B1） | `unkeyed_held_count`／`holdings_non_mapping_rows`＝None；`is_complete=False` | 持股兩段與行動段只有「⬜ …無法判定」；**不得**出現零持股字樣 | `test_norm_unknown_l1_states_map_to_none_not_empty_list`、`test_norm_none_input_digest_coverage_summary_all_unknown` |
+| 2 | 讀取失敗狀態：`worksheet_missing`／`schema_mismatch`（及任何非 ok 的未知狀態） | **None**（§B1） | 同上 | 同上 | 同上 |
+| 3 | `LoginRequiredError`（及權限／網路／配額等例外） | L1 **不產生 tally**（原樣上拋，不得轉成狀態或 0）；若 L3 仍要建 Digest，holdings 必為 **None** | 同上 | 同上 | `test_norm_l1_login_required_never_becomes_a_tally`；上拋 vs 降級見 §C-9 |
+| 4 | 計數未知（status ok 但 `rows` 或任何計數為 None） | **None**（fail-closed；§B1） | 同上 | 同上 | `test_norm_unknown_l1_states_map_to_none_not_empty_list` |
+| 5 | ok＋選定組合不存在（`raw==0`、`other_name_rows>0`） | **待決**（候選 None 或 []；§C-1） | 兩個候選皆 `is_complete=False` | 兩個候選皆不得宣稱零持股 | `test_norm_pending_raw_zero_both_candidates_never_claim_zero_holdings`、`test_current_behavior_c1_…` |
+| 6 | ok＋空表／只有表頭（`raw==0`、`other_name_rows==0`） | **待決**（同 #5；L1 無法與 #5 在「選定組合是否存在」上區分） | 同 #5 | 同 #5 | 同 #5 |
+| 7 | ok＋有持有列且可評估（有 `HoldingKey`） | **list**：依 §B3 手寫，一列一筆、`held=True` | 有鍵列 → entries（輸入順序）；但缺獨立母體 → 依契約須 incomplete（**現況可能 True**，§C-6） | 行動句逐字展開 | `test_norm_evaluable_rows_one_row_one_entry`、`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete` |
+| 8 | ok＋有持有列但無法評估（無 `HoldingKey`） | **list**（該列照樣一筆 `held=True`，不得丟） | `unkeyed_held_count=n`、`is_complete=False`；**只有計數，沒有部位與原因**（§C-5） | 「⬜ 另有 n 檔持股缺少投資組合鍵…」 | `test_norm_unevaluable_rows_retained_with_count`、`test_gap_unevaluable_row_identity_and_reason_preserved` |
+| 9 | ok＋L1 丟列（`dropped>0`，含 `kept==0`） | **list**（只含 kept 列）；丟棄列的數量與原因必須往下游揭露（§C-2） | **現況無通道**：coverage 看不到 L1 dropped（§C-2、§C-6） | 現況不揭露 | `test_norm_ok_with_rows_maps_to_list_including_dropped_dup_nonfinite`、`test_gap_contract_fed_input_…[l1_dropped_2]` |
+| 10 | ok＋重複列（`duplicate_tickers` 非空） | **list**（不去重、不合併；§B3） | 有鍵重複 → `ValueError(duplicate_holding_key)`；無鍵重複 → 計 2、無重複揭露（§C-3） | 無鍵重複寫成「另有 2 檔」 | `test_current_behavior_c3_…`、`test_gap_duplicate_holding_rows_disclosed` |
+| 11 | ok＋非有限值（NaN／+inf 保留在 rows；-inf 已歸 `non_finite` 丟棄） | **list**；但 DEC-218 第 5 點：不得作為有效評分值、須可回報（§C-4） | 現況與乾淨值逐字相同 | 現況與乾淨值逐字相同 | `test_current_behavior_c4_…`、`test_gap_non_finite_source_value_disclosed_downstream` |
+| 12 | ok＋張數／均價空白（預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None） | **待決**（§C-8；DEC-218 第 1 點要求 IN-U 保留） | 保留時與乾淨值逐字相同（無 IN-U 標記） | 同左 | `test_current_behavior_c8_…` |
+
+## §B 三條規範
+
+### §B1 未知不得映成空
+
+未選定（`not_selected`）、讀取失敗（非 ok 狀態或例外）、計數未知 ⇒ **`holdings_rows=None`，不得映成 `[]`**。
+- 理由（FACT）：`[]` 會讓 coverage `unkeyed_held_count` 由 None（未知）變成 0（已知），把「不知道」偽裝成「已知沒有」（`test_norm_none_and_empty_list_are_distinguishable_in_coverage`）。
+- 摘要**不得**宣稱零持股（「0 檔／無持股／空倉」等）；持股兩段與行動段只能說「無法判定」。
+- coverage 的持有側計數為 None、`is_complete=False`。
+- 現況：依契約餵 None 時以上全部成立（規範測試皆綠）。
+
+### §B2 缺獨立母體 ⇒ incomplete；無法評估列保留部位與原因
+
+1. **缺獨立應有母體**：DEC-218 Q2=(a) 的獨立 expected 尚未落地；L1 `raw` 與 `rows` 同源，不能證明「讀到的就是組合的全部」。
+   因此**任何**以 L1 rows 餵入的 Digest，coverage **必須** incomplete。
+   - **現況≠契約（FACT）**：四段證據齊備、每個持有列都有鍵且有行動時，`is_complete=True`（含 L1 `dropped>0` 的情形）。見 §C-6。
+2. **有持有列但無法評估**（目前可實測的只有「無 `HoldingKey`」）⇒ 部位與原因必須保留。
+   - **現況保留到的（FACT）**：`HoldingsSection.unkeyed_count`、`DigestCoverage.unkeyed_held_count`（逐列計數、不去重）、
+     `ActionSelectionPlan.unkeyed_held_count`；holdings 變 PARTIAL、`is_complete=False`；摘要以「缺少投資組合鍵」揭露數量。
+   - **差距（FACT）**：只有**計數**；部位（代號）與原因不在 Digest／coverage／摘要（`excluded_invalid_rows` 只涵蓋站內 held 異常列，與此無關）。見 §C-5。
+   - 其他「無法評估」原因（行情取數失敗、過期、空白張數等 IN-U）目前在 Digest 側**沒有可承載的欄位**（INFERENCE；見 §C-8）。
+
+### §B3 `held` 的來源
+
+`held` 只能來自**所選單一組合**（DEC-218 Q2=(a)）的可追溯證據：
+- **一列一筆**：該組合 L1 rows 的每一列在 `holdings_rows` 恰好一筆、`held=True`（明確 `bool`）；不去重、不合併批次（DEC-218 第 5 點；合併粒度未授權）。
+- **來源為該組合 rows**：不跨組合、不混 SA headless 多 Sheet 母體、不含觀察清單。
+- **不由 `holding_keys` 推得**：`holding_keys` 只是「有沒有鍵」的查表，多給的代號（例：別本組合）不得變成持股或行動（現況成立，FACT）。
+- **不得由 AI 推測**；不得由字串／數字推成 bool（現況 builder 對非 bool 的 `held` Fail Loud，FACT）。
+- 測試的合成 `holdings_rows` 依本條**手寫**；本文件與測試都**不**提供 tally.rows → holdings_rows 的通用轉換。
+
+## §C 待決案例表（現況 ≠ 契約；需裁示者另列）
+
+| # | 案例 | 目前行為（證據） | 預期（候選） | 需誰裁示 |
+|---|---|---|---|---|
+| §C-1 | 選定組合 0 列：組合不存在／空表／只有表頭 | L1 `status=ok`、`raw=0`、`rows=()`，僅 `other_name_rows` 不同；無法分辨「名稱打錯／改名」與「真的 0 列」（`test_current_behavior_c1_…`；既有 #1251 `test_g3_current_behavior_…`） | 候選 (i) None（無法證明組合存在 ⇒ 未知；作者推薦，fail-closed）；(ii) `[]`（來源可讀即已知 0 列）。兩者都必須：不宣稱零持股、`is_complete=False`（已由規範測試守住） | **客戶**（業務語意：「選了但 0 列」算未知或已知空；DEC-218 Q1 延伸） |
+| §C-2 | L1 丟列（`dropped>0`，EX）往下游揭露 | L1 `dropped_by_reason` 五鍵可問到；Digest／coverage 無通道（既有 strict xfail `test_desired_excluded_coverage_includes_upstream_dropped_rows`） | 丟棄數量與原因揭露到 coverage（或其後繼）；有丟棄 ⇒ incomplete | 揭露形態＝技術（內部）；但需改 coverage／Digest schema ⇒ **另需放行**（High Gate） |
+| §C-3 | 重複代號列 | L1 揭露 `duplicate_tickers`、rows 不去重；Digest 有鍵重複 ⇒ `ValueError(duplicate_holding_key)`；無鍵重複 ⇒ 計 2、與兩個不同代號逐字相同、摘要寫「另有 2 檔」（`test_current_behavior_c3_…`；`test_decision_digest_assembly.py::test_duplicate_holding_keys_fail_loud`） | 揭露重複列數與代號；不得默默去重（DEC-218 第 5 點，已裁示）。有鍵重複是 Fail Loud 還是揭露後保留、列數 vs 檔數用語 | 聚合粒度與公式＝**技術契約＋客戶**（DEC-218 第 5 點明言未授權）；揭露形態需 schema 放行 |
+| §C-4 | 非有限值（NaN／+inf 保留；-inf 丟棄） | L1 `kept_non_finite` 揭露、rows 仍含該列；builder 不讀 lots ⇒ Digest／coverage／摘要與乾淨值逐字相同（`test_current_behavior_c4_…`；#1251 `test_e2_current_behavior_…`） | 不得作為有效評分值、須可回報（DEC-218 第 5 點，已裁示）；歸 IN-U 還是 EX、在哪一層擋 | 歸類＝**客戶**（雙母體表 §2 寫 EX，L1 現況保留＝不一致）；落點＝技術＋schema 放行 |
+| §C-5 | 無法評估列的部位與原因 | 只有計數（`unkeyed_count`／`unkeyed_held_count`）；代號與原因不在輸出（`test_gap_unevaluable_row_identity_and_reason_preserved`） | 每個 IN-U 部位可追溯（身分＋原因），隱私呈現方式另定 | 欄位形態需 **schema 放行**；對使用者呈現另過 UI 線框 Gate |
+| §C-6 | 缺獨立應有母體 | 四段齊備＋全部有鍵有行動 ⇒ `is_complete=True`（`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete`） | `is_complete=False`，直到有獨立 expected（DEC-213 I3／G2 Gate） | 獨立 expected 來源＝**客戶＋另案 Gate**（Q2 落地）；coverage 改法需 schema 放行 |
+| §C-7 | `holdings_rows` 內 `held` 缺／None／False 的列 | 被當「非持有」，coverage 無欄位，`is_complete` 不受影響、代號不出現（`test_current_behavior_c7_…`） | 依 §B3 adapter 不應產生此類列；若出現，是否須揭露／Fail Loud | 技術（內部），但 coverage 加欄位需 schema 放行 |
+| §C-8 | 張數／均價空白（IN-U） | 預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None，但 Digest 無 IN-U 標記、與乾淨列逐字相同（`test_current_behavior_c8_…`） | DEC-218 第 1 點：保留為 IN-U、不得刪（已裁示）；adapter 用哪個模式、IN-U 怎麼標 | 模式選擇＝技術；IN-U 標示需 schema 放行 |
+| §C-9 | 讀取例外（`LoginRequiredError` 等） | L1 原樣上拋，不入快取（#1251 `test_g4_…`；`test_norm_l1_login_required_never_becomes_a_tally`） | 上拋到呼叫端（不建 Digest），或 L3 捕捉後以 None＋原因降級；⛔ 不得映成 `[]` | 技術（L3 adapter Gate；adapter 本身未授權） |
+
+**注意**：上表「目前行為」欄由 `current_behavior` 測試釘住，**不是**「這是對的」。轉紅時依各測試 docstring 處置：更新本表與快照、記錄裁示；
+`test_gap_*` 若 XPASS，代表缺口被改掉，須升為正式斷言並同步本表。規範測試（`test_norm_*`）不依賴任何快照。
+
+## §D 範圍與不授權事項
+
+- 本文件**不是 adapter 實作**。正式 L3 adapter、Digest schema（含 coverage 新欄位）、任何 production caller、私人 Sheet／OAuth 讀取、真 Provider，**各自另需放行**。
+- 本批只新增兩個檔（本文件與 `tests/test_onebrain_holdings_input_contract.py`）；`src/`、`shared/`、既有測試與 DECISIONS／HANDOFF／PROJECT_STATE／BACKLOG **0 改動**。
+- 測試內的 `contract_expected_holdings_input` 只輸出「預期輸入類別」，是契約規格表，**不得**被 production 引用（有守衛）。
+- **L1 可用、Digest NOT READY**；OneBrain 正式廣度 NOT EVALUATED。
+
+## §E NOT VERIFIED
+
+- 單組撰寫與自測；兩組非作者 QA、PR exact-head CI、0 unresolved threads 均未完成。
+- §A／§C 的「目前行為」只以合成資料驗證；真實 Sheet 的 gspread 數值轉換、真實 `holding_keys` 來源（`portfolio_id` 仍無正式來源）未驗。
+- §C-1 推薦 (i) 與 §C 各列「需誰裁示」為作者判斷，未經第二組驗證。
+- 「其他無法評估原因在 Digest 側沒有可承載欄位」（§B2-2 末句）為 INFERENCE，未窮舉 Digest 所有欄位語意。
