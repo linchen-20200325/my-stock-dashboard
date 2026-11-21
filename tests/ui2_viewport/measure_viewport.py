@@ -1218,7 +1218,7 @@ def _select_box(page, name: str, option_label: str, anchor: str) -> None:
     page.evaluate("() => document.querySelector('.st-key-ui2_dev_surface').scrollIntoView({block: 'center'})")
     page.wait_for_timeout(200)
     # 以 selectbox 的 label（開頭比對）定位，不靠 combobox 的 accessible name：Streamlit 1.56（BaseWeb）的 combobox 名稱含目前選中的值
-    # （例「FAKE 場景（預設）」含「場景」）→ 會誤選到資料來源那一格。
+    # （例「FAKE 場景」含「場景」）→ 會誤選到資料來源那一格。
     box = page.locator('.st-key-ui2_dev_surface [data-testid="stSelectbox"]',
                        has=page.locator("label", has_text=re.compile(rf"^\s*{re.escape(name)}"))).get_by_role("combobox")
     box.first.click()
