@@ -56,3 +56,9 @@
 ## 7. 測試對照
 
 `tests/test_onebrain_upstream_exclusion_gap_evidence.py`：`test_current_behavior_*` 釘現況（缺口證據，非規範）；`test_desired_*` 為 `xfail(strict=True)` 期望改善；另含剔除點存在性守衛，避免文件漂移。資料全為匿名合成與公開代號，不含任何私人持股或 Sheet 內容。
+
+## 8. 狀態註記（C-OB-GX1-L1-ADDITIVE-TALLY-1；追加，上文不改）
+
+- **L1 計數已實作（dormant）**：`gsheet_portfolio.tally_portfolio_records` / `load_portfolio_tallied` / `PortfolioReadTally`（見 DEC-219）。僅 L1 純加性、0 production caller、全合成資料測試；`parse_portfolio_records` / `load_portfolio` 判定未改；NaN／+inf 只揭露不改判；不去重。對應測試 `tests/test_onebrain_gx1_l1_tally.py`。第 1 節表中 `parse_portfolio_records` 列「是否回報計數＝否」對**該函式本身**仍成立（仍回純 list）；新 API 是並列的另一條讀取路徑。
+- **L3 缺口未解**：`test_desired_excluded_coverage_includes_upstream_dropped_rows`（期望 `excluded_invalid_rows == 6`）**仍保留 `xfail(strict=True)`**——L3 / 戰情表 / Digest 沒有任何接線，缺口 2 與缺口 3 原樣存在。原 L1 層 xfail 已有意識改寫為正式測試 `test_l1_tally_reports_dropped_count_and_reasons`，不是刪除。
+- 單組撰寫，未經獨立 QA；OneBrain 仍 NOT READY，廣度 NOT EVALUATED。
