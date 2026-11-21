@@ -131,7 +131,8 @@ def test_reload_never_calls_global_clear(env):
     _warm(env)
     env.login('A', sheet='SID_A1')
     _fns = (gsp._list_portfolios_cached, gsp._load_portfolio_cached,
-            gsp._list_stock_watchlists_cached, gsp._load_stock_watchlist_cached)
+            gsp._list_stock_watchlists_cached, gsp._load_stock_watchlist_cached,
+            gsp._load_portfolio_tallied_cached)     # C-OB-GX1-L1-ADDITIVE-TALLY-1 同步新增
     with patch.object(gsp, 'clear_read_cache') as _g, \
          patch.object(type(_fns[0]), 'clear', autospec=True) as _c:
         B.reload_my_sheet_reads()
@@ -194,7 +195,8 @@ def test_read_gen_is_a_cache_key_param_not_underscored():
     """`read_gen` 必須進快取鍵：參數名不可加底線（st.cache_data 排除底線參數）。"""
     import inspect
     for fn in (gsp._list_portfolios_cached, gsp._load_portfolio_cached,
-               gsp._list_stock_watchlists_cached, gsp._load_stock_watchlist_cached):
+               gsp._list_stock_watchlists_cached, gsp._load_stock_watchlist_cached,
+               gsp._load_portfolio_tallied_cached):     # C-OB-GX1-L1-ADDITIVE-TALLY-1 同步新增
         _sig = inspect.signature(getattr(fn, '__wrapped__', fn))
         assert 'read_gen' in _sig.parameters, fn
 

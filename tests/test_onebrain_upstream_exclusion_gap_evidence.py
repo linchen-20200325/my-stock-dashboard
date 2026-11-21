@@ -8,7 +8,8 @@ docs/vnext/ONEBRAIN_UPSTREAM_EXCLUSION_POINTS_CONTRACT_EVIDENCE_2026-11-21.md �
 - `test_current_behavior_*` 釘的是**目前真實行為**，其中包含**已知不足**（上游靜默剔除、無計數）。
   它們是缺口**證據**，**不是**「這樣才對」。**不得**被引用來阻止日後經正式 Decision Gate 批准的改善；
   改善落地時，這些測試轉紅是**預期的**，須在同一個被批准的 PR 內顯式更新（不是被悄悄洗掉）。
-- `test_desired_*` 以 `xfail(strict=True)` 表達「尚未實現的期望」。現況下它們必須真的 fail（xfailed）；
+- `test_desired_*` 以 `xfail(strict=True)` 表達「尚未實現的期望」（📌 C-OB-GX1-L1-ADDITIVE-TALLY-1：L1 那一個已有意識升為正式測試
+  `test_l1_tally_reports_dropped_count_and_reasons`；L3 層 `test_desired_excluded_coverage_includes_upstream_dropped_rows` 仍保留 xfail）。現況下它們必須真的 fail（xfailed）；
   若某天 XPASS，strict 會讓 CI 轉紅，提醒維護者：缺口已被改掉，請把測試升為正式斷言並更新文件。
 - 本檔**不**實作 G-X1、**不**定義「可評分」資格、**不**宣稱完整母體已有實作；
   `parse_portfolio_records` 的 7→1 是 L1 內部 raw→kept，**不是**獨立 expected。
@@ -187,12 +188,23 @@ _XFAIL_REASON = ("期望改善尚未實現（DEC-215；docs/vnext/ONEBRAIN_UPSTR
                  "G-X1 未授權，需另行 Decision Gate。strict：若 XPASS 代表缺口已被改掉，請升為正式斷言並更新文件。")
 
 
-@pytest.mark.xfail(strict=True, reason=_XFAIL_REASON)
-def test_desired_parse_layer_reports_dropped_count():
-    """期望：解析層回報丟棄計數（目前回傳純 list，沒有任何計數）。不指定介面形式，僅要求「可問到 raw／dropped」。"""
-    out = parse_portfolio_records(seven_raw_records())
-    assert not isinstance(out, list), "目前回傳純 list，無計數"      # 期望：回傳物件可攜帶 raw／kept／dropped
-    assert getattr(out, "dropped", None) == 6
+def test_l1_tally_reports_dropped_count_and_reasons():
+    """【有意識改寫，不是漏刪】原 `test_desired_parse_layer_reports_dropped_count`（strict xfail，只要求「可問到 dropped==6」）
+    已由 C-OB-GX1-L1-ADDITIVE-TALLY-1（客戶授權 #1199 comment 7055751465；施工包 7055505068）的 L1 純加性
+    `tally_portfolio_records` 實現，升為更嚴的正式斷言：兩模式精確計數＋逐原因＋與既有解析器保留集合一致。
+    ⚠️ 只涵蓋 L1；L3 層期望（下方 `test_desired_excluded_coverage_includes_upstream_dropped_rows`）仍是 xfail，**未實現、不得湊數**。
+    ⚠️ `raw` 與 rows 同源，不是獨立 expected completeness；`parse_portfolio_records` 本身仍回純 list（未改）。"""
+    raw = seven_raw_records()
+    assert isinstance(parse_portfolio_records(raw), list)                 # 既有解析器介面未動
+    t = GSP.tally_portfolio_records(raw, keep_blank=False)
+    assert (t.status, t.raw, t.kept) == ("ok", 7, 1)
+    assert t.raw - t.kept == 6                                            # 原 xfail 的期望：dropped == 6
+    assert t.dropped == {"blank_ticker": 1, "non_numeric": 1, "non_finite": 0, "non_positive": 2, "blank_value": 2}
+    assert list(t.rows) == parse_portfolio_records(raw)                   # 保留集合與既有解析器逐列相同
+    k = GSP.tally_portfolio_records(raw, keep_blank=True)
+    assert (k.raw, k.kept, k.kept_with_missing_value) == (7, 3, 2)
+    assert k.dropped["blank_value"] == 0
+    assert list(k.rows) == parse_portfolio_records(raw, keep_blank=True)
 
 
 @pytest.mark.xfail(strict=True, reason=_XFAIL_REASON)
