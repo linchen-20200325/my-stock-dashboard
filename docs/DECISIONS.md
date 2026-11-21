@@ -11131,3 +11131,26 @@ Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud
 - **編號**：origin/main（`2cc632ff`）已用至 DEC-216；Open PR #1237（未使用 DEC 號）；DEC-217 已由 #1244（B-UI2-FAKE-LABEL-ACCURACY-1）占用，故順延；本批 DEC-218；合併時若被佔則再順延。
 
 單組撰寫。
+
+### DEC-219｜OneBrain G-X1：L1 純加性「持股讀取計數」API 施工（dormant；客戶授權引用 #1199 comment 7055751465，範圍基準 7055505068；2026-11-21；只追加；非 QA PASS；單組作者撰寫）
+
+> **本條只登記一次 L1 純加性實作的事實與邊界。** 它不是功能上線、不是接線、不是 OneBrain 可用；**非 QA PASS**——撰寫與自測為同一組（單組），未經獨立 QA。
+
+- **決策者**：客戶（授權）；**執行**：執行 AI。**日期**：2026-11-21。**狀態**：已實作於分支、待獨立 QA 與 PR 驗收；合併前不得稱已入 main。
+- **客戶授權引用**（依 #1199 所載，原始對話不在 repo，屬 issue 轉錄）：授權留言 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7055751465 ；施工包／範圍基準 https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7055505068 。範圍＝**Q1：僅 L1 純加性計數＋合成資料測試，不接正式系統、不改原有資料判定；Q2 延後，不新增 Sheet 讀取。** 本條不擴權。
+- **本批新增**（`src/data/portfolio/gsheet_portfolio.py`，全為加性）：`PortfolioReadTally`（frozen dataclass）、純函式 `tally_portfolio_records(records, *, keep_blank, …)`、並列讀取 `load_portfolio_tallied(name, *, sheet_id=None, keep_blank=False)`、快取 `_load_portfolio_tallied_cached`（TTL_15MIN、沿用 `_identity_scoped_read`／`read_gen`；已加入 `clear_read_cache`）。`parse_portfolio_records`／`load_portfolio`／`_load_portfolio_*`／`_editor_loaded_row`／SA reader **一字未改**。
+- **語意（逐點）**：
+  1. 狀態沿用既有 `READ_*`（`ok`／`worksheet_missing`／`schema_mismatch`）＋唯一新增字面 `not_selected`（name 空白，**不讀 Sheet**）。非 `ok` 時**所有計數為 `None`（UNKNOWN），不是 0**。
+  2. P0 分區：`blank_rows`（整列全空）／`blank_name_rows`／`other_name_rows`（只給數字，不含其他組合內容）；`raw`＝name 等於目標組合的列數。`sheet_data_rows = blank_rows + blank_name_rows + other_name_rows + raw`。
+  3. `dropped_by_reason` 固定五鍵，逐列互斥、判定順序：空代號 > 非數值 > -inf > ≤0（有填值）> 空白（最後）；`blank_value` 僅預設模式（`keep_blank=True` 恆 0）。保留／丟棄與 `parse_portfolio_records` 兩模式逐列一致（`rows` 直接由該解析器產生；另有執行期保留列數對帳）。
+  4. 保留列三分流（互斥，優先序 non_finite > missing > clean）：`kept_non_finite`（NaN／+inf）／`kept_with_missing_value`（僅 keep_blank）／`kept_clean`。**NaN／+inf 只揭露，不改判、不過濾，仍在 `rows` 內**；-inf 依現行解析器行為被丟棄（歸 `non_finite`）。
+  5. `duplicate_source_rows`／`duplicate_kept_rows`／`duplicate_tickers`：只計數，**不去重**、不改大小寫，rows 原樣。
+  6. 恆等式違反即 `ValueError`（訊息僅含計數）。隱私：repr／例外不含 sheet_id、憑證、其他組合名稱／代號／私人值（`rows` 不進 repr）。
+- **`raw` 與 `rows` 同源**（同一份 `get_all_values` 快照、同一 name 篩選）：**不是獨立 expected completeness，不得冒充**；它不證明「讀到的就是 Sheet 上全部」。
+- **dormant**：`src/`（gsheet_portfolio 自身之外）、`scripts/`、`app*.py` **0 production caller**，由 AST 測試守衛。日後若與 `load_portfolio` 並列呼叫會多一次 `get_all_values`，是否合併留待 L3 Gate。
+- **測試**：新檔 `tests/test_onebrain_gx1_l1_tally.py`（全離線、固定格點窮舉、突變測試）；`tests/test_onebrain_upstream_exclusion_gap_evidence.py` 的**第一個** strict xfail（L1 層）有意識改寫為更嚴的正式測試，**第二個（L3 層，期望 `excluded_invalid_rows == 6`）仍保留 xfail，不得湊數**；`tests/test_sheet_safety_b5_cache.py` 兩處快取列舉同步。
+- **明確仍然 HOLD／未做**：L3／UI 接線、`excluded_invalid_rows` 對帳、任何 production caller、第二次真 Sheet 讀取、Q2、NaN／+inf 過濾修補、去重或批次合併公式、統一可評分資格判準、Digest v2、Stage F／G。OneBrain **仍 NOT READY**，正式廣度 **NOT EVALUATED**。
+- **NOT VERIFIED**：兩組非作者 QA、PR exact-head 五項原生 CI、0 unresolved threads、merge＋main push CI 均未完成；「0 production caller」「恆等式在所有真實 Sheet 輸入下成立」僅以本機合成格點與 AST 單組驗證；真實 Sheet 行為（含 gspread 數值轉換對各種儲存格）未讀取、未驗。
+- **編號**：已核對 origin/main 範圍內 DEC-218 為最大；合併時若被佔則再順延。
+
+單組撰寫。
