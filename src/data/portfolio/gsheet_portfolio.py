@@ -58,8 +58,9 @@ import itertools
 import math
 import threading
 import time
+from collections import Counter
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 try:
@@ -94,7 +95,8 @@ def clear_read_cache() -> None:
     """
     for _fn in (_list_portfolios_cached, _load_portfolio_cached,
                 _list_stock_watchlists_cached, _load_stock_watchlist_cached,
-                _read_sheet_title_cached):          # 👤 我的 P1:Sheet 標題(read_sheet_title)
+                _read_sheet_title_cached,           # 👤 我的 P1:Sheet 標題(read_sheet_title)
+                _load_portfolio_tallied_cached):    # C-OB-GX1-L1-ADDITIVE-TALLY-1:讀取計數(dormant API)
         _clear = getattr(_fn, 'clear', None)
         if callable(_clear):
             _clear()
@@ -962,6 +964,261 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     if str(rec.get('name', '')).strip() != name:
         return False
     return bool(parse_portfolio_records([rec]))
+
+
+# ══ C-OB-GX1-L1-ADDITIVE-TALLY-1:持股讀取「計數」(純加性;dormant,0 production caller) ═══════════
+# 授權:Issue #1199 客戶裁示 comment 7055751465;施工包 comment 7055505068(Q1=僅 L1 純加性計數＋合成資料測試;
+# Q2 延後,不新增 Sheet 讀取、不接線)。⛔ 本區塊不改 parse_portfolio_records / load_portfolio / _load_portfolio_* /
+# _editor_loaded_row / SA reader 一個字;它是**並列**的新 API。
+# ⛔ 不修補 NaN / +inf(只揭露 `kept_non_finite`)、不去重(只揭露 duplicate_*)、不做 L3 / UI 接線。
+# ⚠️ `raw` 與 `rows` 來自**同一份快照**、同一個 name 篩選 ⇒ **不是獨立 expected**;
+#    不得被拿來證明「讀到的就是 Sheet 上的全部」(那需要另一條獨立來源,屬後續 Gate)。
+# ⚠️ 若日後與 `load_portfolio` **並列呼叫**,同一個 Sheet 會多一次 `get_all_values`(兩者快取各自獨立);
+#    要不要合併成一次讀取,須在 L3 Gate 決定(本批 0 caller,不會實際增加任何讀取)。
+
+#: 狀態(沿用既有 READ_* 常數;`not_selected` 為本批唯一新增字面,name 空白 ⇒ 根本不讀 Sheet)。
+TALLY_NOT_SELECTED = 'not_selected'
+
+#: `dropped_by_reason` 的固定五鍵(順序即判定順序;恆全部出現)。
+DROP_BLANK_TICKER = 'blank_ticker'      # 代號去空白後為空
+DROP_NON_NUMERIC = 'non_numeric'        # 張數或均價轉不成 float
+DROP_NON_FINITE = 'non_finite'          # 張數或均價為 -inf(僅 -inf;NaN / +inf 現況**保留**,見 kept_non_finite)
+DROP_NON_POSITIVE = 'non_positive'      # 使用者有填值、但有限且 <= 0(含 0)
+DROP_BLANK_VALUE = 'blank_value'        # 張數或均價是空白格(僅預設模式;keep_blank=True 時恆 0)
+TALLY_DROP_REASONS = (DROP_BLANK_TICKER, DROP_NON_NUMERIC, DROP_NON_FINITE,
+                      DROP_NON_POSITIVE, DROP_BLANK_VALUE)
+
+_CELL_OK, _CELL_BLANK, _CELL_NON_NUMERIC = 'ok', 'blank', 'non_numeric'
+_CELL_NEG_INF, _CELL_NON_POSITIVE, _CELL_NAN, _CELL_POS_INF = 'neg_inf', 'non_positive', 'nan', 'pos_inf'
+
+
+@dataclass(frozen=True)
+class PortfolioReadTally:
+    """一次持股讀取的「計數」(L1 純加性;凍結;`status != 'ok'` 時所有計數欄位為 `None` ＝ UNKNOWN,⛔ 不是 0)。
+
+    欄位(`ok` 時皆為 int,除另述):
+      · sheet_data_rows  資料列總數(不含表頭)。= blank_rows + blank_name_rows + other_name_rows + raw。
+      · blank_rows / blank_name_rows / other_name_rows  P0 分區:整列全空 / name 空白但列非全空 /
+        name 非空但不是目標組合(⛔ 只給數字,不含其他組合的名稱或內容)。
+      · raw              name == 目標組合的列數(與 `rows` 同源,**不是獨立 expected**)。
+      · kept             保留列數(= len(rows),且逐列與 `parse_portfolio_records` 的保留集合一致)。
+      · dropped_by_reason  固定五鍵的 tuple of pairs(見 `TALLY_DROP_REASONS`;可用 `.dropped` 取 dict 副本)。
+        判定順序(逐列互斥):空代號 > 非數值 > -inf > <=0(有填值的非正數)> 空白(空白最後)。
+      · kept 三分流(互斥,優先序 non_finite > missing > clean):
+        kept_non_finite(保留列中張數或均價為 NaN / +inf;⚠️ 只揭露,不改判、仍在 rows 內)>
+        kept_with_missing_value(keep_blank=True 保留且含 None 欄)> kept_clean。
+      · duplicate_source_rows  來源列(raw,代號非空)中,代號出現 >= 2 次者的列數;
+        duplicate_kept_rows    保留列中同;duplicate_tickers  來源列中出現 >= 2 次的代號(strip 後原樣、
+        不改大小寫、排序、只含本組合)。⛔ 只計數,rows 不去重。
+      · rows  非 ok 為 None;ok 時為 `parse_portfolio_records(同一批 records, keep_blank=…)` 的結果(tuple of dict)。
+        ⚠️ rows 內是私人持股值,故 repr 不印(隱私);dict 為獨立副本,呼叫端不得就地改。
+    隱私:repr / 例外訊息只含狀態與計數,⛔ 不含 sheet_id、憑證、其他組合的名稱 / 代號 / 私人值。
+    """
+    status: str
+    keep_blank: bool
+    rows: tuple | None = field(default=None, repr=False)
+    sheet_data_rows: int | None = None
+    blank_rows: int | None = None
+    blank_name_rows: int | None = None
+    other_name_rows: int | None = None
+    raw: int | None = None
+    kept: int | None = None
+    dropped_by_reason: tuple | None = None
+    kept_with_missing_value: int | None = None
+    kept_non_finite: int | None = None
+    kept_clean: int | None = None
+    duplicate_source_rows: int | None = None
+    duplicate_kept_rows: int | None = None
+    duplicate_tickers: tuple | None = None
+
+    @property
+    def dropped(self) -> dict[str, int] | None:
+        """`dropped_by_reason` 的 dict 副本(非 ok → None)。"""
+        return None if self.dropped_by_reason is None else dict(self.dropped_by_reason)
+
+
+_TALLY_COUNT_FIELDS = ('sheet_data_rows', 'blank_rows', 'blank_name_rows', 'other_name_rows', 'raw', 'kept',
+                       'kept_with_missing_value', 'kept_non_finite', 'kept_clean',
+                       'duplicate_source_rows', 'duplicate_kept_rows')
+
+
+def _unknown_tally(status: str, keep_blank: bool) -> PortfolioReadTally:
+    """非 ok 狀態:所有計數 UNKNOWN(None),⛔ 不得為 0。"""
+    return PortfolioReadTally(status=status, keep_blank=bool(keep_blank))
+
+
+def _classify_tally_cell(value: Any) -> str:
+    """一格張數 / 均價 → 類別(與模式無關,兩模式的丟棄原因標籤因此一致)。
+
+    空白格由 `_is_blank_cell` 判(None / 全空白字串);其餘 `float(value)`。
+    ⚠️ 預設模式的 `float(x or 0)` 對「非空白但為 falsy」的值(0、False、[]…)一律視為 0 而丟棄;
+    本分類對這些值也都得到「丟棄」(0 / False → non_positive,[] 等 → non_numeric),故**保留 / 丟棄**與
+    `parse_portfolio_records` 完全一致;只有「falsy 的非數值型別」標籤與 parse 的內部路徑不同
+    (Sheet 讀出的格子只會是 str / int / float,不會出現)。執行期另以保留列數對帳,格點窮舉測試涵蓋。
+    """
+    if _is_blank_cell(value):
+        return _CELL_BLANK
+    try:
+        _v = float(value)
+    except (TypeError, ValueError):
+        return _CELL_NON_NUMERIC
+    if math.isnan(_v):
+        return _CELL_NAN
+    if _v == -math.inf:
+        return _CELL_NEG_INF
+    if _v <= 0:
+        return _CELL_NON_POSITIVE
+    return _CELL_POS_INF if _v == math.inf else _CELL_OK
+
+
+def _classify_tally_record(rec: dict[str, Any], keep_blank: bool) -> tuple[bool, str]:
+    """一列(已篩 name)→ `(是否保留, 標籤)`。丟棄標籤＝`DROP_*`;保留標籤＝
+    `'non_finite'` / `'missing'` / `'clean'`。保留 / 丟棄須與 `parse_portfolio_records` 完全一致(執行期另有對帳)。"""
+    if not str(rec.get('ticker', '')).strip():
+        return False, DROP_BLANK_TICKER
+    _cells = (_classify_tally_cell(rec.get('lots')), _classify_tally_cell(rec.get('avg_price')))
+    if _CELL_NON_NUMERIC in _cells:
+        return False, DROP_NON_NUMERIC
+    if _CELL_NEG_INF in _cells:
+        return False, DROP_NON_FINITE
+    if _CELL_NON_POSITIVE in _cells:
+        return False, DROP_NON_POSITIVE
+    if _CELL_BLANK in _cells and not keep_blank:
+        return False, DROP_BLANK_VALUE
+    if _CELL_NAN in _cells or _CELL_POS_INF in _cells:
+        return True, 'non_finite'
+    return True, ('missing' if _CELL_BLANK in _cells else 'clean')
+
+
+def _verify_tally_identities(t: PortfolioReadTally) -> None:
+    """恆等式 —— 違反即 `ValueError`(⛔ 不靜默;訊息只含計數,不含任何資料值)。"""
+    if t.status != READ_OK:
+        if t.rows is not None or t.dropped_by_reason is not None or t.duplicate_tickers is not None \
+                or any(getattr(t, f) is not None for f in _TALLY_COUNT_FIELDS):
+            raise ValueError(f'tally 非 ok 狀態 {t.status!r} 的欄位必須全為 None(UNKNOWN)')
+        return
+    _d = dict(t.dropped_by_reason or ())
+    if tuple(_d) != TALLY_DROP_REASONS:
+        raise ValueError('tally dropped_by_reason 必須恆為固定五鍵')
+    _dsum = sum(_d.values())
+    if t.sheet_data_rows != t.blank_rows + t.blank_name_rows + t.other_name_rows + t.raw:
+        raise ValueError('tally 恆等式失敗:sheet_data_rows != blank + blank_name + other_name + raw')
+    if t.raw != t.kept + _dsum:
+        raise ValueError('tally 恆等式失敗:raw != kept + Σ dropped_by_reason')
+    if t.kept != t.kept_clean + t.kept_with_missing_value + t.kept_non_finite:
+        raise ValueError('tally 恆等式失敗:kept != clean + missing + non_finite')
+    if t.kept != len(t.rows or ()):
+        raise ValueError('tally 恆等式失敗:kept != len(rows)')
+    if t.keep_blank and _d[DROP_BLANK_VALUE] != 0:
+        raise ValueError('tally 恆等式失敗:keep_blank=True 時 blank_value 必須為 0')
+    if not t.keep_blank and t.kept_with_missing_value != 0:
+        raise ValueError('tally 恆等式失敗:預設模式 kept_with_missing_value 必須為 0')
+
+
+def tally_portfolio_records(records: list[dict[str, Any]], *, keep_blank: bool,
+                            sheet_data_rows: int | None = None, blank_rows: int = 0,
+                            blank_name_rows: int = 0, other_name_rows: int = 0) -> PortfolioReadTally:
+    """已按 name 篩過的 records(與 `_load_portfolio_rows` 內 recs 同義)→ `PortfolioReadTally`(純函式)。
+
+    `rows` 直接由 `parse_portfolio_records(records, keep_blank=…)` 產生(保證與既有解析器逐列相同);
+    本函式另以獨立的逐列分類算出丟棄原因,並在執行期對帳「保留列數」與恆等式,不一致即 `ValueError`。
+    P0 分區三個參數與 `sheet_data_rows` 由 sheet 層呼叫端給;預設 0 / None ⇒ `sheet_data_rows == raw`。
+    ⚠️ `raw` 是 `len(records)`,與 `rows` 同源,**不是獨立 expected completeness**。
+    """
+    _recs = list(records or [])
+    _rows = parse_portfolio_records(_recs, keep_blank=keep_blank)
+    _dropped = dict.fromkeys(TALLY_DROP_REASONS, 0)
+    _kept_flavor = {'non_finite': 0, 'missing': 0, 'clean': 0}
+    _src_tickers: list[str] = []
+    for _rec in _recs:
+        _tk = str(_rec.get('ticker', '')).strip()
+        if _tk:
+            _src_tickers.append(_tk)
+        _kept, _label = _classify_tally_record(_rec, keep_blank)
+        if _kept:
+            _kept_flavor[_label] += 1
+        else:
+            _dropped[_label] += 1
+    _kept_n = sum(_kept_flavor.values())
+    if _kept_n != len(_rows):
+        raise ValueError(f'tally 與 parse_portfolio_records 的保留列數不一致({_kept_n} vs {len(_rows)})')
+    _src_cnt = Counter(_src_tickers)
+    _kept_cnt = Counter(r['ticker'] for r in _rows)
+    _raw = len(_recs)
+    _t = PortfolioReadTally(
+        status=READ_OK, keep_blank=bool(keep_blank), rows=tuple(_rows),
+        sheet_data_rows=_raw + blank_rows + blank_name_rows + other_name_rows
+        if sheet_data_rows is None else sheet_data_rows,
+        blank_rows=blank_rows, blank_name_rows=blank_name_rows, other_name_rows=other_name_rows,
+        raw=_raw, kept=_kept_n, dropped_by_reason=tuple(_dropped.items()),
+        kept_with_missing_value=_kept_flavor['missing'], kept_non_finite=_kept_flavor['non_finite'],
+        kept_clean=_kept_flavor['clean'],
+        duplicate_source_rows=sum(c for c in _src_cnt.values() if c >= 2),
+        duplicate_kept_rows=sum(c for c in _kept_cnt.values() if c >= 2),
+        duplicate_tickers=tuple(sorted(t for t, c in _src_cnt.items() if c >= 2)))
+    _verify_tally_identities(_t)
+    return _t
+
+
+def _load_portfolio_tallied_rows(*, name: str, sheet_id: str, keep_blank: bool) -> PortfolioReadTally:
+    """一次 `get_all_values` → 同一份快照算 P0 分區 + 目標組合的 tally。分頁不存在 / 表頭不符照舊上拋具名例外
+    (由 `_read_status` 轉成狀態)。空表(連表頭都沒有)⇒ ok 且全 0。"""
+    _values = _ws(sheet_id=sheet_id).get_all_values()
+    _state = _header_state(_values, _HEADERS)
+    if _state == _HEADER_EMPTY:
+        return tally_portfolio_records([], keep_blank=keep_blank)
+    if _state == _HEADER_MISMATCH:
+        raise SheetSchemaMismatchError(_WORKSHEET_NAME, _HEADERS)
+    _header, _body = _values[0], _values[1:]
+    _blank = _blank_name = _other = 0
+    _target: list[dict[str, Any]] = []
+    for _row in _body:
+        if all(_is_blank_cell(c) for c in _row):
+            _blank += 1
+            continue
+        _rec = _sheet_record(_header, _row)
+        _nm = str(_rec.get('name', '')).strip()
+        if not _nm:
+            _blank_name += 1
+        elif _nm == name:
+            _target.append(_rec)
+        else:
+            _other += 1
+    return tally_portfolio_records(_target, keep_blank=keep_blank, sheet_data_rows=len(_body),
+                                   blank_rows=_blank, blank_name_rows=_blank_name, other_name_rows=_other)
+
+
+def _load_portfolio_tallied_raw(*, name: str, sheet_id: str, keep_blank: bool) -> PortfolioReadTally:
+    _status, _payload = _read_status(_load_portfolio_tallied_rows,
+                                     name=name, sheet_id=sheet_id, keep_blank=keep_blank)
+    return _payload if _status == READ_OK else _unknown_tally(_status, keep_blank)
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _load_portfolio_tallied_cached(identity: str, *, name: str, sheet_id: str, keep_blank: bool,
+                                   read_gen: str = '') -> PortfolioReadTally:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(同 `_load_portfolio_cached`)。
+    # 讀取失敗的例外往上拋(st.cache_data 不快取例外)。
+    return _run_as_identity(identity, _load_portfolio_tallied_raw,
+                            name=name, sheet_id=sheet_id, keep_blank=keep_blank)
+
+
+def load_portfolio_tallied(name: str, *, sheet_id: str | None = None,
+                           keep_blank: bool = False) -> PortfolioReadTally:
+    """`load_portfolio` 的並列「帶計數」版(**純讀,零寫入**;目前 0 production caller,dormant)。
+
+    · name 去空白後為空 ⇒ `status='not_selected'`,**不讀 Sheet**,所有計數 None。
+    · 分頁不存在 / 表頭不符 ⇒ 對應狀態、所有計數 None(UNKNOWN,⛔ 不是 0);權限 / 網路等例外原樣上拋。
+    · 快取 TTL_15MIN,鍵含 (身分指紋, name, sheet_id, keep_blank, read_gen);與 `load_portfolio` 的快取各自獨立。
+    · `rows` 與 `load_portfolio(name, sheet_id=…, keep_blank=…)` 在同一份資料上逐列相同。
+    ⚠️ 與 `load_portfolio` 並列呼叫會多一次 `get_all_values`,是否合併留待 L3 Gate。
+    """
+    name = (name or '').strip()
+    if not name:
+        return _unknown_tally(TALLY_NOT_SELECTED, keep_blank)
+    return _identity_scoped_read(_load_portfolio_tallied_cached, _load_portfolio_tallied_raw,
+                                 name=name, sheet_id=sheet_id or _get_active_sheet_id(),
+                                 keep_blank=keep_blank)
 
 
 def _header_has_duplicates(header: list[Any], headers: list[str] = _HEADERS) -> bool:
