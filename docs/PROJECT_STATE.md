@@ -1571,3 +1571,25 @@
 - 客戶於 #1199 comment 7054425559 正式同意：Q1=B 持有部位全集、Q2=(a) 選定單一本組合；持有全集與 DEC-215 可評分全集**分開計數**；過期不得自動當已評估；重複代號須揭露（合併粒度／公式未授權）。細節見 `docs/DECISIONS.md` DEC-218；語意示意表見 `docs/vnext/ONEBRAIN_DUAL_UNIVERSE_TABLE_2026-11-21.md`。
 - 決策落盤 ≠ G-X1 施工授權 ≠ OneBrain 可用：G-X1 未授權實作；OneBrain `NOT READY`、0 production caller、正式市場廣度 `NOT EVALUATED`。HOLD 照 DEC-218 §四；D-1／D-2 另屬 Data／A Gate。
 - **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI；統一可評分資格判準待另行決策。
+
+## 2026-11-21 已合併決策與實際狀態索引（DEC-213～218；只追加；非 QA PASS；單組撰寫，待兩組非作者 QA）
+- **更正說明**：本檔先前尾段（DEC-214／215／218 等）所載「非 QA PASS／merge NV」為**合併前快照**，現已合併；舊段不改，現況以本段與 GitHub 為準。main＝`a862fae404c8ec9f21e8f9b4bc579a6f1d232c2e`。
+- **PR／merge SHA 對照**（以 `git log origin/main --oneline` 實證）：
+
+| DEC／項目 | PR | merge SHA |
+|---|---|---|
+| DEC-213 | #1239 | `685db89` |
+| DEC-214 | #1240 | `b522ecf` |
+| DEC-215 | #1241 | `c7be5eb` |
+| （無新 DEC；G-X2 docs＋tests） | #1242 | `85a194f` |
+| DEC-216 | #1243 | `2cc632f` |
+| DEC-217 | #1244 | `cc9da75` |
+| DEC-218 | #1245 | `a862fae` |
+| DEC-211（C-OB-UI-FAKE-A1） | #1236 | `3163e49` |
+| C-OB-EVIDENCE-UNKNOWN-TESTS（tests-only；DEC-212 同名，PR 號取自 commit subject） | #1238 | `5ea2f5f` |
+
+- #1236、#1238 於 `git log origin/main` 可見且標題／任務名與 DEC-211／DEC-212 相符；DECISIONS.md 內無 `#1238` 字樣，DEC-212↔#1238 僅憑任務名對應。
+- main push CI 對 `a862fae`：五項 success（run 44851080530／44852544168；取自交付資訊，**NOT VERIFIED by 本段作者**）。B-UI2-CI156-DEPENDENCY-TRIAGE-1：RESOLVED／NO CHANGE（pip IncompleteRead 瞬斷；#1199 comment 7055607034）。
+- 客戶 G-X1 裁示（#1199 comment 7055751465）：Q1 僅 L1 純加性計數＋合成資料測試、Q2 延後；**不是** OneBrain 整體解除 HOLD；下一個已授權唯一任務 C-OB-GX1-L1-ADDITIVE-TALLY-1（Owner 新 Claude C Session，尚未開工）。
+- **HOLD／未解鎖（皆不變）**：Open PR #1237（Draft／HOLD；NAS）；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
+- **NOT VERIFIED**：Cloud 實際部署畫面；上列 CI run 結論未於本沙箱重查；非作者 QA 尚未進行。

@@ -1658,3 +1658,26 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 ## 2026-11-20 B-UI2-STALE-COPY-1（DEC-214；append-only；非 QA PASS）
 - 現況：Draft PR 分支 `b-ui2-stale-copy-1`（base main `5ea2f5fc`）。方案 B（#1199 comment 7040889025）：台股卡／日 K 不再外露 L1 `stale_reason`。P3 baseline 與 `_P3_BASELINE_SHA256` 已在本 PR 重產（僅 `real/p4_market/stale`）；DEC-137 `source_hash` 不變，Real viewport 兩份已重產（FAKE 兩份未動）。
 - **下一步**：兩組非作者 QA（一組驗技術詞從 Real 原始輸入到 UI 消失＋測試殺突變；一組驗 baseline／viewport／a11y、範圍與治理）、exact-head 五項原生 CI、0 unresolved threads、merge、main push CI；Cloud 部署畫面仍 `NOT VERIFIED`。
+
+## 2026-11-21 Resume Checkpoint 2026-11-21（append-only；非 QA PASS；單組撰寫，待兩組非作者 QA）
+- **說明**：本檔先前檔尾多條（例如 2026-11-20 B-UI2-STALE-COPY-1「Draft PR 分支」）為「Draft／非 QA PASS」歷史快照，**現況以本段與 GitHub 為準**；舊段不改。
+- **main**：`a862fae404c8ec9f21e8f9b4bc579a6f1d232c2e`（`git log origin/main` 實證為 #1245／DEC-218 之合併 commit）。
+- **Open PR 僅 #1237**：Draft／HOLD（head `c406fb5fe3c2c4d2f9a88140c5296615534ee1f9`，base `3163e49d` 已落後 main）；未授權 merge／部署／Secrets。（head SHA 與「Open PR 僅 #1237」取自任務交付資訊，本機 git 無該物件，**NOT VERIFIED by git**；base `3163e49d` 為 #1236 合併 commit，git 可驗。）
+- **main push CI**：run 44851080530 與 44852544168 對 `a862fae` 之五項（export、Fast、Slow、ui2-browser 1.56.0、ui2-browser 1.59.2、ui2-browser-gate）皆 completed／success（取自交付資訊；本沙箱未重查 Actions，**NOT VERIFIED by 本段作者**）。前 run 44848246050（對 `cc9da756`）之 1.56.0 Install dependencies 步驟 pip `IncompleteRead` 瞬斷 → **B-UI2-CI156-DEPENDENCY-TRIAGE-1 RESOLVED／NO CHANGE**，未開 PR、未改檔（#1199 comment 7055607034）。
+- **已合併證據表**（PR→merge SHA→DEC；SHA 與 PR 號以 `git log origin/main --oneline` 逐項核對）：
+
+| PR | merge SHA | DEC／備註 |
+|---|---|---|
+| #1239 | `685db89` | DEC-213 |
+| #1240 | `b522ecf` | DEC-214 |
+| #1241 | `c7be5eb` | DEC-215 |
+| #1242 | `85a194f` | G-X2 docs＋tests；DECISIONS.md 無對應新 DEC |
+| #1243 | `2cc632f` | DEC-216 |
+| #1244 | `cc9da75` | DEC-217 |
+| #1245 | `a862fae` | DEC-218 |
+
+- **客戶裁示 G-X1**：#1199 comment 7055751465。Q1＝僅 L1 純加性計數＋合成資料測試；Q2＝延後。**不是 OneBrain 整體解除 HOLD**。下一個已授權唯一任務：**C-OB-GX1-L1-ADDITIVE-TALLY-1**，Owner＝新 Claude C Session，**本 session 不做**。
+- **舊 session 最終交接 comment id**：GPT 總管 7055347173；Claude B 7055770915；Claude C 7055776334（取自交付資訊，未逐一重讀）。
+- **仍 HOLD／NOT VERIFIED**：#1237 NAS；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT；TWII 資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
+- **下一個唯一安全接手點**：新 Claude C Session 以 C-OB-GX1-L1-ADDITIVE-TALLY-1 為唯一任務，範圍限客戶 G-X1 裁示（L1 純加性計數＋合成資料測試）；開工前先重讀 #1199 comment 7055751465 與 `docs/DECISIONS.md` DEC-218。
+- **停止條件**：任務超出上述範圍、需動 #1237／部署／Secrets／真資料、或需任一 HOLD 項解鎖，即停手回報；不得將本段當 QA PASS。

@@ -3134,3 +3134,20 @@
 | **B-UI2-STALE-COPY-1** | Claude B | UI2 Real 台股卡與 20 根日 K 的 detail 不再原樣輸出 L1 `stale_reason`（含 `twii_ohlcv`、`daily 門檻` 等工程字樣）。**已實作於本 PR（Draft）**：`src/services/ui2/real_canonical.py` 兩處（`twii_card_spec`／`kbar_chart_spec`）只保留既有已核准的上游三態句；`⚠ 過期 N 天` chip、資料日、來源、「新鮮度未判定」不變；fact 仍保留 `stale_reason` 供稽核。守衛：`ENGINEERING_VOCAB` 補 `twii_ohlcv`／`門檻`／`parquet`，以真 L1 `compute_cache_staleness` 輸出為 fixture（突變拔掉修正 9／9／6 紅）。P3 baseline 僅 `real/p4_market/stale` 1 key 變動；Real viewport 兩份重產（版面因少一行 detail 而變矮，非改版）。零變更 L1／L3／`shared/**`／`src/ui2/**`／資料契約；融資／板塊未接線項目不碰 | **PR OPEN（Draft）／NOT VERIFIED**（兩組非作者 QA、exact-head 五項原生 CI、0 threads、merge＋main CI 皆待） | 照 #1199 comment 7040889025 的 QA／merge Gate 執行；Cloud 部署畫面維持 `NOT VERIFIED`／`BLOCKED_EXTERNAL_AUTH`（#1107），不宣稱已驗 |
 
 > 未解鎖（皆不變）：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、融資／板塊 UI2 接線（BLOCKED）、#1237 NAS Draft／HOLD、C 線 OneBrain forward-only PIT、Stage F／G、真 Provider、W8、Risk Cap、Digest v2、官方詢問草稿 v2 寄出 HOLD。
+
+## 2026-11-21｜結案索引與現況更正（只追加；不改既有列；依據 `git log origin/main`（main＝`a862fae404c8ec9f21e8f9b4bc579a6f1d232c2e`）、`docs/DECISIONS.md` DEC-213～218 與 #1199 comment；本段單組撰寫，待兩組非作者 QA；非 QA PASS）
+
+> **現況更正**：上方 2026-11-20「B-UI2-STALE-COPY-1 登記」列仍寫「PR OPEN（Draft）」，**該狀態已過期**；該 PR 已合併（見下表），舊列不改。
+
+| ID | 現況 | 證據來源 |
+|---|---|---|
+| **B-UI2-STALE-COPY-1** | **已合併**：#1240 → `b522ecf`（DEC-214）。更正舊「PR OPEN（Draft）」。Cloud 部署畫面仍 NOT VERIFIED | git log；DEC-214 |
+| **D2-A-UI2-REAL-DEFAULT-1** | **已合併**：#1243 → `2cc632f`（DEC-216；客戶 D2=A，#1199 comment 7052908287） | git log；DEC-216 |
+| **B-UI2-FAKE-LABEL-ACCURACY-1** | **已合併**：#1244 → `cc9da75`（DEC-217） | git log；DEC-217 |
+| **B-UI2-CI156-DEPENDENCY-TRIAGE-1** | **RESOLVED／NO CHANGE**：1.56.0 Install dependencies pip `IncompleteRead` 瞬斷（前 run 44848246050，對 `cc9da756`）；未開 PR、未改檔 | #1199 comment 7055607034（取自交付資訊，未重讀） |
+| **C-OB-GX2-CONTRACT-TESTS-1** | **已合併**：#1242 → `85a194f`（docs＋tests-only，無新 DEC） | git log；`git show --stat 85a194f` |
+| DEC-215～218 引用 | DEC-215＝#1241 `c7be5eb`；DEC-216＝#1243；DEC-217＝#1244；DEC-218＝#1245 `a862fae` | git log；DECISIONS.md |
+| **C-OB-GX1-L1-ADDITIVE-TALLY-1** | **已由客戶授權、尚未開工**；Owner＝Claude C（新 Session）。範圍僅 L1 純加性計數＋合成資料測試（Q2 延後）；不是 OneBrain 整體解除 HOLD | #1199 comment 7055751465 |
+
+> **仍開放（照列、不結案）**：#1237 NAS Draft／HOLD；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT 與資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
+> 註：本 BACKLOG 先前無 D2-A／FAKE-LABEL／CI156／GX2／GX1 之獨立列（grep 無命中），上表為首次登記其現況，非改列。
