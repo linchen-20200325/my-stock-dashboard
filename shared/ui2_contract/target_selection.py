@@ -23,9 +23,20 @@ D8 `quote_readiness`：全為呼叫端傳入的布林，函式內無時鐘、無
 D9 使用自有 str Enum（`SelectionStatus`、`QuoteReadiness`），**不**新增 FieldState、不沿用 DEC-124 capability marker；
    QuoteReadiness 的值一律帶 `quote_` 前綴，避免與 FieldState 的值（如 stale）同字串而被誤當同一語意軸。
 
-═══ 與既有 normalize 函式的語意差異（新契約的設計決策；不改動、不取代既有函式）═══
-既有函式可能補 `.TW`／去 `.TW`／數字化／補零；本契約一律**不**：不補 `.TW`、不去 `.TW`、不數字化、
-後綴須由上游明確處理、重複須揭露。是否、何時、由誰接線＝另行授權（I1144-WIRING-GATE 等），本檔不授權 runtime 接線。
+═══ 與既有四個 normalize 函式的差異（據實描述；新契約的設計決策，不改動、不取代既有函式）═══
+- `normalize_holding_ticker`：只 `strip().upper()`，非 str 拋 TypeError，不加減 `.TW`、不補零。與本契約在
+  strip＋upper／不補後綴／不去後綴上同向；差異僅在本契約多了格式驗證、後綴一律 invalid、重複顯式揭露、可用性判定。
+- `normalize_etf_ticker`：4~6 碼純台股代號補 `.TW`，已含後綴原樣，空值回 ''，非字串以 `str()` 強轉。
+- `dividend_station_thresholds.normalize_ticker`：去 `.TW`／`.TWO` 並大寫，`str()` 強轉。
+- `etf_smart_analysis._normalize_ticker`：無 '.' 就補 `.TW`。
+「數字化（0050→50）」是 DEC-218 §D-1 所述 SA 推播路徑的另一處行為，**不屬**上列四個函式。
+本契約：不補 `.TW`、不去 `.TW`、不數字化，後綴須由上游明確處理，重複須揭露，非 str 不強轉。
+是否、何時、由誰接線＝另行授權（I1144-WIRING-GATE 等），本檔不授權 runtime 接線。
+
+═══ 補充說明 ═══
+- `strip()` 會修剪首尾 Unicode 空白（含 NBSP、全形空格、換行），屬「首尾空白修剪」；內部空白仍 invalid。
+- `duplicates` 每個代號只列一次、不含次數（要次數請呼叫端自行統計）。
+- `quote_readiness` 只檢查 `selection.status`／`symbol` 非 None，不重驗格式；信任邊界在 `parse_ticker_input`。
 """
 from __future__ import annotations
 

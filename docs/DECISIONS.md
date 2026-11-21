@@ -11196,7 +11196,7 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 
 #### 三、與既有四個 normalize 函式的語意差異（新契約的設計決策；非改動、非取代）
 
-既有函式的行為（補 `.TW`／去 `.TW`／數字化等）維持原樣、未被觸碰。本契約刻意相反：**不補 `.TW`、不去 `.TW`、不數字化、後綴須由上游明確處理、重複須揭露**。這是新契約為「公開查股的 identity」所做的設計決策（錯的代號比沒有代號更危險），不是對既有函式的更正，也不要求它們趨同。
+既有函式維持原樣、未被觸碰，逐函式據實描述：`normalize_holding_ticker`＝只 `strip().upper()`、非 str 拋 TypeError、不加減 `.TW`、不補零（與新契約在 strip＋upper／不補後綴／不去後綴上同向，差異僅在新契約多了格式驗證、後綴一律 invalid、重複顯式揭露、可用性判定）；`normalize_etf_ticker`＝4～6 碼純台股代號補 `.TW`、已含後綴原樣、空值回 ''、非字串 `str()` 強轉；`dividend_station_thresholds.normalize_ticker`＝去 `.TW`／`.TWO` 並大寫、`str()` 強轉；`etf_smart_analysis._normalize_ticker`＝無 '.' 就補 `.TW`。「數字化（0050→50）」是 DEC-218 §D-1 所述 SA 推播路徑的另一處行為，**不屬**這四個函式。新契約：不補 `.TW`、不去 `.TW`、不數字化、後綴須由上游明確處理、重複須揭露、非 str 不強轉；這是新契約的設計決策，不是對既有函式的更正，也不要求它們趨同。補充：`strip()` 修剪首尾 Unicode 空白（含 NBSP、全形空格、換行），內部空白仍 invalid；`duplicates` 每個代號只列一次、不含次數；`quote_readiness` 只檢查 `status`／`symbol` 非 None、不重驗格式，信任邊界在 `parse_ticker_input`。
 
 #### 四、守衛與驗證
 
