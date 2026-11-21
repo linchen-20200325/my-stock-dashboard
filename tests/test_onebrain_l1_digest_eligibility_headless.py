@@ -10,9 +10,10 @@ production 也沒有「tally.rows → Digest `holdings_rows`」的 adapter。**�
 
 本檔釘住的項目（標 `current_behavior` 者為現況快照、非規範；語意待裁示，不得被讀成「這是對的」）：
   (b)  Digest 層無法區分「未選定」與「空」：`holdings_rows=None` 與 `[]` 的規則式摘要逐字相同、不宣稱零持股；
-       L1 側 not_selected 全部計數 None、不讀 Sheet。（v1 限制）
+       唯一能區分的通道是 coverage `unkeyed_held_count`（None vs 0）；L1 側 not_selected 全部計數 None、不讀 Sheet。（v1 限制）
   (d)  無持股輸入時，即使站內列有行動碼且證據新鮮，Digest 不帶行動、摘要行動段只有「無法判定」類句子。
-  (e1) held 但無鍵的同代號兩列不去重：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（無 fail-loud 路徑）。
+  (e1) held 但無鍵的同代號兩列不去重：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（規範）；
+       「不 raise」是 current_behavior（無 fail-loud 路徑，待裁示）。
   (e2) current_behavior：持股列 NaN／+inf 張數在 Digest 與 coverage 完全不揭露（builder 不讀 lots）；
        揭露責任目前只在 L1 `kept_non_finite`（既有測試已釘，見報告）。
   (G3) current_behavior：選定組合名不存在 ⇒ status ok、raw 0、other_name_rows>0，可與空表區分（DEC-218 Q1 待裁示）。
@@ -133,7 +134,8 @@ def _check_none_vs_empty_summary_identical() -> None:
         assert w not in text, f"摘要不得宣稱零持股：{w!r}"
     # 持股兩段只說「資料不足，無法判定」
     for sec in ("buy_and_hold", "capital_gain"):
-        assert all("無法判定" in ln for ln in _section(s_empty, sec))
+        lines = _section(s_empty, sec)
+        assert lines and all("無法判定" in ln for ln in lines), (sec, lines)
 
 
 def test_b_digest_cannot_tell_not_selected_from_empty_v1_limitation():
@@ -141,6 +143,23 @@ def test_b_digest_cannot_tell_not_selected_from_empty_v1_limitation():
     holdings 為 UNAVAILABLE、不出現「0 檔／無持股／空倉」。L1 not_selected 的計數為 None（見下一個測試），
     所以任何未來 adapter 都不得把 not_selected 映成 `[]` 再宣稱「空」。"""
     _check_none_vs_empty_summary_identical()
+
+
+def test_b_coverage_is_the_only_channel_that_distinguishes_none_from_empty():
+    """Digest 本體與摘要無法區分 None／[]（上一個測試），**目前唯一能區分兩者的通道**是 `assemble_digest` 的側車
+    coverage：holdings_rows=None → `unkeyed_held_count is None`（未知）；[] → `== 0`（已知為零）。
+    （另：`holdings_non_mapping_rows` 同樣 None／0。）未來任何 adapter 都不得破壞這條通道 ——
+    例如把 L1 not_selected 映成 `[]` 會讓「未知」變成「已知 0」。"""
+    for station_kw in (dict(station_rows=station_rows(), station_evidence=fresh_station()), {}):
+        a_none = assemble_digest(generated_at=NOW, holdings_rows=None, **station_kw)
+        a_empty = assemble_digest(generated_at=NOW, holdings_rows=[], **station_kw)
+        assert a_none.coverage.unkeyed_held_count is None
+        assert a_empty.coverage.unkeyed_held_count == 0
+        assert a_none.coverage.holdings_non_mapping_rows is None
+        assert a_empty.coverage.holdings_non_mapping_rows == 0
+        assert a_none.digest.to_dict() == a_empty.digest.to_dict()           # Digest 本體仍相同
+        assert a_none.coverage.to_dict() != a_empty.coverage.to_dict()
+        assert a_none.coverage.is_complete is False and a_empty.coverage.is_complete is False
 
 
 def _check_l1_not_selected(monkeypatch) -> None:
@@ -228,9 +247,13 @@ def test_d_mutation_builder_fabricates_holdings_from_keys_turns_red(monkeypatch)
 
 
 # ═══ (e1) 無鍵重複代號不去重 ════════════════════════════════════════════════
+_E1_ROWS = [{"ticker": "2330", "held": True}, {"ticker": "2330", "held": True},
+            {"ticker": "2330", "held": False}]                         # 非持有列不計
+
+
 def _check_unkeyed_duplicates_not_deduped() -> None:
-    hr = [{"ticker": "2330", "held": True}, {"ticker": "2330", "held": True},
-          {"ticker": "2330", "held": False}]                         # 非持有列不計
+    """【fail-closed 規範】無鍵持股計數不得去重：同代號兩列 held ⇒ 2。"""
+    hr = [dict(r) for r in _E1_ROWS]
     d = build_decision_digest(generated_at=NOW, holdings_rows=hr, holding_keys=None)
     assert d.holdings.unkeyed_count == 2, d.holdings.unkeyed_count
     assert d.holdings.entries == ()
@@ -243,10 +266,17 @@ def _check_unkeyed_duplicates_not_deduped() -> None:
     assert (plan.unkeyed_held_count, plan.holdings_not_held_rows, plan.holdings_rows_total) == (2, 1, 3)
 
 
-def test_e1_unkeyed_duplicate_ticker_counted_twice_no_fail_loud_path():
-    """held=True、無 HoldingKey 的同一代號兩列：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（不是 1），
-    不 raise（現況：無鍵重複沒有 fail-loud 路徑；有鍵重複才由契約 duplicate_holding_key 擋）。"""
+def test_e1_current_behavior_unkeyed_duplicate_ticker_counted_twice_no_fail_loud_path():
+    """held=True、無 HoldingKey 的同一代號兩列，兩個斷言區塊性質不同：
+    (1) 【規範】計數不去重是 fail-closed 規範：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（不是 1）。
+    (2) 【current_behavior】「不 raise」是 v1 現況快照：無鍵重複目前沒有 fail-loud 路徑（有鍵重複才由契約
+        duplicate_holding_key 擋）。未來 fail-loud 修正落地時，此斷言應隨裁示更新（改成 pytest.raises），
+        不是 bug；但 (1) 的「不去重」不得因此被放寬。"""
+    # (1) 規範：計數不去重
     _check_unkeyed_duplicates_not_deduped()
+    # (2) current_behavior：不 raise（以下兩支呼叫目前正常回傳，即為斷言）
+    build_decision_digest(generated_at=NOW, holdings_rows=[dict(r) for r in _E1_ROWS], holding_keys=None)
+    assemble_digest(generated_at=NOW, holdings_rows=[dict(r) for r in _E1_ROWS], holding_keys=None)
 
 
 def test_e1_mutation_dedupe_unkeyed_turns_red(monkeypatch):
