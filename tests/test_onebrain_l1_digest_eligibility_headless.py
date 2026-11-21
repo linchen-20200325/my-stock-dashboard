@@ -279,31 +279,37 @@ _E1_ROWS = [{"ticker": "2330", "held": True}, {"ticker": "2330", "held": True},
 
 
 def _check_unkeyed_duplicates_not_deduped() -> None:
-    """【fail-closed 規範】無鍵持股計數不得去重：同代號兩列 held ⇒ 2。"""
+    """【fail-closed 規範】無鍵持股計數不得去重：同代號兩列 held ⇒ 2。
+
+    只走純計數路徑 `plan_action_selection`（與 builder 共用 `_keyed_holdings`，去重突變會同時反映在此）。
+    未來若無鍵重複改為 fail-loud（raise ValueError），本規範**不轉紅**：raise 亦可接受；只在成功回傳時斷言計數。
+    ⛔ 本 helper 不假設 builder／assemble「不 raise」—— 那是 current_behavior，只在 `test_e1_current_behavior_...` 內。"""
     hr = [dict(r) for r in _E1_ROWS]
-    d = build_decision_digest(generated_at=NOW, holdings_rows=hr, holding_keys=None)
-    assert d.holdings.unkeyed_count == 2, d.holdings.unkeyed_count
-    assert d.holdings.entries == ()
-    a = assemble_digest(generated_at=NOW, station_rows=[], station_evidence=fresh_station(),
-                        holdings_rows=hr, holding_keys=None)
-    assert a.digest.holdings.unkeyed_count == 2
-    assert a.coverage.unkeyed_held_count == 2
-    assert a.coverage.is_complete is False
-    plan = B.plan_action_selection(station_rows=[], station_stamp=STATION_STAMP, holdings_rows=hr)
-    assert (plan.unkeyed_held_count, plan.holdings_not_held_rows, plan.holdings_rows_total) == (2, 1, 3)
+    try:
+        plan = B.plan_action_selection(station_rows=[], station_stamp=STATION_STAMP, holdings_rows=hr)
+    except ValueError:
+        return                                                      # 未來 fail-loud：可接受（不是去重）
+    assert plan.unkeyed_held_count == 2, f"規範：無鍵重複不得去重，得到 {plan.unkeyed_held_count}"
+    assert (plan.holdings_not_held_rows, plan.holdings_rows_total) == (1, 3)
+
+
+def test_e1_norm_unkeyed_duplicate_ticker_not_deduped():
+    """規範（不得放寬）：held=True、無 HoldingKey 的同一代號兩列，計數為 2（不是 1）；raise 亦可接受。"""
+    _check_unkeyed_duplicates_not_deduped()
 
 
 def test_e1_current_behavior_unkeyed_duplicate_ticker_counted_twice_no_fail_loud_path():
-    """held=True、無 HoldingKey 的同一代號兩列，兩個斷言區塊性質不同：
-    (1) 【規範】計數不去重是 fail-closed 規範：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（不是 1）。
-    (2) 【current_behavior】「不 raise」是 v1 現況快照：無鍵重複目前沒有 fail-loud 路徑（有鍵重複才由契約
-        duplicate_holding_key 擋）。未來 fail-loud 修正落地時，此斷言應隨裁示更新（改成 pytest.raises），
-        不是 bug；但 (1) 的「不去重」不得因此被放寬。"""
-    # (1) 規範：計數不去重
-    _check_unkeyed_duplicates_not_deduped()
-    # (2) current_behavior：不 raise（以下兩支呼叫目前正常回傳，即為斷言）
-    build_decision_digest(generated_at=NOW, holdings_rows=[dict(r) for r in _E1_ROWS], holding_keys=None)
-    assemble_digest(generated_at=NOW, holdings_rows=[dict(r) for r in _E1_ROWS], holding_keys=None)
+    """【current_behavior】v1 現況快照：builder 與 `assemble_digest` 對無鍵重複**不 raise**（無 fail-loud 路徑；
+    有鍵重複才由契約 duplicate_holding_key 擋），且 Digest `unkeyed_count`／coverage `unkeyed_held_count` 為 2。
+    未來 fail-loud 修正落地時，此快照應隨裁示更新（改成 pytest.raises），不是 bug；
+    但規範「計數不去重」（`test_e1_norm_...`）不得因此被放寬。"""
+    hr = [dict(r) for r in _E1_ROWS]
+    d = build_decision_digest(generated_at=NOW, holdings_rows=hr, holding_keys=None)     # 不 raise（快照）
+    assert d.holdings.unkeyed_count == 2 and d.holdings.entries == ()
+    a = assemble_digest(generated_at=NOW, station_rows=[], station_evidence=fresh_station(),
+                        holdings_rows=hr, holding_keys=None)                             # 不 raise（快照）
+    assert a.digest.holdings.unkeyed_count == 2 and a.coverage.unkeyed_held_count == 2
+    assert a.coverage.is_complete is False
 
 
 def test_e1_mutation_dedupe_unkeyed_turns_red(monkeypatch):
