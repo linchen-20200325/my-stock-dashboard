@@ -11252,6 +11252,7 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 3. **整份輸出（含 formal_label）**仍 ⛔「減碼 1/2」「全出」（另補全形 1/2 變體）與新 action code；公開 `SystemActionState` 仍＝O1～O5、`day_basis` 只留內部。Aggregator 判定邏輯未改；3 個 strict xfail 與既有防線、突變全部保留。
 4. 驗收 (a)～(g) 補測：golden 新增 `add_three_lights`／`real_format_cut_premium`（字串由來源函式／常數組出）；突變 38→48（A-T5 3→8、A-T7 2→7）。作者環境驗證，非 QA PASS。
 
+單組撰寫。
 
 
 ### DEC-223｜B-UI2-LOOKUP-P1-INPUT-1：New UI2 標的頁「股票代號輸入」P1——功能開關預設關、只做輸入元件＋代號驗證＋灰色狀態、不接任何資料（客戶明示核准 A1 五項與 A3-lite：#1199 comment 7063828637，連同總管裁定 7063710260；方案見 7062580179；2026-11-21；只追加；非 QA PASS；單組撰寫）
@@ -11283,5 +11284,3 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 - 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；Streamlit 1.56.0 開關開同樣 13／13 pass、數值相同（手機 q4 298／321、q1 頂 336；桌機 q4 289／312、q1 頂 327）。量測視窗為手機 390×844、桌機 1440×900。
 - 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
 - 編號：本條原編 DEC-222；origin/main（#1255）已用 DEC-222（System Action Aggregator M-A2），故有意識改號為 DEC-223，不是漏刪；合併時若再被佔則順延。
-
-單組撰寫。

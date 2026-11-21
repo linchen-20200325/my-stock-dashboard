@@ -567,7 +567,7 @@ def _is_approved_secrets_use(n: ast.AST, parent: dict, relpath: str) -> bool:
         return False
     p = parent.get(n)
     if isinstance(p, ast.Subscript) and p.value is n:
-        return isinstance(p.slice, ast.Constant) and p.slice.value == key
+        return isinstance(p.ctx, ast.Load) and isinstance(p.slice, ast.Constant) and p.slice.value == key   # 只放行讀取；Store／Del 仍擋
     if isinstance(p, ast.Compare) and n in p.comparators and len(p.ops) == 1 and isinstance(p.ops[0], ast.In):
         return isinstance(p.left, ast.Constant) and p.left.value == key
     return False
@@ -1121,6 +1121,8 @@ def test_secrets_exception_is_exactly_one_precise_entry():
     ("x = st.secrets.get('ui2_lookup_input')\n", "app_ui2.py"),
     ("x = st.secrets['ui2_lookup_input']['y']\ny = st.secrets['a']\n", "app_ui2.py"),
     ("import gspread\n", "app_ui2.py"), ("tok = s.access_token\n", "app_ui2.py"),
+    ('st.secrets["ui2_lookup_input"] = "1"\n', "app_ui2.py"),          # Store：寫入同 key 仍擋
+    ('del st.secrets["ui2_lookup_input"]\n', "app_ui2.py"),              # Del：刪除同 key 仍擋
 ])
 def test_secrets_exception_has_teeth(src, rel):
     assert check_no_oauth_or_sheet(src, rel), f"沒抓到：{src!r} @ {rel}"

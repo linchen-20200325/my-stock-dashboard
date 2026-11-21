@@ -294,3 +294,43 @@ def test_mutant_validates_without_submit(monkeypatch):
     import streamlit as st
     monkeypatch.setattr(st, "form_submit_button", lambda *a, **k: True)
     assert _viol_unsubmitted_parse(monkeypatch)
+
+
+# ── shell.run 只認 `lookup_input is True`（非 bool 的 truthy 值一律走原 render）─────────
+def _run_with_flag(monkeypatch, flag) -> dict:
+    import src.ui2.shell.app as SH
+    calls = {"render": 0, "with_lookup": 0}
+    real_render = TG.render
+    monkeypatch.setitem(__import__("src.ui2.views", fromlist=["VIEWS"]).VIEWS, P4_TARGET,
+                        lambda vm: (calls.__setitem__("render", calls["render"] + 1), real_render(vm))[1])
+    real_with = SH.render_with_lookup
+    monkeypatch.setattr(SH, "render_with_lookup",
+                        lambda vm: (calls.__setitem__("with_lookup", calls["with_lookup"] + 1), real_with(vm))[1])
+    holder = {}
+
+    def script():
+        import streamlit as st
+        from src.ui2.shell.app import run
+        st.session_state["ui2_feed"] = "fake"
+        st.session_state["ui2_page"] = "p4_target"
+        run(lookup_input=st.session_state.get("_flag_for_test"))
+    at = AppTest.from_function(script, default_timeout=60)
+    at.session_state["_flag_for_test"] = flag
+    at.run(timeout=60)
+    assert not at.exception
+    holder.update(calls)
+    return holder
+
+
+@pytest.mark.parametrize("flag,expect_lookup", [(True, True), ("0", False), ("1", False), (1, False), ("true", False),
+                                                (["x"], False), (False, False), (None, False)])
+def test_shell_only_exact_true_enables_lookup(monkeypatch, flag, expect_lookup):
+    c = _run_with_flag(monkeypatch, flag)
+    assert (c["with_lookup"] == 1 and c["render"] == 0) if expect_lookup else (c["with_lookup"] == 0 and c["render"] == 1)
+
+
+def test_mutant_truthy_instead_of_is_true_is_caught():
+    """把 shell 的 `lookup_input is True` 改成 truthy：須使上列測試轉紅。於 scratchpad 複本以文字突變驗證（不入庫）；
+    這裡以純函式級確認兩種判定在非 bool truthy 值上確實分歧——即突變可被上列參數化案例（"1"、1、"true"、["x"]）分辨。"""
+    for v in ("0", "1", 1, "true", ["x"]):
+        assert bool(v) is True and (v is True) is False
