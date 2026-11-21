@@ -77,6 +77,14 @@ def test_stale_shows_last_close():
     v = bq(is_stale=True)
     assert v.state is V.STALE and v.value_text == "188.55" and v.tone is ChipTone.WARNING
     assert v.chip_text == "資料過期" and "仍顯示最後收盤" in v.notice_text
+    # 同一筆過期 0050：身分、兩個日期、來源與 fact 皆與輸入一致
+    assert v.symbol == "0050" and v.fact.symbol == "0050"
+    assert v.trade_date_text == "交易日 2026-11-20"
+    assert v.fetched_at_text == "抓取時間 2026-11-21T09:30:00+08:00"
+    assert "2026-11-21" not in v.trade_date_text and "2026-11-20" not in v.fetched_at_text
+    assert v.source_text == "來源 合成來源"
+    assert (v.fact.trade_date, v.fact.fetched_at, v.fact.source) == (
+        GOOD["trade_date"], GOOD["fetched_at"], GOOD["source"])
     # 過期分支不得以抓取日覆寫交易日；兩個日期各自出現且不同
     v2 = bq("00980A", is_stale=True, trade_date="2026-11-12", fetched_at="2026-11-21T09:30:00+08:00")
     assert v2.symbol == "00980A" and v2.fact.symbol == "00980A"
