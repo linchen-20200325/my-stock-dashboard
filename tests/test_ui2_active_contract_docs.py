@@ -701,7 +701,9 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
 #: 由單一 `⬜ 尚未提供` 空槽欄位改為 8 欄固定靜態節錄（示意聲明＋節錄聲明＋6 句 ⬜ 缺值句）；其餘 69 個 key（含全部 Real）與 p4_me 其餘區塊逐值不變。舊值 e39cd203…e7a5。
 #: DEC-214（B-UI2-STALE-COPY-1，2026-11-20，總管方案 B 授權）重生：僅 `real/p4_market/stale` **1 個 key**、2 行：台股卡的「有 detail」旗標 true→false、
 #: detail 雜湊→null（L1 `stale_reason` 不再原樣當畫面 detail；chip「⚠ 過期 N 天」、資料日、來源逐值不變）。其餘 86 個 key 逐欄不變。舊值 235770bb…c7df0。
-_P3_BASELINE_SHA256 = "d49a298fbb70cd9efbab7f3681b0e9a204d94d3e5e342b50036d6f73c9a1fd31"
+#: DEC-220（B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1，2026-11-21，#1199 comment 7056444741）重生：僅 `real/p4_target/*` **9 個 key** 的「是否需要行動」detail 雜湊
+#: （「動作權威＝💼 持股」→「目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放」）；每 key 僅 1 行，其餘 78 個 key（含全部 FAKE）逐欄不變。舊值 d49a298f…1fd31。
+_P3_BASELINE_SHA256 = "e01ef68a831b743d260b422210360f1682960aca49d5aac7d34faf88c6800c6e"
 
 
 def test_p3_evidence_baseline_file_is_pinned_by_sha256():
