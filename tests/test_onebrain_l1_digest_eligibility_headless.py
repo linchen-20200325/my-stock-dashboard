@@ -9,7 +9,7 @@ production 也沒有「tally.rows → Digest `holdings_rows`」的 adapter。**�
 兩側各自用既有公開純函式＋合成資料測，絕不在測試裡寫轉換膠水（那等於發明 production 不存在的路徑）。
 
 本檔釘住的項目（標 `current_behavior` 者為現況快照、非規範；語意待裁示，不得被讀成「這是對的」）：
-  (b)  Digest 層無法區分「未選定」與「空」：`holdings_rows=None` 與 `[]` 的規則式摘要逐字相同、不宣稱零持股；
+  (b)  規範：`holdings_rows=None` 與 `[]` 都不宣稱零持股；current_behavior：Digest／摘要對兩者相同（v1 限制）；
        唯一能區分的通道是 coverage `unkeyed_held_count`（None vs 0）；L1 側 not_selected 全部計數 None、不讀 Sheet。（v1 限制）
   (d)  無持股輸入時，即使站內列有行動碼且證據新鮮，Digest 不帶行動、摘要行動段只有「無法判定」類句子。
   (e1) held 但無鍵的同代號兩列不去重：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（規範）；
@@ -20,7 +20,7 @@ production 也沒有「tally.rows → Digest `holdings_rows`」的 adapter。**�
   (G4) 未登入 fail-closed：`LoginRequiredError` 原樣上拋，不轉成 tally 狀態、不回任何計數 0。
 (b)(d)(e1)(G4) 各附 monkeypatch 突變測試（teeth）：臨時改壞行為，核心斷言必須轉紅；不留任何 production 修改。
 
-⚠️ 單組作者自測，未經獨立 QA。
+⚠️ 作者自測；獨立 QA 見 PR #1251。
 """
 from __future__ import annotations
 
@@ -117,32 +117,53 @@ def _assert_all_counts_unknown(t) -> None:
         assert getattr(t, f) is None, f"{f} 必須是 None（UNKNOWN），得到 {getattr(t, f)!r}"
 
 
-# ═══ (b) 未選定 vs 空：Digest 層無法區分（v1 限制）════════════════════════════
-def _check_none_vs_empty_summary_identical() -> None:
-    d_none = build_decision_digest(generated_at=NOW, holdings_rows=None)
-    d_empty = build_decision_digest(generated_at=NOW, holdings_rows=[])
-    for d in (d_none, d_empty):
-        assert d.holdings.availability is Availability.UNAVAILABLE
-        assert d.holdings.missing_reason is MissingReason.NO_INPUT
-        assert d.holdings.entries == () and d.holdings.unkeyed_count == 0
+# ═══ (b) 未選定 vs 空：規範斷言（不得放寬）與 current_behavior 快照（v1 限制）分開 ═════════════
+def _b_digests():
+    return (build_decision_digest(generated_at=NOW, holdings_rows=None),
+            build_decision_digest(generated_at=NOW, holdings_rows=[]))
+
+
+def _check_none_and_empty_norms() -> None:
+    """【規範】None 與 [] 都不得宣稱零持股：holdings UNAVAILABLE、持股兩段非空且只說「無法判定」、
+    摘要不出現「0 檔／無持股／空倉」等字樣。斷言訊息帶「規範」字樣，供突變測試確認轉紅點。"""
+    for label, d in zip(("None", "[]"), _b_digests()):
+        assert d.holdings.availability is Availability.UNAVAILABLE, \
+            f"規範：holdings_rows={label} 時 holdings 必須 UNAVAILABLE，得到 {d.holdings.availability}"
+        assert d.holdings.entries == (), f"規範：holdings_rows={label} 不得有持股 entry"
         assert assess_digest(d).state is not SummaryState.INVALID
-    assert d_none.to_dict() == d_empty.to_dict(), "Digest 本身也無從區分 None 與 []"
-    s_none, s_empty = build_rule_summary(d_none), build_rule_summary(d_empty)
-    assert s_none.lines == s_empty.lines, "None 與 [] 的摘要必須逐字相同（v1 無法區分未選定與空）"
-    text = "\n".join(_all_lines(s_empty))
-    for w in ZERO_HOLDING_CLAIMS:
-        assert w not in text, f"摘要不得宣稱零持股：{w!r}"
-    # 持股兩段只說「資料不足，無法判定」
-    for sec in ("buy_and_hold", "capital_gain"):
-        lines = _section(s_empty, sec)
-        assert lines and all("無法判定" in ln for ln in lines), (sec, lines)
+        s = build_rule_summary(d)
+        text = "\n".join(_all_lines(s))
+        for w in ZERO_HOLDING_CLAIMS:
+            assert w not in text, f"規範：摘要不得宣稱零持股：{w!r}"
+        for sec in ("buy_and_hold", "capital_gain"):                  # 持股兩段只說「資料不足，無法判定」
+            lines = _section(s, sec)
+            assert lines and all("無法判定" in ln for ln in lines), f"規範：{sec} 段須非空且只說無法判定：{lines}"
 
 
-def test_b_digest_cannot_tell_not_selected_from_empty_v1_limitation():
-    """v1 限制：Digest 只有 `holdings_rows`，None（未選定／沒給）與 []（給了但空）產出同一份摘要，
-    holdings 為 UNAVAILABLE、不出現「0 檔／無持股／空倉」。L1 not_selected 的計數為 None（見下一個測試），
-    所以任何未來 adapter 都不得把 not_selected 映成 `[]` 再宣稱「空」。"""
-    _check_none_vs_empty_summary_identical()
+def _check_current_behavior_none_equals_empty_snapshot() -> None:
+    """【current_behavior 快照】v1 Digest 本體與摘要對 None／[] 產出相同結果。"""
+    d_none, d_empty = _b_digests()
+    for d in (d_none, d_empty):
+        assert d.holdings.missing_reason is MissingReason.NO_INPUT
+        # 此 0 為 v1 Digest 欄位凍結值（None 輸入時也是 0），代表「未知」，不是「未知＝0」規範；
+        # 真正的未知訊號在 holdings availability（UNAVAILABLE）與 coverage `unkeyed_held_count is None`。
+        assert d.holdings.unkeyed_count == 0
+    assert d_none.to_dict() == d_empty.to_dict()
+    assert build_rule_summary(d_none).lines == build_rule_summary(d_empty).lines
+
+
+def test_b_norm_none_and_empty_never_claim_zero_holdings():
+    """規範（不得放寬）：holdings_rows=None（未選定／沒給）與 []（給了但空）都不得被說成零持股／空倉。
+    L1 not_selected 的計數為 None（見 `test_b_l1_not_selected_...`），任何未來 adapter 都不得把 not_selected
+    映成 `[]` 再宣稱「空」。"""
+    _check_none_and_empty_norms()
+
+
+def test_b_current_behavior_digest_and_summary_identical_for_none_and_empty():
+    """current_behavior（v1 限制）：Digest to_dict 與規則式摘要對 None 與 [] 相同 —— Digest 層無法區分未選定與空
+    （唯一能區分的通道見 `test_b_coverage_is_the_only_channel_...`）。
+    未來若正當區分 None 與 []，此快照斷言應隨裁示更新，但規範斷言（`test_b_norm_...`）不得放寬。"""
+    _check_current_behavior_none_equals_empty_snapshot()
 
 
 def test_b_coverage_is_the_only_channel_that_distinguishes_none_from_empty():
@@ -181,19 +202,21 @@ def test_b_l1_not_selected_all_counts_none_and_never_reads_sheet(monkeypatch):
     _check_l1_not_selected(monkeypatch)
 
 
-def test_b_mutation_builder_distinguishes_empty_turns_red(monkeypatch):
-    """突變：讓 builder 對 [] 給不同的缺值原因（模擬「把空當成另一種已知狀態」）→ 逐字相同的斷言必須轉紅。"""
+def test_b_mutation_builder_claims_zero_holdings_for_empty_turns_red(monkeypatch):
+    """突變：builder 對 [] 宣稱 holdings AVAILABLE（＝「已知、零持股」；以 object.__setattr__ 繞過 frozen 與
+    HoldingsSection 建構驗證、並關掉 assert_strict 契約閘門，模擬一個把空當成可得狀態的實作）→ 規範斷言必須轉紅（以斷言訊息「規範」確認轉紅點）。"""
     orig = B._holdings_and_actions
 
     def _mut(holdings_rows, holding_keys, station_rows, station_stamp):
         h, a = orig(holdings_rows, holding_keys, station_rows, station_stamp)
         if holdings_rows is not None and len(holdings_rows) == 0:
-            h = B.HoldingsSection(availability=Availability.UNAVAILABLE, entries=(),
-                                  missing_reason=MissingReason.NOT_APPLICABLE, unkeyed_count=0)
+            object.__setattr__(h, "availability", Availability.AVAILABLE)   # 繞過 frozen＋建構驗證（模擬竄改）
+            object.__setattr__(h, "missing_reason", None)
         return h, a
     monkeypatch.setattr(B, "_holdings_and_actions", _mut)
-    with pytest.raises(AssertionError):
-        _check_none_vs_empty_summary_identical()
+    monkeypatch.setattr(B, "assert_strict", lambda _d: None)
+    with pytest.raises(AssertionError, match="規範：holdings_rows=\\[\\] 時 holdings 必須 UNAVAILABLE"):
+        _check_none_and_empty_norms()
 
 
 def test_b_mutation_l1_not_selected_returns_zero_counts_turns_red(monkeypatch):
@@ -330,7 +353,8 @@ def test_e2_current_behavior_non_finite_lots_not_disclosed_by_digest_or_coverage
 def test_g3_current_behavior_selected_name_absent_is_ok_zero_raw_with_other_name_rows(monkeypatch):
     """current_behavior（語意待裁示：DEC-218 Q1）：Sheet 只有其他組合名的列時，`load_portfolio_tallied(name)`
     回 status ok、raw 0、kept 0、other_name_rows>0；與「空表」「只有表頭」可由 other_name_rows／sheet_data_rows 區分。
-    ⛔ 本測試**不**斷言它代表「無持股」—— 名稱打錯／組合被改名與真的空倉在此都長這樣。"""
+    ⛔ 本測試**不**斷言它代表「無持股」—— 名稱打錯／組合被改名與真的空倉在此都長這樣。
+    轉紅＝行為改變，須同步更新快照與裁示紀錄（DEC-218 Q1），不得直接改斷言讓它過。"""
     ws = _install_sheet(monkeypatch, _sheet(["別組", "2603", "1", "1", "t"], ["別組", "2618", "2", "3", "t"]))
     t = GSP.load_portfolio_tallied("核心", sheet_id="S")
     assert ws.reads == 1
@@ -406,7 +430,8 @@ def test_g4_mutation_swallowing_login_error_turns_red(monkeypatch, swallow_as):
 
 def test_mutation_harness_baselines_are_green(monkeypatch):
     """突變 harness 對原版必須是綠的（否則轉紅不代表抓到突變）。"""
-    _check_none_vs_empty_summary_identical()
+    _check_none_and_empty_norms()
+    _check_current_behavior_none_equals_empty_snapshot()
     _check_no_holdings_no_action_text()
     _check_unkeyed_duplicates_not_deduped()
     _check_login_required_propagates(monkeypatch)
