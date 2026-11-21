@@ -95,7 +95,8 @@ def contract_expected_holdings_input(source) -> str:
     - status ok 但 rows／任何計數為 None（計數未知）→ None（§B1，fail-closed）。
     - ok 且 raw == 0（組合不存在／空表）→ 待決（§C-1；候選 None 或 []，兩者都須滿足 §B1 的安全性質）。
     - 其餘（raw > 0，含 kept == 0、dropped > 0、重複、非有限值）→ list（依 §B3 手寫：只含屬持有全集的列——
-      NaN／+inf 列為 EX 不入（§C-4）、空白列為 IN-U 須入（§C-8），**不是** L1 rows 原樣；揭露缺口見 §C）。
+      kept 中 NaN／+inf 列為 EX 不入（§C-4）；`blank_value` 丟列為 IN-U 須入（§C-8）；其餘丟列為 EX 不入。
+      **不是**「kept 列＝Digest 輸入」；揭露缺口見 §C）。
     """
     if isinstance(source, BaseException):
         return EXPECT_NONE
@@ -391,8 +392,8 @@ def test_norm_held_must_be_explicit_bool(bad):
 ], ids=["l1_clean", "l1_dropped_2"])
 def test_gap_contract_fed_input_without_independent_universe_must_be_incomplete(recs):
     t = GSP.tally_portfolio_records(recs, keep_blank=False)
-    assert contract_expected_holdings_input(t) == EXPECT_LIST and t.kept == 2
-    a = assemble_digest(**full_kwargs(held("0050", "0056")))          # §B3 手寫：kept 兩列
+    assert contract_expected_holdings_input(t) == EXPECT_LIST and t.kept == 2 and t.dropped["blank_value"] == 0
+    a = assemble_digest(**full_kwargs(held("0050", "0056")))          # §B3 手寫：屬持有全集的兩列（丟列皆 EX，無 blank_value）
     assert a.coverage.is_complete is False
 
 
@@ -421,7 +422,7 @@ def test_gap_non_finite_source_value_disclosed_downstream():
 
 @pytest.mark.xfail(strict=True, reason=(
     "DEC-218 第 5 點（重複代號須揭露列數與代號）＋契約 §C-3：無鍵重複列只計 2，與兩個不同代號逐字相同，"
-    "coverage 無持有側重複欄位；聚合粒度（列 vs 部位）待技術契約＋客戶裁示。"))
+    "coverage 無持有側重複欄位；聚合粒度（列 vs 部位）待明確技術契約（DEC-218 第 5 點）。"))
 def test_gap_duplicate_holding_rows_disclosed():
     def run(t1, t2):
         return assemble_digest(**full_kwargs(held("0050", t1, t2), station_tickers=["0050"],
