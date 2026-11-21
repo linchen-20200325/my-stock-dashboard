@@ -556,11 +556,32 @@ _OAUTH_SHEET_BANNED = ("oauth", "gsheet", "gspread", "google_auth", "googleapicl
                        "get_finmind_token", "append_row", "worksheet", "requests")
 
 
-def check_no_oauth_or_sheet(source: str) -> list[str]:
-    """👤 我的頁：⛔ 真 Google OAuth／Sheet 讀寫／secrets。檢查 import、識別字與屬性鏈（AST；字串字面值不算）。"""
+#: B-UI2-LOOKUP-P1-INPUT-1（客戶核准 A1／A3-lite；#1199 comment 7062580179）：唯一精確例外——只有 `app_ui2.py`，只有
+#: `"ui2_lookup_input" in st.secrets` 與 `st.secrets["ui2_lookup_input"]` 兩種形式（功能開關讀取）。⛔ 其他檔案、其他 key、其他用法皆不在例外內。
+SECRETS_EXACT_EXCEPTIONS: dict[str, str] = {"app_ui2.py": "ui2_lookup_input"}
+
+
+def _is_approved_secrets_use(n: ast.AST, parent: dict, relpath: str) -> bool:
+    key = SECRETS_EXACT_EXCEPTIONS.get(relpath)
+    if key is None or not (isinstance(n, ast.Attribute) and ast.unparse(n) == "st.secrets"):
+        return False
+    p = parent.get(n)
+    if isinstance(p, ast.Subscript) and p.value is n:
+        return isinstance(p.slice, ast.Constant) and p.slice.value == key
+    if isinstance(p, ast.Compare) and n in p.comparators and len(p.ops) == 1 and isinstance(p.ops[0], ast.In):
+        return isinstance(p.left, ast.Constant) and p.left.value == key
+    return False
+
+
+def check_no_oauth_or_sheet(source: str, relpath: str = "") -> list[str]:
+    """👤 我的頁：⛔ 真 Google OAuth／Sheet 讀寫／secrets。檢查 import、識別字與屬性鏈（AST；字串字面值不算）。
+    唯一精確例外見 `SECRETS_EXACT_EXCEPTIONS`（預設 `relpath=""`＝無例外）。"""
     bad = []
     tree = ast.parse(source)
+    parent = {c: n for n in ast.walk(tree) for c in ast.iter_child_nodes(n)}
     for n in ast.walk(tree):
+        if _is_approved_secrets_use(n, parent, relpath):
+            continue
         names: list[str] = []
         if isinstance(n, ast.Import):
             names += [a.name for a in n.names]
@@ -583,7 +604,7 @@ def check_no_oauth_or_sheet(source: str) -> list[str]:
 
 @pytest.mark.parametrize("path", UI2_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
 def test_ui2_has_no_oauth_sheet_or_secrets_call(path):
-    assert check_no_oauth_or_sheet(path.read_text(encoding="utf-8")) == []
+    assert check_no_oauth_or_sheet(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()) == []
 
 
 @pytest.mark.parametrize("injected", [
@@ -1081,3 +1102,25 @@ def test_w4_context_sits_after_search_and_summary_in_real_page(scenario):
         return
     assert 'class="ui2-snapshot"' in blob
     assert blob.index('class="ui2-qrow ui2-ctxline" data-ui2-q="ctx"') < blob.index('class="ui2-snapshot"')
+
+
+_SECRETS_OK = 'x = "ui2_lookup_input" in st.secrets\ny = st.secrets["ui2_lookup_input"]\n'
+
+
+def test_secrets_exception_is_exactly_one_precise_entry():
+    assert SECRETS_EXACT_EXCEPTIONS == {"app_ui2.py": "ui2_lookup_input"}
+    assert check_no_oauth_or_sheet(_SECRETS_OK, "app_ui2.py") == []
+
+
+@pytest.mark.parametrize("src,rel", [
+    (_SECRETS_OK, ""), (_SECRETS_OK, "src/ui2/views/target.py"), (_SECRETS_OK, "src/ui2/shell/app.py"),
+    ("x = st.secrets['other_key']\n", "app_ui2.py"),
+    ("x = 'other' in st.secrets\n", "app_ui2.py"),
+    ("x = st.secrets\n", "app_ui2.py"),
+    ("x = dict(st.secrets)\n", "app_ui2.py"),
+    ("x = st.secrets.get('ui2_lookup_input')\n", "app_ui2.py"),
+    ("x = st.secrets['ui2_lookup_input']['y']\ny = st.secrets['a']\n", "app_ui2.py"),
+    ("import gspread\n", "app_ui2.py"), ("tok = s.access_token\n", "app_ui2.py"),
+])
+def test_secrets_exception_has_teeth(src, rel):
+    assert check_no_oauth_or_sheet(src, rel), f"沒抓到：{src!r} @ {rel}"

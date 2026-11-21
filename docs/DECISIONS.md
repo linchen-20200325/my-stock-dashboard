@@ -11210,3 +11210,36 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 - 編號：origin/main 已用至 DEC-220（grep origin/main 無 DEC-221）；合併時若被佔則順延。
 
 單組撰寫。
+
+
+### DEC-222｜B-UI2-LOOKUP-P1-INPUT-1：New UI2 標的頁「股票代號輸入」P1——功能開關預設關、只做輸入元件＋代號驗證＋灰色狀態、不接任何資料（客戶核准 A1 五項與 A3-lite；#1199 comment 7062580179 方案與本輪核准；2026-11-21；只追加；非 QA PASS；單組撰寫）
+
+#### 一、授權與範圍
+
+依客戶核准（#1199 comment 7062580179 的方案與本輪核准：A1 五項＋A3-lite），只做標的頁「輸入元件＋代號驗證＋灰色狀態」。**不接任何資料**、不產生 OK／STALE／MISSING／FETCH_FAILED 態、不新增 L3 service、不動 `real_feed`／`real_canonical` 的資料欄位與 G2F 白名單、不判持有、不寫入持股／Sheet、不動 FAKE。
+
+A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）：輸入框置於標的頁頂端（取代現行純 HTML disabled searchbox 位置，P1 實作）；抓取時間屬次要列（P1 無行情，不顯示）；過期以 ⚠ chip 沿用 7 日門檻；價格顯示範圍 0.005～1,000,000；過期底色沿用既有警示色（後三項屬 P2）。
+
+#### 二、機制
+
+- **功能開關預設關**：讀取位置在 `app_ui2.py`（L6）——`st.secrets` 鍵 `ui2_lookup_input` 或環境變數 `UI2_LOOKUP_INPUT`；值 `'1'`／`'true'`（大小寫不拘）才開（判讀純函式 `src/ui2/shell/app.py::lookup_flag_on`），其餘一律關；任何讀取失敗＝該來源視為不存在（不會因失敗而開啟）。⛔ 不使用 `?ui2_dev`（它不是授權）。以參數注入 `shell/app.py::run(lookup_input=)` → `views/target.py::render(vm, *, lookup_input=)`；L5 自己不讀 secrets／環境。
+- **開關關**：`run()` 對 P4_TARGET 仍呼叫 `VIEWS[page](vm)`、`target.render` 走原 `search_html` 路徑，不呼叫任何新函式；以改動前擷取的 AppTest golden（`tests/fixtures/ui2_lookup_p1_flag_off_golden.json`，FAKE 四場景×兩模式）逐元素比對。
+- **開關開**：`st.form`（key `ui2_lookup_form`）內 `st.text_input`＋`st.form_submit_button("查詢")` 置於模式切換之下、取代 disabled searchbox 的位置。僅在 submit 時以 `target_selection.parse_ticker_input`（#1250）驗證一次、經 `quote_view.build_quote_view`（#1253，`loaded=False`）得到狀態：無效／空→SELECTION_INVALID（灰，非紅）；有效→顯示代號（原樣，0050 保留前導零）＋NOT_LOADED 灰色說明；未提交→NOT_LOADED 灰色說明。狀態列 `html.py::lookup_status_html` chip／說明逐字取自 `quote_view.CHIP_TEXT`／`NOTICE_TEXT`；只接受 NOT_LOADED／SELECTION_INVALID（其餘 fail closed 為 NOT_LOADED）；同時是 q4 版面錨點。新字串僅兩個輸入標籤（`shared/ui2_contract/text.py`：`LOOKUP_INPUT_LABEL`＝股票代號、`LOOKUP_SUBMIT_LABEL`＝查詢）。『加入觀察』仍 disabled、isolation_note 維持（未動）。
+- **session key**：`ui2_lookup_text`（widget 字串）、`ui2_lookup_state`（`QuoteViewState.value` 字串）、`ui2_lookup_symbol`（已解析代號字串）；皆 `ui2_` 前綴、只存字串，不流入持股／strategy／Sheet。
+
+#### 三、守衛調整（唯一一處，最小）
+
+`tests/test_ui2_batch3.py::check_no_oauth_or_sheet` 原禁止 UI2 檔出現任何 `secrets`。為讓 `app_ui2.py` 讀功能開關，新增 `SECRETS_EXACT_EXCEPTIONS = {"app_ui2.py": "ui2_lookup_input"}`：只放行 `app_ui2.py` 內 `"ui2_lookup_input" in st.secrets` 與 `st.secrets["ui2_lookup_input"]` 兩種形式；其他檔案、其他 key、`dict(st.secrets)`、`.get()`、裸 `st.secrets` 皆仍被擋（teeth 測試 11 例）。`G4B_EXACT_EXCEPTIONS`、G2／G4／G4b／G9、c3、DEC-124 capability marker 守衛**一字未改**且全綠。
+
+#### 四、測試與存證
+
+新檔 `tests/test_ui2_lookup_p1.py`：開關判讀（'1'、'true'、'TRUE' 開；空、'0'、'false'、亂字、非字串、secrets 讀取例外＝關）、flag-off golden、flag-on 輸入／灰色狀態／無效輸入（空、'50'、'2330.TW'、全形、過長…）／有效 0050、00980A 原樣顯示、未提交不呼叫 parse、不產生任何資料態、session key 紀律，以及四個突變（拿掉 flag gate、無效顯示紅色、0050 數字化、未提交也驗證）皆轉紅。viewport 存證（DEC-137 `source_hash` 因 `src/ui2/**`、`app_ui2.py` 變動而過期）已重產，見回報與 BACKLOG。
+
+#### 五、未解（NOT VERIFIED）與明確不做
+
+- **使用者仍不能查股**：本批沒有任何資料路徑；P2（行情顯示）仍待 A2／A3／A4。不解除任何 Gate（I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、跨頁 production wiring 皆不變）。
+- 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；1.56 未量測開關開。
+- 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
+- 編號：origin/main 範圍內 DEC-221 為最大；合併時若被佔則順延。
+
+單組撰寫。
