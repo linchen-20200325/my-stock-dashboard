@@ -34,13 +34,13 @@
 | 4 | 計數未知（status ok 但 `rows` 或任何計數為 None） | **None**（fail-closed；§B1） | 同上 | 同上 | `test_norm_unknown_l1_states_map_to_none_not_empty_list` |
 | 5 | ok＋選定組合不存在（`raw==0`、`other_name_rows>0`） | **待決**（候選 None 或 []；§C-1） | 兩個候選皆 `is_complete=False` | 兩個候選皆不得宣稱零持股 | `test_norm_pending_raw_zero_both_candidates_never_claim_zero_holdings`、`test_current_behavior_c1_…` |
 | 6 | ok＋空表／只有表頭（`raw==0`、`other_name_rows==0`） | **待決**（同 #5；L1 無法與 #5 在「選定組合是否存在」上區分） | 同 #5 | 同 #5 | 同 #5 |
-| 7 | ok＋有持有列且可評估（有 `HoldingKey`） | **list**：依 §B3 手寫，一列一筆、`held=True` | 有鍵列 → entries（輸入順序）；但缺獨立母體 → 依契約須 incomplete（**現況可能 True**，§C-6） | 行動句逐字展開 | `test_norm_evaluable_rows_one_row_one_entry`、`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete` |
+| 7 | ok＋有持有列且可評估（有 `HoldingKey`） | **list**：依 §B3 手寫（只取屬持有全集的列、`held=True`；計數單位未裁示） | 有鍵列 → entries（輸入順序）；但缺獨立母體 → 依契約須 incomplete（**現況可能 True**，§C-6） | 行動句逐字展開 | `test_norm_no_row_lost_and_duplicates_not_silently_absorbed`、`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete` |
 | 8 | ok＋有持有列但無法評估（無 `HoldingKey`） | **list**（該列照樣一筆 `held=True`，不得丟） | `unkeyed_held_count=n`、`is_complete=False`；**只有計數，沒有部位與原因**（§C-5） | 「⬜ 另有 n 檔持股缺少投資組合鍵…」 | `test_norm_unevaluable_rows_retained_with_count`、`test_gap_unevaluable_row_identity_and_reason_preserved` |
 | 9 | ok＋L1 丟列（`dropped>0`，含 `kept==0`） | **list**（只含 kept 列）；丟棄列的數量與原因必須往下游揭露（§C-2） | **現況無通道**：coverage 看不到 L1 dropped（§C-2、§C-6） | 現況不揭露 | `test_norm_ok_with_rows_maps_to_list_including_dropped_dup_nonfinite`、`test_gap_contract_fed_input_…[l1_dropped_2]` |
-| 10 | ok＋重複列（`duplicate_tickers` 非空） | **list**（不去重、不合併；§B3） | 有鍵重複 → `ValueError(duplicate_holding_key)`；無鍵重複 → 計 2、無重複揭露（§C-3） | 無鍵重複寫成「另有 2 檔」 | `test_current_behavior_c3_…`、`test_gap_duplicate_holding_rows_disclosed` |
+| 10 | ok＋重複列（`duplicate_tickers` 非空） | **list**（不得默默去重、不得重複灌水；計數單位列 vs 代號未裁示；§B3、§C-3） | 有鍵重複 → `ValueError(duplicate_holding_key)`；無鍵重複 → 計 2、無重複揭露（§C-3） | 無鍵重複寫成「另有 2 檔」 | `test_norm_no_row_lost_and_duplicates_not_silently_absorbed`（只要求重複可觀測）、`test_current_behavior_c3_…`／`c3b_…`（列單位快照）、`test_gap_duplicate_holding_rows_disclosed` |
 | 11 | ok＋非有限值（NaN／+inf 保留在 rows；-inf 已歸 `non_finite` 丟棄） | **list**（L1 現況保留）；但歸類已定為 EX（DEC-218 §一 第 5 點；雙母體表 §2），差距見 §C-4 | 現況與乾淨值逐字相同 | 現況與乾淨值逐字相同 | `test_current_behavior_c4_…`、`test_gap_non_finite_source_value_disclosed_downstream` |
-| 12 | ok＋張數／均價空白（預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None） | **待決**（§C-8；DEC-218 第 1 點要求 IN-U 保留） | 保留時與乾淨值逐字相同（無 IN-U 標記） | 同左 | `test_current_behavior_c8_…` |
-| 13 | 任一 ok 狀態的來源時點 | tally 與 `holdings_rows` 都不帶 `fetched_at`／`as_of`（§C-10） | 持有側無時點；`SegmentEvidence` 的 holdings 段 as_of 取自站內證據戳 | 無持股資料日 | 文件登記（本批無對應測試） |
+| 12 | ok＋張數／均價空白（預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None） | 「保留為 IN-U」**已裁示**（DEC-218 §一 第 1 點）⇒ 應在 list 內；待決只剩 IN-U 標示方式與 L1 預設模式會丟的差距（§C-8） | 保留時與乾淨值逐字相同（無 IN-U 標記） | 同左 | `test_current_behavior_c8_…` |
+| 13 | 任一 ok 狀態的來源時點 | tally 與 `holdings_rows` 都不帶 `fetched_at`／`as_of`（§C-10） | 持有側無時點；`SegmentEvidence` 的 holdings 段 as_of：段採用（used）時先取該段 OK 事實中最舊的 provenance as_of，無則退回站內證據戳；未採用時取站內證據戳（若有）（`decision_digest_assembly.assemble_digest`／`_seg`／`_oldest`）。兩者都不是持股讀取時點 | 無持股資料日 | 文件登記（本批無對應測試） |
 
 ## §B 三條規範
 
@@ -50,11 +50,12 @@
 - 理由（FACT）：`[]` 會讓 coverage `unkeyed_held_count` 由 None（未知）變成 0（已知），把「不知道」偽裝成「已知沒有」（`test_norm_none_and_empty_list_are_distinguishable_in_coverage`）。
 - 摘要**不得**宣稱零持股（「0 檔／無持股／空倉」等）；持股兩段與行動段只能說「無法判定」。
 - coverage 的持有側計數為 None、`is_complete=False`。
+- **UNKNOWN 不得視為 0／中性／SAFE**（DEC-215 §一 第 2 點「不得隱藏，不得視為 0／中性／SAFE」）：摘要不得以中性、正常、安全描述未知（`test_norm_none_input_digest_coverage_summary_all_unknown`）。
 - 現況：依契約餵 None 時以上全部成立（規範測試皆綠）。
 
 ### §B2 缺獨立母體 ⇒ incomplete；無法評估列保留部位與原因
 
-1. **缺獨立應有母體**：DEC-218 Q2=(a) 的獨立 expected 尚未落地；L1 `raw` 與 `rows` 同源，不能證明「讀到的就是組合的全部」。
+1. **缺獨立應有母體**：獨立 `expected_*` 屬 DEC-213 I3（G2 未核准 Gate），DEC-215 §五「I3 expected」只列為後續候選 Gate，皆未落地；L1 `raw` 與 `rows` 同源，不能證明「讀到的就是組合的全部」。（DEC-219 所稱「Q2 延後」是施工包 #1199 comment 7055505068 的題號，**不是** DEC-218 的 Q2。）
    因此**任何**以 L1 rows 餵入的 Digest，coverage **必須** incomplete。
    - **現況≠契約（FACT）**：四段證據齊備、每個持有列都有鍵且有行動時，`is_complete=True`（含 L1 `dropped>0` 的情形）。見 §C-6。
 2. **有持有列但無法評估**（目前可實測的只有「無 `HoldingKey`」）⇒ 部位與原因必須保留。
@@ -65,11 +66,18 @@
 
 ### §B3 `held` 的來源
 
-`held` 只能來自**所選單一組合**（DEC-218 Q2=(a)）的可追溯證據：
-- **一列一筆**：該組合 L1 rows 的每一列在 `holdings_rows` 恰好一筆、`held=True`（明確 `bool`）；不去重、不合併批次（DEC-218 第 5 點；合併粒度未授權）。
-- **來源為該組合 rows**：不跨組合、不混 SA headless 多 Sheet 母體、不含觀察清單。
+`held` 只能來自**所選單一組合**（DEC-218 Q2=(a)）中**屬持有全集（IN／IN-U，DEC-218 §一）的列**的可追溯證據。
+**L1 rows 的現況不是契約**——兩個已知例外：
+- **NaN／+inf 列屬 EX**（DEC-218 §一 第 5 點；§C-4）：不屬持有全集，不得以 `held=True` 進 `holdings_rows`；但 L1 現況仍把它留在 `rows`。
+- **張數／均價空白列須保留為 IN-U**（DEC-218 §一 第 1 點；§C-8）：屬持有全集，不得刪；但 L1 **預設模式**現況會把它歸 `blank_value` 丟掉。
+
+規範：
+- **不得遺失、不得默默去重、不得重複灌水**（DEC-218 §一 第 5 點）：每個屬持有全集的來源列都要能在 `holdings_rows` 找到對應；同代號多列不得被默默吸收成一筆，單列也不得被算成多筆。
+  **計數單位（列 vs 代號）未裁示**（雙母體表 §4；§C-3），本契約與規範測試**不定單位**，只要求「重複可觀測」。
+- `held=True` 必須是明確 `bool`；不得由字串／數字推成 bool（現況 builder 對非 bool 的 `held` Fail Loud，FACT）。
+- **來源為該組合**：不跨組合、不混 SA headless 多 Sheet 母體、不含觀察清單。
 - **不由 `holding_keys` 推得**：`holding_keys` 只是「有沒有鍵」的查表，多給的代號（例：別本組合）不得變成持股或行動（現況成立，FACT）。
-- **不得由 AI 推測**；不得由字串／數字推成 bool（現況 builder 對非 bool 的 `held` Fail Loud，FACT）。
+- **不得由 AI 推測**。
 - 測試的合成 `holdings_rows` 依本條**手寫**；本文件與測試都**不**提供 tally.rows → holdings_rows 的通用轉換。
 
 ## §C 待決案例表（現況 ≠ 契約；需裁示者另列）
@@ -78,12 +86,12 @@
 |---|---|---|---|---|
 | §C-1 | 選定組合 0 列：組合不存在／空表／只有表頭 | L1 `status=ok`、`raw=0`、`rows=()`，僅 `other_name_rows` 不同；無法分辨「名稱打錯／改名」與「真的 0 列」（`test_current_behavior_c1_…`；既有 #1251 `test_g3_current_behavior_…`） | 候選 (i) None（無法證明組合存在 ⇒ 未知；作者推薦，fail-closed）；(ii) `[]`（來源可讀即已知 0 列）。兩者都必須：不宣稱零持股、`is_complete=False`（已由規範測試守住） | **客戶**（業務語意：「選了但 0 列」算未知或已知空；DEC-218 Q1 延伸） |
 | §C-2 | L1 丟列（`dropped>0`，EX）往下游揭露 | L1 `dropped_by_reason` 五鍵可問到；Digest／coverage 無通道（既有 strict xfail `test_desired_excluded_coverage_includes_upstream_dropped_rows`）。**ok 且 `kept==0`** 時若依 §B3 餵 `[]`，摘要與餵 None **一字不差**顯示「…無法判定（尚無輸入）」（#1251 `test_b_current_behavior_digest_and_summary_identical_for_none_and_empty`）：雖不宣稱零持股，但「尚無輸入」描述不準（實為「有列、全部被剔除」）＝待決 | 丟棄數量與原因揭露到 coverage（或其後繼）；有丟棄 ⇒ incomplete；`kept==0` 時摘要措辭應能區分「全部被剔除」與「尚無輸入」 | 揭露形態＝技術（內部）；但需改 coverage／Digest schema ⇒ **另需放行**（High Gate） |
-| §C-3 | 重複代號列 | L1 揭露 `duplicate_tickers`、rows 不去重；Digest 有鍵重複 ⇒ `ValueError(duplicate_holding_key)`；無鍵重複 ⇒ 計 2、與兩個不同代號逐字相同、摘要寫「另有 2 檔」（`test_current_behavior_c3_…`；`test_decision_digest_assembly.py::test_duplicate_holding_keys_fail_loud`） | 揭露重複列數與代號；不得默默去重（DEC-218 第 5 點，已裁示）。有鍵重複是 Fail Loud 還是揭露後保留、列數 vs 檔數用語 | 聚合粒度與公式＝**技術契約＋客戶**（DEC-218 第 5 點明言未授權）；揭露形態需 schema 放行 |
-| §C-4 | 非有限值（NaN／+inf 保留；-inf 丟棄） | L1 `kept_non_finite` 揭露、rows 仍含該列（DEC-219 第 4 點：只揭露、不過濾）；builder 不讀 lots ⇒ Digest／coverage／摘要與乾淨值逐字相同（`test_current_behavior_c4_…`；#1251 `test_e2_current_behavior_…`） | **歸類已定：EX**（DEC-218 §一 第 5 點「來源無效值…不得作為有效評分值；剔除須可回報」；雙母體表 §2 同為 EX）。差距在 L1 現況仍把 NaN／+inf 保留於 rows | 不是歸類裁示；**NaN／+inf 過濾修補屬 DEC-219 明列 HOLD 項的放行問題**（客戶放行）；下游回報形態需 schema 放行 |
+| §C-3 | 重複代號列 | L1 揭露 `duplicate_tickers`、rows 不去重；Digest 有鍵重複 ⇒ `ValueError(duplicate_holding_key)`；無鍵重複 ⇒ 計 2、與兩個不同代號逐字相同、摘要寫「另有 2 檔」（`test_current_behavior_c3_…`；`test_decision_digest_assembly.py::test_duplicate_holding_keys_fail_loud`） | 揭露重複列數與代號；不得默默去重、不得重複灌水（DEC-218 第 5 點，已裁示）。**計數單位（列 vs 代號）未裁示**（雙母體表 §4）：現況「計 2」只是 current_behavior 快照，不是規範；有鍵重複是 Fail Loud 還是揭露後保留、列數 vs 檔數用語 | 聚合粒度與公式＝**技術契約＋客戶**（DEC-218 第 5 點明言未授權）；揭露形態需 schema 放行 |
+| §C-4 | 非有限值（NaN／+inf 保留；-inf 丟棄） | L1 `kept_non_finite` 揭露、rows 仍含該列（DEC-219 第 4 點：只揭露、不過濾）；builder 不讀 lots ⇒ Digest／coverage／摘要與乾淨值逐字相同（`test_current_behavior_c4_…`；#1251 `test_e2_current_behavior_…`） | **歸類已定：EX**（DEC-218 §一 第 5 點「來源無效值…不得作為有效評分值；剔除須可回報」；雙母體表 §2 同為 EX）。差距在 L1 現況仍把 NaN／+inf 保留於 rows | 不是歸類裁示；**NaN／+inf 過濾修補屬 DEC-219 明列 HOLD 項的放行問題**（放行者依 DEC-219 HOLD，該條未指明）；下游回報形態需 schema 放行 |
 | §C-5 | 無法評估列的部位與原因 | 只有計數（`unkeyed_count`／`unkeyed_held_count`）；代號與原因不在輸出（`test_gap_unevaluable_row_identity_and_reason_preserved`） | 每個 IN-U 部位可追溯（身分＋原因），隱私呈現方式另定 | 欄位形態需 **schema 放行**；對使用者呈現另過 UI 線框 Gate |
-| §C-6 | 缺獨立應有母體 | 四段齊備＋全部有鍵有行動 ⇒ `is_complete=True`（`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete`） | `is_complete=False`，直到有獨立 expected（DEC-213 I3／G2 Gate） | 獨立 expected 來源＝**客戶＋另案 Gate**（Q2 落地）；coverage 改法需 schema 放行 |
+| §C-6 | 缺獨立應有母體 | 四段齊備＋全部有鍵有行動 ⇒ `is_complete=True`（`test_gap_contract_fed_input_without_independent_universe_must_be_incomplete`） | `is_complete=False`，直到有獨立 expected（DEC-213 I3，G2 未核准 Gate；DEC-215 §五「I3 expected」） | 獨立 expected＝**DEC-213 I3 的 G2 Gate**（客戶獨立授權）；coverage 改法需 schema 放行 |
 | §C-7 | `holdings_rows` 內 `held` 缺／None／False 的列 | 被當「非持有」，coverage 無欄位，`is_complete` 不受影響、代號不出現（`test_current_behavior_c7_…`） | 依 §B3 adapter 不應產生此類列；若出現，是否須揭露／Fail Loud | 技術（內部），但 coverage 加欄位需 schema 放行 |
-| §C-8 | 張數／均價空白（IN-U） | 預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None，但 Digest 無 IN-U 標記、與乾淨列逐字相同（`test_current_behavior_c8_…`） | DEC-218 第 1 點：保留為 IN-U、不得刪（已裁示）；adapter 用哪個模式、IN-U 怎麼標 | 模式選擇＝技術；IN-U 標示需 schema 放行 |
+| §C-8 | 張數／均價空白（IN-U） | 預設模式歸 `blank_value` 丟棄；`keep_blank=True` 保留為 None，但 Digest 無 IN-U 標記、與乾淨列逐字相同（`test_current_behavior_c8_…`） | 「保留為 IN-U、不得刪」**已裁示**（DEC-218 §一 第 1 點）。待決只剩：(a) IN-U 在 Digest／coverage 的標示方式；(b) L1 預設模式現況會丟空白列（與裁示的差距；`keep_blank=True` 才保留） | (a) IN-U 標示需 schema 放行；(b) adapter 用哪個模式＝技術（不得選會丟列的模式） |
 | §C-9 | 讀取例外（`LoginRequiredError` 等） | L1 原樣上拋，不入快取（#1251 `test_g4_…`；`test_norm_l1_login_required_never_becomes_a_tally`） | 上拋到呼叫端（不建 Digest），或 L3 捕捉後以 None＋原因降級；⛔ 不得映成 `[]` | 技術（L3 adapter Gate；adapter 本身未授權） |
 | §C-10 | 時點／新鮮度 | `PortfolioReadTally` 與 `holdings_rows` 都不帶 `fetched_at`／`as_of`；L1 讀取有 `TTL_15MIN` 快取（`_load_portfolio_tallied_cached`），餵入時無法得知持股讀取的時點；Digest 持有側只有站內證據戳 | 持股讀取帶可追溯時點（至少 fetched_at）；過期須能標示且不自動算已評估 | 過期標示語意已由 DEC-218 §一 第 4 點裁示；列層級 as_of／代表 stamp＝DEC-213 I6「未決（G2 邊界）」⇒ **客戶 G2 Gate**；欄位需 schema 放行 |
 

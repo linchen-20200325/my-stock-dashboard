@@ -56,6 +56,8 @@ H = GSP._HEADERS
 
 #: 「宣稱零持股／空倉」類字眼：未知／未選定／讀取失敗的摘要不得出現任何一個（契約 §B1）。
 ZERO_HOLDING_CLAIMS = ("0 檔", "0檔", "零檔", "無持股", "沒有持股", "空倉", "持股為零", "零持股", "持股 0")
+#: UNKNOWN 不得被說成中性／正常／安全（DEC-215 §一 第 2 點「不得視為 0／中性／SAFE」；契約 §B1）。
+NEUTRAL_SAFE_CLAIMS = ("中性", "正常", "安全", "SAFE", "safe", "neutral")
 
 
 @pytest.fixture(autouse=True)
@@ -92,7 +94,8 @@ def contract_expected_holdings_input(source) -> str:
     - status 非 ok（not_selected／worksheet_missing／schema_mismatch／任何未知狀態）→ None（§B1）。
     - status ok 但 rows／任何計數為 None（計數未知）→ None（§B1，fail-closed）。
     - ok 且 raw == 0（組合不存在／空表）→ 待決（§C-1；候選 None 或 []，兩者都須滿足 §B1 的安全性質）。
-    - 其餘（raw > 0，含 kept == 0、dropped > 0、重複、非有限值）→ list（依 §B3 手寫；揭露缺口見 §C）。
+    - 其餘（raw > 0，含 kept == 0、dropped > 0、重複、非有限值）→ list（依 §B3 手寫：只含屬持有全集的列——
+      NaN／+inf 列為 EX 不入（§C-4）、空白列為 IN-U 須入（§C-8），**不是** L1 rows 原樣；揭露缺口見 §C）。
     """
     if isinstance(source, BaseException):
         return EXPECT_NONE
@@ -109,7 +112,7 @@ def contract_expected_holdings_input(source) -> str:
 
 # ── 合成輸入（Digest 側；依契約 §B3 手寫，不由 tally.rows 轉換）─────────────────────────
 def held(*tickers) -> list:
-    """§B3：選定組合 rows 一列一筆、held=True（明確 bool）。只帶 builder 會讀的欄位。"""
+    """§B3：手寫屬持有全集（IN／IN-U）的列、held=True（明確 bool）。只帶 builder 會讀的欄位；不定計數單位。"""
     return [{"ticker": t, "held": True} for t in tickers]
 
 
@@ -227,6 +230,8 @@ def _check_none_input_is_unknown_everywhere() -> None:
         text = "\n".join(_lines(d))
         for w in ZERO_HOLDING_CLAIMS:
             assert w not in text, f"規範 §B1：摘要不得宣稱零持股：{w!r}"
+        for w in NEUTRAL_SAFE_CLAIMS:
+            assert w not in text, f"規範 §B1（DEC-215 §一 第 2 點）：UNKNOWN 不得被說成 0／中性／SAFE：{w!r}"
         for sec in ("buy_and_hold", "capital_gain", "actions"):
             ls = _section(d, sec)
             assert ls and all("無法判定" in x for x in ls), f"規範 §B1：{sec} 段須只說無法判定：{ls}"
@@ -234,7 +239,8 @@ def _check_none_input_is_unknown_everywhere() -> None:
 
 def test_norm_none_input_digest_coverage_summary_all_unknown():
     """§B1：依契約餵 None（即使 macro／站內證據齊備、站內有行動）⇒ UNAVAILABLE、coverage 計數 None、
-    is_complete False、摘要無零持股字樣且持股／行動段只說「無法判定」。"""
+    is_complete False、摘要無零持股字樣、UNKNOWN 不被說成 0／中性／SAFE（DEC-215 §一 第 2 點），
+    且持股／行動段只說「無法判定」。"""
     _check_none_input_is_unknown_everywhere()
 
 
@@ -289,22 +295,46 @@ def test_norm_ok_with_rows_maps_to_list_including_dropped_dup_nonfinite():
     assert GSP.tally_portfolio_records(cases["all_dropped"], keep_blank=False).kept == 0
 
 
-def _check_one_row_one_entry() -> None:
-    """§B3：每一列 held=True 的持有列恰好一筆——有鍵者一個 entry（輸入順序），無鍵者計入 unkeyed（不去重、不丟）。"""
-    rows = held("0050", "0056", "9001", "9001")                           # 9001 無鍵且重複
+def _check_no_loss_no_silent_dedupe() -> None:
+    """§B3（DEC-218 §一 第 5 點）：屬持有全集的列不得遺失、重複不得被默默吸收、單列不得被灌成多筆。
+    ⚠️ **不定計數單位**（列 vs 代號未裁示；雙母體表 §4）：只斷言「重複可觀測」——[X, X] 的輸出必須與 [X] 不同
+    （或 Fail Loud），不斷言 [X, X] 該計 1 還是 2（現況值見 `test_current_behavior_c3b_…`）。"""
     keys = keys_for("0050", "0056")
-    d = build_decision_digest(generated_at=NOW, holdings_rows=rows, holding_keys=keys,
-                              station_rows=station_for("0050", "0056"), station_stamp=STATION_STAMP)
-    assert [e.key.symbol for e in d.holdings.entries] == ["0050", "0056"], "規範 §B3：有鍵列一列一個 entry、順序不變"
-    assert d.holdings.unkeyed_count == 2, f"規範 §B2：無鍵持有列必須逐列保留為計數（不去重），得到 {d.holdings.unkeyed_count}"
+    st = station_for("0050", "0056")
+    d = build_decision_digest(generated_at=NOW, holdings_rows=held("0050", "0056", "9001"), holding_keys=keys,
+                              station_rows=st, station_stamp=STATION_STAMP)
+    assert [e.key.symbol for e in d.holdings.entries] == ["0050", "0056"], "規範 §B3：有鍵列不得遺失、順序不變"
+    assert d.holdings.unkeyed_count == 1, f"規範 §B3：單一無鍵列不得遺失、不得灌水，得到 {d.holdings.unkeyed_count}"
+
+    def run(rows):
+        dd = build_decision_digest(generated_at=NOW, holdings_rows=rows, holding_keys=keys,
+                                   station_rows=st, station_stamp=STATION_STAMP)
+        pp = plan_action_selection(station_rows=st, station_stamp=STATION_STAMP, holdings_rows=rows, holding_keys=keys)
+        return json.dumps(dd.to_dict(), ensure_ascii=False, sort_keys=True), pp.unkeyed_held_count
+    try:
+        dup = run(held("0050", "0056", "9001", "9001"))
+    except ValueError:
+        return                                            # Fail Loud 亦可接受（不是默默吸收）
+    single = run(held("0050", "0056", "9001"))
+    assert dup != single, "規範 §B3：無鍵重複列被默默吸收（輸出與單列逐字相同）"
+
+
+def test_norm_no_row_lost_and_duplicates_not_silently_absorbed():
+    _check_no_loss_no_silent_dedupe()
+
+
+def test_current_behavior_c3b_row_unit_counts_for_unkeyed_duplicates():
+    """§C-3 現況（計數單位＝列；**非規範**，單位未裁示）：無鍵同代號兩列 ⇒ unkeyed_count／unkeyed_held_count＝2，
+    持有列分割 keyed + unkeyed == 列數。轉紅 ⇒ 若是裁示改成代號單位，更新 §C-3 與本快照；
+    規範 `test_norm_no_row_lost_and_duplicates_not_silently_absorbed` 不得因此放寬。"""
+    rows = held("0050", "0056", "9001", "9001")
+    keys = keys_for("0050", "0056")
+    d = build_decision_digest(generated_at=NOW, holdings_rows=rows, holding_keys=keys)
+    assert d.holdings.unkeyed_count == 2
     p = plan_action_selection(station_rows=station_for("0050", "0056"), station_stamp=STATION_STAMP,
                               holdings_rows=rows, holding_keys=keys)
-    assert p.holdings_held_keyed_rows + p.unkeyed_held_count == len(rows), "規範 §B3：持有列分割必須恰好覆蓋每一列"
+    assert p.holdings_held_keyed_rows + p.unkeyed_held_count == len(rows)
     assert (p.holdings_not_held_rows, p.holdings_non_mapping_rows) == (0, 0)
-
-
-def test_norm_evaluable_rows_one_row_one_entry():
-    _check_one_row_one_entry()
 
 
 def _check_unevaluable_rows_retained() -> None:
@@ -351,7 +381,8 @@ def test_norm_held_must_be_explicit_bool(bad):
 # 現況≠契約（xfail strict）
 # ══════════════════════════════════════════════════════════════════════
 @pytest.mark.xfail(strict=True, reason=(
-    "契約 §B2（缺獨立應有母體）：DEC-218 Q2=(a) 的獨立 expected 未落地，L1 raw 與 rows 同源；依契約 coverage 必須 "
+    "契約 §B2（缺獨立應有母體）：獨立 expected_* 屬 DEC-213 I3（G2 未核准 Gate；DEC-215 §五 I3 expected）未落地，"
+    "L1 raw 與 rows 同源；依契約 coverage 必須 "
     "incomplete，但現行 coverage 無任何欄位承載『應有母體』或 L1 dropped，四段齊備時 is_complete=True。"
     "修法需 coverage／Digest schema 變更（另需放行；§D）。XPASS ⇒ 升為正式斷言並更新契約 §C-6。"))
 @pytest.mark.parametrize("recs", [
@@ -493,8 +524,22 @@ def test_mutation_builder_drops_unkeyed_rows_turns_norm_red(monkeypatch):
     monkeypatch.setattr(B, "_keyed_holdings", lambda rows, keys: (orig(rows, keys)[0], 0))
     with pytest.raises(AssertionError, match="規範 §B2"):
         _check_unevaluable_rows_retained()
-    with pytest.raises(AssertionError, match="規範 §B"):
-        _check_one_row_one_entry()
+    with pytest.raises(AssertionError, match="規範 §B3"):
+        _check_no_loss_no_silent_dedupe()
+
+
+def test_mutation_builder_dedupes_unkeyed_rows_turns_norm_red(monkeypatch):
+    """突變 5：builder `_keyed_holdings` 依代號對無鍵持有列去重 → §B3「重複不得被默默吸收」必須轉紅。"""
+    orig = B._keyed_holdings
+
+    def _mut(rows, keys):
+        ks, _n = orig(rows, keys)
+        unkeyed = {B._ticker_of(r) for r in rows
+                   if isinstance(r, dict) and B._is_held(r) and B._key_for(B._ticker_of(r), keys) is None}
+        return ks, len(unkeyed)
+    monkeypatch.setattr(B, "_keyed_holdings", _mut)
+    with pytest.raises(AssertionError, match="規範 §B3：無鍵重複列被默默吸收"):
+        _check_no_loss_no_silent_dedupe()
 
 
 def test_mutation_builder_infers_holdings_from_keys_turns_norm_red(monkeypatch):
@@ -514,7 +559,7 @@ def test_mutation_harness_baselines_are_green(monkeypatch):
     """突變 harness 對原版必須是綠的（否則轉紅不代表抓到突變）。"""
     _check_unknown_maps_to_none(monkeypatch)
     _check_none_input_is_unknown_everywhere()
-    _check_one_row_one_entry()
+    _check_no_loss_no_silent_dedupe()
     _check_unevaluable_rows_retained()
     _check_held_only_from_selected_rows()
 
