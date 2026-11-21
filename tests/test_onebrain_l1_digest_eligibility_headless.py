@@ -10,7 +10,7 @@ production 也沒有「tally.rows → Digest `holdings_rows`」的 adapter。**�
 
 本檔釘住的項目（標 `current_behavior` 者為現況快照、非規範；語意待裁示，不得被讀成「這是對的」）：
   (b)  規範：`holdings_rows=None` 與 `[]` 都不宣稱零持股；current_behavior：Digest／摘要對兩者相同（v1 限制）；
-       唯一能區分的通道是 coverage `unkeyed_held_count`（None vs 0）；L1 側 not_selected 全部計數 None、不讀 Sheet。（v1 限制）
+       規範：coverage `unkeyed_held_count` 區分兩者（None vs 0，現況觀察可區分，adapter 不得破壞）；L1 側 not_selected 全部計數 None、不讀 Sheet。（v1 限制）
   (d)  無持股輸入時，即使站內列有行動碼且證據新鮮，Digest 不帶行動、摘要行動段只有「無法判定」類句子。
   (e1) held 但無鍵的同代號兩列不去重：`unkeyed_count`／coverage `unkeyed_held_count` 為 2（規範）；
        「不 raise」是 current_behavior（無 fail-loud 路徑，待裁示）。
@@ -161,16 +161,21 @@ def test_b_norm_none_and_empty_never_claim_zero_holdings():
 
 def test_b_current_behavior_digest_and_summary_identical_for_none_and_empty():
     """current_behavior（v1 限制）：Digest to_dict 與規則式摘要對 None 與 [] 相同 —— Digest 層無法區分未選定與空
-    （唯一能區分的通道見 `test_b_coverage_is_the_only_channel_...`）。
+    （目前觀察到 coverage 可區分，見 `test_b_norm_coverage_distinguishes_none_from_empty`）。builder 直呼與
+    `assemble_digest` 兩條路徑都快照。
     未來若正當區分 None 與 []，此快照斷言應隨裁示更新，但規範斷言（`test_b_norm_...`）不得放寬。"""
     _check_current_behavior_none_equals_empty_snapshot()
+    for station_kw in (dict(station_rows=station_rows(), station_evidence=fresh_station()), {}):
+        a_none = assemble_digest(generated_at=NOW, holdings_rows=None, **station_kw)
+        a_empty = assemble_digest(generated_at=NOW, holdings_rows=[], **station_kw)
+        assert a_none.digest.to_dict() == a_empty.digest.to_dict()           # Digest 本體相同（快照）
 
 
-def test_b_coverage_is_the_only_channel_that_distinguishes_none_from_empty():
-    """Digest 本體與摘要無法區分 None／[]（上一個測試），**目前唯一能區分兩者的通道**是 `assemble_digest` 的側車
-    coverage：holdings_rows=None → `unkeyed_held_count is None`（未知）；[] → `== 0`（已知為零）。
-    （另：`holdings_non_mapping_rows` 同樣 None／0。）未來任何 adapter 都不得破壞這條通道 ——
-    例如把 L1 not_selected 映成 `[]` 會讓「未知」變成「已知 0」。"""
+def test_b_norm_coverage_distinguishes_none_from_empty():
+    """規範：`assemble_digest` 的側車 coverage 必須區分 None 與 []——holdings_rows=None → `unkeyed_held_count is None`
+    （未知）；[] → `== 0`（已知為零）；`holdings_non_mapping_rows` 同樣 None／0。
+    目前觀察到 coverage 可區分（現況觀察；Digest 本體與摘要不能，見 current_behavior 快照測試），
+    adapter 不得破壞此區分 —— 例如把 L1 not_selected 映成 `[]` 會讓「未知」變成「已知 0」。"""
     for station_kw in (dict(station_rows=station_rows(), station_evidence=fresh_station()), {}):
         a_none = assemble_digest(generated_at=NOW, holdings_rows=None, **station_kw)
         a_empty = assemble_digest(generated_at=NOW, holdings_rows=[], **station_kw)
@@ -178,7 +183,6 @@ def test_b_coverage_is_the_only_channel_that_distinguishes_none_from_empty():
         assert a_empty.coverage.unkeyed_held_count == 0
         assert a_none.coverage.holdings_non_mapping_rows is None
         assert a_empty.coverage.holdings_non_mapping_rows == 0
-        assert a_none.digest.to_dict() == a_empty.digest.to_dict()           # Digest 本體仍相同
         assert a_none.coverage.to_dict() != a_empty.coverage.to_dict()
         assert a_none.coverage.is_complete is False and a_empty.coverage.is_complete is False
 
@@ -429,9 +433,8 @@ def test_g4_mutation_swallowing_login_error_turns_red(monkeypatch, swallow_as):
 
 
 def test_mutation_harness_baselines_are_green(monkeypatch):
-    """突變 harness 對原版必須是綠的（否則轉紅不代表抓到突變）。"""
+    """突變 harness 對原版必須是綠的（否則轉紅不代表抓到突變）。只驗規範 harness，快照不在此。"""
     _check_none_and_empty_norms()
-    _check_current_behavior_none_equals_empty_snapshot()
     _check_no_holdings_no_action_text()
     _check_unkeyed_duplicates_not_deduped()
     _check_login_required_propagates(monkeypatch)
