@@ -130,6 +130,31 @@ def run(agg, C, rows, *, risk="missing", dig=None):
         risk_cap=risk_caps(C, agg)[risk], station_stamp=C.ActionSourceStamp(**STAMP_KW))
 
 
+def run_with_basis(agg, C, rows, *, risk="missing", dig=None):
+    """內部對照用：`(state, DayBasis)`（`_aggregate_with_basis`；`DayBasis` ⛔ 在公開輸出）。
+    同時斷言公開 `aggregate_system_actions` 與內部 state 相等（同一份計算，⛔ 兩套判定）。"""
+    kw = dict(station_rows=list(rows), station_digest=digest(rows) if dig is None else dig,
+              risk_cap=risk_caps(C, agg)[risk], station_stamp=C.ActionSourceStamp(**STAMP_KW))
+    st, basis = agg._aggregate_with_basis(**kw)
+    assert agg.aggregate_system_actions(**kw) == st
+    return st, basis
+
+
+#: 凍結 O1～O5 的公開欄位（Gate §4.6.6：O1 items／O2 counts／O3 day_status／O4a risk_cap_state／
+#: O4b exposure_gate／O5 provenance）。明列；⛔ 從契約反推。
+O1_O5_FIELDS = ("items", "counts", "day_status", "risk_cap_state", "exposure_gate", "provenance")
+
+
+def check_o1_o5_public_fields(agg, C) -> None:
+    """公開 `SystemActionState` 欄位集合**等於**凍結 O1～O5（多一欄、少一欄皆紅）；實際輸出亦無 day_basis。"""
+    import dataclasses
+    names = [f.name for f in dataclasses.fields(C.SystemActionState)]
+    assert set(names) == set(O1_O5_FIELDS) and len(names) == len(O1_O5_FIELDS), names
+    st = run(agg, C, golden_scenarios()["seven_branches"], risk="valid")
+    assert {f.name for f in dataclasses.fields(type(st))} == set(O1_O5_FIELDS)
+    assert not hasattr(st, "day_basis")
+
+
 def golden_scenarios() -> dict:
     """golden 夾具（名稱 → rows）。涵蓋七分支、四級、三種資料不足、整批失敗、觀察清單、空集合。"""
     B = ds
@@ -250,23 +275,23 @@ def check_t4_day_status(agg, C) -> None:
     """A-T4：「今日無需調整」只在 today_n=0 且 0 判不出、0 不可得、全列判全；任一判不出 → undeterminable。"""
     g = golden_scenarios()
     for name in ("all_cruise_full", "stock_keep_only"):   # 🟡 留意不計入（W-5）→ 全判得出即可「無需調整」
-        st = run(agg, C, g[name])
-        assert st.day_status == "no_adjustment_today", (name, st.day_basis, st.counts)
+        st, basis = run_with_basis(agg, C, g[name])
+        assert st.day_status == "no_adjustment_today", (name, basis, st.counts)
     expect_undet = ("cruise_peer_missing", "error_only", "drift", "price_missing_kept",
                     "price_missing_cruise_replaced", "fx_unconfirmed", "invalid_inputs_cut", "empty",
                     "stock_trend_unknown_verdict")
     for name in expect_undet:
-        st = run(agg, C, g[name])
+        st, basis = run_with_basis(agg, C, g[name])
         assert st.counts.today_n == 0, name
-        assert st.day_status == "undeterminable", (name, st.day_status, st.counts, st.day_basis)
+        assert st.day_status == "undeterminable", (name, st.day_status, st.counts, basis)
     st = run(agg, C, g["add_and_undeterminable"])
     assert st.day_status == "needs_action" and st.counts.today_n == 1 and st.counts.undeterminable_n == 1
     # digest 層資料不足（例：errors 非空）單獨也擋得住，即使列本身全判得出。
     rows = g["all_cruise_full"]
     _d = dict(digest(rows))
     _d["errors"] = ["9999"]
-    st = run(agg, C, rows, dig=_d)
-    assert st.day_basis.digest_data_short is True and st.day_status == "undeterminable"
+    st, basis = run_with_basis(agg, C, rows, dig=_d)
+    assert basis.digest_data_short is True and st.day_status == "undeterminable"
 
 
 _FORBIDDEN_ANYWHERE = ("減碼 1/2", "減碼1/2", "1/2", "½", "全出")
@@ -371,8 +396,6 @@ def check_t3_watchlist(agg, C) -> None:
 
 def check_t4_contract_guard(agg, C) -> None:
     """A-T4（縱深，L0 契約）：有任何判不出／不可得時，SystemActionState ⛔ 建成 no_adjustment_today。"""
-    _basis = C.DayBasis(judged_lights=1, total_lights=1, tally={}, all_rows_judged=True,
-                        cruise_gate_open=True, digest_data_short=False)
     _g = {g: 0 for g in C.GROUPS}
     for kw in ({"undeterminable_n": 1}, {"not_evaluated_n": 1}, {"unavailable_n": 1}, {"incomplete_rows_n": 1}):
         _c = dict(today_n=0, by_group=_g, not_evaluated_n=0, undeterminable_n=0, unavailable_n=0,
@@ -380,7 +403,7 @@ def check_t4_contract_guard(agg, C) -> None:
         _c.update(kw)
         try:
             C.SystemActionState(items=(), counts=C.ActionCounts(**_c), day_status=C.DAY_NO_ADJUSTMENT_TODAY,
-                                day_basis=_basis, risk_cap_state=C.RiskCapState(status=C.RISK_CAP_MISSING),
+                                risk_cap_state=C.RiskCapState(status=C.RISK_CAP_MISSING),
                                 exposure_gate=C.ExposureGate(), provenance=C.ActionProvenance(inputs=()))
         except ValueError:
             continue
@@ -423,21 +446,21 @@ def check_t8_parity(agg, C) -> int:
             assert agg.cruise_or_gap(j, t, all_rows_judged=b) == SC.cruise_or_gap(j, t, all_rows_judged=b)
         n += 4
         dig = digest(rows)
-        st = run(agg, C, rows, dig=dig)
+        st, basis = run_with_basis(agg, C, rows, dig=dig)
         assert [i.data_short_kind for i in st.items] == [HDS.row_short_kind(dict(r)) or "" for r in rows], name
-        assert st.day_basis.digest_data_short == HDS.digest_data_short(dig), name
+        assert basis.digest_data_short == HDS.digest_data_short(dig), name
         assert HDS.total_judged(dig.get("total")) or st.day_status != "no_adjustment_today", name
-        assert (st.day_basis.judged_lights, st.day_basis.total_lights) == SC.aggregate_judged(cells), name
-        assert dict(st.day_basis.tally) == SC.tally_states(cells), name
+        assert (basis.judged_lights, basis.total_lights) == SC.aggregate_judged(cells), name
+        assert dict(basis.tally) == SC.tally_states(cells), name
         n += 5
         if rows:
             ph, PH = _patched_page_hold(rows)
             assert ph.error == "", (name, ph.error)
             assert st.counts.incomplete_rows_n == ph.unjudged_rows, (name, st.counts.incomplete_rows_n,
                                                                      ph.unjudged_rows)
-            assert (st.day_basis.judged_lights, st.day_basis.total_lights) == (ph.judged, ph.total_lights), name
-            assert dict(st.day_basis.tally) == dict(ph.tally), name
-            assert st.day_basis.cruise_gate_open == (ph.cruise_text == PH._clean_signal(SC.CRUISE_TEXT)), name
+            assert (basis.judged_lights, basis.total_lights) == (ph.judged, ph.total_lights), name
+            assert dict(basis.tally) == dict(ph.tally), name
+            assert basis.cruise_gate_open == (ph.cruise_text == PH._clean_signal(SC.CRUISE_TEXT)), name
             n += 4
     for j, t in ((0, 0), (3, 3), (2, 3), (0, 5), (5, 5)):
         for b in (True, False):

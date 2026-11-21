@@ -227,6 +227,20 @@ def aggregate_system_actions(*, station_rows: Sequence[Mapping[str, Any]],
     """既有正式結果＋Risk Cap state → `SystemActionState`。純函式、deterministic、headless。
 
     ⛔ 截斷／排序／top_n／收合：items 與輸入列一一對應、保持輸入順序（Presentation Slice 屬 consumer）。
+    公開輸出嚴格＝凍結 O1～O5；`day_status` 的依據（`DayBasis`）只留在內部 `_aggregate_with_basis`。
+    """
+    return _aggregate_with_basis(station_rows=station_rows, station_digest=station_digest,
+                                 risk_cap=risk_cap, station_stamp=station_stamp)[0]
+
+
+def _aggregate_with_basis(*, station_rows: Sequence[Mapping[str, Any]],
+                          station_digest: Mapping[str, Any],
+                          risk_cap: C.RiskCapState,
+                          station_stamp: C.ActionSourceStamp) -> tuple[C.SystemActionState, C.DayBasis]:
+    """**內部**：同一份計算同時產出公開 `SystemActionState` 與 `day_status` 的依據 `DayBasis`。
+
+    只供 `aggregate_system_actions`（取 [0]）與 A-T8 parity／對照測試使用；⛔ consumer 呼叫。
+    `day_status` 只在此判定一次（⛔ 第二套判定）。
     """
     if isinstance(station_rows, (str, bytes)) or not isinstance(station_rows, (list, tuple)):
         raise TypeError(f"station_rows 必須是 list／tuple：{type(station_rows).__name__}")
@@ -268,14 +282,15 @@ def aggregate_system_actions(*, station_rows: Sequence[Mapping[str, Any]],
     else:
         _day = C.DAY_UNDETERMINABLE
 
-    return C.SystemActionState(
+    _state = C.SystemActionState(
         items=_items, counts=_counts, day_status=_day,
-        day_basis=C.DayBasis(judged_lights=int(_judged), total_lights=int(_total), tally=_tally,
-                             all_rows_judged=_all_judged, cruise_gate_open=_cruise_open,
-                             digest_data_short=_digest_short),
         risk_cap_state=risk_cap,                      # O4a：原樣傳遞（同一物件）
         exposure_gate=C.ExposureGate(),               # O4b：恆 undeterminable
         provenance=C.ActionProvenance(inputs=(("station", station_stamp), ("risk_cap", risk_cap.stamp))))
+    _basis = C.DayBasis(judged_lights=int(_judged), total_lights=int(_total), tally=_tally,
+                        all_rows_judged=_all_judged, cruise_gate_open=_cruise_open,
+                        digest_data_short=_digest_short)
+    return _state, _basis
 
 
 __all__ = [

@@ -272,7 +272,12 @@ class ActionCounts:
 
 @dataclass(frozen=True)
 class DayBasis:
-    """O3 的依據（只沿用 I6／I7 既有函式的結果；M-A2 為 A-T8 parity 可觀測而揭露，消費端 ⛔ 重算）。"""
+    """O3 的依據（只沿用 I6／I7 既有函式的結果）。**內部型別，⛔ 公開輸出**（不在 `__all__`）。
+
+    ⛔ 出現在 `SystemActionState`（公開欄位嚴格＝凍結 O1～O5；#1199 總管裁定）。只由 L3
+    `system_action_aggregator._aggregate_with_basis(...)` 與 `day_status` **同一份**計算產出，
+    供 A-T8 parity／對照測試觀測；consumer ⛔ 取用、⛔ 重算。
+    """
 
     judged_lights: int
     total_lights: int
@@ -312,12 +317,16 @@ class ActionProvenance:
 
 @dataclass(frozen=True)
 class SystemActionState:
-    """System Action State／action-facing canonical contract（O1～O5）。"""
+    """System Action State／action-facing canonical contract（O1～O5）。
+
+    公開欄位**嚴格等於**凍結 O1～O5（Gate §4.6.6）：items／counts／day_status／risk_cap_state／
+    exposure_gate／provenance；多一欄即紅（`tests/test_system_action_aggregator_contract.py`
+    `test_public_state_fields_exactly_o1_o5`＋突變）。`DayBasis` ⛔ 出現在此。
+    """
 
     items: tuple
     counts: ActionCounts
     day_status: str
-    day_basis: DayBasis
     risk_cap_state: RiskCapState
     exposure_gate: ExposureGate
     provenance: ActionProvenance
@@ -325,7 +334,7 @@ class SystemActionState:
     def __post_init__(self) -> None:
         if type(self.items) is not tuple or any(type(_i) is not ActionItem for _i in self.items):
             raise TypeError("SystemActionState.items 必須是 tuple[ActionItem]")
-        for _n, _t in (("counts", ActionCounts), ("day_basis", DayBasis), ("risk_cap_state", RiskCapState),
+        for _n, _t in (("counts", ActionCounts), ("risk_cap_state", RiskCapState),
                        ("exposure_gate", ExposureGate), ("provenance", ActionProvenance)):
             if type(getattr(self, _n)) is not _t:
                 raise TypeError(f"SystemActionState.{_n} 必須是 {_t.__name__}")
@@ -353,6 +362,6 @@ __all__ = [
     "RULE_ID_ALLOWLIST_KEYS", "LEVEL_UNJUDGED", "DATA_SHORT_KINDS",
     "SYSTEM_RISK_CAP_NAME", "RISK_CAP_VALID", "RISK_CAP_INVALID", "RISK_CAP_MISSING", "RISK_CAP_STATUSES",
     "EXPOSURE_GATE_UNDETERMINABLE", "RISK_CAP_TAG_UNDETERMINABLE", "RISK_CAP_TAG_NONE", "RISK_CAP_TAGS",
-    "ActionSourceStamp", "RiskCapState", "ExposureGate", "ActionItem", "ActionCounts", "DayBasis",
+    "ActionSourceStamp", "RiskCapState", "ExposureGate", "ActionItem", "ActionCounts",
     "ActionProvenance", "SystemActionState",
 ]

@@ -11224,14 +11224,14 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 3. **觀察清單（held=False）不計入今日需處理**（同 digest「watch_adds 不計入今日要動作」；W-5 的 portfolio action 讀法）。⚠️ 與既有 `page_hold` 卡③ `cut_n=len(digest["reds"])`（含觀察清單）不同，見第四節。
 4. **Gate §4.6.6 對映表照做**：`row_short_kind=unjudged` 一律 `undeterminable`、不計入、不分組 —— 含「分支是 cut／add 但持股輸入資料異常」的列（digest 的 reds／adds 仍算它，見第四節）。
 5. **`day_status`**＝`needs_action`（today_n>0）／`no_adjustment_today`（today_n=0 且 PORT 的巡航 gate 放行且 `digest_data_short` 為 False 且三類判不出計數皆 0）／其餘 `undeterminable`；L0 `SystemActionState` 建構時再守一次（縱深）。
-6. **輸出比 Gate O1～O5 多一個加性欄位 `day_basis`**（judged／total／tally／all_rows_judged／cruise gate／digest_data_short）：A-T8 parity 需要可觀測，也避免 consumer 各自重算（§4.6.7）。
+6. **公開輸出嚴格＝Gate O1～O5**（#1199 comment 7062290629 總管裁定）：`SystemActionState` 欄位只有 items／counts／day_status／risk_cap_state／exposure_gate／provenance。`day_status` 的依據 `DayBasis`（judged／total／tally／all_rows_judged／cruise gate／digest_data_short）**只留內部**：L3 `_aggregate_with_basis(...)` 以**同一份**計算回 `(state, basis)`，公開 `aggregate_system_actions(...)` 取其 state（⛔ 第二套判定）；`DayBasis` 不在 `SystemActionState`、不在 `__all__`，只供 A-T8 parity／對照測試觀測，consumer ⛔ 取用。守衛 `test_public_state_fields_exactly_o1_o5` 明列 O1～O5 欄位集合（多一欄即紅），2 個突變（把 `day_basis` 加回）轉紅。
 7. **`risk_cap_tag`**：只標在 `action_branch=add` 且 actionable 的 item，恆「Risk Cap 無法判定」（O4b 數值 Gate 前恆 undeterminable，與 Risk Cap state 三態無關）；`RiskCapState` 原樣傳遞（同一物件），`ExposureGate` 建構只接受 `undeterminable`。
 8. **`not_evaluated`** 型別與計數已實作、與 `undeterminable` 分列，但現有輸入（戰情表列）**沒有任何對映路徑會產生它**（戰情表未算時由 consumer 以 capability state 處理，本函式要求 rows 必為 list／tuple）。
 9. **A-T5 與 A-T7 的張力**：`formal_label` 逐字帶來源 `建議動作`，其中既有 add 句含「加碼 N%」（`deploy_pct`，既有規則原文）；A-T5 的比例字樣禁令套在 Aggregator 自寫欄位，「減碼 1/2」「全出」則全輸出禁止。
 
 #### 三、驗證（作者環境，Python 3.13；非 QA PASS）
 
-新測試 120 passed＋3 xfailed（strict）；突變 36 個（A-T2 6／A-T3 4／A-T4 4／A-T5 3／A-T6 2／A-T7 2／A-T8 9／A-T9 3／A-T10 3）＋A-T1 注入 10 種 × 2 檔，全部轉紅；A-T8 golden parity 含真的 `page_hold.load_station`（只替換 L3 取數）。
+新測試 123 passed＋3 xfailed（strict）；突變 38 個（A-T2 6／A-T3 4／A-T4 4／A-T5 3／A-T6 2／A-T7 2／A-T8 9／A-T9 3／A-T10 3／O1-O5 2）＋A-T1 注入 10 種 × 2 檔，全部轉紅；A-T8 golden parity 含真的 `page_hold.load_station`（只替換 L3 取數）。
 
 #### 四、已知差異（⛔ 自行改哪一邊；送總管裁定；以 strict xfail 釘住）
 

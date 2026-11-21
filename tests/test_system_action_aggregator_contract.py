@@ -159,25 +159,35 @@ def _item(**over):
 
 def test_output_field_names_match_gate_o1_o5():
     assert [f.name for f in dataclasses.fields(C.SystemActionState)] == [
-        "items", "counts", "day_status", "day_basis", "risk_cap_state", "exposure_gate", "provenance"]
+        "items", "counts", "day_status", "risk_cap_state", "exposure_gate", "provenance"]
     assert {f.name for f in dataclasses.fields(C.ActionItem)} == {
         "ticker", "name", "held", "source_kind", "source_rule", "formal_label", "action_class", "group",
         "counts_toward_today", "risk_cap_tag", "rule_id", "data_short_kind", "stamp"}
 
 
+def test_public_state_fields_exactly_o1_o5():
+    """#1199 總管裁定：公開 `SystemActionState` 欄位集合＝凍結 O1～O5（明列於 K.O1_O5_FIELDS）；
+    `day_basis` 只留內部。突變（把 day_basis 加回）轉紅見 test_system_action_aggregator_mutation.py。"""
+    from tests import _system_action_checks as K
+    from src.services import system_action_aggregator as A
+    assert K.O1_O5_FIELDS == ("items", "counts", "day_status", "risk_cap_state", "exposure_gate", "provenance")
+    K.check_o1_o5_public_fields(A, C)
+    assert "DayBasis" not in C.__all__ and "_aggregate_with_basis" not in A.__all__
+
+
 def test_all_contract_types_frozen():
     from tests import _system_action_checks as K
     from src.services import system_action_aggregator as A
-    st = K.run(A, C, K.golden_scenarios()["seven_branches"], risk="valid")
+    st, basis = K.run_with_basis(A, C, K.golden_scenarios()["seven_branches"], risk="valid")
     for obj, attr in ((st, "day_status"), (st.items[0], "group"), (st.counts, "today_n"),
-                      (st.day_basis, "judged_lights"), (st.risk_cap_state, "status"),
+                      (basis, "judged_lights"), (st.risk_cap_state, "status"),
                       (st.exposure_gate, "status"), (st.provenance, "inputs"), (st.items[0].stamp, "as_of")):
         with pytest.raises(dataclasses.FrozenInstanceError):
             setattr(obj, attr, None)
     with pytest.raises(TypeError):
         st.counts.by_group["加"] = 9
     with pytest.raises(TypeError):
-        st.day_basis.tally["live"] = 9
+        basis.tally["live"] = 9
 
 
 @pytest.mark.parametrize("over, exc", [
@@ -255,9 +265,7 @@ def test_counts_and_state_validation():
                        incomplete_rows_n=0)
     cnt = C.ActionCounts(today_n=0, by_group=g, not_evaluated_n=0, undeterminable_n=0, unavailable_n=0,
                          incomplete_rows_n=0)
-    basis = C.DayBasis(judged_lights=0, total_lights=0, tally={}, all_rows_judged=False,
-                       cruise_gate_open=False, digest_data_short=True)
-    common = dict(items=(), counts=cnt, day_basis=basis, risk_cap_state=C.RiskCapState(status="missing"),
+    common = dict(items=(), counts=cnt, risk_cap_state=C.RiskCapState(status="missing"),
                   exposure_gate=C.ExposureGate(), provenance=C.ActionProvenance(inputs=()))
     with pytest.raises(ValueError):
         C.SystemActionState(day_status="needs_action", **common)            # today_n=0 不得 needs_action

@@ -175,6 +175,16 @@ MUTANTS = [
        "        exposure_gate=C.ExposureGate(status='blocked' if risk_cap.status == C.RISK_CAP_VALID "
        "else C.EXPOSURE_GATE_UNDETERMINABLE),")],
      [("        if self.status != EXPOSURE_GATE_UNDETERMINABLE:", "        if False:")], K.check_t10_risk_cap),
+    # ── 公開欄位＝凍結 O1～O5（#1199 總管裁定：day_basis 移出公開輸出） ──
+    ("O1-O5", "day_basis 加回公開 SystemActionState（有預設值，Aggregator 仍可建構）",
+     [], [("    provenance: ActionProvenance\n", "    provenance: ActionProvenance\n    day_basis: Any = None\n")],
+     K.check_o1_o5_public_fields),
+    ("O1-O5", "day_basis 加回且 Aggregator 建構時傳入該欄",
+     [("        provenance=C.ActionProvenance(inputs=((\"station\", station_stamp), (\"risk_cap\", risk_cap.stamp))))\n",
+       "        provenance=C.ActionProvenance(inputs=((\"station\", station_stamp), (\"risk_cap\", risk_cap.stamp))),\n"
+       "        day_basis=None)\n")],
+     [("    provenance: ActionProvenance\n", "    provenance: ActionProvenance\n    day_basis: Any = None\n")],
+     K.check_o1_o5_public_fields),
     ("A-T10", "valid 時自行補 pct（改寫值）",
      [("    return C.RiskCapState(status=C.RISK_CAP_VALID, system_cap_pct=_sys[0].pct,",
        "    return C.RiskCapState(status=C.RISK_CAP_VALID, system_cap_pct=min(_sys[0].pct, 30),")],
@@ -202,4 +212,5 @@ def test_unmutated_baseline_passes_every_check():
 def test_mutant_count_per_at():
     from collections import Counter
     c = Counter(m[0] for m in MUTANTS)
-    assert all(c[k] >= 2 for k in ("A-T2", "A-T3", "A-T4", "A-T5", "A-T6", "A-T7", "A-T8", "A-T9", "A-T10")), c
+    assert all(c[k] >= 2 for k in ("A-T2", "A-T3", "A-T4", "A-T5", "A-T6", "A-T7", "A-T8", "A-T9", "A-T10",
+                                   "O1-O5")), c
