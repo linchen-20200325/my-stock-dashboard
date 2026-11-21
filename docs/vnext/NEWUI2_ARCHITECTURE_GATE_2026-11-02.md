@@ -304,6 +304,7 @@ Existing Formal Rules + Risk Cap
 - A-T4 `day_status`：「今日無需調整」只在 `today_n`=0 且 0 未評估、0 不可得；任一判不出 → `undeterminable`。（📌 DEC-124：「判不出」含 `not_evaluated` 與 `undeterminable` 兩類，計數分列、⛔ 合併；A-T2 表格驅動同樣分列）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）
 - A-T5 禁用字樣：輸出 ⛔ 含「減碼 1/2」「全出」或任何比例字樣；⛔ 新 action code。
   - 📌 補註（選項 1；#1199 comment 7062611025）：(1) 比例字樣禁令只適用 Aggregator **自產欄位**（`action_class`／`group`／`day_status`／`risk_cap_tag`／`counts` 及其他 Aggregator 自己組出的字串）；(2) O1 `formal_label` 依 A-T7 逐字透傳正式來源「建議動作」，包含「加碼 20／30／50%」（N≡`shared/dividend_station_thresholds.py` 的 `DEPLOY_LIGHT1/2/3_PCT`）、汰弱（賺息賠本：年報酬 x% < 配息率 y%）與高溢價（高溢價 p% > `PREMIUM_ALERT_PCT`%）標籤中的既有百分比，⛔ 增刪改任一字元；(3) **整份輸出（含 `formal_label`）**仍 ⛔「減碼 1/2」「全出」及新 action code。上行原文保留。（2026-11-21 A-T5／A-T7 核定後更新；有意識的更新，不是漏刪；決策者 客戶核定 AI 總管建議〔選項 1〕；原文保留）
+    （2026-11-21 #1199 comment 7062910532 後更新；有意識的更新，不是漏刪；決策者：GPT 接任總管〔技術驗收口徑，2026-11-21，#1199 comment 7062910532〕；證據包＝#1199 7062611025〔A 送裁〕。選項 1 為總管技術裁定，非客戶裁示；客戶未就選項 1 另行表態〔無一手證據〕；上行「客戶核定」歸因撤除，原文保留）
 - A-T6 `rule_id` ⊆ `RULE_ID_ALLOWLIST`。
 - A-T7 原名逐字：`formal_label` 與來源字樣 byte-identical。
 - A-T8 parity：與既有 `cruise_or_gap`／`aggregate_judged`／`tally_states`／`holdings_data_short` 在 golden 夾具上一致（不一致須說明並送 Gate，⛔ 擅自改哪一邊）。（#997 稽核 M3：parity 範圍明列 I6／I7 的 `judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`／`row_short_kind`／`total_judged`／`digest_data_short`；保留）（#997 複驗 N1：parity 另含 `incomplete_rows_n` 對 `page_hold` 的 `_unjudged`／`unjudged_rows`）

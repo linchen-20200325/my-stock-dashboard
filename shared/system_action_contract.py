@@ -21,7 +21,7 @@
 ⛔ 新投資規則／新門檻／新比例／AI action／改寫既有結果／覆寫 Risk Cap／「減碼 1/2」「全出」／寫入。
 `ExposureGate` 只接受 `undeterminable`（`FUI-RC-NUMERIC-GATE` 啟用前；Q1=A）。
 
-═══ A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；客戶核定總管建議 2026-11-21） ═══════
+═══ A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；總管技術裁定〔GPT 接任總管，#1199 comment 7062910532；非客戶裁示〕2026-11-21） ═══════
 1. 「⛔ 新比例／比例字樣」只適用 Aggregator **自產欄位**：`action_class`／`group`／`day_status`／
    `risk_cap_tag`／`counts`（含 `by_group` 鍵）及其他 Aggregator 自己組出的字串（`source_kind`／
    `source_rule`／`rule_id`／`data_short_kind`／`exposure_gate`／`contract_version` 等）。

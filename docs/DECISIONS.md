@@ -11243,7 +11243,9 @@ Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements.json`�
 
 兩組非作者 QA、PR exact-head CI（Python 3.11）、merge 均未完成；本條不是 QA PASS。編號：origin/main 與 refs/pull/1250～1254 皆止於 DEC-221；合併時若被佔則順延。
 
-#### 六、A-T5／A-T7 採選項 1（客戶／總管 2026-11-21 核定，#1199 comment 7062611025；只追加）
+#### 六、A-T5／A-T7 採選項 1（總管技術裁定；決策者：GPT 接任總管〔技術驗收口徑，2026-11-21，#1199 comment 7062910532〕；證據包＝#1199 7062611025〔A 送裁〕；只追加）
+
+> 歸因註明：此為總管技術裁定，非客戶裁示；客戶未就選項 1 另行表態（無一手證據）。原標題「客戶／總管 2026-11-21 核定」的『客戶』歸因已依 #1199 comment 7062910532 撤除（有意識的更正，不是漏刪）。
 
 1. **A-T5 比例禁令只適用 Aggregator 自產欄位**（action_class／group／day_status／risk_cap_tag／counts〔含 by_group 鍵〕及其他 Aggregator 自己組出的字串）；比例正則補全形「％」、「半」、中文數字「N 成」、「分之」。豁免只限來源透傳欄位（`tests/_system_action_checks.py::T5_PASSTHROUGH_FIELDS`：formal_label／ticker／name／item stamp／risk_cap_state／provenance 各輸入 stamp），其餘預設全掃（provenance 的版本與輸入名由原本整段豁免收緊為受掃）。
 2. **A-T7**：O1 `formal_label` 逐字透傳正式來源「建議動作」，含「加碼 20／30／50%」（N≡`shared/dividend_station_thresholds.DEPLOY_LIGHT1/2/3_PCT`）、汰弱「賺息賠本：年報酬 x% < 配息率 y%」、高溢價「高溢價 p% > PREMIUM_ALERT_PCT%」既有百分比；⛔ 增刪改任一字元。規則複本（DEPLOY 三值、PREMIUM_ALERT_PCT、三種句型）由 `check_t7_option1_real_labels` 釘住，來源改動即轉紅、人工複核。

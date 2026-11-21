@@ -160,7 +160,7 @@ def test_risk_cap_state_from_allocation_edges():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# A-T5／A-T7 選項 1（#1199 comment 7062611025；客戶核定總管建議 2026-11-21）驗收案例 (a)～(g)
+# A-T5／A-T7 選項 1（#1199 comment 7062611025；總管技術裁定〔GPT 接任總管，#1199 comment 7062910532；非客戶裁示〕2026-11-21）驗收案例 (a)～(g)
 # 突變證明見 test_system_action_aggregator_mutation.py（A-T5／A-T7 新增項）。
 # ══════════════════════════════════════════════════════════════════════
 def test_option1_a_add_three_lights_and_g_real_format_cut_premium_verbatim():

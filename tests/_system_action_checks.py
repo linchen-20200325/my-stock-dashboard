@@ -323,7 +323,7 @@ def check_t4_day_status(agg, C) -> None:
     assert basis.digest_data_short is True and st.day_status == "undeterminable"
 
 
-# ── A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；客戶核定總管建議 2026-11-21） ─────────────
+# ── A-T5／A-T7 範圍（選項 1；#1199 comment 7062611025；總管技術裁定〔GPT 接任總管，#1199 comment 7062910532；非客戶裁示〕2026-11-21） ─────────────
 # 1) 比例禁令（`_RATIO_RE`）**只**適用 Aggregator **自產欄位**：action_class／group／day_status／
 #    risk_cap_tag／counts（含 by_group 鍵）／source_kind／source_rule／rule_id／data_short_kind／
 #    exposure_gate／provenance 的版本與輸入名，及其他 Aggregator 自己組出的字串。採**預設全掃**：
