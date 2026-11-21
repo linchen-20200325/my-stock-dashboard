@@ -1566,3 +1566,8 @@
 - 客戶於 #1199 comment 7043929256 選定 DG-COV 方案 B：母體＝Top-N 截斷與市場條件篩選之前、經既有可評分資格判準後的完整集合；不可評分／排除列另行揭露；不採 A、C 作完整性分母。**只決定母體口徑**，細節與逐項比對見 `docs/DECISIONS.md` DEC-215。
 - 已批准 ≠ 完整性已驗證：0 production caller、無獨立 expected count、上游預剔除不回報；OneBrain `NOT READY`、正式市場廣度 `NOT EVALUATED`。`I1144-WIRING-GATE`、DG-LIC、DG-PIT、Digest v2、G-F2、Stage F／G、真 Provider／W8／Risk Cap、#1107、#1237 全部維持，**一個都沒解鎖**。
 - **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI；「可評分全集」與既有契約術語的對應未核實。
+
+## 2026-11-21 OneBrain 雙母體客戶裁示 Q1=B、Q2=(a) 登記（DEC-218；docs-only；只追加；非 QA PASS）
+- 客戶於 #1199 comment 7054425559 正式同意：Q1=B 持有部位全集、Q2=(a) 選定單一本組合；持有全集與 DEC-215 可評分全集**分開計數**；過期不得自動當已評估；重複代號須揭露（合併粒度／公式未授權）。細節見 `docs/DECISIONS.md` DEC-218；語意示意表見 `docs/vnext/ONEBRAIN_DUAL_UNIVERSE_TABLE_2026-11-21.md`。
+- 決策落盤 ≠ G-X1 施工授權 ≠ OneBrain 可用：G-X1 未授權實作；OneBrain `NOT READY`、0 production caller、正式市場廣度 `NOT EVALUATED`。HOLD 照 DEC-218 §四；D-1／D-2 另屬 Data／A Gate。
+- **NOT VERIFIED**：非作者 QA、exact-head 五項原生 CI、merge／main CI；統一可評分資格判準待另行決策。
