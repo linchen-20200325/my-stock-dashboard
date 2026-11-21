@@ -1681,3 +1681,21 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **仍 HOLD／NOT VERIFIED**：#1237 NAS；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT；TWII 資料停在 2026-11-09；OneBrain `NOT READY`（0 production caller）；Stage F／G；Digest v2；G-F2；私人 Sheet；統一可評分資格判準；SA 0050→50 與靜默空集合（D-1／D-2）。
 - **下一個唯一安全接手點**：新 Claude C Session 以 C-OB-GX1-L1-ADDITIVE-TALLY-1 為唯一任務，範圍限客戶 G-X1 裁示（L1 純加性計數＋合成資料測試）；開工前先重讀 #1199 comment 7055751465 與 `docs/DECISIONS.md` DEC-218。
 - **停止條件**：任務超出上述範圍、需動 #1237／部署／Secrets／真資料、或需任一 HOLD 項解鎖，即停手回報；不得將本段當 QA PASS。
+
+## 2026-11-21 Resume Checkpoint 2026-11-21（第二段）（append-only；非 QA PASS；單組撰寫，待兩組非作者 QA；任務 B-SSOT-POST1248-1251-SYNC-1，授權 #1199 comment 7058201887）
+- **說明**：上一段「Resume Checkpoint 2026-11-21」（main `a862fae`）為**歷史快照**，現況以本段與 GitHub 為準；舊段不改。
+- **main**：`bff4a626630992284a7098e347648f808037310d`（#1251；`git fetch` 後 `origin/main` 實證，未再前進）。
+- **Open PR（`gh api pulls?state=open` 實查）**：僅 **#1247**（A，Draft，head `e40faf7f`，base 仍 `5963cc46`，落後 main）與 **#1237**（NAS，Draft／HOLD，head `c406fb5f`，base `3163e49d` 已落後）。#1251 已合併，不列為開放。#1247 未合併、不得寫成完成。
+- **已合併證據表**（PR→merge SHA→main push CI，`gh api` check-runs 實查）：
+
+| PR | merge SHA | DEC／任務 | main push CI |
+|---|---|---|---|
+| #1248 | `5963cc46` | DEC-220（B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1；一處 Real 文案；viewport 存證已重產；Cloud 畫面 NOT VERIFIED） | run 44866087366 五項 success |
+| #1249 | `40abe505` | DEC-219（C-OB-GX1-L1-ADDITIVE-TALLY-1；L1 純加性計數；dormant、0 production caller；非 completeness PASS） | run 44863884140 五項 success |
+| #1250 | `702918c0` | DEC-221（B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1；離線代號選取契約；無 production caller） | run 44869410722 五項 success |
+| #1251 | `bff4a626` | 無 DEC（C-OB-L1-DIGEST-ELIGIBILITY-HEADLESS-QA-1；tests-only） | run 44871350535 五項 success（核實於 2026-11-21，gh api check-runs；run completed／success） |
+
+- **DEC 號**：DEC-219＝C #1249、DEC-220＝B #1248（自原 219 有意識改號）、DEC-221＝B #1250。結案 comment：B 7057937922（#1248／#1250）；C 7057201818＋GPT 接收 7057317293（#1249）；#1251 C 結案留言 NOT VERIFIED，引用 GPT 7058201887。
+- **仍 HOLD／NOT VERIFIED（皆不變）**：#1237 NAS；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT；OneBrain `NOT READY`；Stage F／G；Digest v2；G-F2；私人 Sheet；G-X1 Q2 延後；I1144-WIRING-GATE；Real 查股與跨頁 production wiring（使用者仍不能在 Real 查股）；#1119 workflow 清理 HOLD；C1／C2 HOLD。
+- **下一步唯一任務**：**待總管裁示**。#1199 7057937922 記有「可先做」候選：「單檔公開行情 Fact／VM 契約＋合成測試」——**僅為候選，非已授權**；任何 Real 接線須客戶明示批准。
+- **停止條件**：超出上述、動 #1237／部署／Secrets／真資料、或需解除任一 HOLD 即停手；不得將本段當 QA PASS。

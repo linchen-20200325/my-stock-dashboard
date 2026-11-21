@@ -3158,3 +3158,18 @@
 | ID | Owner | 狀態 | 授權來源 | 內容與邊界 |
 |---|---|---|---|---|
 | **B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1** | Claude B | **PR OPEN／NOT VERIFIED** | #1199 comment 7057338506 | 新增 L0 `shared/ui2_contract/target_selection.py`（公開股票選取／跨頁代號 identity 純離線契約）＋ `tests/test_ui2_target_selection_contract.py`（合成資料）；DEC-221。**完成後使用者仍不能在 Real 查股；正式接線需另行授權：I1144-WIRING-GATE、DG-LIC／DG-PIT／DG-SCOPE、Real 標的查詢啟用、跨頁 production wiring。** 不解除任何 Gate；無 production caller；不改既有 normalize 函式；無「是否持有」概念。QA／CI／merge 未完成 |
+
+## 2026-11-21 結案索引與狀態更正：#1248～#1251（append-only；非 QA PASS；單組撰寫，待兩組非作者 QA；依據 `git log origin/main`（main＝`bff4a626630992284a7098e347648f808037310d`）、`gh api` 與 #1199 comment 7057937922／7058201887；任務 B-SSOT-POST1248-1251-SYNC-1）
+
+> **現況更正**：上方「2026-11-21 B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1 登記」列仍寫「**PR OPEN／NOT VERIFIED**」，**該狀態已過期**；#1250 已合併（見下表），舊列不改。另 C-OB-GX1-L1-ADDITIVE-TALLY-1 先前列寫「已授權、尚未開工」，亦已過期（已合併為 #1249）。有意識的更正，不是漏刪。
+> BACKLOG 先前無 B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1、C-OB-L1-DIGEST-ELIGIBILITY-HEADLESS-QA-1 之獨立列（grep 無命中），下表為首次登記；#1250 與 GX1 為**狀態更正，不重複造列**。
+
+| ID | PR → merge SHA（DEC） | 現況／邊界 | main push CI（`gh api …/check-runs` 實查） | #1199 結案 comment |
+|---|---|---|---|---|
+| **B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1** | #1248 → `5963cc46`（DEC-220） | **已合併**。Real 標的頁**僅一處文案**（據實告知目前無法查詢是否持有、持股頁與 OneBrain Real 功能尚未開放）；Real viewport 存證已重產。**Cloud 部署畫面 NOT VERIFIED** | run 44866087366：Fast／Slow／ui2-browser 1.56.0／1.59.2／ui2-browser-gate 五項皆 success | B 結案 7057937922 |
+| **C-OB-GX1-L1-ADDITIVE-TALLY-1** | #1249 → `40abe505`（DEC-219） | **已合併**。L1 **純加性**持股讀取計數 API（`gsheet_portfolio.py`）；**dormant、0 production caller**；**不是 completeness PASS、不是獨立 expected**；G-X1 Q2 仍延後；OneBrain 仍 `NOT READY` | run 44863884140：五項皆 success | C 結案 7057201818；GPT 接收 7057317293 |
+| **B-UI2-PUBLIC-TICKER-CONTRACT-MINSLICE-1** | #1250 → `702918c0`（DEC-221） | **已合併**（更正上方舊列「PR OPEN」）。`shared/ui2_contract/target_selection.py` 純離線代號選取契約＋合成測試；**無 production caller；使用者仍不能在 Real 查股**；不解除 I1144-WIRING-GATE／DG-* | run 44869410722：五項皆 success | B 結案 7057937922 |
+| **C-OB-L1-DIGEST-ELIGIBILITY-HEADLESS-QA-1** | #1251 → `bff4a626`（**無 DEC**：`git grep` DECISIONS.md 無對應） | **已合併**。**tests-only**（`tests/test_onebrain_l1_digest_eligibility_headless.py` 單檔）：L1 tally × Digest fail-closed 離線負測；不是整合、不是 OneBrain 可用 | run 44871350535：五項 success（核實於 2026-11-21，gh api check-runs；run completed／success） | **C 結案留言 NOT VERIFIED**（#1199 與 #1251 皆查無）；僅引用 GPT 總管 7058201887 |
+
+> 未解鎖（皆不變）：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、Real 查股／跨頁 production wiring、#1237 NAS Draft／HOLD、#1119 workflow 清理 HOLD、OneBrain `NOT READY`、Stage F／G、Digest v2、G-F2、私人 Sheet、G-X1 Q2 延後。
+> **#1247**（A-SA-GSPREAD-621-REGRESSION-EVIDENCE-1，C3 tests-only）：查核時 **Draft、未合併**（head `e40faf7f`、base 仍 `5963cc46`、落後 main、mergeable_state＝behind），**不得寫成完成**；C1／C2 維持 HOLD。
