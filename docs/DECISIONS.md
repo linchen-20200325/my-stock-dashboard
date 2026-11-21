@@ -11131,3 +11131,26 @@ Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud
 - **編號**：origin/main（`2cc632ff`）已用至 DEC-216；Open PR #1237（未使用 DEC 號）；DEC-217 已由 #1244（B-UI2-FAKE-LABEL-ACCURACY-1）占用，故順延；本批 DEC-218；合併時若被佔則再順延。
 
 單組撰寫。
+
+
+### DEC-219｜B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1：New UI2 Real 標的頁「是否需要行動」文案據實告知「目前無法查詢是否持有、持股頁與 OneBrain Real 功能尚未開放」（#1199 comment 7056444741；2026-11-21；只追加；非 QA PASS；單組撰寫）
+
+#### 一、授權依據與範圍
+
+依 #1199 comment 7056444741，僅改 Real 標的頁（P4_TARGET）一處文案：`src/services/ui2/real_canonical.py` 的 `no_holding_action` 欄 detail，由「本頁不產生持股動作；動作權威＝💼 持股」改為「本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放」。目的：不讓使用者誤以為此處可得知持有與否；不製造新能力，欄位仍為 `⬜ 尚未提供`（NOT_PROVIDED）。
+
+#### 二、零變更清單
+
+FAKE 標的頁（`scenarios.py`）與資料頁（`data_page.py`）同字串**未改**；導航、按鈕 enabled／disabled、CTA、data service、L1／L3／`shared/**`、Secrets、workflow、守衛斷言（未放寬）皆未動。ENGINEERING_VOCAB 守衛照常適用（新字串無工程字樣）。
+
+#### 三、consumers 與處置（`git grep` 實查）
+
+- `tests/test_ui2_batch3.py`（`動作權威＝💼 持股` 斷言）：僅測 FAKE 場景，不動、仍綠。
+- `tests/test_ui2_real_feed.py` 的 `q2_row` 突變：作用於 Real 資料頁，不動。
+- P3 evidence baseline（`tests/fixtures/ui2_p3_evidence_baseline.json`）：依 DEC-214 程序以 `--regen` 重產，僅 `real/p4_target/*` 9 個 key 各 1 行（detail 雜湊）變動，其餘 78 key 逐欄不變；`_P3_BASELINE_SHA256` 更新為 `e01ef68a…0c6e`（舊 `d49a298f…1fd31`）。
+- DEC-137 `source_hash`：僅涵蓋 `src/ui2/**`，本批未動該範圍，freshness 守衛維持綠，source_hash 不變。
+- 新增測試：`tests/test_ui2_real_feed.py` 兩則（Real 標的頁 VM detail 含「無法查詢是否持有」「尚未開放」、不含「動作權威」、過 ENGINEERING_VOCAB；FAKE 與資料頁舊字串仍在）。
+
+#### 四、未解（NOT VERIFIED）
+
+Real viewport 存證（`docs/vnext/newui2_realfeed/viewport_measurements*.json`）內 Real 標的頁（`results[2]、[3]、[8]、[9]`）元素 `text` 仍含舊字串：本作者環境無 Chromium（`cdn.playwright.dev` 403），未能依 DEC-214 程序重產；存證文字落後，待具瀏覽器環境重產（量測判準未變）。Cloud 實際畫面＝NOT VERIFIED。QA、CI、merge 均未完成；本條不是 QA PASS，不解鎖任何 Gate。編號：origin/main 已用至 DEC-218，故為 DEC-219；合併時若被佔則順延。
