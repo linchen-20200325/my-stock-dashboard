@@ -11052,6 +11052,35 @@ Batch 3：處理 #1164 文件 PR 與 #1124～#1126 資料 PR。資料授權／PI
 
 Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud 已更新；Real 資料可能停在 2026-11-09 而顯示 STALE；為非正式行情，可用於預覽。QA、CI、merge 均未完成；本條為單組作者自跑結論。
 
+### DEC-217｜B-UI2-FAKE-LABEL-ACCURACY-1：開發面 feed 選單標籤「FAKE 場景（預設）」→「FAKE 場景」（總管裁示 #1199 comment 7054252829 裁示 B；2026-11-21；只追加；非 QA PASS；單組作者環境）
+
+#### 一、授權依據與範圍
+
+DEC-216 把一般入口預設改為 Real 後，開發面（`?ui2_dev=1`）feed 選單標籤 `FAKE 場景（預設）` 字樣失真。依總管裁示 B 處理（即 DEC-216 §四「未解（待裁）」的該項；DEC-216 原文不改）：`src/ui2/shell/app.py` 的 `_FEED_LABELS[FEED_FAKE]` 改為 `FAKE 場景`，不含任何預設宣稱。Real 標籤、值、儲存狀態、切換行為、頁面文案、layout 一律不動。
+
+#### 二、零變更清單
+
+`app.py`、`app_ui2.py`、production 路由、Cloud、Secrets、NAS、OneBrain、持股、`shared/**`、資料契約／PIT／staleness 門檻、五頁路由與 layout、任何守衛與測試斷言（未放寬）、量測門檻／判準／邏輯皆未動。
+
+#### 三、consumers 與處置（`git grep` 實查）
+
+- 硬編舊字串者：僅 `tests/ui2_viewport/measure_viewport.py` 內一則註解（舉例用，已同步改為「FAKE 場景」，不影響行為）。
+- 動態取值（`_FEED_LABELS[...]`）：`measure_viewport.py`、`tests/ui2_viewport/degraded.py`、`tests/test_ui2_drawer_browser.py`；選項以 `exact=True` 比對動態取得的新字樣，無須改。
+- 選擇器核對：`_select_box` 以 selectbox 的 **label**（開頭比對「資料來源」／「場景」／「帳戶狀態」）定位，不以目前選中值或 accessible name 比對；新字樣「FAKE 場景」仍含「場景」，但 label 比對不看選項文字，且選項為 exact 比對，故不會誤選資料來源那一格（browser lane 實跑驗證）。
+- `tests/test_ui2_real_feed.py` 無硬編舊字串。
+
+#### 四、viewport 證據（DEC-137；`src/ui2/**` 在 `source_hash` 範圍）
+
+守衛紅燈僅 5 項（四份 `test_dec137_evidence_meta_is_fresh`＋`freshness_guard_has_teeth`），其餘 3035 項綠。依 DEC-209／214／216 程序重產四份（`--shots none`；Real 加 `--feed real`；1.56.0 用暫時 venv `streamlit==1.56.0`；playwright 1.64.1）：FAKE 82／82、Real 13／13（兩版皆是）。逐值差額：FAKE 兩份除 meta（`git_sha`／`generated_at`／`source_hash`）外**逐值相同**（非 meta 差額 0）；Real 兩份除 meta 外僅 `results[6]`（手機 🗂 資料頁）`expanded.expander_box.height` 652.6→652.7（0.1px 量測雜訊，`top`／`bottom` 相同；DEC-210／216 已記載同欄位的 0.1px 抖動），時鐘文字本次無差。headless 模擬 ≠ Cloud。
+
+#### 五、測試（作者自跑，未經第二組驗證）
+
+指定範圍 pytest（`tests/test_ui2_*.py tests/test_b2_consumer_consistency.py tests/test_c3_layering_guard.py`）與整條 browser lane（兩個檔，兩個 Streamlit 版本）結果：指定範圍 3040 passed／57 deselected／3 xfailed／0 failed（基準 3040）；browser lane（`UI2_BROWSER_LANE=required`、`UI2_EXPECT_STREAMLIT` 設對應版本、playwright 1.64.1）Streamlit 1.59.2＝57 passed、1.56.0＝57 passed，皆 0 failed。
+
+#### 六、NOT VERIFIED
+
+Streamlit Cloud 實際可用性＝NOT VERIFIED（#1107）；程式合併≠Cloud 已更新。QA、CI、merge 均未完成；本條不是 QA PASS。編號：origin/main 已用至 DEC-216；合併時若被佔則順延。
+
 
 ### DEC-218｜OneBrain 雙母體客戶正式裁示：Q1=B「持有部位全集」、Q2=(a)「選定單一本組合」；持有全集與 DEC-215 可評分全集分開計數（#1199 comment 7054425559；2026-11-21；只追加；docs-only；非 QA PASS；單組撰寫）
 

@@ -39,7 +39,7 @@ DEV_FLAG_PARAM = "ui2_dev"             # 開發面旗標（query parameter）
 DEV_SURFACE_TITLE = "🧪 開發／測試工具（非產品內容）"
 
 _FEED_LABELS = {
-    FEED_FAKE: "FAKE 場景（預設）", FEED_REAL: "Real-data Preview（唯讀；只接 2 項真資料）",
+    FEED_FAKE: "FAKE 場景", FEED_REAL: "Real-data Preview（唯讀；只接 2 項真資料）",
 }
 
 _ACCOUNT_LABELS = {
