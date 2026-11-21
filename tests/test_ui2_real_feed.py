@@ -1372,3 +1372,28 @@ def test_1202_kbar_valid_xs_control_passes():
 def test_1202_kbar_xs_rejects_newline_and_fullwidth_dates(bad_x):
     with pytest.raises(RC.RealFeedContractError):
         RC.validate_twii_kbar_fact(_kbar_fact_xs((bad_x,)))
+
+
+def test_real_target_action_needed_copy_dec220():
+    """DEC-220：Real 標的頁「是否需要行動」須明說目前無法查詢是否持有、持股頁與 OneBrain Real 功能尚未開放；
+    不再使用舊的「動作權威＝」工程字樣；FAKE 標的頁與 Real 資料頁字串不得被連帶改動。"""
+    import inspect
+    from src.services.ui2 import data_page, real_canonical, scenarios
+    src = inspect.getsource(real_canonical)
+    new = "本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放"
+    old = "本頁不產生持股動作；動作權威＝💼 持股"
+    assert src.count(new) == 1 and old not in src
+    assert "動作權威" not in new and "尚未開放" in new and "無法查詢是否持有" in new
+    # FAKE 側與資料頁維持原字串（本批不得改）
+    assert old in inspect.getsource(scenarios)
+    assert old in inspect.getsource(data_page)
+
+
+def test_real_target_page_action_needed_vm_dec220():
+    """DEC-220：Real 標的頁 VM 的「是否需要行動」detail 行為驗證（含 ENGINEERING_VOCAB 守衛；FAKE 側見上一則）。"""
+    from tests.test_ui2_p1_human_text import ENGINEERING_VOCAB
+    a = get_real_page_vm(P4_TARGET, RF.read_real_snapshot()).context.first_screen.action_needed
+    d = a.detail or ""
+    assert a.capability is CapabilityState.NOT_PROVIDED
+    assert "無法查詢是否持有" in d and "尚未開放" in d and "動作權威" not in d
+    assert [w for w in ENGINEERING_VOCAB if w in d] == []

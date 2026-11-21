@@ -628,7 +628,7 @@ def _target(snap: RealFeedSnapshot) -> dict:
                                        "精選尚未開放（需連網取得，且候選的組合方式尚待定義）"),
         "context_rows": [regime_spec(snap, "market_regime", "市場位階", see_why=REGIME_SEE_WHY_MARKET),
                          _risk_cap_row()],
-        "action_needed": _not_provided("no_holding_action", "是否需要行動", "本頁不產生持股動作；動作權威＝💼 持股"),
+        "action_needed": _not_provided("no_holding_action", "是否需要行動", "本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放"),
         "next_step": _not_provided("next", "下一步", "選一檔後進入研究頁（尚未提供）"),
         "cta": {"label": "查詢", "disabled_reason": "尚未開放查詢"},
         "cards": [
