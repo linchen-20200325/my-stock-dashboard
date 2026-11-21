@@ -36,6 +36,7 @@
 | 其餘（乾淨；含保留空白值模式下張數／均價空白的 IN-U 列） | 每個保留代號一筆 `{'ticker', 'held': True}`，不去重、不丟 IN-U、順序不變 | 恆含 `universe_not_independent`；有 IN-U 列再加 `in_u_blank_kept` |
 
 **為什麼 EX 證據要降級成 None，而不是給 list 並「揭露」？**（技術判斷，作者單組，未經第二組驗證）
+⚠️ EX 證據→None 為保守降級，與契約 §A 第 9–11 列（EX 剔除、其餘 list）不同，待總管裁示（#1199）。
 Digest／coverage 目前**沒有**承載丟列、非有限值、重複代號的欄位（契約 §C-2／§C-3／§C-4，皆需 schema 放行）。若照樣給
 list，四段齊備時 `DigestCoverage.is_complete` 會是 True——下游看到「完整」，實際上來源有列被剔除或值無效（§C-6）。
 在沒有揭露通道之前，保守降級成「未知」是唯一不冒稱完整的做法；原因碼記錄降級理由。
@@ -52,7 +53,7 @@ list，四段齊備時 `DigestCoverage.is_complete` 會是 True——下游看�
 adapter 無法改 coverage，只能在自己的結果上**明示**，避免呼叫端把 `is_complete` 當成已證明完整。
 
 已知限制（據實）：無時點（§C-10，本模組不補）；無鍵部位在 Digest 只剩計數（§C-5）；單組撰寫與自測，未經非作者 QA。
-Digest NOT READY；OneBrain 正式廣度 NOT EVALUATED。
+Digest NOT READY；OneBrain NOT READY；OneBrain 正式廣度 NOT EVALUATED。
 """
 from __future__ import annotations
 
@@ -322,7 +323,17 @@ def _is_consistent(s: HoldingsReadSnapshot) -> bool:
         return False
     if len(set(s.kept_tickers)) != kept and s.duplicate_ticker_count == 0:
         return False                      # 保留列自身就有重複，卻宣稱來源無重複代號
-    return s.duplicate_ticker_count * 2 <= s.source_row_count   # 每個重複代號至少占兩列來源列
+    return _duplicate_bound_ok(s)
+
+
+def _duplicate_bound_ok(s: HoldingsReadSnapshot) -> bool:
+    """每個重複代號至少占兩列「代號非空」的來源列。
+
+    理由：重複代號只從代號非空的來源列計算（代號空白的列不構成任何代號）；而代號空白的列恰好全數歸入
+    `dropped_blank_ticker`（該丟列原因判定順序第一、條件就是代號去空白後為空），故代號非空的來源列數＝
+    `source_row_count − dropped_blank_ticker`，⇒ `2 × duplicate_ticker_count ≤ source_row_count − dropped_blank_ticker`。
+    """
+    return s.duplicate_ticker_count * 2 <= s.source_row_count - s.dropped_blank_ticker
 
 
 def _ex_evidence_reasons(s: HoldingsReadSnapshot) -> tuple:

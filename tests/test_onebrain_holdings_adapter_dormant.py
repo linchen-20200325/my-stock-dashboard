@@ -164,6 +164,8 @@ DEGRADE_CASES = {
     "duplicate_one_dropped": ([_rec("2330"), _rec("2330", lots=0)], False,
                               {A.REASON_DUPLICATE_TICKERS, A.REASON_EX_DROPPED_NON_POSITIVE}),
     "blank_dropped_default": ([_rec("0050"), _rec("7001", lots="")], False, {A.REASON_IN_U_BLANK_DROPPED}),
+    "duplicate_with_blank_ticker": ([_rec("2330"), _rec("2330", lots=2), _rec("")], False,   # 界限恰好相等：仍合法
+                                    {A.REASON_DUPLICATE_TICKERS, A.REASON_EX_DROPPED_BLANK_TICKER}),
     "all_dropped": ([_rec("", lots=1), _rec("0050", lots=0)], False,
                     {A.REASON_EX_DROPPED_BLANK_TICKER, A.REASON_EX_DROPPED_NON_POSITIVE}),
     "combo": ([_rec("0050"), _rec("0050"), _rec("0056", lots=NAN), _rec("7001", lots=""), _rec("9001", lots="x")],
@@ -177,6 +179,8 @@ LIST_CASES = {
     "in_u_blank_kept": ([_rec("0050"), _rec("7001", lots=""), _rec("7002", avg="  ")], True,
                         ["0050", "7001", "7002"], 2, {}),
     "all_in_u": ([_rec("7001", lots=""), _rec("7002", avg="")], True, ["7001", "7002"], 2, {}),
+    "mixed_stock_and_etf_codes": ([_rec("2330"), _rec("00878"), _rec("0056"), _rec("006208"), _rec("0050")], False,
+                                  ["2330", "00878", "0056", "006208", "0050"], 0, {}),   # 前導零保留、原樣、順序不變
     "with_other_partitions": ([_rec("00878")], False, ["00878"], 0,
                               dict(other_name_rows=4, blank_rows=1, blank_name_rows=2)),
 }
@@ -204,6 +208,10 @@ def _none_inputs():
                                                     {A.REASON_TALLY_INCONSISTENT}),
         "inconsistent_default_but_blank_kept": (_ok(kept_blank_value_count=1), {A.REASON_TALLY_INCONSISTENT}),
         "inconsistent_kept_dup_claims_none": (_ok(kept_tickers=("0050", "0050")), {A.REASON_TALLY_INCONSISTENT}),
+        "inconsistent_dup_exceeds_source_rows": (_ok(duplicate_ticker_count=2), {A.REASON_TALLY_INCONSISTENT}),
+        "inconsistent_dup_exceeds_nonblank_ticker_rows": (     # 舊界限（≤ 來源列數）會放行；收緊後才抓到
+            _ok(kept_tickers=("0050",), source_row_count=2, dropped_blank_ticker=1, duplicate_ticker_count=1),
+            {A.REASON_TALLY_INCONSISTENT}),
         "inconsistent_flavors_exceed_kept": (_ok(kept_blank_value_count=2, kept_non_finite_count=1, retained=True),
                                              {A.REASON_TALLY_INCONSISTENT}),
         "zero_rows": (_snap([]), {A.REASON_ZERO_ROWS}),
@@ -620,6 +628,28 @@ def test_mutation_unknown_check_removed_turns_norm_red(monkeypatch):
     monkeypatch.setattr(A, "_has_unknown", lambda s: False)
     with pytest.raises((AssertionError, TypeError)):
         _check_none_paths()
+
+
+def test_mutation_duplicate_bound_removed_turns_norm_red(monkeypatch):
+    """M11：移除「2 × 重複代號數 ≤ 代號非空來源列數」界限 ⇒ 兩個 inconsistent_dup_* 案例改走 duplicate_tickers ⇒ 轉紅。"""
+    monkeypatch.setattr(A, "_duplicate_bound_ok", lambda s: True)
+    with pytest.raises(AssertionError, match="inconsistent_dup_"):
+        _check_none_paths()
+
+
+def test_mutation_duplicate_bound_loosened_turns_norm_red(monkeypatch):
+    """M12：界限放寬回「≤ 來源列數」（不扣代號空白列）⇒ 收緊專屬案例轉紅。"""
+    monkeypatch.setattr(A, "_duplicate_bound_ok", lambda s: s.duplicate_ticker_count * 2 <= s.source_row_count)
+    with pytest.raises(AssertionError, match="inconsistent_dup_exceeds_nonblank_ticker_rows"):
+        _check_none_paths()
+
+
+def test_norm_mixed_codes_kept_verbatim():
+    """list 路徑：4 碼股與 5／6 碼 ETF 混合，代號原樣（前導零保留）、順序不變、列數不變。"""
+    s, tickers, _ = _list_inputs()["mixed_stock_and_etf_codes"]
+    res = _adapt(s)
+    assert [r["ticker"] for r in res.holdings_rows] == tickers == list(s.kept_tickers)
+    assert all(type(r["ticker"]) is str for r in res.holdings_rows) and res.kept_positions == 5
 
 
 @pytest.mark.parametrize("semantic", ["_is_consistent", "_has_unknown"])
