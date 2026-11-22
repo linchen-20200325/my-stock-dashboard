@@ -4,16 +4,17 @@
 授權：Issue #1199 comment 7071984103（核准）；客戶口徑 7071998333；設計 7071897672。DEPENDS ON #1258（adapter）。
 只新增本檔（tests-only）；⛔ 不改 adapter／Digest／schema／shared／production／既有測試／docs。
 
-═══ 三類（每個測試名與 docstring 標其一，不可混用）═══════════════════════
+═══ 分類（每個測試名與 docstring 標其一，不可混用）═══════════════════════
 - `norm_transition`：客戶已核准的**過渡期**語意（7071998333）——未知／異常輸入 ⇒ 整段無法判定；effective 恆為規則式摘要；
   adapter 原因碼**不傳遞**到下游（⚠️ 這是「未傳遞」，**不是**「已揭露」：下游目前沒有任何通道承載原因碼）。
   突變（`test_norm_transition_mutation_*`）與守衛（`test_norm_transition_guard_*`）用來證明這類測試有牙齒，歸同類。
 - `current_behavior`：現況快照，**非規範**；轉紅表示行為改變，處置寫在各 docstring。
 - `target_state`：未來目標態，**只能**以 `xfail(strict=True, raises=AssertionError)` 表達；XPASS ⇒ 缺口已補，升為正式斷言。
+- `unit_guard`：結果型別建構期不變量的單元守衛（G7）；**不是**過渡期語意，也不是跨層鏈，只是補上此前無測試執行的檢查。
 
 本檔聚焦**跨層鏈**；#1258 既有 48 測試已覆蓋的 adapter 單元斷言（分支表、建構期、repr 等）不重做。
 全離線（socket 封鎖）、無時鐘（`generated_at` 固定）、不讀 Sheet、不呼叫真 Provider。
-⚠️ 作者單組撰寫與自測；未經非作者 QA。Digest NOT READY；OneBrain NOT READY。
+⚠️ 初版 116bd15e 經兩組非作者 QA 本地 PASS（#1261）；其後依 QA 意見的修訂為作者自測，尚未再經 QA。Digest NOT READY；OneBrain NOT READY。
 """
 from __future__ import annotations
 
@@ -33,11 +34,13 @@ import src.services.onebrain_holdings_adapter as A
 import src.services.onebrain_shadow as SH
 from shared.allocation_decision import build_allocation_decision
 from shared.decision_digest import Availability, HoldingKey
-from shared.decision_digest_coverage import DigestCoverage
+from shared.decision_digest import AiParticipation
+from shared.decision_digest_coverage import SEGMENT_HOLDINGS, WITHHELD_NOT_LOADED, DigestCoverage
 from shared.decision_digest_grounding import (
     Lit,
     SummaryDraft,
     SummarySection,
+    SummaryResult,
     SummarySentence,
 )
 from shared.freshness_policy import FreshnessStatus
@@ -74,6 +77,7 @@ def _socket_blocked(monkeypatch):
     def _no_net(*_a, **_k):
         raise AssertionError("離線鏈不得連網")
     monkeypatch.setattr(socket.socket, "connect", _no_net)
+    monkeypatch.setattr(socket.socket, "connect_ex", _no_net)
     monkeypatch.setattr(socket, "create_connection", _no_net)
 
 
@@ -164,7 +168,8 @@ def _assemble(holdings_rows, keyed):
 
 
 def _providers(digest) -> dict:
-    """FakeProvider 四類：echo／boom（非 ProviderError）／timeout（ProviderError）／forged（偽造草稿兩種）。"""
+    """FakeProvider：echo／boom（非 ProviderError）／timeout（ProviderError）／forged（偽造草稿兩種）／
+    clean_reordered（通過 grounding、但內容與規則式草稿不同：market 段句序反轉）。"""
     honest = S.compose_rule_draft(digest)
     safe_literal = SummaryDraft((SummarySection("market", (SummarySentence((Lit("safe"),)),)),))
     drop_holdings = SummaryDraft(tuple(s for s in honest.sections if s.key != "buy_and_hold"))
@@ -174,7 +179,19 @@ def _providers(digest) -> dict:
         ProviderErrorKind.TIMEOUT.value: FakeProvider(ProviderErrorKind.TIMEOUT.value),
         "forged_safe_literal": FakeProvider(MODE_PAYLOAD, safe_literal),
         "forged_drop_holdings": FakeProvider(MODE_PAYLOAD, drop_holdings),
+        MODE_CLEAN_REORDERED: FakeProvider(MODE_PAYLOAD, _clean_reordered_draft(honest)),
     }
+
+
+MODE_CLEAN_REORDERED = "clean_reordered"
+#: 草稿乾淨（應通過 grounding）的模式；其餘模式一律不得被接受。
+CLEAN_MODES = (MODE_ECHO, MODE_CLEAN_REORDERED)
+
+
+def _clean_reordered_draft(honest: SummaryDraft) -> SummaryDraft:
+    """乾淨但內容不同的草稿：只把 market 段句序反轉（G5 不限段內句序；段落順序與句子集合不變）。"""
+    m = honest.sections[0]
+    return SummaryDraft((SummarySection(m.key, tuple(reversed(m.sentences))),) + honest.sections[1:])
 
 
 @dataclasses.dataclass
@@ -214,10 +231,15 @@ def _fingerprint(c: Chain) -> str:
 
 
 def _check_shadow_effective_is_rule_summary(label: str, c: Chain) -> None:
+    reordered = c.shadow[MODE_CLEAN_REORDERED][1].payload
+    assert reordered != S.compose_rule_draft(c.assembled.digest), f"norm_transition：{label} 對照草稿須與規則式不同"
     for mode, (o, p) in c.shadow.items():
         assert p.calls >= 1, f"norm_transition：{label}/{mode} provider 應被呼叫"
         assert o.effective == c.summary, f"norm_transition：{label}/{mode} effective 必須恆為規則式摘要"
-        if mode != MODE_ECHO:
+        if mode in CLEAN_MODES:
+            assert o.shadow_accepted is True and o.error_kind is None, \
+                f"norm_transition：{label}/{mode} 乾淨草稿應通過 grounding（只供離線比對、不採用）"
+        else:
             assert o.shadow_accepted is False, f"norm_transition：{label}/{mode} 失敗／偽造不得被接受"
             assert isinstance(o.error_kind, ProviderErrorKind), f"norm_transition：{label}/{mode} 須分類錯誤"
 
@@ -266,7 +288,6 @@ def _check_list_chain() -> None:
         text = "\n".join(x for _s, ls in c.summary.lines for x in ls)
         assert not [w for w in ZERO_HOLDING_CLAIMS if w in text], f"norm_transition：{label} 有部位時不得宣稱零持股"
         _check_shadow_effective_is_rule_summary(label, c)
-        assert c.shadow[MODE_ECHO][0].shadow_accepted is True, f"norm_transition：{label} echo 草稿應通過 grounding"
         _check_reasons_not_transmitted(label, c)
 
 
@@ -276,7 +297,7 @@ def _check_list_chain() -> None:
 def test_norm_transition_none_paths_unknown_through_whole_chain():
     """[norm_transition] 每種 None 原因（含 EX／重複／非有限／預設模式丟 IN-U 等異常輸入）→ Digest holdings UNAVAILABLE、
     coverage 未知（None）、is_complete False、摘要無零持股字樣、持股與行動段整段「無法判定」且無中性／正常／安全；
-    run_shadow 在 echo／boom／timeout／偽造下 effective 恆為規則式摘要；原因碼不出現在任何下游物件（未傳遞，非已揭露）。"""
+    run_shadow 在 echo／boom／timeout／偽造／乾淨但內容不同下 effective 恆為規則式摘要；原因碼不出現在任何下游物件（未傳遞，非已揭露）。"""
     _check_none_chain()
 
 
@@ -304,8 +325,8 @@ def test_norm_transition_none_case_inventory_covers_every_none_reason():
     (dict(kept_positions=1, in_u_positions=0, reasons=(A.REASON_IN_U_BLANK_KEPT, A.REASON_UNIVERSE_NOT_INDEPENDENT)),
      "標示不一致"),
 ], ids=["in_u_negative", "kept_bool", "in_u_float", "in_u_gt_kept", "in_u_without_reason", "reason_without_in_u"])
-def test_norm_transition_g7_result_list_path_invariants_raise(kw, match):
-    """[norm_transition] G7：`HoldingsAdapterResult` list 路徑三項此前未有測試執行的檢查——負數／非 int 計數、
+def test_unit_guard_g7_result_list_path_invariants_raise(kw, match):
+    """[unit_guard；非過渡期語意] G7：`HoldingsAdapterResult` list 路徑三項此前未有測試執行的檢查——負數／非 int 計數、
     in_u > kept、in_u 與 `in_u_blank_kept` 原因碼不一致 ⇒ ValueError（各自命中預期訊息，非被其他檢查先擋）。"""
     base = dict(holdings_rows=({"ticker": "0050", "held": True},), reasons=(A.REASON_UNIVERSE_NOT_INDEPENDENT,))
     with pytest.raises(ValueError, match=match):
@@ -405,8 +426,10 @@ def test_current_behavior_g1_known_divergence_contract_oracle_list_vs_adapter_no
 # target_state（strict xfail；只表達未來目標態）
 # ══════════════════════════════════════════════════════════════════════
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "target_state：契約 §A 註／§C-8（IN-U＝持有但未能評估）＋#1199 comment 7071998333（目標態）——IN-U 列全部有鍵時，"
-    "coverage 不得宣稱完整；現行 coverage 無 IN-U 欄位，is_complete=True。需 coverage／schema 放行。XPASS ⇒ 升為正式斷言。"))
+    "target_state：契約 §B2 第 1 點（缺獨立應有母體：任何以 L1 rows 餵入者 coverage 必須 incomplete）、§C-6、"
+    "§C-8(a)（IN-U 在 coverage 的標示）＋#1199 comment 7071998333——IN-U 列全部有鍵時 coverage 不得宣稱完整；"
+    "現行 coverage 無 IN-U／母體欄位，is_complete=True。此為 §C-6 缺口的特例（clean_all_keys 同樣 is_complete=True，"
+    "已由 #1254 strict xfail 釘住）。需 coverage／schema 放行。XPASS ⇒ 升為正式斷言。"))
 def test_target_state_in_u_all_keyed_must_not_claim_complete():
     """[target_state] IN-U 全有鍵時 coverage 不得宣稱完整（預期失敗於 is_complete 斷言）。"""
     c = _chain(*_list_cases()["in_u_kept_all_keys"])
@@ -414,17 +437,82 @@ def test_target_state_in_u_all_keyed_must_not_claim_complete():
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "target_state：契約 §A 第 9–11 列與 §C-2（EX 剔除、其餘 list、剔除須可回報）＋#1199 comment 7071998333"
+    "target_state：main 契約 §A 第 9–11 列與 §C-2（EX 剔除、其餘 list、剔除須可回報）＋客戶裁示 #1199 comment 7071998333"
     "（過渡期 None、目標態 list）——目前 Digest／coverage 無承載剔除列數與原因的通道，adapter 保守降級為 None。"
     "XPASS ⇒ 揭露通道已就緒：升為正式斷言，並同步 G1 known_divergence 快照與 norm_transition 鏈。"))
 def test_target_state_ex_removed_rows_kept_and_disclosed():
-    """[target_state] EX 剔除後保留其餘列並揭露剔除 N 列與原因（預期失敗於 adapter 仍回 None 的斷言）。"""
+    """[target_state] EX 剔除後保留其餘列（只含有效列）並揭露剔除 N 列與原因（預期失敗於 adapter 仍回 None 的斷言）。
+    揭露通道的 schema 名稱**待定**，故不綁欄位名：以通用方式在 Digest／coverage 的 to_dict 與摘要中找「非零剔除計數」或
+    「明示的剔除原因」。"""
     snap = _ok(kept=("0050",), dropped_non_numeric=1)
     res = A.adapt_holdings_read(snap)
     assert res.holdings_rows is not None, "target_state：EX 剔除後應保留其餘列（list）"
+    assert [r["ticker"] for r in res.holdings_rows] == ["0050"], "target_state：只含有效列"
     c = _chain(snap, ("0050",))
-    cov = c.assembled.coverage.to_dict()
-    assert cov.get("excluded_source_rows") == 1, "target_state：coverage 應揭露剔除 1 列"
+    assert _has_observable_exclusion_disclosure(c), "target_state：下游須可觀測到剔除列數或原因"
+
+
+_EXCLUSION_KEY_HINTS = ("exclu", "drop", "remov", "reject", "剔除")
+_EXCLUSION_TEXT_HINTS = ("剔除", "non_numeric", "ex_dropped")
+
+
+def _has_observable_exclusion_disclosure(c: Chain) -> bool:
+    """通用揭露檢查（不綁 schema 名）：任一鍵名含剔除語意且值為非零 int，或任一字串明示剔除原因。
+    ⚠️ 既有 `excluded_invalid_rows` 是站內列計數，本情境站內列乾淨（恆 0），不會誤判。"""
+    found = []
+
+    def walk(o, key=""):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                walk(v, str(k))
+        elif isinstance(o, (list, tuple)):
+            for v in o:
+                walk(v, key)
+        elif type(o) is int and o > 0 and any(h in key.lower() for h in _EXCLUSION_KEY_HINTS):
+            found.append(key)
+        elif isinstance(o, str) and any(h in o for h in _EXCLUSION_TEXT_HINTS):
+            found.append(o)
+    walk(c.assembled.to_dict())
+    walk([ln for _s, ls in c.summary.lines for ln in ls])
+    return bool(found)
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "target_state：CLAUDE.md §1（missing≠0、Fail Loud）＋契約 §B1（未知不得映成已知）——holdings_rows 含非 Mapping 列時，"
+    "應 fail-loud（TypeError／ValueError）或 coverage unkeyed_held_count 為 None（未知）；現況為 0（已知），見 G5 current_behavior。"
+    "XPASS ⇒ 升為正式斷言並更新 G5 快照。"))
+def test_target_state_g5_non_mapping_holdings_rows_fail_loud_or_unknown():
+    """[target_state] G5：非 Mapping 的 holdings_rows 不得被算成「已知 0 個無鍵部位」（預期失敗於 unkeyed_held_count 斷言）。"""
+    snap, _r = _none_cases()[A.OUTCOME_EXCEPTION_NETWORK]
+    reasons = A.adapt_holdings_read(snap).reasons
+    try:
+        c = _chain(snap, KEYED_STATION, rows_override=reasons)
+    except (TypeError, ValueError):
+        return                                                       # fail-loud 亦符合目標態
+    assert c.assembled.coverage.unkeyed_held_count is None, "target_state：非 Mapping 列 ⇒ unkeyed 必須未知（None），不是 0"
+
+
+_NO_INPUT_WORDING = "（尚無輸入）"
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "target_state：客戶裁示 #1199 comment 7071998333 第 3 點＋契約 §C-2（「尚無輸入」描述不準）——None 路徑中來源**有讀到但異常**"
+    "（EX／重複／非有限／丟 IN-U）或**讀取例外**時，持股段文案不得為「（尚無輸入）」，coverage holdings 段 withheld_reason 不得為 "
+    "not_loaded。具體文案與原因值待 UI Gate，本測試只斷言「不得是」。XPASS ⇒ 升為正式斷言。"))
+def test_target_state_none_path_wording_not_no_input_and_not_not_loaded():
+    """[target_state] EX／讀取例外的 None 路徑：持股段不得寫成「尚無輸入」、withheld_reason 不得為 not_loaded
+    （預期失敗於第一個案例的文案斷言）。"""
+    labels = [k for k in _none_cases() if k.startswith(("ex_", "exception_"))]
+    labels += ["non_finite_kept", "duplicate", "in_u_blank_dropped_default_mode"]
+    assert len(labels) >= 12
+    for label in labels:
+        c = _chain(_none_cases()[label][0], KEYED_STATION)
+        secs = dict(c.summary.lines)
+        for sec in HOLDINGS_RELATED_SECTIONS[:2]:
+            assert not any(_NO_INPUT_WORDING in ln for ln in secs[sec]), \
+                f"target_state：{label} {sec} 段不得寫成「尚無輸入」"
+        seg = {g.segment: g for g in c.assembled.coverage.segments}[SEGMENT_HOLDINGS]
+        assert seg.withheld_reason != WITHHELD_NOT_LOADED, f"target_state：{label} withheld_reason 不得為 not_loaded"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -472,6 +560,25 @@ def test_norm_transition_mutation_run_shadow_adopts_provider_draft_turns_red(mon
         _check_none_chain()
 
 
+def test_norm_transition_mutation_run_shadow_adopts_only_clean_draft_turns_red(monkeypatch):
+    """[norm_transition] 突變 2b：run_shadow「只在草稿乾淨時採用」⇒ 乾淨但內容不同（clean_reordered）的情境轉紅
+    （echo 草稿與規則式相同，抓不到；本情境專抓這種回歸）。"""
+    orig = SH.run_shadow
+
+    def _mut(digest, provider):
+        o = orig(digest, provider)
+        if not o.shadow_accepted:
+            return o
+        draft = provider.propose_summary(ProviderRequest(digest=digest))
+        adopted = SummaryResult(digest=digest, mode=AiParticipation.RULE_ONLY, sections=draft.sections)
+        return dataclasses.replace(o, effective=adopted)
+    monkeypatch.setattr(SH, "run_shadow", _mut)
+    with pytest.raises(AssertionError, match="norm_transition：.*/clean_reordered effective 必須恆為規則式摘要"):
+        _check_none_chain()
+    with pytest.raises(AssertionError, match="norm_transition：.*/clean_reordered effective 必須恆為規則式摘要"):
+        _check_list_chain()
+
+
 def test_norm_transition_mutation_adapter_ex_back_to_list_turns_red(monkeypatch):
     """[norm_transition] 突變 3：adapter 對 EX 證據改回 list（移除 EX 降級）⇒ None 鏈斷言轉紅。"""
     monkeypatch.setattr(A, "_ex_evidence_reasons", lambda s: ())
@@ -483,26 +590,36 @@ def test_norm_transition_mutation_adapter_ex_back_to_list_turns_red(monkeypatch)
 # 守衛
 # ══════════════════════════════════════════════════════════════════════
 def test_norm_transition_guard_socket_block_is_active_for_chain():
-    """[norm_transition] 守衛：本檔 socket 封鎖確實生效（連線嘗試即 AssertionError），且鏈在封鎖下可完整執行。"""
+    """[norm_transition] 守衛：本檔 socket 封鎖確實生效（connect／connect_ex／create_connection 皆 AssertionError），且鏈在封鎖下可完整執行。"""
     with pytest.raises(AssertionError, match="離線鏈不得連網"):
         socket.create_connection(("127.0.0.1", 9))
     with pytest.raises(AssertionError, match="離線鏈不得連網"):
         socket.socket().connect(("127.0.0.1", 9))
+    with pytest.raises(AssertionError, match="離線鏈不得連網"):
+        socket.socket().connect_ex(("127.0.0.1", 9))
     snap, _r = _none_cases()["zero_rows"]
     assert _chain(snap, KEYED_STATION).shadow[MODE_ECHO][0].effective is not None
 
 
 def test_norm_transition_guard_this_file_offline_and_clockless_by_ast():
-    """[norm_transition] 守衛：本檔 AST 無時鐘呼叫（now／today／utcnow／time.time）、無網路套件 import、
+    """[norm_transition] 守衛：本檔 AST 無時鐘呼叫（now／today／utcnow／time.time／perf_counter／monotonic，含屬性與
+    裸名呼叫）、不得 `import time`／`from datetime import datetime`、無網路套件 import、
     無 socket 實連呼叫（connect／create_connection 只以 monkeypatch 字串名替換、在被封鎖狀態下呼叫）。"""
     tree = ast.parse(THIS_FILE.read_text(encoding="utf-8"))
     banned_mods = {"requests", "urllib", "httpx", "gspread", "streamlit", "anthropic", "openai", "google", "time"}
+    clock_attrs = ("now", "today", "utcnow", "time", "time_ns", "perf_counter", "monotonic", "localtime", "gmtime")
     mods: set = set()
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             mods |= {a.name.split(".")[0] for a in n.names}
         elif isinstance(n, ast.ImportFrom) and n.module:
             mods.add(n.module.split(".")[0])
-        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
-            assert n.func.attr not in ("now", "today", "utcnow", "time", "load_portfolio", "load_portfolio_tallied")
+            if n.module.split(".")[0] == "datetime":
+                assert {a.name for a in n.names} <= {"date"}, "本檔只可 from datetime import date（不得取 datetime 類別）"
+        elif isinstance(n, ast.Call):
+            f = n.func
+            if isinstance(f, ast.Attribute):
+                assert f.attr not in clock_attrs + ("load_portfolio", "load_portfolio_tallied"), f.attr
+            elif isinstance(f, ast.Name):
+                assert f.id not in clock_attrs, f.id
     assert not (mods & banned_mods), mods & banned_mods
