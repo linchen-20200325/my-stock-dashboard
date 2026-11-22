@@ -87,14 +87,14 @@
 
 ## 2. 切換條件與停止條件
 
-**切換條件（MC §1.1 C7 原文）**：「C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠；**前置必含 `NUI2-AGGREGATOR-IMPL`＋M-A3＋M-A4 完成**」。另 MC §7：production 預設 VM 須 0 個 `⬜ 尚未提供`；MC §1：不得先刪程式，切換後另進 Removal Gate。（#1255 僅合併 M-A2，**M-A3、M-A4 未完成**，C7 前置仍不滿足。）
+**切換條件（MC §1.1 C7 原文）**：「C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠；**前置必含 `NUI2-AGGREGATOR-IMPL`＋M-A3＋M-A4 完成**（否則持股頁動作能力消失）（#997 稽核 M2）」。另 MC §7：production 預設 VM 須 0 個 `⬜ 尚未提供`；MC §1：不得先刪程式，切換後另進 Removal Gate。（#1255 僅合併 M-A2，**M-A3、M-A4 未完成**，C7 前置仍不滿足。）
 
 **停止條件（任一成立即不切；已切則依第 3 節回退）**：
 1. C1～C7 或 MC §1.2 任一前置缺證據或無獨立 QA（現況：全缺）。
 2. **部署 SHA 不可證**（0-4／0-5 任一 NOT VERIFIED；現況成立）。
 3. **回退未演練**（R1～R4 無紀錄；現況成立）。
-4. G11 不存在或非綠；或 cutover PR 的 slow lane 未綠——⚠️ slow lane 為 `continue-on-error: true`（informational），紅燈**不擋 merge**，須人工核對（逐 step 看 Run AppTest 終態），不得以「CI 通過」代替。
-5. 切換方式不是「一次 PR 切 `app.py` 預設」（例如把正式 App 的 Main file 改指 `app_ui2.py`）→ 停，另送客戶 Gate（INFERENCE：該方式繞過 `?ui=1`／`?legacy=1`）。
+4. G11 不存在或非綠；或 cutover PR 的 slow lane 未綠——⚠️ slow lane 為 `continue-on-error: true`（informational），紅燈**不擋 merge**，須人工核對（逐 step 看 Run AppTest 終態），不得以「CI 通過」代替。**核對方式**：slow lane 為 informational，須在該 head 的 PR Check run 中逐 step 檢視 `Run AppTest (slow lane)` 的 conclusion（例如 `gh api repos/<owner>/<repo>/actions/runs/<run_id>/jobs`），不得以整體 run 成功代替。
+5. 切換方式不是「一次 PR 切 `app.py` 預設」（例如把正式 App 的 Main file 改指 `app_ui2.py`）→ 停，另送客戶 Gate（INFERENCE：該方式繞過 `?ui=1`／`?legacy=1`）。**這是保守規則（INFERENCE，非 MC 原文）**。
 
 ## 3. 回退：誰執行、怎麼退
 
@@ -147,7 +147,7 @@ v0 §4 第二列原寫「Cloud 部署 commit＝revert 後 main SHA」——**僅
 ```
 【UI2 回退回存】日期時間（台北）：…
 觸發原因：…（停止條件 §2 第 _ 項／實機異常）
-回退級別：R1／R2／R4-a／R4-b；執行者：…
+回退級別：R1／R4-a／R4-b（R2＝`?ui=1` 現未實作、不可選；R3 為守衛、非回退級別）；執行者：…
 GitHub main SHA：…；revert PR：#…（無則寫「無」）
 Cloud App 網址前綴：…；Main file：…；部署 commit 前 7 碼：…（看不到寫 NOT VERIFIED）
 資料日：…；截圖：入口／?legacy=1／持股頁
@@ -195,7 +195,7 @@ Cloud App 網址前綴：…；Main file：…；部署 commit 前 7 碼：…�
 
 **停用與回退程序**
 - **回退＝關閉旗標，不需改 code**：移除（或設為非 `'1'`／`'true'`）Cloud Secrets 的 `ui2_lookup_input` 與環境變數 `UI2_LOOKUP_INPUT`，Reboot／重新部署使其生效（Reboot 需求屬客戶陳述，未實測）。這是 Cloud 管理員操作，AI 不改 Secrets。
-- **關閉後的現行畫面**：與 #1257 合併前**逐元素相同**。依據：`tests/test_ui2_lookup_p1.py` 的 flag-off golden（`tests/fixtures/ui2_lookup_p1_flag_off_golden.json`，改動前以 AppTest 擷取）與 112 組 AppTest 逐元素比對（base＝head；#1199 comment `7064531081`）。此為測試層證據，**非 Cloud 實機驗證**。
+- **關閉後的現行畫面**：與 #1257 合併前**逐元素相同**。依據為兩條**各自獨立**的證據：(a) **flag-off golden**：`tests/test_ui2_lookup_p1.py` 對照 `tests/fixtures/ui2_lookup_p1_flag_off_golden.json`，該檔共 **8 筆**（`cold|curated`、`cold|lookup`、`loaded|curated`、`loaded|lookup`、`missing|curated`、`missing|lookup`、`unavailable|curated`、`unavailable|lookup`；以 `python3 -c "import json;print(len(json.load(open(...))))"` 實數），為改動前以 AppTest 擷取，來源＝repo 內測試；(b) **112 組 AppTest base＝head 逐元素比對**：由非作者 QA 另做，**不是 golden**，來源＝#1199 comment `7064531081`，repo 內無對應測試檔。皆為測試層證據，**非 Cloud 實機驗證**。
 - ⛔ **不得在任何正式環境啟用旗標**。開啟旗標本身需另行裁示（`7064531081`：「開啟旗標本身需另行裁示」；P1 無資料來源、不顯示價格；真報價屬 P2，HOLD）。
 - **Cloud 上實際旗標狀態＝NOT VERIFIED**（repo 讀不到 Cloud Secrets／環境變數）。
 - 旗標 ON 時的行為（僅供辨識，非授權）：標的頁頂端 `st.form`（`ui2_` 前綴）輸入、提交時驗證代號、灰態「尚未查詢／代號無效」；不接資料、不產生 OK／STALE／MISSING／FETCH_FAILED、不顯示價格。
