@@ -1,7 +1,8 @@
 """OneBrain 持股 FAKE 離線示意（OFFLINE-WIRING-SCRATCH-1；**原型，可拋棄**；不是測試檔，不會被收集；**僅限 tests/ 使用**）。
 
-⚠️ 暫行：依 #1261 **未合併**內容（head 1f99b0cc ＝ main 93a27e1e ＋ #1261 tests）建置，**非 main**；
-設計＝#1199 v2 設計 ＋ 總管 D1–D9 裁定（comment 7075101372）。未經非作者 QA。Digest NOT READY；OneBrain NOT READY。
+基準：main（#1258＋#1261 已合併）；移植自 scratch/onebrain-holdings-ui2-demo-20261122@61619ad6。
+設計＝#1199 v2 設計 ＋ 總管 D1–D9 裁定（comment 7075101372）、D8（comment 7076099172）。
+QA 狀態不寫進程式檔（由 PR／#1199 記錄）。Digest NOT READY；OneBrain NOT READY。
 
 執行：`python -m tests.onebrain_holdings_ui2_demo [R1|R2|R3|L1|L2|L3|all]`（純文字輸出；**未**接 UI2 hold view）
 
@@ -284,7 +285,7 @@ def main(argv=None) -> int:
     sel = args[0] if args else "all"
     ids = CASE_IDS if sel == "all" else (sel,)
     for cid in ids:
-        print(f"===== {cid}（tests/ 示範頁模擬 💼 OneBrain 槽；暫行、依 #1261 未合併內容、非 main）=====")
+        print(f"===== {cid}（tests/ 示範頁模擬 💼 OneBrain 槽；FAKE 離線示範、基準 main）=====")
         print(render_text(build_case_block(cid)))
     return 0
 

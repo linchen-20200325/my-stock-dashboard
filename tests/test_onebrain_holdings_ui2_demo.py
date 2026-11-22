@@ -1,7 +1,8 @@
 """OFFLINE-WIRING-SCRATCH-1（原型，可拋棄）— `tests/onebrain_holdings_ui2_demo.py` 的 parity／分區禁字／fail-closed／突變測試。
 
-⚠️ 暫行：依 #1261 **未合併**內容（head 1f99b0cc）建置，**非 main**；設計＝#1199 v2 ＋ 總管 D1–D9（comment 7075101372）。
-⛔ tests-only；不改 src／shared／app*／scripts／守衛；全離線（socket 封鎖）、無時鐘。未經非作者 QA。
+基準：main（#1258＋#1261 已合併）；移植自 scratch/onebrain-holdings-ui2-demo-20261122@61619ad6；
+設計＝#1199 v2 ＋ 總管 D1–D9（comment 7075101372）、D8（comment 7076099172）。QA 狀態不寫進程式檔（由 PR／#1199 記錄）。
+⛔ tests-only；不改 src／shared／app*／scripts／守衛；全離線（socket 封鎖）、無時鐘。
 
 Oracle 獨立性：Digest 原句由本檔**自行**跑 `adapt_holdings_read → assemble → build_rule_summary` 取得，
 顯示段、預期原因碼、預期可用性、D9 規則、註記觸發條件均為本檔**本地常數**（不讀 demo 的同名常數），
@@ -145,10 +146,13 @@ def _check_banned(b, cid):
     assert TEXT_NOT_EVALUATED_DATA_SHORT not in whole and "未評估" not in whole, f"{cid} 不得重用『未評估／資料不足』"
 
 
+_INJECTED_MSG = "injected-secret-value-7f3a"  # 注入例外的訊息值；fail-closed log 只可記型別名，不得含此值
+
+
 def _check_failclosed():
     with pytest.MonkeyPatch.context() as mp:
         def boom(*_a, **_k):
-            raise RuntimeError("injected")
+            raise RuntimeError(_INJECTED_MSG)
         mp.setattr(ASM, "assemble_digest", boom)
         for cid in EXPECTED_CASE_IDS:
             b = _build(cid)
@@ -227,6 +231,10 @@ def test_failclosed_on_assemble_exception(caplog):
     with caplog.at_level("WARNING"):
         _check_failclosed()
     assert "fail-closed" in caplog.text
+    msgs = [r.getMessage() for r in caplog.records if r.name == demo.__name__]
+    # demo 以 `_log.warning("... %s fail-closed: %s", case_id, type(err).__name__)` 記錄：只含型別名、不含例外訊息值
+    assert msgs == [f"onebrain holdings demo {cid} fail-closed: {RuntimeError.__name__}" for cid in EXPECTED_CASE_IDS]
+    assert _INJECTED_MSG not in caplog.text
 
 
 @pytest.mark.parametrize("inject", ["rule_summary_raises", "adapter_raises", "effective_mismatch",
