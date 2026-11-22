@@ -556,20 +556,27 @@ _OAUTH_SHEET_BANNED = ("oauth", "gsheet", "gspread", "google_auth", "googleapicl
                        "get_finmind_token", "append_row", "worksheet", "requests")
 
 
-#: B-UI2-LOOKUP-P1-INPUT-1（客戶核准 A1／A3-lite；#1199 comment 7062580179）：唯一精確例外——只有 `app_ui2.py`，只有
-#: `"ui2_lookup_input" in st.secrets` 與 `st.secrets["ui2_lookup_input"]` 兩種形式（功能開關讀取）。⛔ 其他檔案、其他 key、其他用法皆不在例外內。
-SECRETS_EXACT_EXCEPTIONS: dict[str, str] = {"app_ui2.py": "ui2_lookup_input"}
+#: 精確 allowlist（兩鍵）：只有 `app_ui2.py`，只有 `ui2_lookup_input`（B-UI2-LOOKUP-P1-INPUT-1；客戶核准 A1／A3-lite）與
+#: `ui2_diag_enabled`（S1 連線診斷開關），且只有 `"<key>" in st.secrets` 與 `st.secrets["<key>"]`（Load）兩種形式（功能開關讀取）。
+#: ⛔ 其他檔案、其他 key、`st.secrets.get`、整個 `st.secrets` 物件、Store／Del、取值後再下標／取屬性，皆不在例外內。
+SECRETS_EXACT_EXCEPTIONS: dict[str, frozenset[str]] = {
+    "app_ui2.py": frozenset({"ui2_lookup_input", "ui2_diag_enabled"}),
+}
 
 
 def _is_approved_secrets_use(n: ast.AST, parent: dict, relpath: str) -> bool:
-    key = SECRETS_EXACT_EXCEPTIONS.get(relpath)
-    if key is None or not (isinstance(n, ast.Attribute) and ast.unparse(n) == "st.secrets"):
+    keys = SECRETS_EXACT_EXCEPTIONS.get(relpath)
+    if keys is None or not (isinstance(n, ast.Attribute) and ast.unparse(n) == "st.secrets"):
         return False
     p = parent.get(n)
     if isinstance(p, ast.Subscript) and p.value is n:
-        return isinstance(p.ctx, ast.Load) and isinstance(p.slice, ast.Constant) and p.slice.value == key   # 只放行讀取；Store／Del 仍擋
+        gp = parent.get(p)
+        if (isinstance(gp, (ast.Subscript, ast.Attribute)) and gp.value is p):   # 取值後再下標／取屬性（如 ['k']['y']）不放行
+            return False
+        return (isinstance(p.ctx, ast.Load) and isinstance(p.slice, ast.Constant)
+                and isinstance(p.slice.value, str) and p.slice.value in keys)   # 只放行讀取；Store／Del 仍擋
     if isinstance(p, ast.Compare) and n in p.comparators and len(p.ops) == 1 and isinstance(p.ops[0], ast.In):
-        return isinstance(p.left, ast.Constant) and p.left.value == key
+        return (isinstance(p.left, ast.Constant) and isinstance(p.left.value, str) and p.left.value in keys)
     return False
 
 
@@ -1105,11 +1112,13 @@ def test_w4_context_sits_after_search_and_summary_in_real_page(scenario):
 
 
 _SECRETS_OK = 'x = "ui2_lookup_input" in st.secrets\ny = st.secrets["ui2_lookup_input"]\n'
+_SECRETS_DIAG_OK = 'x = "ui2_diag_enabled" in st.secrets\ny = st.secrets["ui2_diag_enabled"]\n'
 
 
-def test_secrets_exception_is_exactly_one_precise_entry():
-    assert SECRETS_EXACT_EXCEPTIONS == {"app_ui2.py": "ui2_lookup_input"}
+def test_secrets_exception_is_exactly_two_precise_keys():
+    assert SECRETS_EXACT_EXCEPTIONS == {"app_ui2.py": frozenset({"ui2_lookup_input", "ui2_diag_enabled"})}
     assert check_no_oauth_or_sheet(_SECRETS_OK, "app_ui2.py") == []
+    assert check_no_oauth_or_sheet(_SECRETS_DIAG_OK, "app_ui2.py") == []
 
 
 @pytest.mark.parametrize("src,rel", [
@@ -1123,6 +1132,19 @@ def test_secrets_exception_is_exactly_one_precise_entry():
     ("import gspread\n", "app_ui2.py"), ("tok = s.access_token\n", "app_ui2.py"),
     ('st.secrets["ui2_lookup_input"] = "1"\n', "app_ui2.py"),          # Store：寫入同 key 仍擋
     ('del st.secrets["ui2_lookup_input"]\n', "app_ui2.py"),              # Del：刪除同 key 仍擋
+    # —— 兩鍵 allowlist 新增負控 ——
+    ("x = st.secrets['ui2_diag_enabled_x']\n", "app_ui2.py"),            # 第三鍵（前綴相似）
+    ("x = 'third_key' in st.secrets\n", "app_ui2.py"),                   # 第三鍵（in 形式）
+    (_SECRETS_DIAG_OK, ""), (_SECRETS_DIAG_OK, "src/ui2/views/data.py"), (_SECRETS_DIAG_OK, "src/ui2/shell/app.py"),
+    ('st.secrets["ui2_diag_enabled"] = "1"\n', "app_ui2.py"),            # Store：診斷鍵寫入仍擋
+    ('del st.secrets["ui2_diag_enabled"]\n', "app_ui2.py"),              # Del：診斷鍵刪除仍擋
+    ("x = st.secrets.get('ui2_diag_enabled')\n", "app_ui2.py"),
+    ("x = st.secrets['ui2_diag_enabled']['y']\n", "app_ui2.py"),         # 取值後再下標（單獨即須被抓）
+    ("x = st.secrets['ui2_diag_enabled'].get('y')\n", "app_ui2.py"),     # 取值後再取屬性
+    ("x = st.secrets['ui2_diag_enabled']\ny = st.secrets['third_key']\n", "app_ui2.py"),   # 一合法加一非法同檔
+    ("x = 'third_key' in st.secrets\ny = 'ui2_diag_enabled' in st.secrets\n", "app_ui2.py"),
+    ("x = 'ui2_diag_enabled' in st.secrets and 'ui2_lookup_input' in st.secrets.get('z')\n", "app_ui2.py"),
+    ("x = 'ui2_diag_enabled' not in st.secrets\n", "app_ui2.py"),        # NotIn 不放行
 ])
 def test_secrets_exception_has_teeth(src, rel):
     assert check_no_oauth_or_sheet(src, rel), f"沒抓到：{src!r} @ {rel}"
