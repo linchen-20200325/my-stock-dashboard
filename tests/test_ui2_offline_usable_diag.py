@@ -26,6 +26,12 @@ _GOOD = D.DiagReport(_OK, _OK, _OK, _OK, _OK)
 _WAIT = D.DiagNotice.WAIT.value
 
 
+@pytest.fixture(autouse=True)
+def _diag_flag_on(monkeypatch):
+    """S1：診斷功能開關預設關（按鈕 disabled、不注入 callable）。本檔測的是『開啟後』的行為，故顯式開旗標。"""
+    monkeypatch.setenv("UI2_DIAG_ENABLE", "1")
+
+
 @pytest.fixture
 def stub(monkeypatch):
     def deny(*a, **k):
