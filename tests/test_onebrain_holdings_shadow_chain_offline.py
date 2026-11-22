@@ -428,8 +428,8 @@ def test_current_behavior_g1_known_divergence_contract_oracle_list_vs_adapter_no
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "target_state：契約 §B2 第 1 點（缺獨立應有母體：任何以 L1 rows 餵入者 coverage 必須 incomplete）、§C-6、"
     "§C-8(a)（IN-U 在 coverage 的標示）＋#1199 comment 7071998333——IN-U 列全部有鍵時 coverage 不得宣稱完整；"
-    "現行 coverage 無 IN-U／母體欄位，is_complete=True。此為 §C-6 缺口的特例（clean_all_keys 同樣 is_complete=True，"
-    "已由 #1254 strict xfail 釘住）。需 coverage／schema 放行。XPASS ⇒ 升為正式斷言。"))
+    "現行 coverage 無 IN-U／母體欄位，is_complete=True。此為 §C-6 缺口的特例（clean_all_keys 同樣 is_complete=True）；"
+    "#1254 的 strict xfail 釘的是**同一缺口**（缺獨立母體），但**不是同一案例**（該處為 L1 clean／dropped 合成列，本處為 IN-U 全有鍵）。需 coverage／schema 放行。XPASS ⇒ 升為正式斷言。"))
 def test_target_state_in_u_all_keyed_must_not_claim_complete():
     """[target_state] IN-U 全有鍵時 coverage 不得宣稱完整（預期失敗於 is_complete 斷言）。"""
     c = _chain(*_list_cases()["in_u_kept_all_keys"])
@@ -496,15 +496,17 @@ _NO_INPUT_WORDING = "（尚無輸入）"
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "target_state：客戶裁示 #1199 comment 7071998333 第 3 點＋契約 §C-2（「尚無輸入」描述不準）——None 路徑中來源**有讀到但異常**"
-    "（EX／重複／非有限／丟 IN-U）或**讀取例外**時，持股段文案不得為「（尚無輸入）」，coverage holdings 段 withheld_reason 不得為 "
+    "target_state：客戶裁示 #1199 comment 7071998333 第 3 點＋契約 §C-2（「尚無輸入」描述不準）——None 路徑中來源**有讀到但有"
+    "無效列／有列被剔除**（EX 四型／重複／非有限／預設模式丟 IN-U）時，持股段文案不得為「（尚無輸入）」，coverage holdings 段 withheld_reason 不得為 "
     "not_loaded。具體文案與原因值待 UI Gate，本測試只斷言「不得是」。XPASS ⇒ 升為正式斷言。"))
 def test_target_state_none_path_wording_not_no_input_and_not_not_loaded():
-    """[target_state] EX／讀取例外的 None 路徑：持股段不得寫成「尚無輸入」、withheld_reason 不得為 not_loaded
-    （預期失敗於第一個案例的文案斷言）。"""
-    labels = [k for k in _none_cases() if k.startswith(("ex_", "exception_"))]
-    labels += ["non_finite_kept", "duplicate", "in_u_blank_dropped_default_mode"]
-    assert len(labels) >= 12
+    """[target_state] 無效列／有列被剔除的 None 路徑（EX 四型／duplicate／non_finite_kept／預設模式丟 IN-U）：
+    持股段不得寫成「尚無輸入」、withheld_reason 不得為 not_loaded（預期失敗於第一個 EX 案例的文案斷言）。
+    ⚠️ 讀取例外（exception_*）與非 ok 狀態的文案／withheld_reason **未裁示，NOT VERIFIED，不在本目標態**；
+    刻意不為未裁示事項另設 xfail。"""
+    labels = ["ex_blank_ticker", "ex_non_numeric", "ex_non_finite", "ex_non_positive",
+              "duplicate", "non_finite_kept", "in_u_blank_dropped_default_mode"]
+    assert len(labels) == 7 and set(labels) <= set(_none_cases())
     for label in labels:
         c = _chain(_none_cases()[label][0], KEYED_STATION)
         secs = dict(c.summary.lines)
