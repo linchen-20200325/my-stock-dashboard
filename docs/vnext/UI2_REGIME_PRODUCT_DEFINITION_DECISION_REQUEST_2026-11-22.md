@@ -20,7 +20,8 @@
 - **DEC-202 原文（決定段）**：「O1／O2 已重現，判定非缺陷＝符合 DEC-177 口徑，維持現狀，僅以文件揭露（設計文件 §7 補註）。」
 - **DEC-202 的限制（本文遵守）**：「**不新增契約**：未改程式、測試、JSON、Schema、UI 文案、統計口徑；……候選的新字句／改口徑／口徑鎖定測試均**未授權**。」BACKLOG 同章亦寫「**候選但未授權（不得自行施工）**：新增揭露字句、更改計數口徑、口徑鎖定測試。」
 - **文件揭露落點**：`docs/vnext/NEWUI2_DATA_FRESHNESS_FIRST_SCREEN_DESIGN_2026-11-18.md` §7「口徑補註」(b)。
-- **本文如何處理**：O2 的**現狀判定不重問**。本文只問 O2 判定**之後**的三件事（長期缺值容忍度、將來 as_of 規則、Cloud state 取得架構）；凡涉及「新增揭露字句／更改計數口徑／口徑鎖定測試」者，只列為「客戶若同意才進入的後續」，**不提案實作**。
+- **O2 的涵蓋範圍（務必分清）**：O2 只涵蓋「位階**有值**但無可驗證 as_of」的情形。**位階「沒有值」而長期顯示「⬜ 尚未載入」**不在 O2 範圍內，其使用者影響是**本次首次請示，尚無既有判定、也無先例**（見決策 1）。
+- **本文如何處理**：O2 的**現狀判定（有值無日期）不重問**。本文只問 O2 判定**之後**的三件事（長期缺值容忍度、將來 as_of 規則、Cloud state 取得架構）；凡涉及「新增揭露字句／更改計數口徑／口徑鎖定測試」者，只列為「客戶若同意才進入的後續」，**不提案實作**。
 
 ### 1.2 「Q5」：派工訊息未寫明是哪一個 Q5 —— 指涉 NOT VERIFIED，以下如實列出作者找到的候選
 
@@ -61,8 +62,9 @@
 - `macro_state.json`、`risk_cap_state.json` 被 `.gitignore` 排除、`git ls-files` 無此二檔。出處：`.gitignore`；`docs/BACKLOG.md` `DEC180-UI2-REGIME-STATE-FILES-PUBLISH`（「Cloud 上位階預期恆『⬜ 尚未載入』（INFERENCE，未實機驗）」）、`NUI2-PREVIEW-CLOUD-STATE-FILES`（open 未驗）。**Cloud 容器內是否真的不存在這兩檔：INFERENCE／NOT VERIFIED。**
 - **即使這兩檔存在，位階仍不會載入**：`tests/test_batch_c21.py::TestRegimeMatrix::test_absent_cold_start_gate` 釘住「旗標 False（現行）：warroom 不存在 ⇒ 舊檔**有效**時位階未評估（`SOURCE_UNLOADED`）、不退舊檔」。
 - **廣度旗標**：`shared/signal_thresholds.py::BREADTH_PROXY_SCORING_ENABLED = False`（DEC-074 B）。其 docstring 與 STAGE_F §1.5 記載：現行 `fetch_adl` 為由 `^TWII` 反推的估算（`is_proxy=True`）、`data_cache` 無逐日漲跌家數序列；**復活條件缺一不可**：(1) 正式漲跌家數來源接上並帶 `is_proxy=False` provenance，或另一套經客戶核准的計算方式；(2) 客戶裁示可計分。「『恢復』是否等於『新增來源』須客戶裁示」。
-- 前進式驗證帳本 `data_cache/macro_forward_test/signals.parquet`：**FACT（出處為 repo 文件，作者未讀檔案值）**——`STAGE_F_GF1…` §1.6／`STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md` 量測日 2026-11-11 記載：47 列，`schema_version` 3 者 6 列、其 6 列 `effective_regime` 皆 `unknown`（`regime_source`＝`unevaluated:breadth_unavailable`）；37／47 為回填；PIT 被拒；「不得充當 live 市場判斷」；`src/ui`、`src/ui2`、`app.py`、`app_ui2.py`、`src/services/ui2` 皆無引用，**無「禁止讀取」測試，僅靠無 caller（INFERENCE）**。該帳本的 producer workflow `update_macro_forward_test.yml` 於 2026-11-14 被手動停用（`DEC-185`，`disabled_manually`）；**現在是否仍停用：NOT VERIFIED**。
+- 前進式驗證帳本 `data_cache/macro_forward_test/signals.parquet`：**FACT（出處為 repo 文件，作者未讀檔案值）**——`STAGE_F_GF1…` §1.6／`STAGE_F_HEADLESS_INPUT_AND_STALE_SEMANTICS_2026-11-11.md` 量測日 2026-11-11 記載：（原句，兩份文件分別記載）`STAGE_F_GF1…` §1.6：「47 列（date 2026-08-20～11-03，25 欄）；`effective_regime` bull 22／neutral 18／unknown 6／bear 1；`schema_version` 1:37／2:4／3:6；`date_source=backfill_from_captured_at` 37 列」；`STAGE_F_HEADLESS…` 同表：「6 列 unknown 的 `regime_source`＝`unevaluated:breadth_unavailable`」「v1／v2 列為旗標生效前，仍有 bull／neutral 歷史值」。**兩份來源都沒有直接寫「schema v3 的 6 列即是那 6 列 unknown」；把兩者對應起來是 INFERENCE**（數字相同、`regime_source` 與 v3 語意一致，但作者未讀 parquet 驗證）。另：PIT 被拒；「不得充當 live 市場判斷」；`src/ui`、`src/ui2`、`app.py`、`app_ui2.py`、`src/services/ui2` 皆無引用，**無「禁止讀取」測試，僅靠無 caller（INFERENCE）**。該帳本的 producer workflow `update_macro_forward_test.yml` 於 2026-11-14 被手動停用（`DEC-185`，`disabled_manually`）；**現在是否仍停用：NOT VERIFIED**。
 - 帳本的每腿資料日欄位定義（只引既有 schema 註解，未讀 parquet 值）：`shared/macro_forward_test_schema.py` 的 `inputs_as_of`、`score_index_as_of`（大盤分用的 ^TWII 最後一根）、`inst_as_of`（外資現貨；失敗時回的是請求日，不是資料日，故為 None）、`adl_as_of`（廣度實際被用的末列）、`li_as_of`（先行指標末列）。**同檔註解明寫這四個 per-leg 欄位為「純觀測：⛔ 不得用這四欄做任何判斷（寫不寫列、改判 ⬜、新鮮度…皆禁止）」**（`MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`）。`max_score` 註解亦指出「當日實際分母會隨選填腿在／不在浮動」——即**哪幾條腿實際參與當日位階結論，本身會變動**。
+- **位階本身是內部衍生值，沒有官方發布日**；任何位階 as_of 都只能衍生自輸入腿，並**繼承各輸入腿的授權（DG-LIC）與 PIT（DG-PIT）狀態**，不會因為是「自己算的」而免除（INFERENCE，依 DEC-205 的限定射程推得）。
 
 ### 2.2 UI2 各路徑的位階結果
 
@@ -75,9 +77,9 @@
 | Real，位階「已載入」（目前**無已知的正常路徑**可達；僅為契約情境） | 顯示全站位階字（多頭等）＋`⬜ 資料日未提供`；🗂 計入「資料未備」 | `tests/test_ui2_real_feed.py::test_regime_loaded_uses_the_site_wide_label`；`tests/test_ui2_data_freshness_overview.py::test_all_missing` |
 | FAKE 場景（開發面 `?ui2_dev=1`） | 示意值（標 FAKE）；與真資料無關 | 既有 FAKE 場景測試（不在本題範圍） |
 
-**結論（FACT 彙整）**：在 Real 軸，位階目前**沒有任何已知路徑能在 Cloud 上載入有值**；「尚未載入」是結構性結果（無 UI2 寫入者＋狀態檔不在 git＋廣度旗標關閉三者疊加），不是某次抓取失敗。
+**結論（FACT 彙整）**：在 Real 軸，位階目前**沒有任何已知路徑能在 Cloud 上載入有值**；「尚未載入」是結構性結果，不是某次抓取失敗。**最強成因是客戶自己的裁示**：DEC-074 B（客戶 2026-10-23，代理廣度不得計分、`BREADTH_PROXY_SCORING_ENABLED=False`）與 DEC-075 D-1(a)（位階一併「⬜ 未評估／資料不足」）；架構成因（無 UI2 寫入者、狀態檔不在 git）次之——即使架構補齊，旗標不動位階仍不載入（見 `test_absent_cold_start_gate`、`test_no_health_breadth_gate`）。
 
-### 2.3 可能造成誤讀之處（DEC-202 判定「非缺陷、使用者影響低」；此處只陳述事實，不重判）
+### 2.3 可能造成誤讀之處（只陳述事實；DEC-202 O2 的「非缺陷、影響低」判定針對「有值無日期」，**不涵蓋**本節「長期無值」情形，故此處不引為先例）
 
 - Real 頁首橫幅（`shared/ui2_contract/text.py::REAL_PREVIEW_BANNER_NOTE`）寫「**僅台股與市場位階為真資料**」。
 - 🗂 資料頁第一屏（`src/services/ui2/data_page.py::freshness_rows`）寫「固定清單 8 項」「**已接入畫面 2 項**｜尚未提供 6 項」；位階屬「已接入」，其狀態在計數中落「⬜ 尚未評估」（未載入時）或「⬜ 資料未備」（已載入但無資料日時）。
@@ -93,14 +95,17 @@
 
 **問題（白話）**：目前 Real Preview 的位階會長期、結構性地顯示「⬜ 尚未載入」（原因見 2.1／2.2）。這個狀態可以長期存在嗎？
 
+**先說清楚成因**：位階長期無值，**最強的成因是客戶自己的 DEC-074 B／DEC-075 D-1(a)**（旗標 `BREADTH_PROXY_SCORING_ENABLED=False`、位階一併未評估），架構成因（UI2 無寫入者、狀態檔不在 git）次之。因此**決策 1 實質在問：是否接受 DEC-074 B 的長期後果**（在正式廣度來源與客戶計分裁示到位前，Real Preview 位階不會有值）。注意：DEC-202 的 O2 只判定「有值無日期」，**沒有**判定「長期無值」；後者是本次首次請示。
+
 | 選項 | 內容 | 優點 | 缺點 | 風險 |
 |---|---|---|---|---|
-| **A 接受現狀** | 位階長期顯示「⬜ 尚未載入」；不改任何畫面字句、計數、測試；僅維持 DEC-202 的文件揭露 | 零改動、不碰任何 Gate；畫面誠實（不造值、不補 0，符合 `CLAUDE.md` §1）；與 DEC-202 O2 判定一致 | 橫幅「僅台股與市場位階為真資料」與「已接入畫面 2 項」可能被讀成位階已接通（2.3）；客戶在 Preview 永遠看不到位階值 | 驗收或對外展示時被誤讀為「位階壞了」或「位階已接通」；屬認知落差，非資料錯誤 |
+| **A 接受現狀** | 位階長期顯示「⬜ 尚未載入」；不改任何畫面字句、計數、測試；僅維持 DEC-202 的文件揭露 | 零改動、不碰任何 Gate；畫面本身誠實（不造值、不補 0，符合 `CLAUDE.md` §1） | 客戶在 Preview 永遠看不到位階值；橫幅「僅台股與市場位階為真資料」與資料頁「已接入畫面 2 項」是否構成誤導，**由客戶判定** | 這是「**文字是否與事實相符**」的問題：文字說位階為真資料／已接入，事實是位階目前沒有值；兩者是否矛盾，需客戶看過那兩處文字後判斷（作者不替客戶下結論） |
 | **B 接受長期未載入，另案調整揭露** | 同意位階長期未載入，**並同意後續另案**評估新增揭露字句、改橫幅／計數口徑、口徑鎖定測試（**本文不提案這些的內容**） | 消除 2.3 的誤讀；揭露與事實更貼合 | 屬 DEC-202 明列「候選但未授權」的新文案／口徑變更；需新文案 Gate；動 `src/ui2/**` 會使 DEC-137 存證 `source_hash` 失效、須重生四份存證；連動 P3 evidence 基準 | 一次改字牽動多處測試與存證；文案若與 DEC-177 口徑不一致會產生新矛盾 |
 | **C 不接受** | 位階無值就不算 Real Preview 完成；把「位階有值」列為 Real Preview 驗收條件 | Real 軸名實相符 | 取決於決策 3 的資料來源（見 3.3），且受廣度旗標與來源授權雙重阻擋 | 卡住目前的 Offline Preview Ready 驗收；時程取決於外部授權（DG-LIC 等待條款原文／法務，時間不在 AI 手上） |
 
-**AI 總管推薦：A。**
-**理由**：(1) DEC-202 O2 已判定非缺陷、使用者影響低，沒有新事實推翻；(2) 位階缺值的結構性成因（廣度旗標、來源授權、無 UI2 寫入者）都是**資料來源 Gate**，不是畫面問題，選 C 只是把畫面驗收綁到一個今天無法解的條件上；(3) B 的內容屬 DEC-202 明列的未授權候選，且依 `CLAUDE.md` §-1，沒有實際使用者困擾回報就不應主動動工。**B 保留為觸發式後續**：若客戶實際看 Preview 時覺得「已接入 2 項」會誤導，再回報，屆時另案走新文案 Gate。
+**AI 總管推薦：A，前提是「客戶看過橫幅『僅台股與市場位階為真資料』與資料頁『已接入畫面 2 項』這兩處文字後，仍接受位階長期無值」。若客戶認為這兩處文字與事實不符，請改選 B。**
+**理由**：(1) **O2 不能當依據**：O2 只涵蓋「位階有值但無可驗證 as_of」，**未**涵蓋「長期無值」；後者的使用者影響是本次首次請示，**尚無既有判定**，客戶不應以為已有先例；(2) 位階缺值的最強成因是 DEC-074 B／DEC-075 D-1(a)（客戶既有裁示），其次是來源授權與無 UI2 寫入者，都是**資料來源／資料政策 Gate**，不是畫面問題，選 C 只是把畫面驗收綁到一個今天無法解的條件上；(3) B 的內容（新增揭露字句、改橫幅／計數口徑、口徑鎖定測試）屬 DEC-202 明列「候選但未授權」，本文不提案其內容，只請客戶表態要不要另案評估。
+**請客戶同時明示（選 A 或 B 皆需回答）**：「橫幅／資料頁計數口徑是否另案評估：〈另案／不另案〉」。選「另案」＝只同意 AI 總管另送新文案 Gate 請示，**不是**授權改字；選「不另案」＝該疑慮就此結案。（取代原先「有客戶抱怨才處理」的觸發式寫法。）
 **後續所需 Gate**：A＝無；B＝新文案 Gate＋UI 變更草稿先行（若動版面）＋DEC-137 存證重生；C＝見決策 3。**是否動既有 Contract**：A 否；B 可能（`shared/ui2_contract/text.py` 文案常數屬契約檔，需另案）；C 是（見決策 3）。
 
 ### 3.2 決策 2：將來 as_of 日期規則（僅在位階日後真的有值時才適用）
@@ -109,14 +114,14 @@
 
 | 選項 | 內容 | 優點 | 缺點 | 風險 |
 |---|---|---|---|---|
-| **A 取輸入腿的最早日** | 位階資料日＝參與結論的各腿 as_of 的最小值；任一腿缺日則整體不顯示日期（fail-closed） | 保守：不會宣稱比任何一腿更新；與 `CLAUDE.md` §1 方向一致 | 單一舊腿會拖低整體；「資料日」可能被讀成整體日期；須先定義「哪幾腿參與」 | 腿定義不清時日期不可重現；需要各腿都有可信資料日（現無 headless 副本） |
+| **A 取輸入腿的最早日** | 位階資料日＝參與結論的各腿 as_of 的最小值；任一腿缺日則整體不顯示日期（fail-closed） | 保守：不會宣稱比任何一腿更新；與 `CLAUDE.md` §1 方向一致 | 單一舊腿會拖低整體；「資料日」可能被讀成整體日期；須先定義「哪幾腿參與」；**輸入腿頻率不一致時最早日可能長期過舊**：若有月頻腿參與（站內月頻來源如 M1B／M2、PMI，`CLAUDE.md` §2.3 發布延遲表：M1B／M2 約月後 27 天、月度 PMI 約月後 5–10 天），最早日幾乎恆為數週前（INFERENCE；現行 `M1B_M2_LEG_ENABLED=False`，**哪些腿屬月頻、是否參與 NOT VERIFIED**） | 腿定義不清時日期不可重現；需要各腿都有可信資料日（現無 headless 副本） |
 | **B 取輸入腿的最晚日** | 資料日＝各腿 as_of 最大值 | 看起來最新 | **高估新鮮度**：舊腿被新腿掩蓋，等同為舊資料背書 | 違反寧可保守、不得造日期的原則；**不推薦** |
 | **C 各腿並列** | 不合成單一日期，列出每條腿各自的資料日（大盤、外資、廣度、先行指標等） | 最誠實、可稽核；符合 DG-PIT「只顯示最新值的資料日」的精神 | 版面異動（需 UI 草稿先行）；新文案；與 🗂 第一屏「單一資料日」計數口徑如何對映待另定 | 畫面變重；各腿 as_of 來源與權利需逐腿確認（DG-LIC／DG-PIT） |
 | **D 不顯示（維持 `⬜ 資料日未提供`）** | 即使將來位階有值，也不顯示資料日；🗂 仍計「資料未備」 | 不動契約、不新增文案、與現狀及 DEC-202 O2 一致 | 位階有值時使用者無從判斷新舊；「多頭」等顯示不構成已確認資料日期（DEC-202） | 使用者可能把無日期的值當成最新值 |
 
 **共通限制（不論選哪個）**：不得造日期；不得拿 `cl_ts` 或 `fetched_at` 頂替（SG-10、DEC-205）；不得使用 `signals.parquet` 的四個 per-leg 純觀測欄做新鮮度判斷（其 schema 註解明文禁止）；任何帶日期的選項都須**擴既有 service 契約**，屬 SG-10；DEC-190 要求位階一旦有資料日，「載入→資料未備」歸類須重審。
 
-**AI 總管推薦：D（現階段維持不顯示）；條件式後備：日後位階真有值且客戶要日期時，採 A（最早日，任一腿缺日則整體 fail-closed），C 留作資料頁明細層的後續候選。**
+**AI 總管推薦：D（現階段維持不顯示）。閘門：位階一旦有值，無日期顯示須重新請示客戶（與 DEC-190 延後項「位階契約新增 as_of／載入→資料未備歸類須重審」同向），不得因本次選了 D 而默認沿用。條件式後備：日後位階真有值且客戶要日期時，以 A（最早日，任一腿缺日則整體 fail-closed）為起點；但若屆時有月頻腿參與、最早日長期過舊，則 C（並列）可能更合適，須依當時實際輸入腿再議。**
 **理由**：(1) 位階目前沒有值（決策 3 若選甲則長期如此），為尚不存在的資料預先鎖死日期口徑，無從驗證；(2) 腿的集合會浮動，口徑必須在知道「真正有哪些腿、各腿的授權與 PIT 狀態」之後才定得準；(3) 若將來要日期，最早日是唯一不會高估新鮮度的單一值；B 會製造「看起來新」的假象，不推薦。
 **後續所需 Gate**：D＝無；A／B／C＝SG-10（擴契約）＋DG-PIT（B＋X 射程內）＋逐腿 DG-LIC＋`I1144-WIRING-GATE`（若涉及接線）；C 另需 UI 草稿先行。**是否動既有 Contract**：D 否；A／B／C 是（需另案）。
 
@@ -124,18 +129,18 @@
 
 **問題（白話）**：UI2 若要在 Cloud 上有位階，位階的輸入要從哪來？
 
-**重要前提（FACT，2.1）**：不論選哪個架構，位階有值的**共同條件**是廣度旗標 `BREADTH_PROXY_SCORING_ENABLED` 的復活條件被滿足（正式廣度來源＋客戶裁示可計分）。**架構只決定「怎麼取輸入」，不會自己產生缺的正式廣度來源。**
+**重要前提（FACT，2.1）**：不論選哪個架構，位階有值的**共同條件**是廣度旗標 `BREADTH_PROXY_SCORING_ENABLED` 的復活條件被滿足。docstring 原意：(1) 正式漲跌家數來源接上並帶 `is_proxy=False`，**或另一套經客戶核准的計算方式**；(2) 客戶裁示可計分。**架構只決定「怎麼取輸入」，不會自己產生缺的正式廣度來源。**
 
 | 選項 | 內容 | 優點 | 缺點 | 所需 Gate／是否動既有 Contract |
 |---|---|---|---|---|
 | **A 接受長期未載入** | 維持現狀（與決策 1 的 A 搭配） | 零改動；不碰授權與來源 | 位階在 UI2 永遠沒值 | **無新 Gate**；**不動** Contract |
 | **B UI2 headless 自行計算** | UI2 自己從原始資料算位階（需 I/O 與輸入來源） | 不依賴 Legacy | 輸入（`mkt_info`／`jingqi_info`／`cl_data`／`li_latest`）**無 headless 副本**（STAGE_F §1.3）；需新取數／cron／Secrets；缺正式廣度來源；feed 對 L3 service 只准 `get_twii_trend_view`／`get_macro_regime` 兩個名稱（G2F 白名單，`tests/test_ui2_guards.py`）須放寬 | **DG-LIC**（來源授權，HOLD）、**DG-PIT**（B＋X）、**I1144-WIRING-GATE**（未授權）、**SG-10**（as_of）、**G2F**（放寬守衛）、廣度旗標復活條件；**動**既有 Contract（新增 as_of、可能新增 service） |
-| **C 沿用 Legacy 流程** | UI2 讀 Legacy 更新後寫入的 session `warroom_summary` | 計算邏輯已存在、不重寫 | **UI2 與 Legacy 是否共用 session：NOT VERIFIED**（`app_ui2.py` 是獨立入口；`NUI2-REALFEED-WARROOM-CONTRACT-INTEGRATION` 記載同行程／同 session 才成立）；UI2「更新」CTA 目前 disabled，feed 被 G2F 禁止呼叫任何 producer；warroom 組合可能被 `validate_regime_fact` 判契約違反（同 BACKLOG 條目） | **I1144-WIRING-GATE**、**G2F**（解禁 producer 呼叫）、**SG-10**、廣度旗標復活條件；可能**動**既有 Contract（`validate_regime_fact` 擴充）；DG-LIC／DG-PIT 視輸入來源而定（NOT VERIFIED） |
-| **D 改由已提交的快取產物提供** | 新 producer 把位階（或其輸入）發布成 git 追蹤的快取檔，UI2 讀檔 | 與台股日 K 既有「cron→PR→git 檔→feed 讀檔」模式一致；BACKLOG 已登記候選 `DEC180-UI2-REGIME-STATE-FILES-PUBLISH`（未授權） | 需**新 producer**與**新來源 Gate**；資料發布 workflow 現況（DEC-185：三支被手動停用，恢復條件未裁示）；**不可用 `signals.parquet` 當來源**——repo 既有記載：凍結帳本、現行 schema 6 列全 unknown、不可重建、PIT 被拒、「不得充當 live 市場判斷」、producer 已被停用（見 2.1）；且該帳本 per-leg 欄位禁止用於判斷 | **DG-LIC**、**DG-PIT**、**I1144-WIRING-GATE**、**SG-10**、新 cron／Secrets 授權、資料發布授權（DEC-205 明示不授權）、廣度旗標復活條件；**動**既有 Contract |
+| **C 沿用 Legacy 流程** | UI2 讀 Legacy 更新後寫入的 session `warroom_summary` | 計算邏輯已存在、不重寫 | **UI2 與 Legacy 是否共用 session：NOT VERIFIED**。現況 `app_ui2.py` 與 `app.py` 是**兩個獨立入口檔**（FACT：`app_ui2.py` 自行呼叫 `st.set_page_config`，只 import `src.ui2` 與 `connection_diag_service`；`git grep -n app_ui2 -- app.py` 0 命中；repo 根無 `pages/` 目錄）；共用 session 需先改部署／導航形態（INFERENCE；Cloud 部署形態 NOT VERIFIED）。`NUI2-REALFEED-WARROOM-CONTRACT-INTEGRATION` 亦記載「同行程／同 session」才成立。另受 DEC-161 邊界限制（「不以 session 的 `macro_state.json` 或推播 SA 冒充 headless source」，同一不授權條款）；UI2「更新」CTA 目前 disabled，feed 被 G2F 禁止呼叫任何 producer；warroom 組合可能被 `validate_regime_fact` 判契約違反（同 BACKLOG 條目） | **I1144-WIRING-GATE**、**G2F**（解禁 producer 呼叫）、**SG-10**、廣度旗標復活條件；可能**動**既有 Contract（`validate_regime_fact` 擴充）；DG-LIC／DG-PIT 視輸入來源而定（NOT VERIFIED） |
+| **D 改由已提交的快取產物提供** | 新 producer 把位階（或其輸入）發布成 git 追蹤的快取檔，UI2 讀檔 | 與台股日 K 既有「cron→PR→git 檔→feed 讀檔」模式一致；BACKLOG 已登記候選 `DEC180-UI2-REGIME-STATE-FILES-PUBLISH`（未授權） | 需**新 producer**與**新來源 Gate**；資料發布 workflow 現況（DEC-185：三支被手動停用，恢復條件未裁示）；**不可用 `signals.parquet` 當來源**——repo 既有記載：凍結帳本（同日已存在則保留既有、不覆寫）；`shared/macro_forward_test_schema.py` 檔頭：離線重建版與線上版在 `conf`（重建恆 60／線上可達 100）、`m1b_m2_prev` 兩處系統性不同；STAGE_F §1.6：v1／v2 的 bull／neutral 為旗標生效前的舊規則值（INFERENCE：這正是 DEC-075 D-1(a)「不得靜默沿用另一套規則」所要避免者）、PIT 被拒、「不得充當 live 市場判斷」；producer 已被停用（見 2.1）；且該帳本 per-leg 欄位禁止用於判斷。**即使只發布 state 檔，旗標不動位階仍不載入**（`test_absent_cold_start_gate`／`test_no_health_breadth_gate`）。DEC-161 邊界同樣適用（不以 session 的 `macro_state.json` 冒充 headless source） | **DG-LIC**、**DG-PIT**、**I1144-WIRING-GATE**、**SG-10**、新 cron／Secrets 授權、資料發布授權（DEC-205 明示不授權）、廣度旗標復活條件；**動**既有 Contract |
 
-**AI 總管推薦：A（接受長期未載入），並建議客戶把「是否希望位階有真值」併入既有未決的 G-F1 方向題一併回答，而不是在本題先挑 B／C／D。**
-**理由**：(1) B、C、D 都被**同一組尚未解的前置條件**阻擋：廣度正式來源與客戶計分裁示、DG-LIC／DG-PIT 逐資料集證據、I1144-WIRING-GATE；現在選架構，只是把一個今天無法開工的方案寫進計畫；(2) 架構選擇取決於**資料來源**答案——來源若是官方公開資料集，D（發布快取）最自然；若來源是 Legacy 運算，C 才有意義；這正是 BACKLOG `G-F1`（客戶方向 Gate：是否希望使用真正可信的市場位階／廣度資訊）要先問的；(3) 與決策 1＝A、決策 2＝D 構成**一組自洽的「維持現狀」組合**，不會留下半套契約。
-**重要**：本題若與 G-F1 合併回答，**僅授權後續來源／PIT／授權可行性研究，不自動授權開 fetcher、cron、Secret 或正式接線**（沿用 BACKLOG `G-F1` 列的限定）。
+**AI 總管推薦：A（接受長期未載入）。**「是否希望位階有真值」屬既有未決的 G-F1 方向題，由總管另案單獨整理成客戶 Decision Gate 請示（BACKLOG `G-F1` 列：「由總管整理成客戶 Decision Gate」）；本稿的回覆**不視為已答 G-F1**，本題也不先挑 B／C／D。
+**理由**：(1) B、C、D 都被**同一組尚未解的前置條件**阻擋：廣度正式來源與客戶計分裁示、DG-LIC／DG-PIT 逐資料集證據、I1144-WIRING-GATE；現在選架構，只是把一個今天無法開工的方案寫進計畫；(2) 架構選擇取決於**資料來源**答案——來源若是官方公開資料集，D（發布快取）最自然；若來源是 Legacy 運算，C 才有意義；這正是 BACKLOG `G-F1`（客戶方向 Gate：是否希望使用真正可信的市場位階／廣度資訊）要先問的，且須另案單獨請示；(3) 與決策 1＝A、決策 2＝D 構成**一組自洽的「維持現狀」組合**，不會留下半套契約。
+**重要**：G-F1 若日後由客戶同意方向，**僅授權後續來源／PIT／授權可行性研究，不自動授權開 fetcher、cron、Secret 或正式接線**（沿用 BACKLOG `G-F1` 列的限定）。
 
 ---
 
@@ -144,10 +149,12 @@
 一行即可（選項字母只在各決策內有效，請帶決策編號）：
 
 ```
-決策1=〈A／B／C〉、決策2=〈A／B／C／D〉、決策3=〈A／B／C／D〉
+決策1=〈A／B／C〉（橫幅／計數口徑：〈另案／不另案〉）、決策2=〈A／B／C／D〉、決策3=〈A／B／C／D〉
 ```
 
-- **AI 總管推薦組合**：`決策1=A、決策2=D、決策3=A`（＝維持現狀；位階長期顯示「⬜ 尚未載入」，不新增任何字句或契約）。
+- **AI 總管推薦組合**：`決策1=A（橫幅／計數口徑：由客戶表態）、決策2=D、決策3=A`（＝維持現狀；位階長期顯示「⬜ 尚未載入」，不新增任何字句或契約）。推薦 A 的前提見 3.1（客戶看過兩處文字後仍接受）。
+- **互相矛盾的組合**（例如決策 1=C 要求位階有值、決策 3=A 接受永遠無值）由總管追問，**不視為有效回覆**。
+- 本稿**不含** G-F1 的欄位；G-F1 另案單獨請示，本稿回覆不視為已答。
 - 沒答的項目視為**維持現狀**（等同各決策的推薦選項 A／D／A 的「不動」效果，但**不是**客戶裁示）。
 - 若選到需要後續工作的選項（決策 1 的 B／C、決策 2 的 A／B／C、決策 3 的 B／C／D），**回覆本身不構成施工授權**；AI 總管會另送對應 Gate 的請示（新文案 Gate、SG-10、DG-LIC／DG-PIT、I1144-WIRING-GATE、G2F 等），逐項取得授權後才進入實作。
 - 想改為「不採推薦、另有想法」，直接寫自己的答案即可。
