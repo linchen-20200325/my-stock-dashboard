@@ -663,9 +663,11 @@ def test_second_items_section_or_an_items_section_on_another_page_is_not_wired()
 @pytest.mark.parametrize("name", ["viewport_measurements.json", "viewport_measurements_streamlit156.json"])
 def test_real_viewport_evidence_carries_the_expanded_items_measurement(name):
     import json
+
+    from tests.ui2_viewport import measure_viewport as MV
     j = json.loads((ROOT / "docs" / "vnext" / "newui2_realfeed" / name).read_text(encoding="utf-8"))
     recs = [r for r in j["results"] if r["page"] == P4_DATA]
-    assert {r["viewport_name"] for r in recs} == {"mobile", "desktop"}
+    assert {r["viewport_name"] for r in recs} == set(MV.VIEWPORTS)
     for r in recs:
         e = r["expanded"]
         assert r["pass"] and e["failures"] == [] and e["collapsed_before"] is True and e["open"] is True
