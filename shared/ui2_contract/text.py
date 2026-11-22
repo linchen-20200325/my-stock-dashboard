@@ -143,3 +143,8 @@ HOLD_TABLE_COLS: tuple[tuple[str, bool], ...] = (
     ("現價", False), ("報酬", True), ("策略", False), ("System Action", True),
 )
 HOLD_TABLE_EXPAND_HINT = "每列可展開：持股比例、成本、現價、策略"
+
+# ── 標的頁「股票代號輸入」（B-UI2-LOOKUP-P1-INPUT-1；功能開關預設關；P1 不接資料）──
+#: 只放輸入元件自己的兩個標籤；狀態 chip／說明一律用 `shared/ui2_contract/quote_view.py` 的 CHIP_TEXT／NOTICE_TEXT（不新增第二套文案）。
+LOOKUP_INPUT_LABEL = "股票代號"
+LOOKUP_SUBMIT_LABEL = "查詢"

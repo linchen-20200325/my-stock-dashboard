@@ -18,7 +18,7 @@ import streamlit as st
 
 from shared.ui2_contract.pages import (
     ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, FEED_FAKE, FEED_IDS, FEED_REAL,
-    P4_DATA, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
+    P4_DATA, P4_TARGET, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
 )
 from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import RealFeedSnapshot, get_real_page_vm
@@ -27,6 +27,7 @@ from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_FEED_DEGRADED_TEX
 from src.ui2.components.html import degraded_notice_html, top_status_row_html
 from src.ui2.shell.css import CSS
 from src.ui2.views import VIEWS
+from src.ui2.views.target import render_with_lookup
 
 KEY_PAGE = "ui2_page"
 KEY_SCENARIO = "ui2_scenario"
@@ -73,7 +74,13 @@ def _render_dev_surface(real: bool) -> None:
                      format_func=lambda a: _ACCOUNT_LABELS[a])
 
 
-def run(diag_check=None) -> None:
+def lookup_flag_on(value: object) -> bool:
+    """功能開關值判讀（純函式）：只有字串 '1'／'true'（大小寫不拘、去首尾空白）才開；其餘（None、空、'0'、'false'、亂字、非字串）一律關。
+    ⛔ 本檔（L5）不讀 secrets／環境；讀取在 `app_ui2.py`（L6）並以參數注入。"""
+    return isinstance(value, str) and value.strip().lower() in ("1", "true")
+
+
+def run(diag_check=None, lookup_input: bool = False) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     dev = dev_surface_enabled()
     if KEY_PAGE not in st.session_state:
@@ -107,6 +114,8 @@ def run(diag_check=None) -> None:
         st.markdown(degraded_notice_html(REAL_FEED_DEGRADED_TEXT), unsafe_allow_html=True)
     if page == P4_DATA:      # 🔌 連線診斷：唯一注入點（只傳給資料頁；其他頁 render 簽名不變）
         VIEWS[page](vm, diag_check=diag_check)
+    elif page == P4_TARGET and lookup_input is True:    # 股票代號輸入（功能開關開；預設關＝下方原呼叫不變）
+        render_with_lookup(vm)
     else:
         VIEWS[page](vm)
     if dev:

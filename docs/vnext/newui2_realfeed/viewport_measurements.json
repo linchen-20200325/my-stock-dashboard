@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "34f9fd79aed1af5f7b642512888f7f0a5f32fd75",
-  "source_hash": "7c80d04eff8efa55303ecc7555bbcb77fa3bf7ad9a76659df30157f66cb62312",
-  "generated_at": "2026-11-21T03:37:56+00:00",
+  "git_sha": "3749295b9912de6fe220c94a05db06637c7348ec",
+  "source_hash": "af434a1a879b764808ea775e1f366bc0dee34d3fd8c263c4b3014452b6a11793",
+  "generated_at": "2026-11-21T14:11:11+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "streamlit_version": "1.59.2",
