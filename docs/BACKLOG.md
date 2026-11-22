@@ -3173,3 +3173,33 @@
 
 > 未解鎖（皆不變）：`I1144-WIRING-GATE`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`、Real 查股／跨頁 production wiring、#1237 NAS Draft／HOLD、#1119 workflow 清理 HOLD、OneBrain `NOT READY`、Stage F／G、Digest v2、G-F2、私人 Sheet、G-X1 Q2 延後。
 > **#1247**（A-SA-GSPREAD-621-REGRESSION-EVIDENCE-1，C3 tests-only）：查核時 **Draft、未合併**（head `e40faf7f`、base 仍 `5963cc46`、落後 main、mergeable_state＝behind），**不得寫成完成**；C1／C2 維持 HOLD。
+
+
+## 2026-11-21 B-UI2-LOOKUP-P1-INPUT-1 登記與 B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1 補登（只追加）
+
+| ID | Owner | 狀態 | 授權／證據來源 | 內容與邊界 |
+|---|---|---|---|---|
+| **B-UI2-LOOKUP-P1-INPUT-1** | Claude B | **PR OPEN／NOT VERIFIED** | 客戶明示核准 A1 五項＋A3-lite（#1199 comment 7063828637，連同總管裁定 7063710260；方案見 7062580179）；DEC-223（原編 DEC-222，因 origin/main 已用而有意識改號） | 標的頁「股票代號輸入」P1：功能開關預設關（`st.secrets` `ui2_lookup_input` 或環境變數 `UI2_LOOKUP_INPUT`＝'1'／'true' 才開；由 `app_ui2.py` 讀取、參數注入）；開時以 `st.form` 取代 disabled searchbox，提交時 `parse_ticker_input` 驗證，狀態僅 NOT_LOADED／SELECTION_INVALID（灰）；**不接任何資料、不判持有、無新 L3 service**。**使用者仍不能查股**；P2 行情顯示仍待 A2／A3／A4。不解除任何 Gate。QA／CI／merge 未完成 |
+| **B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1**（補登） | Claude B | **已合併**：#1253 → `7917a818` | #1199 comment 7060205009；線框 A1 五項已核准 | L0 `shared/ui2_contract/quote_view.py`＋合成測試＋文字線框；**本身無 production caller**（P1 輸入元件為其第一個使用者，僅用 NOT_LOADED／SELECTION_INVALID 兩態）。補登先前延後的列，非改列 |
+
+> **A1 已核准、供 P2 使用（P1 不實作）**：過期以 ⚠ chip 沿用 7 日門檻；價格顯示範圍 0.005～1,000,000；過期底色沿用既有警示色；抓取時間屬次要列。
+> **開關開時的版面量測**：以環境變數 `UI2_LOOKUP_INPUT=1` 啟動 `measure_viewport --feed real`（scratch、不入庫）Real 13／13 pass（含 `p2_nav_margin_160`；手機 q4 底緣 321、q1 頂 336，第一屏內；詳見 DEC-223 §五）；提交互動僅 AppTest 驗，Streamlit 1.56.0 開關開亦 13／13 pass；**真瀏覽器的提交互動（輸入→按查詢）＝NOT VERIFIED**。
+
+## 2026-11-22 結案索引與狀態更正：#1253～#1259（append-only；非 QA PASS；單組撰寫，待非作者 QA；依據 `git log origin/main`（main＝`33c3d76a156246ab67a185c545f022371a659139`）；任務 B-UI2-SSOT-STATUS-SYNC-DRAFT-1，授權 #1199 comment 7072588840）
+
+> **現況更正**（有意識的更正，不是漏刪；**舊列不改**）：
+> 1. 上方 `NUI2-AGGREGATOR-IMPL` 列（約 L1170）仍寫「**M-A2 Draft PR，未接 consumer**」、`NUI2-AGGREGATOR-UTD-CLASS` 列（約 L1228）仍寫「隨 M-A2 Draft PR 實作」，**該狀態已過期**：M-A2 已合併為 #1255 → `8b39f385`（DEC-222）。
+> 2. 上方 `B-UI2-LOOKUP-P1-INPUT-1` 列（約 L3182）仍寫「**PR OPEN／NOT VERIFIED**」、「QA／CI／merge 未完成」，**該狀態已過期**：#1257 已合併 → `a035abfc`（DEC-223）。
+> 3. 上方 `B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1`（補登）列已正確標「已合併 #1253 → `7917a818`」，**無需更正**；僅補一句：其所稱「P1 輸入元件為其第一個使用者」現已成立於 main（#1257）。
+> 4. `NUI2-CUTOVER`／`NUI2-ROLLBACK`（約 L1181／L1182）狀態 `open` **仍正確、不改**；僅補註：切換與回退操作手冊已落地為 `docs/vnext/NEWUI2_CUTOVER_ROLLBACK_RUNBOOK_2026-11-22.md`（#1259 → `2c6d9081`，docs-only）。**手冊落地 ≠ 切換授權。**
+
+| ID | PR → merge SHA（DEC） | 現況／邊界（只述已發生事實；SHA 以 `git log` 核對） |
+|---|---|---|
+| **NUI2-AGGREGATOR-IMPL**（M-A2；更正上方舊列） | #1255 → `8b39f385`（DEC-222） | **已合併**。`shared/system_action_contract.py`（L0）＋`src/services/system_action_aggregator.py`（L3）＋A-T1～A-T10 測試。**0 consumer**（2026-11-22 `git grep -n -E "system_action_aggregator\|system_action_contract" -- src shared app.py app_ui2.py scripts` 僅命中兩個定義檔自身，無任何其他 production 引用；僅 `tests/` 引用）。**M-A3～M-A6 與 A-T11 未做**；不是 cutover 前置已滿足（C2／C6／C7 仍含 M-A3／M-A4）。非 QA PASS |
+| **B-UI2-PUBLIC-QUOTE-VIEW-CONTRACT-1** | #1253 → `7917a818` | 已合併（沿上方補登列）。L0 `shared/ui2_contract/quote_view.py`＋合成測試＋文字線框 |
+| **B-UI2-LOOKUP-P1-INPUT-1**（更正上方舊列） | #1257 → `a035abfc`（DEC-223） | **已合併**。查一檔輸入 P1：旗標（`st.secrets` `ui2_lookup_input`／環境變數 `UI2_LOOKUP_INPUT`）**預設 OFF、未在任何環境啟用**（`git grep -n "UI2_LOOKUP_INPUT\|ui2_lookup_input" -- .github .streamlit` 無命中；repo 內僅 `app_ui2.py` 讀取）；**不接任何資料、不判持有**；**使用者仍不能查股**。P2 行情顯示仍待 A2／A3／A4。真瀏覽器提交互動＝NOT VERIFIED |
+| **C-OB-HOLDINGS-INPUT-CONTRACT-1**（C 線；僅列 SHA，不改其內容） | #1254 → `cca7a290` | 已合併（docs＋tests）；本批不觸 OneBrain 契約文件 |
+| **B-UI2-CUTOVER-ROLLBACK-RUNBOOK-DOCS-1** | #1259 → `2c6d9081` | **已合併**（docs-only）。手冊檔見上；**Cloud 部署 SHA／Main file／entrypoint＝NOT VERIFIED；回退 R1～R4＝NOT RUN**；手冊本身單組撰寫、待非作者 QA，**不得引用為「已驗」或「可切換」** |
+
+> **仍 HOLD／NOT VERIFIED／未做（皆不變，本批無一解除）**：Cloud 部署 SHA／Main file／entrypoint（NOT VERIFIED）；切換與回退 R1～R4（NOT RUN）；資料接線（`I1144-WIRING-GATE`）、P2 的 A2／A3／A4、`I1144`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`（HOLD）；M-A3～M-A6（未做）；`NUI2-CUTOVER`、C1～C7、G11、`?ui=1`（未實作）。
+> 本段不取代 DECISIONS；本批不新增 DEC。#1260（C 線 OneBrain 契約 §A）、#1258／#1261 不在本段範圍。

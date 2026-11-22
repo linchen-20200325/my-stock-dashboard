@@ -176,3 +176,13 @@ flowchart TD
 ### 5.3 本檔未做的事
 
 未改任何程式、測試、資料、workflow、Secrets 或既有文件；未更新 `docs/DECISIONS.md`／`docs/BACKLOG.md`／`docs/HANDOFF.md`（Issue #1121 要求之同步由後續步驟處理）；未建立三欄 Capability Map 本體（僅記錄其缺口）。
+
+---
+
+## 附：2026-11-22 現況更正（追加；上文一字未改；有意識的更正，不是漏刪；任務 B-UI2-SSOT-STATUS-SYNC-DRAFT-1）
+
+本檔基準為 2026-11-10。下列兩處上文敘述已過期（以 `git log origin/main`，main＝`33c3d76a`）：
+
+- §4 表「Aggregator（#3）…**未實作**」與 §5.1 第 2 點「System Action Aggregator **未實作（NOT FOUND）**…implementation Gate 為 blocked-on-customer，目前沒有授權」：**已更正為** —— implementation Gate 已由客戶核准 M-A1；**M-A2 已合併為 #1255 → `8b39f385`（DEC-222）**：L0 契約＋L3 Aggregator＋A-T1～A-T10；**0 consumer**（`git grep` src／shared／`app.py`／`app_ui2.py`／scripts 無任何接線）；**M-A3～M-A6 未做**，故 C2／C6／C7 的 Aggregator 前置**仍未滿足**，§5.1「目前不可提 cutover」結論**不變**。
+- §5.1 第 4 點「`app.py` 無 UI2 路由、無 `?ui=1` rollback 機制、無 G11…」**仍屬實**，不更正。另：切換與回退操作手冊已落地為 `docs/vnext/NEWUI2_CUTOVER_ROLLBACK_RUNBOOK_2026-11-22.md`（#1259 → `2c6d9081`，docs-only）；**手冊落地 ≠ 切換授權**；Cloud 部署 SHA／Main file／entrypoint NOT VERIFIED，回退 R1～R4 NOT RUN。
+- 其餘列（C1～C7 狀態、資料接線、P2 A2／A3／A4、I1144、DG-*）本批**未重評**，維持 HOLD／未滿足。
