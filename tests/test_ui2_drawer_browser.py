@@ -467,7 +467,7 @@ def test_row1_fake_mode_label_is_complete_single_line(mob):
 
 def test_row1_real_mode_label_is_complete_and_not_production(mob):
     from shared.ui2_contract import text as T
-    MV._select_box(mob.pg, "資料來源（feed）", "Real-data Preview（唯讀；只接 2 項真資料）", '[data-ui2-scenario="real"]')
+    MV._select_box(mob.pg, "資料來源（feed）", "Real-data Preview（唯讀）", '[data-ui2-scenario="real"]')
     mob.pg.wait_for_timeout(400)
     row = _row1(mob)
     assert T.REAL_PREVIEW_BANNER_TEXT in row["mode"] and "FAKE" not in row["mode"], row
@@ -645,7 +645,7 @@ def test_a11y_headings_every_page_every_fake_scenario(request, which):
 @pytest.mark.parametrize("which", ["mob", "desk"])
 def test_a11y_headings_every_page_real_feed(request, which):
     ui = request.getfixturevalue(which)
-    MV._select_box(ui.pg, "資料來源（feed）", "Real-data Preview（唯讀；只接 2 項真資料）", '[data-ui2-scenario="real"]')
+    MV._select_box(ui.pg, "資料來源（feed）", "Real-data Preview（唯讀）", '[data-ui2-scenario="real"]')
     ui.pg.wait_for_timeout(400)
     for label, pid in zip(PAGES, PAGE_IDS):
         ui.click_page(label, pid)
