@@ -43,4 +43,19 @@ def _read_lookup_flag() -> bool:
         return False
 
 
-run(diag_check=run_connection_check, lookup_input=_read_lookup_flag())
+def _read_diag_flag() -> bool:
+    """資料頁「連線診斷」的功能開關（預設關）。來源：st.secrets 鍵 `ui2_diag_enabled`，否則環境變數 `UI2_DIAG_ENABLE`；
+    值 '1'／'true' 才開（判讀見 `lookup_flag_on`）。任何讀取失敗＝視為該來源不存在（不會因失敗而開啟）。
+    關閉時不注入 `run_connection_check`（按鈕 disabled、不探測、不連外）。⛔ 開發面旗標不是授權，不參與判斷。"""
+    try:
+        if "ui2_diag_enabled" in st.secrets:
+            return lookup_flag_on(st.secrets["ui2_diag_enabled"])
+    except Exception:  # noqa: BLE001 — 無 secrets 檔／讀取失敗＝該來源不存在
+        pass
+    try:
+        return lookup_flag_on(os.environ.get("UI2_DIAG_ENABLE"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+run(diag_check=(run_connection_check if _read_diag_flag() else None), lookup_input=_read_lookup_flag())

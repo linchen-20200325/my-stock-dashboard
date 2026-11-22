@@ -48,10 +48,14 @@ def _reasons(rep: D.DiagReport) -> str:
     return "".join(f'<div class="ui2-diag__reason">{ln}</div>' for ln in lines)
 
 
-def _block_html(rep: D.DiagReport) -> str:
+def _block_html(rep: D.DiagReport, *, preview_unavailable: bool = False) -> str:
+    """`preview_unavailable`＝未注入 `diag_check`（功能開關預設關）：在說明句之後多一行固定說明；False 時 HTML 與先前逐字相同。"""
+    unavailable = (f'<div class="ui2-diag__note">{escape(D.TEXT_DIAG_PREVIEW_UNAVAILABLE)}</div>'
+                   if preview_unavailable else "")
     return (f'<div class="ui2-diag" role="group" aria-label="{escape(D.TEXT_DIAG_ARIA)}">'
             f'<div role="heading" aria-level="2" class="ui2-section-title">{escape(D.TEXT_DIAG_TITLE)}</div>'
             f'<div class="ui2-diag__note">{escape(D.TEXT_DIAG_NOTE)}</div>'
+            + unavailable
             + _row(D.TEXT_DIAG_LABEL_NAS_RELAY, rep.nas_relay)
             + _row(D.TEXT_DIAG_LABEL_NAS_PROXY, rep.nas_proxy)
             + f'<div class="ui2-diag__group">{escape(D.TEXT_DIAG_LABEL_EXTERNAL)}</div>'
@@ -94,7 +98,7 @@ def render_diag(diag_check=None) -> None:
             report = D.DiagReport(*(D.ProbeResult(D.DiagStatus.FAILED, D.DiagReason.OTHER),) * 5)
         st.session_state[KEY_DIAG_REPORT] = report
     rep = _current_report()
-    rows_slot.markdown(_block_html(rep), unsafe_allow_html=True)
+    rows_slot.markdown(_block_html(rep, preview_unavailable=diag_check is None), unsafe_allow_html=True)
     reasons_slot.markdown(_reasons(replace(rep, notice=notice)), unsafe_allow_html=True)
 
 
