@@ -1,0 +1,506 @@
+[
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 14.390625,
+   "r": 375.609375,
+   "t": 663.640625,
+   "b": 684.109375,
+   "w": 361.21875,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 361,
+   "cw": 361,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 361,
+   "cw": 361,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 14.390625,
+   "right": 375.609375,
+   "top": 613.578125,
+   "bottom": 944.140625
+  },
+  "doc": {
+   "sw": 390,
+   "cw": 390
+  },
+  "main": {
+   "sw": 390,
+   "cw": 390
+  },
+  "inner": {
+   "w": 390,
+   "h": 844
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": true
+   }
+  ],
+  "feed": "real",
+  "viewport": "mobile",
+  "size": [
+   390,
+   844
+  ],
+  "pass": true
+ },
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 80,
+   "r": 1200,
+   "t": 606.75,
+   "b": 627.21875,
+   "w": 1120,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 1120,
+   "cw": 1120,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 1120,
+   "cw": 1120,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 80,
+   "right": 1200,
+   "top": 556.6875,
+   "bottom": 887.25
+  },
+  "doc": {
+   "sw": 1280,
+   "cw": 1280
+  },
+  "main": {
+   "sw": 1280,
+   "cw": 1280
+  },
+  "inner": {
+   "w": 1280,
+   "h": 900
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": true
+   }
+  ],
+  "feed": "real",
+  "viewport": "desktop1280",
+  "size": [
+   1280,
+   900
+  ],
+  "pass": true
+ },
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 80,
+   "r": 1360,
+   "t": 606.75,
+   "b": 627.21875,
+   "w": 1280,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 1280,
+   "cw": 1280,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 1280,
+   "cw": 1280,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 80,
+   "right": 1360,
+   "top": 556.6875,
+   "bottom": 887.25
+  },
+  "doc": {
+   "sw": 1440,
+   "cw": 1440
+  },
+  "main": {
+   "sw": 1440,
+   "cw": 1440
+  },
+  "inner": {
+   "w": 1440,
+   "h": 900
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": true
+   }
+  ],
+  "feed": "real",
+  "viewport": "desktop1440",
+  "size": [
+   1440,
+   900
+  ],
+  "pass": true
+ },
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 14.390625,
+   "r": 375.609375,
+   "t": 24.640625,
+   "b": 45.109375,
+   "w": 361.21875,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 361,
+   "cw": 361,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 361,
+   "cw": 361,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 14.390625,
+   "right": 375.609375,
+   "top": -25.421875,
+   "bottom": 305.140625
+  },
+  "doc": {
+   "sw": 390,
+   "cw": 390
+  },
+  "main": {
+   "sw": 390,
+   "cw": 390
+  },
+  "inner": {
+   "w": 390,
+   "h": 844
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   }
+  ],
+  "feed": "fake",
+  "viewport": "mobile",
+  "size": [
+   390,
+   844
+  ],
+  "pass": true
+ },
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 80,
+   "r": 1200,
+   "t": 205.5625,
+   "b": 226.03125,
+   "w": 1120,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 1120,
+   "cw": 1120,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 1120,
+   "cw": 1120,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 80,
+   "right": 1200,
+   "top": 155.5,
+   "bottom": 486.0625
+  },
+  "doc": {
+   "sw": 1280,
+   "cw": 1280
+  },
+  "main": {
+   "sw": 1280,
+   "cw": 1280
+  },
+  "inner": {
+   "w": 1280,
+   "h": 900
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   }
+  ],
+  "feed": "fake",
+  "viewport": "desktop1280",
+  "size": [
+   1280,
+   900
+  ],
+  "pass": true
+ },
+ {
+  "note_text": "連線診斷暫不提供（預覽模式）",
+  "all_notes": [
+   "僅供檢查連線；連線成功不代表行情已更新。",
+   "連線診斷暫不提供（預覽模式）"
+  ],
+  "note_rect": {
+   "l": 80,
+   "r": 1360,
+   "t": 205.5625,
+   "b": 226.03125,
+   "w": 1280,
+   "h": 20.46875
+  },
+  "note_scroll": {
+   "sw": 1280,
+   "cw": 1280,
+   "sh": 20,
+   "ch": 20
+  },
+  "note_visibility": "visible",
+  "note_display": "block",
+  "note_overflow": "visible",
+  "note_white_space": "normal",
+  "note_in_viewport_x": true,
+  "ancestor_clipped_x": false,
+  "blk_scroll": {
+   "sw": 1280,
+   "cw": 1280,
+   "sh": 331,
+   "ch": 331
+  },
+  "blk_rect": {
+   "left": 80,
+   "right": 1360,
+   "top": 155.5,
+   "bottom": 486.0625
+  },
+  "doc": {
+   "sw": 1440,
+   "cw": 1440
+  },
+  "main": {
+   "sw": 1440,
+   "cw": 1440
+  },
+  "inner": {
+   "w": 1440,
+   "h": 900
+  },
+  "buttons": [
+   {
+    "t": "Deploy",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "檢查連線",
+    "disabled": true
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   },
+   {
+    "t": "",
+    "disabled": false
+   }
+  ],
+  "feed": "fake",
+  "viewport": "desktop1440",
+  "size": [
+   1440,
+   900
+  ],
+  "pass": true
+ }
+]

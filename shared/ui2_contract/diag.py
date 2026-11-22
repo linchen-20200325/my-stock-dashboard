@@ -70,6 +70,8 @@ TEXT_DIAG_LABEL_TWSE = "臺灣證交所"
 TEXT_DIAG_LABEL_PUBLICATION = "資料發布狀態"
 TEXT_DIAG_PUBLICATION_VALUE = "尚未提供"
 TEXT_DIAG_BUTTON = "檢查連線"
+#: S1：診斷功能開關預設關（未注入 diag_check）時，區塊內顯示的固定說明（按鈕保留且 disabled；不探測）。
+TEXT_DIAG_PREVIEW_UNAVAILABLE = "連線診斷暫不提供（預覽模式）"
 TEXT_DIAG_ARIA = "連線診斷"
 #: DEC-146 局部文案更正（客戶授權的最小更正）：本區只檢查連線。
 TEXT_DIAG_HEALTH_NOT_OPEN = "完整資料健康度尚未開放；本區僅檢查連線，不代表資料已更新"
