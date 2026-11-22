@@ -19,6 +19,7 @@ import ast
 import dataclasses
 import html as htmllib
 import inspect
+import logging
 import os
 import pathlib
 import re
@@ -38,7 +39,7 @@ import tests.ui2_viewport.onebrain_hold_demo_evidence as EV
 import tests.ui2_viewport.onebrain_hold_demo_launcher as L
 from shared.decision_digest import Availability
 from shared.ui2_contract.models import FieldState, JudgementState
-from shared.ui2_contract.pages import P4_HOLD, PAGE_IDS, SCENARIO_COLD, SCENARIO_IDS
+from shared.ui2_contract.pages import P4_DATA, P4_HOLD, PAGE_IDS, SCENARIO_COLD, SCENARIO_IDS, SCENARIO_LOADED
 from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_RISK_CAP_UNDETERMINABLE
 from src.ui2.views._page import section_l1_html
 from tests.ui2_viewport import measure_viewport as MV
@@ -497,6 +498,53 @@ def test_failclosed_each_step(monkeypatch, step):
     assert ASM.assemble_digest is real_assemble
 
 
+VM_BUILD_SECRET = "DISTINCTIVE-値-7f3a9c"          # 注入的例外訊息：log 不得出現（只記型別名）
+
+
+def _inject_vm_build_failure(mp):
+    real = VM.build_fields
+
+    def fields(block):
+        if block.fail_closed is False:
+            raise VM.MapperError(VM_BUILD_SECRET)
+        return real(block)
+    mp.setattr(VM, "build_fields", fields)
+
+
+def _check_fallback_logged(caplog):
+    """vm_build 失敗降級成固定 fail-closed 列時：必須留一筆 WARNING（案例＋例外型別名），且不得洩漏例外訊息／值。"""
+    with caplog.at_level(logging.WARNING, logger=L._log.name):
+        sec, fc = L.build_demo_section("L1", False)
+    assert fc is True
+    _check_failclosed(sec)
+    recs = [r for r in caplog.records if r.name == L._log.name]
+    assert len(recs) == 1 and recs[0].levelno == logging.WARNING, f"降級必須恰留一筆 WARNING，實得 {len(recs)}"
+    assert "L1" in caplog.text and "vm_build fail-closed" in caplog.text
+    assert "MapperError" in recs[0].getMessage(), "log 必須帶例外型別名"
+    assert VM_BUILD_SECRET not in caplog.text, "log 不得含例外訊息／值（只記型別名）"
+
+
+def test_vm_build_failclosed_fallback_is_logged_type_only(monkeypatch, caplog):
+    _inject_vm_build_failure(monkeypatch)
+    _check_fallback_logged(caplog)
+
+
+def _fallback_variant(log_message: bool):
+    def fb(case_id, err):
+        if log_message:
+            L._log.warning("onebrain holdings demo %s vm_build fail-closed: %s", case_id, str(err))   # 突變：記了訊息
+        return VM.build_section(demo.DemoBlock(case_id, (), True, type(err).__name__))
+    return fb
+
+
+@pytest.mark.parametrize("log_message", [True, False], ids=["logs_message_not_type", "no_log"])
+def test_mutation_fallback_log_turns_red(monkeypatch, caplog, log_message):
+    _inject_vm_build_failure(monkeypatch)
+    monkeypatch.setattr(L, "_failclosed_fallback_section", _fallback_variant(log_message))
+    with pytest.raises(AssertionError):
+        _check_fallback_logged(caplog)
+
+
 def test_failclosed_injection_restores_assemble_even_on_error(monkeypatch):
     real = ASM.assemble_digest
     monkeypatch.setattr(demo, "build_case_block", lambda cid: (_ for _ in ()).throw(KeyError("boom")))
@@ -736,6 +784,7 @@ def _check_wraps_once(shell, original, installs=3):
     assert _wrap_depth(cur) == 1, f"包了 {_wrap_depth(cur)} 層"
     assert cur.__wrapped__ is original and getattr(shell, L.ORIG_ATTR) is original
     assert getattr(original, "__obdemo_wrapper__", False) is False
+    assert L.get_state(shell)["installs"] == installs, "install() 每呼叫一次，installs 計數恰加 1"
 
 
 def test_launcher_wraps_once_across_reruns():
@@ -790,6 +839,19 @@ def test_mutation_nested_wrapping_turns_red(monkeypatch):
     with pytest.raises(AssertionError):
         _check_wraps_once(shell, orig)
     shell.get_preview_page_vm = orig                                # 還原（autouse 另會 uninstall）
+
+
+def test_mutation_install_counter_not_incremented_turns_red(monkeypatch):
+    shell = L._shell()
+    orig = shell.get_preview_page_vm
+    real_install = L.install
+
+    def install_without_count():
+        real_install()
+        L.get_state(shell)["installs"] -= 1
+    monkeypatch.setattr(L, "install", install_without_count)
+    with pytest.raises(AssertionError):
+        _check_wraps_once(shell, orig)
 
 
 def test_mutation_not_forwarding_mode_account_turns_red(monkeypatch):
@@ -1215,6 +1277,39 @@ def test_check_meta_requires_every_field():
         assert EV.check_meta(m) != []
 
 
+def _meta_r1():
+    return EV.build_meta(ROOT, variant="baseline", case="R1", streamlit_version="x", chromium_version="y",
+                         network={"server_rejected": 0, "context_aborted": 0, "server_rejected_hosts": [], "context_aborted_urls": []})
+
+
+def _check_devsurface_disclosure(meta, doc):
+    note = meta["note"]
+    for need in (".st-key-ui2_dev_surface", "預設隱藏開發面", "測試輸入說明", "持股清單", "虛線框", "🧪 開發／測試工具（非產品內容）", "之後"):
+        assert need in note, f"meta.note 缺：{need}"
+    assert meta["label"] == "tests-only／非 DEC-137 正式", "label 不得改動"
+    for need in (".st-key-ui2_dev_surface", "預設暫時隱藏開發面", "持股清單", "🧪 開發／測試工具（非產品內容）"):
+        assert need in doc, f"runner docstring 缺：{need}"
+
+
+def test_meta_note_and_runner_doc_disclose_devsurface_hidden_in_default_pngs():
+    """F3 證據誠實：預設 PNG 隱藏開發面 ⇒ 槽外測試輸入說明的位置與開發面顯示時不同；note 與 runner docstring 都必須明說，且標籤不變。"""
+    meta = _meta_r1()
+    _check_devsurface_disclosure(meta, EV.__doc__)
+    assert EV.DEVSURFACE_NOTE in meta["note"] and meta["note"].startswith("tests-only 證據；非 DEC-137 正式；不稱 Cloud 已驗")
+    assert [e for e in EV.check_meta(meta) if "git_sha" not in e and "playwright_version" not in e] == []
+
+
+@pytest.mark.parametrize("mutation", ["note_empty", "doc_dropped"])
+def test_mutation_devsurface_disclosure_dropped_turns_red(monkeypatch, mutation):
+    doc = EV.__doc__
+    if mutation == "note_empty":
+        monkeypatch.setattr(EV, "DEVSURFACE_NOTE", "")
+    else:
+        doc = doc.replace("預設暫時隱藏開發面", "")
+    with pytest.raises(AssertionError):
+        _check_devsurface_disclosure(_meta_r1(), doc)
+
+
 def test_variant_dir_isolation():
     assert EV.variant_dir_ok({"css_variant": "baseline"}, "baseline_unmodified_css")
     assert not EV.variant_dir_ok({"css_variant": "preview"}, "baseline_unmodified_css")
@@ -1286,7 +1381,7 @@ def _slot_rows(blob: str):
     return [{"axis": a, "state": s, "label": lb, "value": v, "detail": d} for a, s, lb, v, _c, d in _ROW_RX.findall(_slot(blob))]
 
 
-def _run_app(monkeypatch, *, case=None, failclosed=False, feed="fake", page=P4_HOLD, scenario=SCENARIO_COLD, dev=False):
+def _run_app(monkeypatch, *, case=None, failclosed=False, feed="fake", page=P4_HOLD, scenario=SCENARIO_COLD, dev=False, source=None):
     from streamlit.testing.v1 import AppTest
     for k in (L.ENV_CASE, L.ENV_FAILCLOSED, L.ENV_PREVIEW_CSS, L.ENV_SEAL):
         monkeypatch.delenv(k, raising=False)
@@ -1294,7 +1389,7 @@ def _run_app(monkeypatch, *, case=None, failclosed=False, feed="fake", page=P4_H
         monkeypatch.setenv(L.ENV_CASE, case)
     if failclosed:
         monkeypatch.setenv(L.ENV_FAILCLOSED, "1")
-    at = AppTest.from_file(str(LAUNCHER_PATH), default_timeout=60)
+    at = AppTest.from_string(source, default_timeout=60) if source is not None else AppTest.from_file(str(LAUNCHER_PATH), default_timeout=60)
     if dev:
         at.query_params["ui2_dev"] = "1"
     at.session_state["ui2_feed"], at.session_state["ui2_page"], at.session_state["ui2_scenario"] = feed, page, scenario
@@ -1402,7 +1497,59 @@ def test_apptest_wraps_once_across_streamlit_reruns(monkeypatch):
     at.run(timeout=60)
     assert not at.exception and _wrap_depth(shell.get_preview_page_vm) == 1
     assert L.get_state(shell)["calls"] == 3, "每次 rerun 恰好呼叫一次（巢狀包會變 2×）"
+    assert L.get_state(shell)["installs"] == 3, "每次 rerun 恰好 install 一次"
     assert isinstance(at, AppTest)
+
+
+def _testinfo_captions(at) -> list[str]:
+    return [c.value for c in at.caption if "測試輸入說明" in c.value]
+
+
+def _goto(at, *, page, scenario):
+    at.session_state["ui2_page"], at.session_state["ui2_scenario"] = page, scenario
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    return _page_blob(at)
+
+
+def _check_testinfo_lifecycle(at, no_demo_slot_loaded: str):
+    """槽外「測試輸入說明」的生命週期：只在「本次 run 確實注入」的 持股／FAKE／cold 頁出現；
+    換頁、換場景後的 rerun 必須消失（不得殘留上一次 run 的狀態），回到持股 cold 才重新出現。"""
+    info = VM.test_info_text("R1")
+    assert _testinfo_captions(at) == [info], "起點：持股 FAKE cold 注入 R1 ⇒ 槽外說明恰 1 則"
+    blob = _goto(at, page=P4_DATA, scenario=SCENARIO_COLD)                  # 換頁（資料頁，FAKE cold）
+    assert f'data-ui2-page="{P4_DATA}"' in blob and "示意：合成持股快照" not in blob
+    assert _testinfo_captions(at) == [], "換到資料頁後 rerun：說明不得殘留"
+    blob = _goto(at, page=P4_HOLD, scenario=SCENARIO_LOADED)                # 持股頁換場景 loaded
+    assert 'data-ui2-scenario="loaded"' in blob
+    assert _testinfo_captions(at) == [], "換到 loaded 後 rerun：說明不得殘留"
+    assert _slot(blob) == no_demo_slot_loaded and "示意：合成持股快照" not in blob, "loaded 的槽必須與無示範時相同"
+    blob = _goto(at, page=P4_HOLD, scenario=SCENARIO_COLD)                  # 回持股 cold
+    assert _testinfo_captions(at) == [info], "回到持股 FAKE cold 說明必須再次出現"
+    assert "示意：合成持股快照" in _slot(blob) and info not in _slot(blob)
+
+
+@pytest.mark.slow
+def test_apptest_testinfo_caption_does_not_linger_across_pages_and_scenarios(monkeypatch):
+    ref = _slot(_page_blob(_run_app(monkeypatch, scenario=SCENARIO_LOADED)))      # 無示範的 loaded 槽（對照）
+    _check_testinfo_lifecycle(_run_app(monkeypatch, case="R1"), ref)
+
+
+def _launcher_source_without_reset() -> str:
+    """突變：把 `main()` 每次 rerun 的「重置當次 run 狀態」拿掉（AppTest 以 from_string 跑；`__file__` 不存在 ⇒ 改寫 `_ROOT` 為固定 repo 根）。"""
+    src = LAUNCHER_PATH.read_text(encoding="utf-8")
+    reset, root = "state.update(injected=False, case=None, failclosed=False)", "Path(__file__).resolve().parents[2]"
+    assert src.count(reset) == 1 and src.count(root) == 1, "launcher 重置行／_ROOT 行變了：突變失去對象，請同步本測試"
+    return src.replace(reset, "pass").replace(root, f"Path({str(ROOT)!r})")
+
+
+@pytest.mark.slow
+def test_mutation_launcher_without_per_rerun_reset_turns_red(monkeypatch):
+    ref = _slot(_page_blob(_run_app(monkeypatch, scenario=SCENARIO_LOADED)))
+    at = _run_app(monkeypatch, case="R1", source=_launcher_source_without_reset())
+    assert _testinfo_captions(at) == [VM.test_info_text("R1")], "突變版在起點仍正常（紅燈必須來自換頁後殘留）"
+    with pytest.raises(AssertionError):
+        _check_testinfo_lifecycle(at, ref)
 
 
 @pytest.mark.slow

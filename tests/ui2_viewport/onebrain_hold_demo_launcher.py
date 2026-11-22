@@ -27,6 +27,7 @@ import functools
 import importlib
 import ipaddress
 import json
+import logging
 import os
 import runpy
 import socket
@@ -44,6 +45,8 @@ if str(_ROOT) not in sys.path:
 from shared.ui2_contract.pages import P4_HOLD, SCENARIO_COLD  # noqa: E402
 from tests import onebrain_holdings_ui2_demo as demo  # noqa: E402
 from tests import onebrain_holdings_ui2_demo_vm as VM  # noqa: E402
+
+_log = logging.getLogger(__name__)
 
 ENV_CASE = "UI2_OBDEMO_CASE"
 ENV_FAILCLOSED = "UI2_OBDEMO_FAILCLOSED"
@@ -122,7 +125,9 @@ def _raise_assemble(*_a, **_k):
 
 
 def _failclosed_fallback_section(case_id: str, err: BaseException):
-    """mapper（vm_build）在正常區塊上失敗 ⇒ 改以空的 fail-closed 區塊建固定 5 列（不猜句）；此處再失敗＝漂移，往上拋（fail loud）。"""
+    """mapper（vm_build）在正常區塊上失敗 ⇒ 改以空的 fail-closed 區塊建固定 5 列（不猜句）；此處再失敗＝漂移，往上拋（fail loud）。
+    降級**必須留 log**（CLAUDE.md §1：不得靜默）；只記案例與例外**型別名**，⛔ 不記訊息／值（沿用 demo `_failclosed_block` 的格式）。"""
+    _log.warning("onebrain holdings demo %s vm_build fail-closed: %s", case_id, type(err).__name__)
     return VM.build_section(demo.DemoBlock(case_id, (), True, type(err).__name__))
 
 

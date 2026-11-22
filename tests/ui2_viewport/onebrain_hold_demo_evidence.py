@@ -12,6 +12,9 @@
 `?ui2_dev=1` → 資料來源切 FAKE → 點 💼 持股 → 量測。另起一個**不注入**的 server 當首屏對照（`first_screen_equals_nodemo`）。
 視窗在本檔自訂 {390×844, 1280×900, 1440×900}，**不重用** `measure_viewport.VIEWPORTS`（DEC-137 V1 另案會改它）。
 封網：server 側（launcher `seal_network`）＋ Playwright context 側（`route` abort 非本機請求）各自計數並寫進 meta。
+⚠️ 截圖的開發面（dev surface）：`*_viewport.png` 走 `MV._screenshot`，**預設暫時隱藏開發面**（`.st-key-ui2_dev_surface`）⇒ 這些 PNG 裡，
+槽外「測試輸入說明」直接出現在「持股清單」正下方；**開發面顯示時**（真實操作 `?ui2_dev=1` 的畫面），它會接在虛線框
+「🧪 開發／測試工具（非產品內容）」**之後**。兩者只差開發面是否入鏡；本 runner 沒有另產「開發面入鏡」的 PNG（`*_testinfo.png` 只截說明容器本身）。
 輸出只寫到 `--out`（預設 `tempfile.gettempdir()/onebrain_a1_evidence`；⛔ 預設不在 repo 內）。
 
 判定器 `evaluate_demo()` 是**純函式**（吃量測 dict，不碰瀏覽器），並有突變測試（tests/test_onebrain_holdings_ui2_demo_view.py）。
@@ -34,6 +37,9 @@ from pathlib import Path
 from tests.ui2_viewport import measure_viewport as MV
 
 LABEL = "tests-only／非 DEC-137 正式"
+#: meta `note` 內的截圖說明（F3 證據誠實）：預設 PNG 隱藏開發面 ⇒ 槽外測試資訊的位置與真實操作畫面不同。
+DEVSURFACE_NOTE = ("截圖預設隱藏開發面（.st-key-ui2_dev_surface）：PNG 中槽外「測試輸入說明」緊接在「持股清單」下方；"
+                   "開發面顯示時，它在虛線框「🧪 開發／測試工具（非產品內容）」之後。")
 TOOL = "tests/ui2_viewport/onebrain_hold_demo_evidence.py"
 LAUNCHER = Path(__file__).with_name("onebrain_hold_demo_launcher.py")
 #: A 證據自訂尺寸（不重用 MV.VIEWPORTS）。
@@ -525,7 +531,7 @@ def build_meta(repo: Path, *, variant: str, case: str, streamlit_version: str, c
                                "context_aborted_urls": network["context_aborted_urls"]},
             "css_variant": variant, "case": case,
             "note": ("tests-only 證據；非 DEC-137 正式；不稱 Cloud 已驗；本 runner 不進 CI（NOT VERIFIED 原生 CI）；"
-                     "封網僅本進程 Python socket＋瀏覽器 route，非作業系統層。")}
+                     "封網僅本進程 Python socket＋瀏覽器 route，非作業系統層。" + DEVSURFACE_NOTE)}
 
 
 def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), python: str = sys.executable) -> dict:
