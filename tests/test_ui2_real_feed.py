@@ -439,6 +439,79 @@ def test_cross_page_checker_has_teeth(monkeypatch):
     assert check_cross_page_regime(mixed)
 
 
+# ── U1（總管核准文案）：市場位階缺值旁註（只在「未載入／無法判定」兩個缺值分支；有真值與讀取失敗都不得出現） ──
+_REGIME_NO_DATA_NOTE_TEXT = "尚無可用的市場位階資料，暫不顯示判讀。"
+
+
+def check_regime_note_placement(vms: dict[str, PageVM], variant: str) -> list[str]:
+    """位階三處（📊 現在狀態／🎯 市場位階／🎯 市場環境）：缺值兩態（unloaded／unevaluated_breadth）必帶旁註且為 detail 最後一句，
+    並與既有「資料日未提供」「原因：…」並存（不替換、不蓋過）；有真值（loaded）與讀取失敗（failed→unavailable 紅態）一律不得帶旁註，
+    且不得輸出「⬜ 尚未載入」缺值句。"""
+    bad: list[str] = []
+    note = _REGIME_NO_DATA_NOTE_TEXT
+    for name, f in zip(("📊", "🎯市場位階", "🎯市場環境"), _regime_triplet(vms)):
+        d = f.detail or ""
+        if variant in ("unloaded", "unevaluated_breadth"):
+            if note not in d:
+                bad.append(f"{name}: 缺值態缺旁註")
+            elif not d.endswith(note):
+                bad.append(f"{name}: 旁註不是最後一句")
+            if T.TEXT_ASOF_MISSING not in d or RC.REGIME_SEE_WHY not in d:
+                bad.append(f"{name}: 旁註蓋過了既有資料日／原因揭露")
+        else:
+            if note in d or note in (f.status_text or "") or note in (f.value_text or ""):
+                bad.append(f"{name}: {variant} 不應出現缺值旁註")
+            if f.status_text == T.TEXT_NOT_LOADED:
+                bad.append(f"{name}: {variant} 不應輸出「⬜ 尚未載入」缺值句")
+    return bad
+
+
+def test_regime_no_data_note_constant_is_exact():
+    assert RC.REGIME_NO_DATA_NOTE == _REGIME_NO_DATA_NOTE_TEXT
+    assert "\n" not in RC.REGIME_NO_DATA_NOTE and RC.REGIME_NO_DATA_NOTE.endswith("。")
+
+
+@pytest.mark.parametrize("variant", list(_REGIME_VARIANTS))
+def test_regime_no_data_note_only_on_the_two_missing_branches(monkeypatch, variant):
+    vms = _vms(_feed(monkeypatch, **_REGIME_VARIANTS[variant]))
+    assert check_regime_note_placement(vms, variant) == []
+    assert check_cross_page_regime(vms) == []                # 三處同值（既有跨頁一致性守衛）
+
+
+def test_regime_no_data_note_keeps_asof_and_unloaded_ordering(monkeypatch):
+    vms = _vms(_feed(monkeypatch, regime=_regime()))
+    for f in _regime_triplet(vms):
+        assert f.detail.index(T.TEXT_ASOF_MISSING) < f.detail.index(RC.REGIME_SEE_WHY) < f.detail.index(RC.REGIME_NO_DATA_NOTE)
+    w = _why_regime(vms[P4_MARKET])                          # L2 位階說明不動（既有 NO_REFRESH_NOTE 順序斷言另有守衛）
+    assert RC.REGIME_NO_DATA_NOTE not in w.detail
+
+
+def test_regime_no_data_note_checker_has_teeth(monkeypatch):
+    """mutation（測試內 monkeypatch，不改 repo 檔）：旁註塞進 loaded／unavailable 分支，或缺值分支漏掉旁註 → 檢查器必紅。"""
+    orig = RC.regime_spec
+
+    def with_note(snap, key, label, **kw):                    # 對所有分支一律附旁註（含 loaded、unavailable）
+        s = orig(snap, key, label, **kw)
+        r = s.get("reason")
+        return {**s, "reason": f"{r}。{RC.REGIME_NO_DATA_NOTE}" if r else RC.REGIME_NO_DATA_NOTE}
+
+    def without_note(snap, key, label, **kw):                 # 缺值分支完全不附
+        s = orig(snap, key, label, **kw)
+        r = (s.get("reason") or "").replace(f"。{RC.REGIME_NO_DATA_NOTE}", "")
+        return {**s, "reason": r}
+
+    for variant in ("loaded", "failed"):
+        snap = _feed(monkeypatch, **_REGIME_VARIANTS[variant])
+        assert check_regime_note_placement(_vms(snap), variant) == []
+        monkeypatch.setattr(RC, "regime_spec", with_note)
+        assert check_regime_note_placement(_vms(snap), variant), variant
+        monkeypatch.setattr(RC, "regime_spec", orig)
+    snap = _feed(monkeypatch, **_REGIME_VARIANTS["unloaded"])
+    monkeypatch.setattr(RC, "regime_spec", without_note)
+    assert check_regime_note_placement(_vms(snap), "unloaded")
+    monkeypatch.setattr(RC, "regime_spec", orig)
+
+
 def test_one_snapshot_means_one_call_per_service(monkeypatch):
     calls = {}
     snap = _feed(monkeypatch, calls=calls)
@@ -734,10 +807,10 @@ def test_real_threshold_registered_with_source():
 def test_real_viewport_evidence_passed_and_is_real_mode(name):
     d = _evidence(name)
     assert d["meta"]["feed"] == "real"
-    # DEC-146：五頁 → 2 viewport × (5 頁＋🎯 查一檔) ＋ 手機市場壓力態 1 ＝ 13（舊四頁＝11）
-    assert d["summary"]["failed"] == [] and d["summary"]["states"] == 2 * (len(PAGE_IDS) + 1) + 1
+    # DEC-146：五頁 → 各 viewport × (5 頁＋🎯 查一檔) ＋ 手機市場壓力態 1；V1：viewport 數由 `MV.VIEWPORTS` 推導（不寫死兩個）
+    assert d["summary"]["failed"] == [] and d["summary"]["states"] == len(MV.VIEWPORTS) * (len(PAGE_IDS) + 1) + 1
     pages = {(r["viewport_name"], r["page"], r.get("mode")) for r in d["results"]}
-    for vp in ("mobile", "desktop"):
+    for vp in MV.VIEWPORTS:
         for p in PAGE_IDS:
             assert any(k[0] == vp and k[1] == p for k in pages)
     for r in d["results"]:
