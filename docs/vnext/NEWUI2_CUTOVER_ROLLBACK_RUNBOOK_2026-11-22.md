@@ -68,7 +68,7 @@
 | G11 路由毒化測試 | **未實作**：`git grep -n G11 -- tests` 空 | 同左 |
 | production 預設 VM 0 個 capability marker 的 runtime 斷言 | **未實作**：僅有 `tests/test_ui2_guards.py:1151` `CAPABILITY_MARKER_ALLOWLIST`（靜態白名單）；BACKLOG `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO` 規定 cutover 前清零 | `git grep -n CAPABILITY_MARKER_ALLOWLIST -- tests` |
 | UI2 畫面版本字串 | **0 命中**：`git grep -n -E 'GIT_SHA\|APP_VERSION\|build_id' -- src/ui2 shared/ui2_contract app_ui2.py app.py` 空 → UI2 畫面無法自證部署 commit | 同左 |
-| MC／GM 引用處 | MC §1.1 C7 原文（「C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠；前置必含 `NUI2-AGGREGATOR-IMPL`＋M-A3＋M-A4 完成」）、MC §2（`?ui=1`、G11、OAuth 降級揭露）、MC §6／§7（`app_ui2.py` 登記 L6；capability marker 為 Preview-only、cutover 前須 0 個）**皆仍屬實**；GM 僅其「Aggregator 未實作」一語因 #1255 合併而過時（見 0.A） | `sed -n 34,46p`／`grep -n -E 'G11\|\?ui=\|NUI2-AGGREGATOR' docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` |
+| MC／GM 引用處 | MC §1.1 C7 原文（「C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠；前置必含 `NUI2-AGGREGATOR-IMPL`＋M-A3＋M-A4 完成（否則持股頁動作能力消失）（#997 稽核 M2）」）、MC §2（`?ui=1`、G11、OAuth 降級揭露）、MC §6／§7（`app_ui2.py` 登記 L6；capability marker 為 Preview-only、cutover 前須 0 個）**皆仍屬實**；GM 僅其「Aggregator 未實作」一語因 #1255 合併而過時（見 0.A） | `sed -n 34,46p`／`grep -n -E 'G11\|\?ui=\|NUI2-AGGREGATOR' docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` |
 
 ---
 
