@@ -19,7 +19,8 @@ QA 狀態不寫進程式檔（由 PR／#1199 記錄）。Digest NOT READY；OneB
 - ⛔ 不轉譯原因碼；「（尚無輸入）」逐字保留，另於 UI 說明區（資料驅動）附核定註記（D3=a）。
 - ⛔ 零網路、零時鐘（`generated_at` 固定）、零 Secrets、不讀 Sheet／OAuth、無真實 Provider。
 - Fail-closed：鏈中任何例外、可用性不符預期、effective ≠ 規則式摘要、或待顯示文字含禁字 ⇒
-  只輸出聲明＋「持股判讀 ⬜ 無法判定」＋固定失敗說明＋頁尾，**不**猜任何系統句（`FAILCLOSED_*`）。
+  只輸出聲明＋「持股判讀 ⬜ 無法判定」＋固定失敗說明＋頁尾（僅合成來源／時點；**不含**「顯示＝規則式摘要…」一句，
+  因 fail-closed 沒有顯示任何規則式摘要），**不**猜任何系統句（`FAILCLOSED_*`）。
 """
 from __future__ import annotations
 
@@ -70,6 +71,9 @@ FOOTER_DISPLAY = "顯示＝規則式摘要；FakeProvider 草稿不採用"
 FOOTER_SOURCE = "來源：FAKE 合成持股快照"
 FOOTER_ASOF = "時點：FAKE 示意（無持股讀取時點，§C-10）"
 FOOTER_LINES = (FOOTER_DISPLAY, FOOTER_SOURCE, FOOTER_ASOF)
+#: fail-closed 沒有顯示任何規則式摘要 ⇒ 頁尾**不得**含 FOOTER_DISPLAY（「顯示＝規則式摘要…」；總管 #1199 裁示 C）；
+#: 只留合成來源／時點（明列，不以字串過濾 FOOTER_LINES 衍生）。
+FAILCLOSED_FOOTER_LINES = (FOOTER_SOURCE, FOOTER_ASOF)
 TEST_INPUT_PREFIX = "測試輸入說明（非系統輸出；系統不傳遞此資訊，§C-2）："
 FAILCLOSED_NOTE = "示範鏈未通過檢查，未顯示任何系統句"
 
@@ -239,7 +243,7 @@ def _failclosed_block(case_id: str, err: BaseException) -> DemoBlock:
     lines = ([Line(AREA_DISCLOSURE, t) for t in DISCLOSURE_LINES]
              + [Line(AREA_DERIVED, f"{DERIVED_LABEL} {HOLDINGS_UNDETERMINABLE}{DERIVED_MARK}"),
                 Line(AREA_UI_NOTE, FAILCLOSED_NOTE)]
-             + [Line(AREA_FOOTER, t) for t in FOOTER_LINES])
+             + [Line(AREA_FOOTER, t) for t in FAILCLOSED_FOOTER_LINES])
     return DemoBlock(case_id, tuple(lines), True, type(err).__name__)
 
 

@@ -55,6 +55,10 @@ NOTE_TRIGGER = "（尚無輸入）"
 APPROVED_NOTE = "註：『尚無輸入』是現行摘要措辭，也可能代表讀取失敗、輸入異常或缺少組合鍵；請勿解讀為零持股。"
 EXPECTED_FOOTER = ("顯示＝規則式摘要；FakeProvider 草稿不採用", "來源：FAKE 合成持股快照",
                    "時點：FAKE 示意（無持股讀取時點，§C-10）")
+#: fail-closed 頁尾（總管 #1199 裁示 C）：沒有顯示規則式摘要 ⇒ 只留合成來源／時點，**不得**含 EXPECTED_FOOTER[0]。
+EXPECTED_FAILCLOSED_FOOTER = ("來源：FAKE 合成持股快照", "時點：FAKE 示意（無持股讀取時點，§C-10）")
+FOOTER_DISPLAY_TEXT = "顯示＝規則式摘要；FakeProvider 草稿不採用"      # 僅正常六案許可（tests-only 否定式揭露）
+FAILCLOSED_NO_SUMMARY_WORDS = (FOOTER_DISPLAY_TEXT, "FakeProvider", "規則式摘要")
 TEST_INPUT_PREFIX = "測試輸入說明（非系統輸出；系統不傳遞此資訊，§C-2）："
 UI_NOTE_WHITELIST = (APPROVED_NOTE, "示範鏈未通過檢查，未顯示任何系統句")
 AREA_ORDER = ("disclosure", "derived", "system_output", "ui_note", "footer", "test_input")
@@ -146,6 +150,15 @@ def _check_banned(b, cid):
     assert TEXT_NOT_EVALUATED_DATA_SHORT not in whole and "未評估" not in whole, f"{cid} 不得重用『未評估／資料不足』"
 
 
+def _check_failclosed_no_summary_claim(b, cid):
+    """fail-closed 沒有顯示規則式摘要 ⇒ 整個區塊（逐行文字＋render_text）不得出現 FOOTER_DISPLAY／FakeProvider／規則式摘要。"""
+    assert b.fail_closed is True, f"{cid} 須為 fail-closed 區塊"
+    whole = "\n".join([ln.text for ln in b.lines] + [demo.render_text(b)])
+    hit = [w for w in FAILCLOSED_NO_SUMMARY_WORDS if w in whole]
+    assert not hit, f"{cid} fail-closed 不得暗示已顯示規則式摘要 {hit}"
+    assert b.area("footer") == EXPECTED_FAILCLOSED_FOOTER, f"{cid} fail-closed 頁尾只留來源／時點"
+
+
 _INJECTED_MSG = "injected-secret-value-7f3a"  # 注入例外的訊息值；fail-closed log 只可記型別名，不得含此值
 
 
@@ -161,7 +174,8 @@ def _check_failclosed():
             assert b.area("disclosure") == (DISCLOSURE_FIRST, DISCLOSURE_SECOND) and b.lines[0].text == DISCLOSURE_FIRST
             assert b.area("derived") == (DERIVED_ROW,), f"{cid} fail-closed 須顯示無法判定"
             assert b.area("ui_note") == (UI_NOTE_WHITELIST[1],), f"{cid} fail-closed 說明"
-            assert b.area("footer") == EXPECTED_FOOTER and b.area("test_input") == ()
+            assert b.area("footer") == EXPECTED_FAILCLOSED_FOOTER and b.area("test_input") == ()
+            _check_failclosed_no_summary_claim(b, cid)
             _check_banned(b, cid)
 
 
@@ -271,7 +285,50 @@ def test_failclosed_variants(monkeypatch, inject):
     assert b.fail_closed is True
     assert b.area("system_output") == () and b.area("derived") == (DERIVED_ROW,)
     assert b.lines[0].text == DISCLOSURE_FIRST
+    _check_failclosed_no_summary_claim(b, cid)
     _check_banned(b, cid)
+
+
+@pytest.mark.parametrize("cid", EXPECTED_CASE_IDS)
+def test_failclosed_footer_has_no_display_line_negative_control(monkeypatch, cid):
+    """裁示 C 負控：fail-closed（直接建構＋任一例外注入）整塊與 render_text 皆無『顯示＝規則式摘要；FakeProvider 草稿不採用』。"""
+    direct = demo._failclosed_block(cid, RuntimeError("x"))
+    _check_failclosed_no_summary_claim(direct, cid)
+    assert FOOTER_DISPLAY_TEXT not in direct.area("footer") and FOOTER_DISPLAY_TEXT not in demo.render_text(direct)
+    assert demo.FOOTER_DISPLAY == FOOTER_DISPLAY_TEXT and demo.FOOTER_DISPLAY not in demo.FAILCLOSED_FOOTER_LINES
+    assert demo.FAILCLOSED_FOOTER_LINES == EXPECTED_FAILCLOSED_FOOTER
+    monkeypatch.setattr(ASM, "assemble_digest", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError(_INJECTED_MSG)))
+    injected = _build(cid)
+    _check_failclosed_no_summary_claim(injected, cid)
+    assert injected == direct or injected.lines == direct.lines
+
+
+@pytest.mark.parametrize("cid", EXPECTED_CASE_IDS)
+def test_normal_footer_keeps_display_line_exactly_once(cid):
+    """正常六案：tests-only 否定式揭露『顯示＝規則式摘要；FakeProvider 草稿不採用』維持且恰一次（輸出不變）。"""
+    b = demo.build_case_block(cid)
+    assert b.fail_closed is False
+    assert b.area("footer") == EXPECTED_FOOTER and b.area("footer")[0] == FOOTER_DISPLAY_TEXT
+    assert [ln.text for ln in b.lines].count(FOOTER_DISPLAY_TEXT) == 1
+    assert demo.render_text(b).count(FOOTER_DISPLAY_TEXT) == 1
+
+
+@pytest.mark.parametrize("how", ["constant", "block"])
+def test_failclosed_checker_detects_readded_display_line(monkeypatch, how):
+    """突變式：把 FOOTER_DISPLAY 加回 fail-closed 區塊 ⇒ 檢查器必須 raise（有牙齒）。"""
+    if how == "constant":
+        monkeypatch.setattr(demo, "FAILCLOSED_FOOTER_LINES", (demo.FOOTER_DISPLAY, *demo.FAILCLOSED_FOOTER_LINES))
+    else:
+        real = demo._failclosed_block
+
+        def fb(cid, err):
+            b = real(cid, err)
+            return demo.DemoBlock(cid, b.lines + (demo.Line("footer", demo.FOOTER_DISPLAY),), True, b.error_type)
+        monkeypatch.setattr(demo, "_failclosed_block", fb)
+    with pytest.raises(AssertionError):
+        _check_failclosed()
+    with pytest.raises(AssertionError):
+        _check_failclosed_no_summary_claim(demo._failclosed_block("L1", RuntimeError("x")), "L1")
 
 
 _TEETH = [("system_output", w) for w in (*ZERO_HOLDING_CLAIMS, *NEUTRAL_SAFE_CLAIMS, "完整", *A.ALL_REASONS)] + \
@@ -462,6 +519,26 @@ def _m_failclosed_guesses_sentence(mp):
         b = real(cid, err)
         return demo.DemoBlock(cid, b.lines + (demo.Line("system_output", "⬜ 存股：持股資料不足，無法判定（尚無輸入）",
                                                         "buy_and_hold"),), True, b.error_type)
+    mp.setattr(demo, "_failclosed_block", fb)
+
+
+def _m_failclosed_footer_readds_display_constant(mp):
+    """裁示 C：fail-closed 頁尾被加回『顯示＝規則式摘要…』（改常數）⇒ 必須轉紅。"""
+    mp.setattr(demo, "FAILCLOSED_FOOTER_LINES", (demo.FOOTER_DISPLAY, *demo.FAILCLOSED_FOOTER_LINES))
+
+
+def _m_failclosed_footer_reverts_to_full_footer(mp):
+    """裁示 C：fail-closed 頁尾退回完整 FOOTER_LINES（舊行為）⇒ 必須轉紅。"""
+    mp.setattr(demo, "FAILCLOSED_FOOTER_LINES", demo.FOOTER_LINES)
+
+
+def _m_failclosed_footer_appends_provider_wording(mp):
+    """裁示 C：fail-closed 區塊尾端另加含 FakeProvider 字樣的 footer 行 ⇒ 必須轉紅。"""
+    real = demo._failclosed_block
+
+    def fb(cid, err):
+        b = real(cid, err)
+        return demo.DemoBlock(cid, b.lines + (demo.Line("footer", "FakeProvider 草稿不採用"),), True, b.error_type)
     mp.setattr(demo, "_failclosed_block", fb)
 
 
