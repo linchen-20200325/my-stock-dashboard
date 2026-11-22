@@ -4,7 +4,7 @@
 > **授權**：Issue #1199 comment 7060205009（契約設計＋離線驗收案例；最多一支 Draft PR；不合併）。
 > **依據**：DEC-215、DEC-218（Q1=B 持有部位全集；Q2=(a) 選定單一本組合）、DEC-219（L1 tally）；
 > `docs/vnext/ONEBRAIN_DUAL_UNIVERSE_TABLE_2026-11-21.md`、`docs/vnext/ONEBRAIN_UPSTREAM_EXCLUSION_POINTS_CONTRACT_EVIDENCE_2026-11-21.md`。
-> **量測基準**：main `29594c5a`；以符號為準，不寫行號。
+> **量測基準**：main `29594c5a`；以符號為準，不寫行號。（本次修訂量測基準 `2c6d9081`，見 §F）
 > **驗收測試**：`tests/test_onebrain_holdings_input_contract.py`（規範＝`test_norm_*`；現況≠契約＝`test_gap_*`，`xfail(strict=True)`；
 > 現況快照＝名稱含 `current_behavior`；突變＝`test_mutation_*`）。
 > **標記**：FACT＝原始碼或測試可直接核對；INFERENCE＝由 FACT 推得；NV＝NOT VERIFIED。
@@ -53,7 +53,7 @@
 2. **過渡期規則（fail-closed）**：在剔除提示／原因／影響範圍及 coverage 不完整的正式揭露機制尚未具備、尚未通過其 Gate 之前，持股輸入只要有**任一無效列**——EX 丟列（`blank_ticker`／`non_numeric`／`non_finite`／`non_positive`）、重複代號、保留列含 NaN／+inf（非有限）、預設模式 `blank_value` 丟列等——⇒ **整段 `holdings_rows=None`**，持股與行動段摘要只能說「無法判定」。
    - ⛔ **不得**以其餘列顯示持股建議；**不得**宣稱完整（`is_complete` 不得為 True）、零持股、中性或安全。missing≠0；UNKNOWN≠0／中性／SAFE（DEC-215 §一 第 2 點「不得隱藏，不得視為 0／中性／SAFE」；§B1）。
    - **原因碼**：須保留**固定、脫敏**的原因碼——只表達類別，不含代號、張數、均價、組合名稱、sheet_id 等來源私值。參考：Draft #1258 dormant adapter 現用 `ex_dropped_*`／`non_finite_kept`／`duplicate_tickers`／`in_u_blank_dropped`（該 PR 未合併；本文件不定碼名）。
-   - 未知／空列（§A 第 1–6 列、§B1）既有的 fail-closed 語意**維持不變**。
+   - 未知列（§A 第 1–4 列、§B1）既有的 fail-closed 語意**維持不變**；第 5–6 列（ok＋0 列）仍依 §C-1 **待決**（候選 None 或 `[]`），本註**不代裁**。Draft #1258 dormant adapter 現選 None（`zero_rows`）屬保守實作，**不是裁示**。
    - 保留空白值模式（`keep_blank=True`）下保留為 None 的 IN-U 列不是「無效列」，本註不改其口徑（仍依第 12 列與 §C-8(a)）。
    - **文案**：過渡期對使用者應準確表達「資料無法判定／有異常輸入」，**不得**說成「沒有持股」；現行摘要「…無法判定（尚無輸入）」的「尚無輸入」措辭不準（§C-2 已記）。具體 UI 文案待產品／畫面 Gate，本文件不定稿。
 3. **逐型解除前置**（每型各自滿足才可對**該型**改回 list；未滿足即維持 None）：
