@@ -8,6 +8,14 @@
 - `norm_transition`：客戶已核准的**過渡期**語意（7071998333）——未知／異常輸入 ⇒ 整段無法判定；effective 恆為規則式摘要；
   adapter 原因碼**不傳遞**到下游（⚠️ 這是「未傳遞」，**不是**「已揭露」：下游目前沒有任何通道承載原因碼）。
   突變（`test_norm_transition_mutation_*`）與守衛（`test_norm_transition_guard_*`）用來證明這類測試有牙齒，歸同類。
+  ⚠️ 本類 None 案例中有兩類**不是**「客戶已核准的過渡期語意」，須分開讀：
+  · `zero_rows`（ok＋0 列；契約 §A 第 5–6 列）：仍依契約 §C-1 **待決**（候選 None 或 `[]`），客戶裁示**不代裁**；
+    adapter 現選 None 屬**保守實作，不是裁示**（契約 §A 註 第 2 點 第 4 項）。本案例在 §C-1 兩個候選下都成立的真規範
+    **只有**「不宣稱零持股」與「`is_complete` False」；`holdings_rows is None`、holdings `UNAVAILABLE`、coverage
+    `unkeyed_held_count is None` 這三項是 None 專屬斷言、只釘住保守實作——若 §C-1 日後裁示為 `[]`，這三項須**重新檢視**，
+    **不得**視為違反裁示。
+  · `in_u_blank_dropped_default_mode`（預設模式 `blank_value` 丟列）：None 是**永久**口徑、**不是**過渡期——
+    列已丟、無從還原，**永不改 list**（契約 §A 第 12 列、§A 註 第 3 點、§C-8(b)）；正式接線須用保留空白值模式讀取。
 - `current_behavior`：現況快照，**非規範**；轉紅表示行為改變，處置寫在各 docstring。
 - `target_state`：未來目標態，**只能**以 `xfail(strict=True, raises=AssertionError)` 表達；XPASS ⇒ 缺口已補，升為正式斷言。
 - `unit_guard`：結果型別建構期不變量的單元守衛（G7）；**不是**過渡期語意，也不是跨層鏈，只是補上此前無測試執行的檢查。
@@ -122,6 +130,9 @@ def _none_cases() -> dict:
         "counts_one_none": (_ok(kept_non_finite_count=None), (A.REASON_COUNTS_UNKNOWN,)),
         "tickers_none": (_ok(kept=None, source=2), (A.REASON_COUNTS_UNKNOWN,)),
         "tally_inconsistent": (_ok(source=5), (A.REASON_TALLY_INCONSISTENT,)),
+        # zero_rows：契約 §C-1 待決（None 或 []）；adapter 現選 None 屬保守實作、不是裁示（§A 註 第 2 點 第 4 項）。
+        # 兩候選皆須的真規範只有「不宣稱零持股」＋「is_complete False」；None／UNAVAILABLE／unkeyed None 三項為 None 專屬，
+        # §C-1 若裁示為 [] 須重新檢視這三項，不得視為違反裁示（見模組 docstring）。
         "zero_rows": (_ok(kept=()), (A.REASON_ZERO_ROWS,)),
         "ex_blank_ticker": (_ok(dropped_blank_ticker=1), (A.REASON_EX_DROPPED_BLANK_TICKER,)),
         "ex_non_numeric": (_ok(dropped_non_numeric=1), (A.REASON_EX_DROPPED_NON_NUMERIC,)),
@@ -129,6 +140,7 @@ def _none_cases() -> dict:
         "ex_non_positive": (_ok(dropped_non_positive=1), (A.REASON_EX_DROPPED_NON_POSITIVE,)),
         "non_finite_kept": (_ok(kept_non_finite_count=1), (A.REASON_NON_FINITE_KEPT,)),
         "duplicate": (_ok(kept=("2330", "2330"), duplicate_ticker_count=1), (A.REASON_DUPLICATE_TICKERS,)),
+        # 預設模式 blank_value 丟列：永久 None（非過渡期），永不改 list（契約 §A 第 12 列、§A 註 第 3 點、§C-8(b)）。
         "in_u_blank_dropped_default_mode": (_ok(dropped_blank_value=1), (A.REASON_IN_U_BLANK_DROPPED,)),
     })
     return out
@@ -410,10 +422,14 @@ G1_DIVERGENCE_CASES = {
 
 def test_current_behavior_g1_known_divergence_contract_oracle_list_vs_adapter_none():
     """[current_behavior，非規範；known_divergence] G1：12 個 EX／重複／非有限／IN-U 被丟案例——契約 oracle
-    `contract_expected_holdings_input` 期望 list（契約 §A 第 9–11 列），adapter 回 None（保守降級）。
+    `contract_expected_holdings_input` 期望 list（契約 §A 第 9–12 列），adapter 回 None（保守降級）。
     此差異已由客戶裁示 #1199 comment 7071998333 定為「**過渡期 None、目標態 list**」；本測試只釘住兩邊現況。
     任一邊改動即紅 ⇒ 須對照裁示：adapter 轉 list 屬目標態落地（需揭露通道就緒，見 target_state xfail），
-    oracle 改動屬契約變更；兩者都須記錄裁示，不得只改斷言。"""
+    oracle 改動屬契約變更；兩者都須記錄裁示，不得只改斷言。
+    ⚠️ 例外：含預設模式 `blank_value` 丟列的 `blank_dropped_default` 與 `combo`（原因碼 `in_u_blank_dropped`）是
+    **永久 None、不是過渡期**——列已丟、無從還原，契約 §A 第 12 列、§A 註 第 3 點、§C-8 明定「**永不改 list**」；
+    adapter 對這兩案改回 list ＝ **違反裁示**，不是目標態落地（`combo` 即使其餘類型日後各自解除，仍因 `blank_value` 丟列維持 None）。
+    oracle 對這兩案期望 list 是 oracle 只看 raw>0 的 ok 狀態（契約 §A 表前說明：對 raw>0 的 ok 狀態一律輸出 list 類別＝目標態），不代表可改回 list。"""
     assert len(G1_DIVERGENCE_CASES) == 12
     for label, (recs, blank) in G1_DIVERGENCE_CASES.items():
         t = GSP.tally_portfolio_records(recs, keep_blank=blank)
@@ -427,7 +443,8 @@ def test_current_behavior_g1_known_divergence_contract_oracle_list_vs_adapter_no
 # ══════════════════════════════════════════════════════════════════════
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "target_state：契約 §B2 第 1 點（缺獨立應有母體：任何以 L1 rows 餵入者 coverage 必須 incomplete）、§C-6、"
-    "§C-8(a)（IN-U 在 coverage 的標示）＋#1199 comment 7071998333——IN-U 列全部有鍵時 coverage 不得宣稱完整；"
+    "§A 註 第 3 點「共同」項（coverage 須能承載「不完整」）、§C-8(a)（IN-U 在 coverage 的標示）——IN-U 列全部有鍵時 coverage 不得宣稱完整"
+    "（不以 #1199 comment 7071998333 為據：該裁示的「不得宣稱完整」針對無效列，IN-U 保留列依契約 §A 註 第 2 點不是無效列）；"
     "現行 coverage 無 IN-U／母體欄位，is_complete=True。此為 §C-6 缺口的特例（clean_all_keys 同樣 is_complete=True）；"
     "#1254 的 strict xfail 釘的是**同一缺口**（缺獨立母體），但**不是同一案例**（該處為 L1 clean／dropped 合成列，本處為 IN-U 全有鍵）。需 coverage／schema 放行。XPASS ⇒ 升為正式斷言。"))
 def test_target_state_in_u_all_keyed_must_not_claim_complete():
@@ -496,7 +513,7 @@ _NO_INPUT_WORDING = "（尚無輸入）"
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "target_state：客戶裁示 #1199 comment 7071998333 第 3 點＋契約 §C-2（「尚無輸入」描述不準）——None 路徑中來源**有讀到但有"
+    "target_state：客戶裁示 #1199 comment 7071998333 第 3 點（＝§A 註 第 2 點「文案」）＋契約 §C-2（「尚無輸入」描述不準）——None 路徑中來源**有讀到但有"
     "無效列／有列被剔除**（EX 四型／重複／非有限／預設模式丟 IN-U）時，持股段文案不得為「（尚無輸入）」，coverage holdings 段 withheld_reason 不得為 "
     "not_loaded。具體文案與原因值待 UI Gate，本測試只斷言「不得是」。XPASS ⇒ 升為正式斷言。"))
 def test_target_state_none_path_wording_not_no_input_and_not_not_loaded():
