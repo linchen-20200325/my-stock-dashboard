@@ -528,8 +528,11 @@ def test_real_browser_viewport_acceptance(tmp_path):
     finally:
         proc.kill()
     # Batch 3：每 viewport＝四頁×六場景＋🎯 每場景另量『即時查一檔』＋👤 signed-out／unavailable
-    # 2 viewport × (4 頁×6 場景 ＋ 6 查一檔 ＋ 2 帳戶態)；另加手機市場頁每場景一個長字串壓力態（DEC-127，只有手機）
-    assert report["summary"]["states"] == 2 * (len(PAGE_IDS) * len(SCENARIO_IDS) + len(SCENARIO_IDS) + 2) + len(SCENARIO_IDS)
+    # 每個 viewport（V1：數量由 `MV.VIEWPORTS` 推導）× (5 頁×場景 ＋ 查一檔 ＋ 2 帳戶態)；另加手機寬（≤ MOBILE_MAX_W）市場頁
+    # 每場景一個長字串壓力態（DEC-127，只有手機寬）
+    n_mobile = sum(1 for w, _h in MV.VIEWPORTS.values() if w <= MV.MOBILE_MAX_W)
+    assert report["summary"]["states"] == (len(MV.VIEWPORTS) * (len(PAGE_IDS) * len(SCENARIO_IDS) + len(SCENARIO_IDS) + 2)
+                                           + n_mobile * len(SCENARIO_IDS))
     assert report["summary"]["failed"] == [], report["summary"]["failed"]
 
 
@@ -588,7 +591,7 @@ def test_real_browser_degraded_alert_is_single_line_and_keeps_nav_margin():
         rows = DG.run_degraded(url)
     finally:
         proc.kill()
-    assert len(rows) == 2 * len(PAGE_IDS)
+    assert len(rows) == len(MV.VIEWPORTS) * len(PAGE_IDS)
     for r in rows:
         tag = (r["viewport_name"], r["page"])
         a = r["alert"]

@@ -65,7 +65,7 @@ PREVIEW_BANNER_NOTE = "非真實行情、持股或建議"
 #: Real-data 單行標示（客戶 (11) A3／2026-11-03 Real Feed 指示：標明 Real-data Preview／非正式 production default；
 #: P1：縮為單行、不再帶工程句）。⛔ 與 FAKE 標示共用：兩者必須一眼可分（`is_fake` 決定用哪一個）。
 REAL_PREVIEW_BANNER_TEXT = "Real-data Preview（非正式 production default）"
-REAL_PREVIEW_BANNER_NOTE = "僅台股與市場位階為真資料"
+REAL_PREVIEW_BANNER_NOTE = "目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。"
 #: Real 讀取整體失敗（`read_real_snapshot` 拋 Exception）時五頁共用的固定警示（#1204；ChatGPT 定稿，逐字）。
 REAL_FEED_DEGRADED_TEXT = "⚠️ 真實資料讀取失敗，數值已隱藏。"
 
