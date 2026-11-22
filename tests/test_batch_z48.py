@@ -71,6 +71,13 @@ Z48_ABORT_PAIR = (
     "                         excluded_tickers=tuple(sorted(_w)), **_base)\n",
     "",
 )
+#: ②b 固定「修前還原體」的報酬語意為「不補值」（pandas 3 預設）：正式碼的 `pct_change()` 在
+#:    pandas<3 預設 `fill_method='pad'`，會把 NaN 補成 0% 報酬而使 NaN 那天沒被 dropna 剔除，
+#:    還原體行為就隨環境的 pandas 版本漂移。只套在 `z48_pre_svc`，不動其他 variant。
+Z48_PRE_PCT_NOFILL_PAIR = (
+    '_df["Close"].pct_change().dropna()',
+    '_df["Close"].pct_change(fill_method=None).dropna()',
+)
 #: ③ L5 `build_var_card` 的灰態分支（拔掉 ＝ 落回通用灰卡「這是一個有效的結果」）。
 Z48_UI_PAIR = (
     "    elif _invalid:\n"
@@ -97,7 +104,8 @@ def _load_variant(rel: str, pairs, name: str) -> types.ModuleType:
 @functools.lru_cache(maxsize=None)
 def z48_pre_svc():
     """L3 修前（偵測 ＋ 中止兩段都拔掉）。"""
-    return _load_variant(_SVC, (Z48_DETECT_PAIR, Z48_ABORT_PAIR), '_z48_pre_svc')
+    return _load_variant(
+        _SVC, (Z48_DETECT_PAIR, Z48_ABORT_PAIR, Z48_PRE_PCT_NOFILL_PAIR), '_z48_pre_svc')
 
 
 @functools.lru_cache(maxsize=None)
