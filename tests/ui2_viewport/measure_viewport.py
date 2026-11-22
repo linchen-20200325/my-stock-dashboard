@@ -12,7 +12,7 @@ DEC-146（2026-11-07）：導覽改為**頂部兩列五頁**（第一列＝Activ
 `p2_nav_margin_160` 的量測錨點（今日主要風險之後第一區塊頂緣 → 底部保留線 791）與舊值**同公式同單位**，只是頂部導覽的高度現在
 自然包含在內（內容被導覽往下推），所以舊 162.5 與現值可直接比較；門檻 160 不變。
 
-對 `streamlit run app_ui2.py` 於 390×844（手機）與 1440×900（桌機），五頁 ×（cold／loaded／missing／
+對 `streamlit run app_ui2.py` 於 390×844（手機）、1440×900 與 1280×900（兩個桌機視窗），五頁 ×（cold／loaded／missing／
 stale／unavailable／not_evaluated）逐一量測並輸出 `viewport_measurements.json`＋截圖。
 
 判定門檻**全部引用既有條文，不自創新門檻**（見 `THRESHOLDS`）。第一屏高度、導覽列高度出自
@@ -41,7 +41,9 @@ import time
 import urllib.request
 from pathlib import Path
 
-VIEWPORTS: dict[str, tuple[int, int]] = {"mobile": (390, 844), "desktop": (1440, 900)}
+#: V1（總管核准）：三視窗並列——手機 390×844、桌機 1440×900（保留）、桌機 1280×900（常見筆電寬）。
+#: 手機／桌機的判定一律看視窗**寬度**（`MOBILE_MAX_W`），不看名稱；PNG 檔名沿用 `{vp_name}_…`（即 `desktop1280_*`）。
+VIEWPORTS: dict[str, tuple[int, int]] = {"mobile": (390, 844), "desktop": (1440, 900), "desktop1280": (1280, 900)}
 #: Freeze §16 視窗說明／Gate §3：手機底部導覽 53px。
 #: DEC-134／DEC-137（手機抽屜）起：底部已無固定主導覽，53px 改為**底部保留帶**（Manage app／家的指示條可能遮擋區），
 #: 量測線＝視窗高 − 53（844 → 791）**不變**；第一屏、導覽餘裕、頁底可達性一律以這條線判定（等價於舊「導覽上緣」）。
@@ -1177,8 +1179,8 @@ def click_nav(page, label: str) -> None:
 def _want_shot(mode: str, vp_name: str, scenario: str) -> bool:
     if mode == "all":
         return True
-    if mode == "core":          # 手機全部場景＋桌機 cold／loaded（控制 repo 檔案大小）
-        return vp_name == "mobile" or scenario in ("cold", "loaded")
+    if mode == "core":          # 手機全部場景＋各桌機視窗 cold／loaded（控制 repo 檔案大小）
+        return vp_name == "mobile" or scenario in ("cold", "loaded")   # 兩個桌機視窗（desktop／desktop1280）同規則
     return False
 
 

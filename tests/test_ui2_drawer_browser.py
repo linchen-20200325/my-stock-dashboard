@@ -410,7 +410,7 @@ def test_first_screen_margin_160_every_fake_scenario(mob, scenario):
     assert q4 and q4[0]["bottom"] <= 791 and q4[0]["top"] >= m["nav"]["bottom"] - 0.5, q4      # 主 CTA 在導覽之下、首屏內
 
 
-@pytest.mark.parametrize("w,h", [(390, 844), (360, 640), (320, 568), (740, 360), (1440, 900)])
+@pytest.mark.parametrize("w,h", [(390, 844), (360, 640), (320, 568), (740, 360), (1280, 900), (1440, 900)])
 def test_no_page_horizontal_scroll_and_row1_not_clipped(browser, url, w, h):
     ui = Ui(browser, url, {"width": w, "height": h}, "", mobile=w <= 768)
     try:
