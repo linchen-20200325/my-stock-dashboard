@@ -4,11 +4,11 @@
 
 | 位置/議題 | 當前仍應遵守的有效邊界 | v1.0 新產品目標差額 | Owner / Gate |
 |---|---|---|---|
-| 五頁與 390 首屏 | 不擅動 navigation／PageVM／原已通過視覺證據；Real/FAKE 隔離 | 📊/💼 Delta Strip，三核心狀態及 OneBrain 四鏡頭；先做 390/1280 線框 | B 只做線框/視覺與 Copy Gate，不直接施工 |
-| Level 0–2 | 正式判定與 DataStatus/DEC-124 已有定義，不能新增第三正式結果或第六資料態 | L1 研究參考與正式 L2/無結論 L0 的**呈現區分**；L1 不改 Risk Cap/System Action | A 對帳 #1275 四 Must-Fix；正式文案與狀態須原 DEC/Contract Gate |
+| 五頁與 390 首屏 | 不擅動 navigation／PageVM／原已通過視覺證據；Real/FAKE 隔離。**現行 📊 順序（DEC-157）＝日 K 主圖／空槽 → 核心指標卡 → OneBrain Outlook**（取代 DEC-133 G-3 僅 OneBrain 位置；Active §3.1 該列文字仍為舊序、原文保留）。**Active §3／DEC-130**：📊🎯💼 無完整 evidence expander，👤 稽核入口預設收合；**DEC-209 例外僅 🗂 Real 資料頁「各項明細」** | 📊/💼 Delta Strip，三核心狀態及 OneBrain 四鏡頭；先做 390/1280 線框。**OneBrain 移首屏、「證據預設展開」為新目標，與現行契約不同**；保留「完整證據可追溯」與新首屏目標 | B 只做線框/視覺與 Copy Gate，不直接施工；新位置／展開方式須原 Active Contract／線框 Gate |
+| Level 0–2 | 正式判定與 DataStatus/DEC-124 已有定義，不能新增第三正式結果或第六資料態；FORMAL／UNDETERMINABLE 二分是 #1275 DRAFT **擬議**軸（現行 `JudgementState` 無 `FORMAL` 成員）；#1275 Draft、DEC 未生效，四 Must-Fix 已修、§3A 對照已加（head `6d4c9f2f`），均過非作者差額 QA | L1＝核心價格證據有效、輔助證據（例如廣度）不足時最多是有來源與缺口揭露的研究參考；與正式 L2／無結論 L0 的**呈現區分**；L1 不改 Risk Cap/System Action | 客戶對 #1275 的正式 DEC Gate；正式文案與狀態須原 DEC/Contract Gate |
 | Delta Strip 比較 | TWII published_at/PIT/授權與前次同口徑快照未證可比較；不拿 missing 當 0 | 只有有效同源/口徑、可追溯、訊號完整才可顯示「無重大變更」；否則「⬜ 暫無足夠資料比較今日變化」**目標 copy** | C M1/M2 設計、Work PIT QA；B Copy Gate；不能插新正式 compare path |
 | 欄位語意 | 原 FieldVM 能力、狀態、判定分開；DEC-124 不可新添第六態 | 對「過期/缺/來源失敗/未評估/尚未提供/無法判定」誠實短語映射 | B Copy/Contract Gate；正式詞不可因本文直接替換 |
-| OneBrain 首屏 | 完整 Digest v1 frozen，不放行正式 OneBrain production caller | 四膠囊，≤3句、<100字，evidence trace 和反證展開；字元計數與 badge 預算口徑待設計 Gate | C Topic Lens Contract；B 視覺，不重寫 Digest |
+| OneBrain 首屏 | 完整 Digest v1 frozen，不放行正式 OneBrain production caller；現行 OneBrain Outlook 位於日 K 主圖與核心指標卡之後（DEC-157） | 四膠囊，≤3句、<100字，evidence trace 和反證展開；字元計數與 badge 預算口徑待設計 Gate | C Topic Lens Contract；B 視覺，不重寫 Digest |
 | Cache/開頁 | 無正式 LLM caller；G-F3=A2-i, G-F4 S1 僅設計 | 證據、coverage、origin/source/as_of、schema/ruleset/contract、topic/lens、model/prompt key；重新判 freshness，開頁零同步 LLM | C 契約差額，不新 provider/cache producer |
 | 🎯 What-If | 真持股/OAuth/Sheet HOLD；不可創造 Risk Cap | 唯讀記憶體合成規劃；未接持股顯示「⬜ 需先接入持股」目標詞 | 設計階段，正式文案/功能原 Gate |
 | LINE 與 v1.1 | 無正式 LINE／News／Secrets／模型或 Canonical Evidence Store Gate | LINE v1.0 四類事件僅設計；Radar/Signal Log/Store 全 v1.1 HOLD | 不施工 |
@@ -23,7 +23,7 @@
 
 ## Owner 與回存
 
-- **A**：#1275 Must-Fix、正式二分 vs Level 呈現 docs-only 對帳。
+- **A**：#1275 後續（四 Must-Fix 與 §3A 對照已完成並過差額 QA；僅餘客戶正式 DEC Gate 後的呈現／文案對帳）。
 - **B**：手機/桌機 Delta Strip／四膠囊、六態、字數／不可比較／未接入文案的線框及 Copy Gate。
 - **C**：Topic Lens、Digest/Coverage、完整快取鍵、G-F3/G-F4 設計；What Changed M1/M2 限研究。
 - **Work**：非作者獨立差額 QA、授權/PIT/快照可比性與既有 Contract 檢核。

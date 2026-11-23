@@ -34,7 +34,9 @@
 共用導覽順序：**📊 市場 → 🎯 標的 → 💼 持股 → 👤 我的 → 🗂 資料**；OneBrain 不新增第六個主頁。手機 390×844 優先，兼顧 1280×900／1440×900；首屏極簡，明細可展開但不可丟證據。
 
 ### 3.1 📊 市場
-首屏：① Delta Strip（今日變化）②市場位階／Level 0–2 *呈現*、正式 Risk Cap、正式 System Action 三大核心狀態（不存在時缺值）③ OneBrain 四主題膠囊及短核心觀察。次要展開：台股加權指數／同源 20 根日 K（紅漲綠跌，OHLC 自洽）、四格決策檢核、VIX、10Y 美債、利差、DXY、台灣 PMI、前夜美股、產業強弱／風險條。僅為規劃的項目**不能**當已接入顯示。
+**v1.0 新產品目標首屏**（目標，非現行順序）：① Delta Strip（今日變化）②市場位階／Level 0–2 *呈現*、正式 Risk Cap、正式 System Action 三大核心狀態（不存在時缺值）③ OneBrain 四主題膠囊及短核心觀察。次要展開：台股加權指數／同源 20 根日 K（**K 棒色依 DEC-156：以當日開盤對收盤決定——收>開紅、收<開綠、收=開灰十字線；不以前收決定 K 色，前收漲跌幅另為獨立指標（取合法前收資料、獨立語意），不得與紅綠 K 混用；最近 20 根只取已驗證完整日 K，不足不補假棒、不補 0**；OHLC 自洽）、四格決策檢核、VIX、10Y 美債、利差、DXY、台灣 PMI、前夜美股、產業強弱／風險條。僅為規劃的項目**不能**當已接入顯示。
+
+> **現行契約 vs 本章新目標（差額；不修改 Active Contract）**：現行 📊 市場順序依 DEC-157：同一組首屏狀態／今日主要風險 → **日 K 主圖／空槽 → 核心指標卡 → OneBrain Outlook**（DEC-157 只取代 DEC-133 G-3 中「OneBrain 的位置」；Active Contract §3.1 該列文字仍是 DEC-133 舊序，原文保留）。Active Contract §3（含 DEC-130 (b)）：📊🎯💼 整頁 0 個完整 evidence expander；👤 稽核面入口預設收合；DEC-209 的例外僅限 🗂 **Real-data Preview 資料頁**預設收合的「各項明細」。本章把 OneBrain 移到首屏（③），與第八章「證據預設展開」，都是**新目標、與現行契約不同**，須先過原 Active Contract／線框 Gate（草稿先行），**不得以本規格直接改 UI**。保留不變的目標：完整證據可追溯、不因首屏縮減而丟證據，以及上述新首屏目標本身。
 
 ### 3.2 🎯 標的
 兩模式：「市場精選」（產業機會、候選股、正式篩選條件）與「即時查一檔」（股票代號輸入後的公司基本面、估值、籌碼、趨勢／產業／市場環境）。現有查詢 P1 功能不等於行情 P2 已接線。**What-If** 僅規劃唯讀記憶體、合成輸入，未來重用已核准持股集中度及 Risk Cap 規則評估擬議股數／金額，禁止寫 Google Sheet、下單、覆寫 HoldingsReadSnapshot 或自製正式動作；真持股未接顯示「⬜ 需先接入持股」。新正式文案另待 Copy Gate。
@@ -65,9 +67,10 @@ Sheet 目標：登入→授權→組合選擇→欄位/代碼/值驗證→`Holdi
 嚴格分離 DataStatus、判斷 availability/result、capability（有無接線），不增加新的正式狀態列舉，不以 UI 字詞取代原有效 `FieldVM`／DEC-124。
 - 過期：⚠ 過期 N 天；不確定：⚠ 可能已過期；缺：⬜ 資料未取得／資料未備；來源錯：🔴 來源目前不可用；未評估：⬜ 尚未評估；無結論：⬜ 無法判定；未接：⬜ 尚未提供。**皆為 v1.0 目標呈現詞**；實際新字樣先核 Active Contract 的 Copy Gate。
 - **Level 2**：所有原正式必要條件成立，才照既有規則得正式結論，並揭露日期來源。
-- **Level 1**：有可信可追溯價格／觀察事實但輔助條件不足，僅「研究參考」且揭露缺項；**不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap**。
+- **Level 1**：核心價格證據有效、輔助證據（例如廣度）不足時，Level 1 最多是有來源與缺口揭露的研究參考；**不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap**。
 - **Level 0**：核心證據不足、過期／不可用，禁止投資結論。
 - 均不構成新信心分數、公式、擇時判斷或買賣權限；missing≠0、unknown≠safe、STALE≠fresh、Real≠FAKE。
+- **與正式判定軸／#1275 的關係（據實，2026-11-24 查證）**：FORMAL／UNDETERMINABLE 二分是 [#1275](https://github.com/linchen-20200325/my-stock-dashboard/pull/1275) DRAFT **擬議**的兩級判定軸，**不是已存在的正式軸**——現行 `shared/ui2_contract/models.py` 的 `JudgementState` 只有 `UNDETERMINABLE`、**無 `FORMAL` 成員**（main `c75ec8f4` :32-49）。#1275 現況：Draft、DEC 未生效且無編號；Work 原四項 Must-Fix 已修（head `17a9d32b`／`13fae4d4`，非作者差額 QA PASS，見 [7110815346](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7110815346)）；Level 0–2 對照已加於 #1275 §3A（head `6d4c9f2f`，非作者差額 QA PASS、同 head CI 五項 success，見 [7111783774](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7111783774)；該對映屬 INFERENCE，待客戶確認）；剩餘＝客戶正式 DEC Gate 與呈現／文案裁示。
 
 ## 第七章｜正式規則與 v1.0 MVP
 
@@ -77,7 +80,7 @@ Sheet 目標：登入→授權→組合選擇→欄位/代碼/值驗證→`Holdi
 
 四個 Topic Lenses：**大盤、產業前瞻、持股健檢、反方風險**。分析須可追溯支持／反證、短中長期與缺口。不得把事件可信度（v1.1 的 `RUMOR/REPORTED/CORROBORATED/CONFIRMED`）混成投資命題可信度；「VALIDATED_IMPACT」若作研究候選亦不取代正式規則。無反方證據 → 誠實「無法判定」，不得從 Risk Cap 猜出反證。
 
-**首屏 Text Budget**：核心觀察 **≤3 句且 <100 個字**；行動／觀察重點目標 ≤3 點且每點 <25 字，其他說明／證據／反證／缺項預設展開。這是**產品目標**，是否計入強制揭露 badge、計數字元口徑及欄位投影須既有 Contract/Copy Gate 明確落地，不自行裁定為已生效型別或驗收測試。完整 Digest 不刪；每短句可追溯 evidence-id→fact→rule/source/as_of/status。若證據不足或 ground fail，維持規則式摘要或「無法判定」，AI 錯誤不導出安全。
+**首屏 Text Budget**：核心觀察 **≤3 句且 <100 個字**；行動／觀察重點目標 ≤3 點且每點 <25 字；其他說明／證據／反證／缺項目標為**完整可追溯，且（本目標）預設展開**——此「預設展開」與 OneBrain 首屏位置同屬**新目標、與現行 Active Contract §3 不同**（📊🎯💼 無完整 evidence expander；👤 稽核入口預設收合；DEC-209 例外僅 🗂 Real 資料頁「各項明細」），展開方式與位置須先過原 Contract／線框 Gate。字數等這些是**產品目標**，是否計入強制揭露 badge、計數字元口徑及欄位投影須既有 Contract/Copy Gate 明確落地，不自行裁定為已生效型別或驗收測試。完整 Digest 不刪；每短句可追溯 evidence-id→fact→rule/source/as_of/status。若證據不足或 ground fail，維持規則式摘要或「無法判定」，AI 錯誤不導出安全。
 
 **預計算＋完整快取失效鍵**：開頁零同步 LLM；成功的預計算輸出可在合法 Gate 後快取，鍵涵蓋 Digest/Coverage/evidence 的內容與狀態、source、as_of／有效日期、REAL/FAKE origin、schema、ruleset/risk_cap/system_action、contract、topic id/lens_def_version、model、prompt 版本；缺維度／unknown schema／invalid origin fail-closed；過期與新證據必失效。若 hash 排除抓取時間，**取用時仍重新判定 freshness／TTL**；None 必須獨立編碼。cache miss 只能顯示合約允許的非 AI 規則式摘要或無法判定，不可顯示過期 AI 充新。**不授權新 provider、API、離線排程或持久快取施工**。
 
@@ -108,14 +111,14 @@ LINE **v1.0 只允許合成事件契約與設計**：動作切換／風控觸發
 - 【誠實降級】缺值、NaN、STALE、不可比較等依有效契約顯示或標 NOT VERIFIED；不得補 0、冒充 fresh／安全／續抱，Real 不以 FAKE 補畫。
 - 【退回門檻】遇最新 DEC/Contract 衝突、授權缺失、指定 Must-Fix 未清、有效 QA FAIL／CI FAIL、head/base 改變而證據失效，停在現有 Gate，明列阻塞及最小解除證據；不得硬上 Ready/merge/deploy。
 
-**任務邊界**：A＝#1275 四 Must-Fix、正式判定 vs L1 研究呈現差額 docs；B＝首屏 Delta/不可比較/OneBrain 字數線框、原 R1/手機 CI；C＝S1/G-F4（G-F3=A2-i）、Topic Lens＋快取和 What Changed M1/M2 **設計**；Work＝最新差額非作者 QA、TWII 可比性與 PIT、Contract 抽查。不改舊已 PASS、不新增實作 Gate。
+**任務邊界**：A＝#1275 後續（四 Must-Fix 與 Level 0–2 §3A 對照已完成並過差額 QA，見第六章；餘為客戶正式 DEC Gate 與呈現／文案裁示）；B＝首屏 Delta/不可比較/OneBrain 字數線框、原 R1/手機 CI；C＝S1/G-F4（G-F3=A2-i）、Topic Lens＋快取和 What Changed M1/M2 **設計**；Work＝最新差額非作者 QA、TWII 可比性與 PIT、Contract 抽查。不改舊已 PASS、不新增實作 Gate。
 
 **HOLD 清單不因本文件改變**：#1237、真持股／Sheet／OAuth、Cloud cutover/R1～R4、外部新行情/新聞來源、Secrets、正式 OneBrain 付費模型 caller、正式 LINE、v1.1 雷達/Signal Log/Evidence Store、未核准規則、PR #1237 merge、停用 workflows（包括 DEC-185）、比較 producer／歷史寫入。遇現行 DEC 或 Active Contract 衝突，**將差額送原 Gate**，而非宣告產品方向可直接施工。
 
 ## 規格差額索引
 | 類別 | 已核准產品目標 | 非本次授權／待原 Gate |
 |---|---|---|
-| Level 0–2 | L1 僅研究呈現，L2 原正式規則，L0 無結論 | 第三正式狀態、新 DataStatus、動作、Risk Cap 變更、#1275 Must-Fix |
+| Level 0–2 | L1 僅研究呈現（核心價格證據有效、輔助證據不足時最多是有來源與缺口揭露的研究參考），L2 原正式規則，L0 無結論 | 第三正式狀態、新 DataStatus、動作、Risk Cap 變更、#1275 正式 DEC Gate（四 Must-Fix 與 §3A 已修並過差額 QA；Draft、DEC 未生效） |
 | Delta Strip | 有有效雙快照才可比較；否則不可比較 | 真快照持久化、未經 PIT 授權的跨期比較、直接插新 FieldVM copy |
 | OneBrain | 四主題、短觀察、trace、完整快取失效 | Digest v1 變更、LLM caller、provider、快取 producer |
 | LINE / What-If | 合成事件設計／記憶體唯讀規劃 | 真通知、真持股、寫 Sheet、交易 |
