@@ -151,6 +151,10 @@ THRESHOLDS: list[dict[str, str]] = [
              "（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；"
              "不達須停手回報，不得縮字、刪資訊或改設計。",
      "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"},
+    {"id": "p2_real_nav_margin_109",
+     "rule": "（R1）📊 市場（Real-data Preview；僅手機寬度恰為 390；320／360／FAKE／桌機不適用）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791 "
+             "≥ 109px（與 p2_nav_margin_160 同量測錨點、同 ±0.05 誤差處理）；不達須停手回報，不得縮字、刪資訊或改設計。",
+     "source": "R1 WIP：Real 390 導覽餘裕守衛（客戶門檻轉述待核）；既有 p2_nav_margin_160 規則與適用範圍一字不變"},
     {"id": "kbar_primary_chart",
      "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖"
              "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px"
@@ -301,6 +305,8 @@ def _intersects(a: dict, b: dict) -> bool:
 
 P2_NAV_MARGIN_MIN_PX = 160
 P2_NAV_MARGIN_SCENARIOS = ("stale", "unavailable")
+P2_REAL_NAV_MARGIN_MIN_PX = 109.0
+P2_REAL_NAV_MARGIN_VIEWPORT_W = 390
 
 
 #: 日 K 主圖判定常數（判定器自己的字面值，獨立於被測的 `src/ui2/components/html.py`，避免 mutation 時判定器跟著被改）。
@@ -346,6 +352,7 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     if m.get("page") != "p4_market":
         return
     k, k2 = "p2_onebrain_primary_slot_order", "p2_nav_margin_160"
+    k3 = "p2_real_nav_margin_109"
     p2 = m.get("p2")
     if p2 is None:
         out[k].append("p4_market 量測缺 `p2` 鍵（真瀏覽器 lane 必須量 OneBrain／空槽）")
@@ -394,6 +401,10 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     if mobile and m.get("scenario") in P2_NAV_MARGIN_SCENARIOS and nb is not None and ntop is not None:
         if ntop - nb < P2_NAV_MARGIN_MIN_PX - 0.05:
             out[k2].append(f"手機 {m.get('scenario')}：導覽餘裕 {ntop - nb:.1f}px < {P2_NAV_MARGIN_MIN_PX}px")
+    if (m.get("feed") == "real" and m.get("viewport", {}).get("w") == P2_REAL_NAV_MARGIN_VIEWPORT_W
+            and nb is not None and ntop is not None):
+        if ntop - nb < P2_REAL_NAV_MARGIN_MIN_PX - 0.05:
+            out[k3].append(f"Real 390：導覽餘裕 {ntop - nb:.1f}px < {P2_REAL_NAV_MARGIN_MIN_PX:g}px")
 
 
 #: DEC-141 W-11 批 1 判定常數（判定器自己的字面值，獨立於被測的 `shared/ui2_contract/text.py`，避免 mutation 時判定器跟著被改）。
@@ -1109,6 +1120,10 @@ def measure_items_expanded(page, vw: int, vh: int) -> dict | None:
     return out
 
 
+REAL_META_NOTE = ("Real-data Preview（唯讀）：目前僅部分台股資料已接入；其餘資料依各卡片狀態顯示。"
+                  "本報告記錄量測當下的資料及畫面狀態，不代表即時或正式生產環境。")
+
+
 def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
               streamlit_version: str | None) -> dict:
     """Real-data Preview（NUI2-REAL-FEED A3）：每 viewport 四頁＋🎯 查一檔模式；手機市場頁加壓力態。"""
@@ -1163,8 +1178,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                      "streamlit_version": streamlit_version,
                      "viewports": {k: list(v) for k, v in VIEWPORTS.items()}, "nav_mobile_h": NAV_MOBILE_H,
                      "thresholds": THRESHOLDS,
-                     "note": ("Real-data Preview（唯讀 feed）：只接台股加權指數與市場位階兩項真資料，其餘欄位 ⬜＋原因；"
-                              "量測當下的真值會隨每日 cron 與本地狀態檔變動（證據為量測日快照）。")},
+                     "note": REAL_META_NOTE},
             "summary": summary, "results": results}
 
 
