@@ -57,7 +57,20 @@ ASOF_VALUE = "無（FAKE 示意，沒有持股讀取時點）"
 #: D3 核定註記（逐字；只在顯示句含 NOTE_TRIGGER 時出現）
 NOTE_TRIGGER = "（尚無輸入）"
 NOTE_D3 = "註：『尚無輸入』是現行摘要措辭，也可能代表讀取失敗、輸入異常或缺少組合鍵；請勿解讀為零持股。"
-TEST_INFO_PREFIX = "測試輸入說明（非系統輸出）："
+#: 槽外「測試輸入說明」前綴（總管裁示 Q3-8 要求保留開頭「測試輸入說明（非系統輸出」）：明示這句描述的是**本示範的合成測試輸入**，
+#: 不是系統摘要、也不是持股清單內容（避免被誤讀成「持股清單有 N 列」）。
+TEST_INFO_PREFIX = "測試輸入說明（非系統輸出；為本示範的合成測試輸入，非持股清單內容）："
+#: 槽外說明的本文白名單（**不**取用 `demo.CASES[cid].test_input`：那些字串含「2 列」，會與槽內顯示列、持股清單的列數撞詞）。
+#: 每句必須與 `demo.CASES[cid]` 的實際合成快照一致；一致性由 `tests/test_onebrain_holdings_ui2_demo_view.py` 對照 snapshot／keyed 事實鎖定。
+#: 用語：只用「筆」與代號，不寫裸「N 列」；不寫「持股清單」。
+TEST_INFO_BODY = {
+    "R1": "合成讀取結局：網路例外（不含持股內容）",
+    "R2": "合成讀取結局：未選定投資組合（不含持股內容）",
+    "R3": "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 1 筆資料為非數字",
+    "L1": "合成測試持股 FAKE-T1、FAKE-T2，均無組合鍵（不在本頁顯示）",
+    "L2": "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T1 有組合鍵（不在本頁顯示）",
+    "L3": "合成測試持股 FAKE-T1、FAKE-T2，均有組合鍵（不在本頁顯示）",
+}
 
 #: 任何狀態都**不得**出現在 UI 槽的字樣（總管 Q3-1／Q3-2／Q3-8）。
 UI_SLOT_FORBIDDEN = (
@@ -139,4 +152,4 @@ def build_section(block: "demo.DemoBlock") -> SectionVM:
 def test_info_text(case_id: str) -> str:
     """槽外「測試輸入說明」整句（launcher 以 `st.caption` 畫在槽外；不屬 SectionVM、不是系統輸出）。
     未知 case id ⇒ KeyError（呼叫端錯誤，照常往上拋）。"""
-    return TEST_INFO_PREFIX + demo.CASES[case_id].test_input
+    return TEST_INFO_PREFIX + TEST_INFO_BODY[case_id]

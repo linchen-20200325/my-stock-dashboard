@@ -61,7 +61,20 @@ DISCLOSURE_ROW = "示意：合成持股快照（FAKE）；非真實持股；非�
 SOURCE_ROW = "FAKE 合成持股快照（非真實持股）"
 ASOF_ROW = "無（FAKE 示意，沒有持股讀取時點）"
 FAILCLOSED_NOTE = "示意內容未能產生，未顯示任何摘要句"
-TESTINFO_PREFIX = "測試輸入說明（非系統輸出）："
+TESTINFO_PREFIX = "測試輸入說明（非系統輸出；為本示範的合成測試輸入，非持股清單內容）："
+#: 前綴必須同時帶三個語意標記（總管裁示：說明的是「本示範的合成測試輸入」，不是系統摘要、也不是持股清單內容）
+TESTINFO_MARKERS = ("非系統輸出", "合成測試輸入", "非持股清單內容")
+#: 各案例說明本文的本地 oracle（刻意不 import mapper／demo；與 mapper 的 `TEST_INFO_BODY` 逐字相同，由測試對照）
+TESTINFO_BODY = {
+    "R1": "合成讀取結局：網路例外（不含持股內容）",
+    "R2": "合成讀取結局：未選定投資組合（不含持股內容）",
+    "R3": "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 1 筆資料為非數字",
+    "L1": "合成測試持股 FAKE-T1、FAKE-T2，均無組合鍵（不在本頁顯示）",
+    "L2": "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T1 有組合鍵（不在本頁顯示）",
+    "L3": "合成測試持股 FAKE-T1、FAKE-T2，均有組合鍵（不在本頁顯示）",
+}
+#: 說明全文不得出現「裸 N 列」（會被誤讀成持股清單的列數，且與槽內顯示列撞詞）
+_BARE_ROWS_RX = re.compile(r"\d+\s*列")
 DIGEST_LABELS = ("存股", "資本利得")
 CARRIER_LABELS = ("示意", "存股", "資本利得", "說明", "來源", "時點")      # D 型列（DOM 上 data-state=ok；只是文字載體）
 JUDGEMENT_LABEL = "持股判讀"
@@ -152,7 +165,17 @@ def evaluate_demo(m: dict, baseline_elements=None) -> dict[str, list[str]]:
         if ti.get("inside_slot"):
             out["testinfo_outside_slot"].append("測試輸入說明在 onebrain 槽內（closest 非 null）")
         if not str(ti.get("text", "")).startswith(TESTINFO_PREFIX):
-            out["testinfo_outside_slot"].append("測試輸入說明前綴不是「測試輸入說明（非系統輸出）：」")
+            out["testinfo_outside_slot"].append("測試輸入說明前綴不是約定的整句前綴（須含「非系統輸出」「合成測試輸入」「非持股清單內容」）")
+        txt = str(ti.get("text", ""))
+        miss = [w for w in TESTINFO_MARKERS if w not in txt]
+        if miss:
+            out["testinfo_outside_slot"].append(f"測試輸入說明缺語意標記 {miss}")
+        if _BARE_ROWS_RX.search(txt):
+            out["testinfo_outside_slot"].append("測試輸入說明含裸「N 列」（會被誤讀成持股清單列數）")
+        if key in TESTINFO_BODY and txt != TESTINFO_PREFIX + TESTINFO_BODY[key]:
+            out["testinfo_outside_slot"].append("測試輸入說明整句與該案例的約定字樣不同")
+        if txt.replace("非持股清單內容", "").count("持股清單"):
+            out["testinfo_outside_slot"].append("測試輸入說明出現「持股清單」（僅許可於『非持股清單內容』的否定語）")
     # 7. 禁字（槽與整頁產品文字）
     for scope, text in (("槽", m.get("slot_text") or ""), ("整頁", m.get("page_text") or "")):
         hit = [w for w in FORBIDDEN_TEXT if w in text]

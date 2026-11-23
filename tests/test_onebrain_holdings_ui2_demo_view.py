@@ -65,7 +65,22 @@ ASOF = "無（FAKE 示意，沒有持股讀取時點）"
 UNDETERMINABLE = "⬜ 無法判定"
 NOTE_TRIGGER = "（尚無輸入）"
 NOTE_D3 = "註：『尚無輸入』是現行摘要措辭，也可能代表讀取失敗、輸入異常或缺少組合鍵；請勿解讀為零持股。"
-TESTINFO_PREFIX = "測試輸入說明（非系統輸出）："
+#: 槽外「測試輸入說明」整句前綴（本地 oracle；總管裁示：描述的是「本示範的合成測試輸入」，不是系統摘要、不是持股清單內容）
+TESTINFO_LEAD = "測試輸入說明（非系統輸出"                      # 總管 Q3-8 要求保留的開頭
+TESTINFO_PREFIX = "測試輸入說明（非系統輸出；為本示範的合成測試輸入，非持股清單內容）："
+TESTINFO_MARKERS = ("非系統輸出", "合成測試輸入", "非持股清單內容")
+#: 舊（被取代）的前綴與本文：只用於突變／負控，證明改回舊字樣會紅
+OLD_TESTINFO_PREFIX = "測試輸入說明（非系統輸出）："
+TESTINFO_BODY = {
+    "R1": "合成讀取結局：網路例外（不含持股內容）",
+    "R2": "合成讀取結局：未選定投資組合（不含持股內容）",
+    "R3": "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 1 筆資料為非數字",
+    "L1": "合成測試持股 FAKE-T1、FAKE-T2，均無組合鍵（不在本頁顯示）",
+    "L2": "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T1 有組合鍵（不在本頁顯示）",
+    "L3": "合成測試持股 FAKE-T1、FAKE-T2，均有組合鍵（不在本頁顯示）",
+}
+CAPTION_EXTRA_BANNED = ("零持股", "0 檔", "空倉", "正常", "安全", "完整", "中性")
+OUTCOME_WORDS = {A.OUTCOME_EXCEPTION_NETWORK: "網路例外", A.OUTCOME_NOT_SELECTED: "未選定投資組合"}
 LABEL_OF = {"buy_and_hold": "存股", "capital_gain": "資本利得"}
 ORACLE_SECTIONS = ("buy_and_hold", "capital_gain")
 LABEL_WHITELIST = ("示意", "持股判讀", "存股", "資本利得", "說明", "來源", "時點")
@@ -384,14 +399,172 @@ def test_ok_state_is_text_carrier_only():
 def test_testinfo_outside_slot_not_in_slot_html():
     for cid in CASE_IDS:
         info = VM.test_info_text(cid)
-        assert info == TESTINFO_PREFIX + demo.CASES[cid].test_input and info.startswith(TESTINFO_PREFIX)
+        assert info == TESTINFO_PREFIX + TESTINFO_BODY[cid] and info.startswith(TESTINFO_PREFIX) and info.startswith(TESTINFO_LEAD)
+        assert info != TESTINFO_PREFIX + demo.CASES[cid].test_input and demo.CASES[cid].test_input not in info, "不得改回 demo 的 test_input"
         assert "§C" not in info and P1.hits_in(info) == []
         sec = VM.build_section(demo.build_case_block(cid))
         text, _rows = _html_rows(sec)
         assert info not in text and TESTINFO_PREFIX not in text and demo.CASES[cid].test_input not in text
+        assert TESTINFO_BODY[cid] not in text and not any(TESTINFO_BODY[cid] in t for t in _all_texts(sec))
         assert not any(demo.CASES[cid].test_input in t for t in _all_texts(sec))
     with pytest.raises(KeyError):
         VM.test_info_text("ZZ")
+
+
+# ── 槽外說明的措辭控制（總管裁示：不得被誤讀成「持股清單有 N 列」）────────────────────────────────
+def _check_caption_text(info: str, cid: str | None = None) -> None:
+    """整句檢查（任一項失敗即 AssertionError）。各項另有「單獨可抓」的子檢查，供突變負控個別驗證。"""
+    _check_caption_prefix(info)
+    _check_caption_no_bare_rows(info)
+    _check_caption_no_holdings_list_claim(info)
+    _check_caption_banned(info)
+    if cid is not None:
+        assert info == TESTINFO_PREFIX + TESTINFO_BODY[cid], "說明整句與 oracle 不一致"
+        assert demo.CASES[cid].test_input not in info, "說明不得含 demo 的 test_input（含裸『2 列』）"
+        _check_body_facts(cid, info[len(TESTINFO_PREFIX):])
+
+
+def _check_caption_prefix(info: str) -> None:
+    assert info.startswith(TESTINFO_LEAD), "開頭必須保留「測試輸入說明（非系統輸出」"
+    assert info.startswith(TESTINFO_PREFIX), "前綴與約定整句不同"
+    head = info[:info.index("）：") + 2] if "）：" in info else ""
+    miss = [w for w in TESTINFO_MARKERS if w not in head]
+    assert not miss, f"前綴缺語意標記 {miss}"
+
+
+def _check_caption_no_bare_rows(info: str) -> None:
+    assert not re.search(r"\d+\s*列", info), "說明含裸「N 列」（會被誤讀成持股清單列數）"
+
+
+def _check_caption_no_holdings_list_claim(info: str) -> None:
+    assert info.count("持股清單") == 1 and "持股清單" not in info.replace("非持股清單內容", ""), \
+        "「持股清單」只能出現在前綴的否定語「非持股清單內容」"
+
+
+def _check_caption_banned(info: str) -> None:
+    assert P1.hits_in(info) == [], f"工程詞彙 {P1.hits_in(info)}"
+    hit = [w for w in (*BANNED, *CAPTION_EXTRA_BANNED, *NEVER_ANYWHERE) if w in info]
+    assert not hit, f"說明含禁字 {hit}"
+
+
+def _check_body_facts(cid: str, body: str) -> None:
+    """本文的每個事實斷言都由 `demo.CASES[cid]` 的實際合成快照／組合鍵推出；快照一改、本文沒跟著改 ⇒ 紅燈。"""
+    case = demo.CASES[cid]
+    snap = case.snapshot
+    if snap.outcome != A.OUTCOME_OK:
+        assert snap.kept_tickers is None and OUTCOME_WORDS[snap.outcome] in body
+        assert not re.search(r"FAKE-T\d|\d", body), "非 ok 結局沒有任何代號／計數，本文不得出現"
+        return
+    kept = tuple(snap.kept_tickers)
+    assert set(re.findall(r"FAKE-T\d+", body)) >= set(kept), "本文必須點名每個保留的合成代號"
+    drops = {n: getattr(snap, n) for n in A.DROP_REASON_FIELDS.values()}
+    if any(drops.values()):
+        assert drops["non_numeric"] == 1 if "non_numeric" in drops else True
+        n = snap.dropped_non_numeric
+        assert sum(drops.values()) == n and n > 0, "本文只說明非數字一種丟棄；其餘丟棄計數必須為 0"
+        assert f"另有 {n} 筆資料為非數字" in body and "可讀" in body and "組合鍵" not in body
+        assert set(re.findall(r"FAKE-T\d+", body)) == set(kept)
+        return
+    assert "非數字" not in body and "可讀" not in body
+    keyed = tuple(case.keyed)
+    if not keyed:
+        assert "均無組合鍵" in body and "有組合鍵" not in body
+    elif keyed == kept:
+        assert "均有組合鍵" in body and "無組合鍵" not in body
+    else:
+        m = re.search(r"僅 ((?:FAKE-T\d+(?:、)?)+) 有組合鍵", body)
+        assert m and set(m.group(1).split("、")) == set(keyed), "部分有鍵：本文必須點名有鍵的代號"
+        assert "均" not in body.split("組合鍵")[0].split("，", 1)[-1]
+
+
+@pytest.mark.parametrize("cid", CASE_IDS)
+def test_testinfo_caption_wording_controls(cid):
+    """(a)(b)(c)(d)：裸「N 列」、「持股清單」、三個語意標記、禁字、與合成快照事實一致。"""
+    info = VM.test_info_text(cid)
+    _check_caption_text(info, cid)
+    assert TESTINFO_BODY[cid] == VM.TEST_INFO_BODY[cid] and set(VM.TEST_INFO_BODY) == set(CASE_IDS)
+    assert "列" not in TESTINFO_BODY[cid], "本文不用「列」字（與槽內顯示列撞詞）"
+
+
+def test_testinfo_facts_cross_check_has_teeth():
+    """事實對照要真的會紅：把每案例本文換成別案例的本文（或改數字）必須抓到。"""
+    for cid in CASE_IDS:
+        for other in CASE_IDS:
+            if other == cid:
+                continue
+            with pytest.raises(AssertionError):
+                _check_caption_text(TESTINFO_PREFIX + TESTINFO_BODY[other], cid)
+    with pytest.raises(AssertionError):
+        _check_body_facts("R3", "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 2 筆資料為非數字")
+    with pytest.raises(AssertionError):
+        _check_body_facts("L2", "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T2 有組合鍵（不在本頁顯示）")
+    with pytest.raises(AssertionError):
+        _check_body_facts("L1", "合成測試持股 FAKE-T1，均無組合鍵（不在本頁顯示）")
+    with pytest.raises(AssertionError):
+        _check_body_facts("R1", "合成讀取結局：未選定投資組合（不含持股內容）")
+
+
+def test_testinfo_facts_follow_the_snapshot(monkeypatch):
+    """快照事實改了（例：L1 變成 1 組合鍵）而本文沒改 ⇒ 紅燈。"""
+    monkeypatch.setitem(demo.CASES, "L1", dataclasses.replace(demo.CASES["L1"], keyed=demo.TICKERS[:1]))
+    with pytest.raises(AssertionError):
+        _check_caption_text(VM.test_info_text("L1"), "L1")
+
+
+@pytest.mark.parametrize("cid", CASE_IDS)
+def test_synthetic_tickers_never_appear_in_slot(cid):
+    """本文寫「（不在本頁顯示）」＝槽內任何文字都不得出現合成代號（整頁版見 AppTest）。"""
+    sec = VM.build_section(demo.build_case_block(cid))
+    text, _rows = _html_rows(sec)
+    assert "FAKE-T" not in text and not any("FAKE-T" in t for t in _all_texts(sec))
+
+
+def test_mutation_old_prefix_or_old_test_input_as_caption_turns_red(monkeypatch):
+    monkeypatch.setattr(VM, "TEST_INFO_PREFIX", OLD_TESTINFO_PREFIX)
+    with pytest.raises(AssertionError):
+        _check_caption_text(VM.test_info_text("L1"), "L1")
+    monkeypatch.undo()
+    for cid in CASE_IDS:                                           # 把 demo 原 test_input（含裸「2 列」）當說明
+        for pre in (OLD_TESTINFO_PREFIX, TESTINFO_PREFIX):
+            with pytest.raises(AssertionError):
+                _check_caption_text(pre + demo.CASES[cid].test_input, cid)
+    with pytest.raises(AssertionError):                           # 即使保留新前綴，改走 demo.CASES 的 test_input 也紅
+        _check_caption_text(TESTINFO_PREFIX + demo.CASES["L1"].test_input)
+
+
+def test_mutation_reintroduced_bare_rows_turns_red(monkeypatch):
+    for bad in ("合成 2 列，均無組合鍵", "合成2列", "合成 2  列"):
+        with pytest.raises(AssertionError):
+            _check_caption_no_bare_rows(TESTINFO_PREFIX + bad)             # 子檢查單獨即可抓到
+    monkeypatch.setitem(VM.TEST_INFO_BODY, "L1", "合成 2 列，均無組合鍵")
+    with pytest.raises(AssertionError):
+        _check_caption_no_bare_rows(VM.test_info_text("L1"))
+    with pytest.raises(AssertionError):
+        _check_caption_text(VM.test_info_text("L1"), "L1")
+    _check_caption_no_bare_rows(TESTINFO_PREFIX + TESTINFO_BODY["L1"])    # 對照：正常本文不紅
+
+
+@pytest.mark.parametrize("marker", TESTINFO_MARKERS)
+def test_mutation_dropping_a_semantic_marker_turns_red(marker):
+    bad = TESTINFO_PREFIX.replace(marker, "") + TESTINFO_BODY["L1"]
+    with pytest.raises(AssertionError):
+        _check_caption_prefix(bad)                                          # 前綴子檢查單獨即可抓到
+    with pytest.raises(AssertionError):
+        _check_caption_text(bad, "L1")
+    _check_caption_prefix(TESTINFO_PREFIX + TESTINFO_BODY["L1"])
+
+
+def test_mutation_holdings_list_claim_or_banned_word_in_caption_turns_red():
+    for bad in ("持股清單共 2 筆", "持股清單有 FAKE-T1", "零持股", "空倉", "0 檔", "正常", "安全", "完整", "中性", "示範鏈"):
+        full = TESTINFO_PREFIX + bad
+        with pytest.raises(AssertionError):
+            _check_caption_text(full)
+    with pytest.raises(AssertionError):
+        _check_caption_no_holdings_list_claim(TESTINFO_PREFIX + "合成持股清單內容")
+    with pytest.raises(AssertionError):
+        _check_caption_banned(TESTINFO_PREFIX + "正常")
+    with pytest.raises(AssertionError):
+        _check_caption_banned(TESTINFO_PREFIX + "需要 Gate 與 canonical")
 
 
 def test_three_blank_square_meanings_are_not_conflated():
@@ -690,7 +863,7 @@ MUTATIONS = {
     "cross_page_claim": _append("說明", "與本頁其他 FAKE 數字無關"),
     "engineering_code": _append("說明", "§C-2"),
     "demo_chain_word": _append("說明", "示範鏈未通過檢查"),
-    "testinfo_inside_slot": _append("說明", "測試輸入說明（非系統輸出）：合成讀取結局為網路例外；無列資訊"),
+    "testinfo_inside_slot": _append("說明", "測試輸入說明（非系統輸出；為本示範的合成測試輸入，非持股清單內容）：合成讀取結局：網路例外（不含持股內容）"),
     "banned_market_word": _append("說明", "市場位階 72.5"),
     "banned_zero_holding": _append("說明", "零持股"),
     # fail-closed
@@ -729,7 +902,8 @@ def _check_testinfo_not_in_slot(cid):
     sec = VM.build_section(demo.build_case_block(cid))
     text, _rows = _html_rows(sec)
     assert TESTINFO_PREFIX not in text and demo.CASES[cid].test_input not in text, "測試輸入說明不得在槽內"
-    assert not any(TESTINFO_PREFIX in t or demo.CASES[cid].test_input in t for t in _all_texts(sec))
+    assert TESTINFO_BODY[cid] not in text and TESTINFO_LEAD not in text, "測試輸入說明（本文／開頭）不得在槽內"
+    assert not any(TESTINFO_PREFIX in t or demo.CASES[cid].test_input in t or TESTINFO_BODY[cid] in t for t in _all_texts(sec))
 
 
 def test_testinfo_scan_alone_catches_mutation(monkeypatch):
@@ -753,6 +927,8 @@ def test_mutation_testinfo_prefix_changed_turns_red(monkeypatch):
     monkeypatch.setattr(VM, "TEST_INFO_PREFIX", "說明：")
     with pytest.raises(AssertionError):
         assert VM.test_info_text("R1").startswith(TESTINFO_PREFIX)
+    with pytest.raises(AssertionError):
+        _check_caption_text(VM.test_info_text("R1"), "R1")
 
 
 def test_mutation_failclosed_still_draws_testinfo_turns_red(monkeypatch):
@@ -1231,6 +1407,24 @@ def test_failclosed_shape_check_teeth():
     assert EV.evaluate_demo(m, _baseline_of(m))["testinfo_outside_slot"] != []
 
 
+@pytest.mark.parametrize("cid", CASE_IDS)
+def test_evidence_testinfo_check_teeth_on_wording(cid):
+    """證據判定器對說明措辭也要有牙：舊前綴、缺語意標記、裸「N 列」、出現「持股清單」宣稱 ⇒ testinfo_outside_slot 非空。"""
+    good = _good_measure(cid)
+    assert EV.evaluate_demo(good, _baseline_of(good))["testinfo_outside_slot"] == []
+    assert EV.TESTINFO_PREFIX == TESTINFO_PREFIX and tuple(EV.TESTINFO_MARKERS) == TESTINFO_MARKERS
+    assert EV.TESTINFO_BODY == TESTINFO_BODY == VM.TEST_INFO_BODY, "三份本地 oracle／mapper 本文必須逐字一致"
+    bads = [OLD_TESTINFO_PREFIX + TESTINFO_BODY[cid],
+            TESTINFO_PREFIX + "合成 2 列，均無組合鍵",
+            TESTINFO_PREFIX + TESTINFO_BODY[cid] + "；持股清單共 2 筆",
+            TESTINFO_PREFIX + demo.CASES[cid].test_input]
+    bads += [TESTINFO_PREFIX.replace(w, "") + TESTINFO_BODY[cid] for w in TESTINFO_MARKERS]
+    for text in bads:
+        m = _good_measure(cid)
+        m["testinfo"]["text"] = text
+        assert EV.evaluate_demo(m, _baseline_of(m))["testinfo_outside_slot"] != [], text
+
+
 def test_fold_report_and_row_layout_are_measurements_not_gates():
     m = _good_measure("R1")
     fr = EV.fold_report(m)
@@ -1422,6 +1616,13 @@ def test_apptest_normal_case(monkeypatch, cid):
     assert P1.hits_in(_visible(blob)) == [], f"整頁工程詞彙 {P1.hits_in(_visible(blob))}"
     captions = [c.value for c in at.caption]
     assert captions.count(VM.test_info_text(cid)) == 1 and VM.test_info_text(cid) not in _slot(blob)
+    want_caption = TESTINFO_PREFIX + TESTINFO_BODY[cid]                    # 本地 oracle（不經 mapper）
+    assert _testinfo_captions(at) == [want_caption], "非 fail-closed：槽外說明恰 1 則且等於 oracle"
+    _check_caption_text(_testinfo_captions(at)[0], cid)
+    assert want_caption not in _slot(blob) and TESTINFO_BODY[cid] not in _slot(blob), "說明不得在槽內"
+    assert demo.CASES[cid].test_input not in blob, "demo 原 test_input（含裸『N 列』）不得出現在整頁"
+    page_markdown = "\n".join(m.value for m in at.markdown)
+    assert "FAKE-T" not in page_markdown, "本文說『不在本頁顯示』：合成代號不得出現在任何 markdown（含槽與持股清單區）"
     assert set(at.session_state.filtered_state) <= {"ui2_account", "ui2_feed", "ui2_page", "ui2_scenario", "ui2_target_mode"}
     assert all(k.startswith("ui2_") for k in at.session_state.filtered_state)
 
@@ -1516,6 +1717,7 @@ def _check_testinfo_lifecycle(at, no_demo_slot_loaded: str):
     """槽外「測試輸入說明」的生命週期：只在「本次 run 確實注入」的 持股／FAKE／cold 頁出現；
     換頁、換場景後的 rerun 必須消失（不得殘留上一次 run 的狀態），回到持股 cold 才重新出現。"""
     info = VM.test_info_text("R1")
+    assert info == TESTINFO_PREFIX + TESTINFO_BODY["R1"]
     assert _testinfo_captions(at) == [info], "起點：持股 FAKE cold 注入 R1 ⇒ 槽外說明恰 1 則"
     blob = _goto(at, page=P4_DATA, scenario=SCENARIO_COLD)                  # 換頁（資料頁，FAKE cold）
     assert f'data-ui2-page="{P4_DATA}"' in blob and "示意：合成持股快照" not in blob
