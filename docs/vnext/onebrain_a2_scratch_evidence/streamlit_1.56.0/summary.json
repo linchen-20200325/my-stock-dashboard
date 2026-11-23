@@ -1,0 +1,177 @@
+{
+ "label": "tests-only／非 DEC-137 正式",
+ "runs": [
+  {
+   "case": "R1",
+   "variant": "baseline",
+   "file": "baseline_unmodified_css/onebrain_hold_demo_R1_baseline.json",
+   "pass": {
+    "mobile_390": true,
+    "desktop_1280": true,
+    "desktop_1440": true
+   },
+   "failures": {},
+   "meta_failures": [],
+   "network": {
+    "server_rejected": 0,
+    "server_rejected_hosts": [],
+    "context_aborted": 0,
+    "context_aborted_urls": []
+   },
+   "a2_new_checks": {
+    "mobile_390": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1280": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1440": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    }
+   }
+  },
+  {
+   "case": "L1",
+   "variant": "baseline",
+   "file": "baseline_unmodified_css/onebrain_hold_demo_L1_baseline.json",
+   "pass": {
+    "mobile_390": true,
+    "desktop_1280": true,
+    "desktop_1440": true
+   },
+   "failures": {},
+   "meta_failures": [],
+   "network": {
+    "server_rejected": 0,
+    "server_rejected_hosts": [],
+    "context_aborted": 0,
+    "context_aborted_urls": []
+   },
+   "a2_new_checks": {
+    "mobile_390": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1280": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1440": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    }
+   }
+  },
+  {
+   "case": "L2",
+   "variant": "baseline",
+   "file": "baseline_unmodified_css/onebrain_hold_demo_L2_baseline.json",
+   "pass": {
+    "mobile_390": true,
+    "desktop_1280": true,
+    "desktop_1440": true
+   },
+   "failures": {},
+   "meta_failures": [],
+   "network": {
+    "server_rejected": 0,
+    "server_rejected_hosts": [],
+    "context_aborted": 0,
+    "context_aborted_urls": []
+   },
+   "a2_new_checks": {
+    "mobile_390": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1280": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1440": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    }
+   }
+  },
+  {
+   "case": "L3",
+   "variant": "baseline",
+   "file": "baseline_unmodified_css/onebrain_hold_demo_L3_baseline.json",
+   "pass": {
+    "mobile_390": true,
+    "desktop_1280": true,
+    "desktop_1440": true
+   },
+   "failures": {},
+   "meta_failures": [],
+   "network": {
+    "server_rejected": 0,
+    "server_rejected_hosts": [],
+    "context_aborted": 0,
+    "context_aborted_urls": []
+   },
+   "a2_new_checks": {
+    "mobile_390": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1280": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1440": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    }
+   }
+  },
+  {
+   "case": "FAILCLOSED",
+   "variant": "baseline",
+   "file": "baseline_unmodified_css/onebrain_hold_demo_FAILCLOSED_baseline.json",
+   "pass": {
+    "mobile_390": true,
+    "desktop_1280": true,
+    "desktop_1440": true
+   },
+   "failures": {},
+   "meta_failures": [],
+   "network": {
+    "server_rejected": 0,
+    "server_rejected_hosts": [],
+    "context_aborted": 0,
+    "context_aborted_urls": []
+   },
+   "a2_new_checks": {
+    "mobile_390": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1280": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    },
+    "desktop_1440": {
+     "no_fake_t_above_slot": true,
+     "caption_after_slot": true
+    }
+   }
+  }
+ ],
+ "a2": true,
+ "a2_note": "A2 scratch 證據：tests-only 離線示範，非 DEC-137 正式存證；基底＝#1268 head；clip 圖以暫時加高的視窗（同寬）截取，量測判定仍以原視窗為準；`*_clip_devshown.png` 的下緣另延伸到開發面下緣（若較低）＋120px。",
+ "invocation": [
+  "python",
+  "-m",
+  "tests.ui2_viewport.onebrain_hold_demo_evidence",
+  "--out",
+  "<OUT_DIR>",
+  "--python",
+  "<VENV_PYTHON>",
+  "--a2"
+ ]
+}

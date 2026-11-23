@@ -1,5 +1,12 @@
 """OneBrain 持股 FAKE 示範的真瀏覽器證據 runner＋純函式判定器（C-OB-HOLD-DEMO-STAGE2-A1；**tests-only**）。
 
+【A2 scratch 增補（非 #1268 內容；僅存在於 scratch 證據分支，基底＝#1268 head 711142ce38c5cdae07144ae164a72a3bb0f9df6a）】
+  `--a2`：(1) 新判定 `no_fake_t_above_slot`（排除測試輸入說明後，整頁文字無 FAKE-T）與 `caption_after_slot`
+  （說明在槽外且位於槽下方；fail-closed 無說明）；(2) 新增 clip 圖（槽上緣−120px～說明下緣＋120px；無說明則槽區±120px）；
+  (3) L3／FAILCLOSED 另產「開發面顯示」成對 clip；(4) 不產 `_DARK` 截圖（對比量測仍保留）；(5) summary 加 `invocation`（已遮罩）。
+  `--a2-assemble DIR --a2-base-sha SHA`：由 DIR 下 `streamlit_*/` 產生 `MANIFEST.json` 與 `SHA256SUMS`（相對路徑）。
+  原有判定與輸出格式不變（未加 `--a2` 時行為與 #1268 head 相同）。
+
 ⛔ 這**不是** DEC-137 正式證據（四份固定檔名那一套）：meta 標 `label="tests-only／非 DEC-137 正式"`；
 ⛔ 不稱 Cloud 已驗；⛔ 本 runner **不進 CI**（既有 browser lane 只列兩個檔；總管 Q9）⇒ 原生 CI 覆蓋 NOT VERIFIED，只有本地封網驗證。
 
@@ -50,6 +57,13 @@ VARIANT_PREVIEW = "preview"
 VARIANT_DIRS = {VARIANT_BASELINE: "baseline_unmodified_css", VARIANT_PREVIEW: "supplementary_preview_css"}
 FAILCLOSED = "FAILCLOSED"
 CASE_KEYS = ("R1", "L1", "L2", "L3", FAILCLOSED)
+#: A2 scratch 增補
+A2_CLIP_PAD = 120                                    # clip 圖：槽上緣／說明下緣外各 120px
+A2_DEV_PAIR_CASES = ("L3", FAILCLOSED)               # 另產「開發面顯示」成對 clip 的案例
+A2_FAKE_T = "FAKE-T"
+A2_LABEL_NOTE = ("A2 scratch 證據：tests-only 離線示範，非 DEC-137 正式存證；基底＝#1268 head；"
+                 "clip 圖以暫時加高的視窗（同寬）截取，量測判定仍以原視窗為準；"
+                 "`*_clip_devshown.png` 的下緣另延伸到開發面下緣（若較低）＋120px。")
 
 #: A1 四個檔（meta 記 hash；路徑相對 repo 根）
 A1_FILES = ("tests/onebrain_holdings_ui2_demo_vm.py", "tests/ui2_viewport/onebrain_hold_demo_launcher.py",
@@ -92,7 +106,8 @@ META_REQUIRED = ("label", "tool", "git_sha", "source_hash", "a1_file_hashes", "g
 # ══════════════════════════════════════════════════════════════════════
 CHECKS = ("slot_rows", "no_horizontal_overflow", "no_truncated_text", "disclosure_first", "l3_no_completeness",
           "testinfo_outside_slot", "no_forbidden_text", "layout_mode", "row_state_attrs", "failclosed_shape",
-          "source_asof_rows", "first_screen_equals_nodemo")
+          "source_asof_rows", "first_screen_equals_nodemo", "no_fake_t_above_slot", "caption_after_slot")
+A2_NEW_CHECKS = ("no_fake_t_above_slot", "caption_after_slot")
 
 
 def case_key(case: str, failclosed: bool) -> str:
@@ -216,6 +231,30 @@ def evaluate_demo(m: dict, baseline_elements=None) -> dict[str, list[str]]:
         out["source_asof_rows"].append("缺來源／時點")
     # 12. 首屏與無注入對照一致
     out["first_screen_equals_nodemo"] = _first_screen_diff(m.get("elements") or [], baseline_elements)
+    # 13.（A2 增補）排除「測試輸入說明」後，整頁文字不得出現 FAKE-T（合成代號只許出現在槽外說明）
+    ex = m.get("page_text_ex_testinfo")
+    if ex is None:       # 相容舊量測：由 page_text 扣掉說明全文
+        ex = str(m.get("page_text") or "")
+        if ti:
+            ex = ex.replace(str(ti.get("text", "")), "")
+    if A2_FAKE_T in ex:
+        out["no_fake_t_above_slot"].append("排除測試輸入說明後，整頁文字仍出現 FAKE-T")
+    if "FAKE" not in (m.get("slot_text") or ""):
+        out["no_fake_t_above_slot"].append("槽文字不含 FAKE 標示")
+    # 14.（A2 增補）說明在槽外、且位於槽下方；fail-closed 必須無說明＋固定句
+    if key == FAILCLOSED:
+        if ti is not None:
+            out["caption_after_slot"].append("fail-closed 不得有說明")
+        note_rows = [r for r in rows if r["label"] == "說明"]
+        if not note_rows or note_rows[0]["value"] != FAILCLOSED_NOTE:
+            out["caption_after_slot"].append("fail-closed 缺固定句")
+    elif ti is None or slot is None:
+        out["caption_after_slot"].append("缺說明或缺槽，無法判定相對位置")
+    else:
+        if ti.get("inside_slot"):
+            out["caption_after_slot"].append("說明在槽內")
+        if ti.get("top") is None or ti["top"] < slot["bottom"] - 0.01:
+            out["caption_after_slot"].append(f"說明 top {ti.get('top')} < 槽 bottom {slot['bottom']}（說明未在槽下方）")
     return out
 
 
@@ -323,6 +362,8 @@ _JS_DEMO = r"""
   const clone = bcEl.cloneNode(true);
   clone.querySelectorAll('.st-key-ui2_dev_surface, .st-key-ui2_nav, style, script').forEach(e => e.remove());
   out.page_text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  clone.querySelectorAll('.st-key-ui2_obdemo_testinfo').forEach(e => e.remove());
+  out.page_text_ex_testinfo = (clone.textContent || '').replace(/\s+/g, ' ').trim();
   if (slot) {
     const cs = getComputedStyle(slot);
     out.slot = {...R(slot), display: cs.display, flex_wrap: cs.flexWrap, scroll_w: slot.scrollWidth, client_w: slot.clientWidth};
@@ -473,6 +514,77 @@ def _shots(page, out: Path, stem: str, shot_slot: bool) -> list[str]:
     return files
 
 
+_JS_CLIP_GEO = r"""
+() => {
+  const R = e => { const r = e.getBoundingClientRect(); return {top: r.top, bottom: r.bottom}; };
+  const slot = document.querySelector('[data-ui2-l1="onebrain"]');
+  const cap = document.querySelector('.st-key-ui2_obdemo_testinfo');
+  const bc = document.querySelector('.block-container');
+  const dev = document.querySelector('.st-key-ui2_dev_surface');
+  const vis = e => !!e && getComputedStyle(e).display !== 'none';
+  return {slot: slot ? R(slot) : null, caption: cap ? R(cap) : null, content_bottom: bc ? R(bc).bottom : null,
+          dev_surface: (dev && vis(dev)) ? R(dev) : null};
+}
+"""
+
+
+def _set_dev_surface(page, shown: bool) -> None:
+    """A2：顯示（還原預設）／隱藏開發面（只改 inline display；不動 measure_viewport）。"""
+    v = "''" if shown else "'none'"
+    page.evaluate("() => { const e = document.querySelector('.st-key-ui2_dev_surface'); if (e) e.style.display = " + v + "; }")
+
+
+def _clip_bottom(g: dict, dev_shown: bool) -> float:
+    """clip 下緣基準：說明下緣（無說明＝槽下緣）；開發面顯示版另取開發面下緣（兩者較大者），好讓 fail-closed 版也看得到開發面。"""
+    b = (g["caption"] or g["slot"])["bottom"]
+    if dev_shown and g.get("dev_surface"):
+        b = max(b, g["dev_surface"]["bottom"])
+    return b
+
+
+def _a2_clip(page, out: Path, name: str, vw: int, vh: int, *, dev_shown: bool) -> dict:
+    """A2：clip 圖＝槽上緣−120px 至（說明下緣；無說明則槽下緣）＋120px。暫時加高視窗（同寬）讓上下文放得下，截完還原。"""
+    _set_dev_surface(page, dev_shown)
+    try:
+        page.set_viewport_size({"width": vw, "height": 3200})
+        _scroll_top(page)
+        g = page.evaluate(_JS_CLIP_GEO)
+        if not g["slot"]:
+            return {"file": None, "reason": "no slot"}
+        y1 = _clip_bottom(g, dev_shown) + A2_CLIP_PAD
+        if g["content_bottom"] is not None:
+            y1 = min(y1, g["content_bottom"])
+        page.set_viewport_size({"width": vw, "height": max(vh, int(y1) + 90)})   # 手機底部固定導覽落在 clip 之外
+        _scroll_top(page)
+        g = page.evaluate(_JS_CLIP_GEO)
+        y0 = max(0.0, g["slot"]["top"] - A2_CLIP_PAD)
+        y1 = _clip_bottom(g, dev_shown) + A2_CLIP_PAD
+        if g["content_bottom"] is not None:
+            y1 = min(y1, g["content_bottom"])
+        page.screenshot(path=str(out / name), clip={"x": 0, "y": y0, "width": vw, "height": max(1.0, y1 - y0)})
+        rd = lambda d: None if d is None else {k: round(v, 1) for k, v in d.items()}
+        return {"file": name, "dev_surface_shown": dev_shown, "clip_y0": round(y0, 1), "clip_y1": round(y1, 1),
+                "slot": rd(g["slot"]), "caption": rd(g["caption"]), "dev_surface": rd(g["dev_surface"]),
+                "caption_below_slot": (g["caption"]["top"] >= g["slot"]["bottom"]) if g["caption"] else None}
+    finally:
+        page.set_viewport_size({"width": vw, "height": vh})
+        _set_dev_surface(page, True)
+        _scroll_top(page)
+
+
+def _a2_shots(page, out: Path, stem: str, vw: int, vh: int, failclosed: bool, case: str) -> tuple[list[str], dict]:
+    files: list[str] = []
+    geo: dict = {}
+    geo["clip"] = _a2_clip(page, out, f"{stem}_clip.png", vw, vh, dev_shown=False)
+    if geo["clip"].get("file"):
+        files.append(geo["clip"]["file"])
+    if case_key(case, failclosed) in A2_DEV_PAIR_CASES:
+        geo["clip_devshown"] = _a2_clip(page, out, f"{stem}_clip_devshown.png", vw, vh, dev_shown=True)
+        if geo["clip_devshown"].get("file"):
+            files.append(geo["clip_devshown"]["file"])
+    return files, geo
+
+
 def measure_one(page, case: str, failclosed: bool, variant: str, vp_name: str, vw: int, vh: int) -> dict:
     _scroll_top(page)
     m = page.evaluate(_JS_DEMO)
@@ -484,14 +596,14 @@ def measure_one(page, case: str, failclosed: bool, variant: str, vp_name: str, v
 
 
 def run_server_case(p, browser, repo: Path, out: Path, *, tag: str, env_extra: dict, case: str, failclosed: bool,
-                    variant: str, python: str, real_control: bool = False, dark: bool = False) -> dict:
+                    variant: str, python: str, real_control: bool = False, dark: bool = False, a2: bool = False) -> dict:
     """一個 server（一個案例）× 三視窗。回 {"measures": {vp: m}, "files": [...], "network": {...}, "streamlit_version"}。"""
     seal_log = _mktemp("obdemo_seal_", ".jsonl")
     seal_log.write_text("", encoding="utf-8")
     env = {**env_extra, "UI2_OBDEMO_SEAL": "1", "UI2_OBDEMO_SEAL_LOG": str(seal_log)}
     proc, url, log = start_server(repo, env, python)
     aborted: list[str] = []
-    res: dict = {"measures": {}, "files": [], "real_control": {}, "dark": {}}
+    res: dict = {"measures": {}, "files": [], "real_control": {}, "dark": {}, "a2_clips": {}}
     try:
         for vp_name, (vw, vh) in VIEWPORTS.items():
             ctx = _new_context(browser, vw, vh, aborted)
@@ -500,6 +612,10 @@ def run_server_case(p, browser, repo: Path, out: Path, *, tag: str, env_extra: d
             m = measure_one(page, case, failclosed, variant, vp_name, vw, vh)
             res["measures"][vp_name] = m
             res["files"] += _shots(page, out, f"{tag}_{vp_name}", shot_slot=True)
+            if a2 and tag != "NODEMO_baseline":
+                f2, geo = _a2_shots(page, out, f"{tag}_{vp_name}", vw, vh, failclosed, case)
+                res["files"] += f2
+                res["a2_clips"][vp_name] = geo
             if real_control:
                 res["real_control"][vp_name] = _real_control(page, out, f"{tag}_{vp_name}_REALFEED", res["files"])
             ctx.close()
@@ -510,7 +626,7 @@ def run_server_case(p, browser, repo: Path, out: Path, *, tag: str, env_extra: d
                 _open_hold_fake(page, url)
                 key = "dark" if scheme_dark else "light"
                 res["dark"][key] = {sel: page.evaluate(_JS_CONTRAST, sel) for sel in (".ui2-row__detail", ".ui2-row__value")}
-                if scheme_dark:
+                if scheme_dark and not a2:           # A2：不產 _DARK 截圖（對比量測仍保留）
                     res["files"] += _shots(page, out, f"{tag}_mobile_390_DARK", shot_slot=True)
                 ctx.close()
     finally:
@@ -557,10 +673,13 @@ def build_meta(repo: Path, *, variant: str, case: str, streamlit_version: str, c
                      "封網僅本進程 Python socket＋瀏覽器 route，非作業系統層。" + DEVSURFACE_NOTE)}
 
 
-def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), python: str = sys.executable) -> dict:
+def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), python: str = sys.executable, a2: bool = False,
+            invocation: list | None = None) -> dict:
     from playwright.sync_api import sync_playwright
     streamlit_version = MV._streamlit_version(python)
     summary: dict = {"label": LABEL, "runs": []}
+    if a2:
+        summary.update(a2=True, a2_note=A2_LABEL_NOTE, invocation=invocation or [])
     with sync_playwright() as p:
         browser = MV.launch_chromium(p)
         chromium_version = browser.version
@@ -575,7 +694,7 @@ def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), py
             real_case = "R1" if fc else case
             res = run_server_case(p, browser, repo, out, tag=f"{label}_{variant}", env_extra=env, case=real_case, failclosed=fc,
                                   variant=variant, python=python, real_control=(variant == VARIANT_BASELINE and case == "R1"),
-                                  dark=(variant == VARIANT_BASELINE and case == "R1"))
+                                  dark=(variant == VARIANT_BASELINE and case == "R1"), a2=a2)
             if case == "NODEMO":
                 baseline_elements = {vp: m["elements"] for vp, m in res["measures"].items()}
                 continue
@@ -589,12 +708,16 @@ def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), py
             contrast = {scheme: {sel: effective_contrast(s) for sel, s in d.items()} for scheme, d in res["dark"].items()}
             doc = {"meta": meta, "meta_failures": check_meta(meta), "results": per_vp, "real_control": res["real_control"],
                    "contrast": contrast, "files": res["files"]}
+            if a2:
+                doc["a2"] = {"note": A2_LABEL_NOTE, "clips": res["a2_clips"],
+                             "new_checks": {vp: {c: (not r["failures"].get(c)) for c in A2_NEW_CHECKS} for vp, r in per_vp.items()}}
             name = f"onebrain_hold_demo_{label}_{variant}.json"
             (out / name).write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
             summary["runs"].append({"case": label, "variant": variant, "file": f"{VARIANT_DIRS[variant]}/{name}",
                                     "pass": {vp: r["pass"] for vp, r in per_vp.items()},
                                     "failures": {vp: r["failures"] for vp, r in per_vp.items() if r["failures"]},
-                                    "meta_failures": doc["meta_failures"], "network": res["network"]})
+                                    "meta_failures": doc["meta_failures"], "network": res["network"],
+                                    **({"a2_new_checks": doc["a2"]["new_checks"]} if a2 else {})})
         browser.close()
     (out_root / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     return summary
@@ -609,15 +732,111 @@ def _env_for(case: str, preview: bool) -> dict:
     return env
 
 
+def _mask_invocation(argv: list[str], repo: Path) -> list[str]:
+    """A2：只記相對／已遮罩形式的命令列（不含絕對路徑、帳號、venv 路徑）。"""
+    masked = ["python", "-m", "tests.ui2_viewport.onebrain_hold_demo_evidence"]
+    it = iter(argv)
+    for tok in it:
+        if tok == "--out":
+            next(it, None)
+            masked += ["--out", "<OUT_DIR>"]
+        elif tok == "--python":
+            next(it, None)
+            masked += ["--python", "<VENV_PYTHON>"]
+        elif tok.startswith("--out=") or tok.startswith("--python="):
+            masked.append(tok.split("=", 1)[0] + "=<MASKED>")
+        else:
+            masked.append(tok)
+    return masked
+
+
+def _git_out(repo: Path, *args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=str(repo), text=True).strip()
+
+
+def assemble_a2_manifest(repo: Path, ev_dir: Path, base_sha: str) -> dict:
+    """A2：由 `ev_dir/streamlit_*/` 產生 `MANIFEST.json` 與 `SHA256SUMS`（相對路徑；SHA256SUMS 為 `sha256sum` 格式）。"""
+    import datetime
+    if not re.fullmatch(r"[0-9a-f]{40}", base_sha):
+        raise SystemExit("--a2-base-sha 必須是完整 40 位")
+    ev_dir = ev_dir.resolve()
+    top_skip = {"MANIFEST.json", "SHA256SUMS"}
+    files = sorted((p for p in ev_dir.rglob("*") if p.is_file() and not (p.parent == ev_dir and p.name in top_skip)),
+                   key=lambda p: p.relative_to(ev_dir).as_posix())
+    entries = [{"path": p.relative_to(ev_dir).as_posix(), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                "bytes": p.stat().st_size} for p in files]
+    runs: dict = {}
+    for d in sorted(ev_dir.glob("streamlit_*")):
+        summ = json.loads((d / "summary.json").read_text(encoding="utf-8"))
+        cases = {}
+        for r in summ["runs"]:
+            doc = json.loads((d / r["file"]).read_text(encoding="utf-8"))
+            meta = doc["meta"]
+            cases[r["case"]] = {"json": f"{d.name}/{r['file']}", "viewports_pass": r["pass"], "failures": r["failures"],
+                                "meta_failures": r["meta_failures"]}
+            info = {k: meta[k] for k in ("streamlit_version", "playwright_version", "chromium_version", "git_sha", "source_hash")}
+        gen = sorted(json.loads((d / r["file"]).read_text(encoding="utf-8"))["meta"]["generated_at"] for r in summ["runs"])
+        runs[d.name] = {**info, "runs": len(summ["runs"]), "failing": sum(1 for r in summ["runs"] if r["failures"] or r["meta_failures"]),
+                        "viewports_total": sum(len(r["pass"]) for r in summ["runs"]),
+                        "viewports_passing": sum(sum(1 for v in r["pass"].values() if v) for r in summ["runs"]),
+                        "generated_at_utc_first": gen[0], "generated_at_utc_last": gen[-1],
+                        "invocation_masked": summ.get("invocation"), "cases": cases}
+    inv = {}
+    four = {}
+    for rel in A1_FILES:
+        base_blob = _git_out(repo, "rev-parse", f"{base_sha}:{rel}")
+        cur_blob = _git_out(repo, "hash-object", "--no-filters", rel)
+        raw = (repo / rel).read_bytes()
+        four[rel] = {"sha256": hashlib.sha256(raw).hexdigest(), "git_blob_sha": cur_blob, "head_1268_blob_sha": base_blob,
+                     "identical_to_1268_head": cur_blob == base_blob}
+    inv["a1_four_files"] = four
+    runner = TOOL
+    inv["runner_blob_sha"] = {"head_1268": four[runner]["head_1268_blob_sha"], "a2_modified": four[runner]["git_blob_sha"]}
+    inv["other_three_identical_to_1268_head"] = {k: v["identical_to_1268_head"] for k, v in four.items() if k != runner}
+    added = "tests/ui2_viewport/a2_evidence_privacy_scan.py"
+    manifest = {
+        "manifest_version": 1,
+        "label": "tests-only 離線示範，非 DEC-137 正式存證",
+        "base_head_sha": base_sha,
+        "scratch_commit_note": ("本目錄隨 scratch 分支 scratch/onebrain-a2-evidence-20261123 的單一 commit 提交；"
+                                "該 commit SHA 無法自我包含於本檔，請以 git 取得（見 README）。不開 PR、不進 main。"),
+        "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "source_hash": next(iter(runs.values()))["source_hash"] if runs else None,
+        "four_files": four, "runner_blob_sha": inv["runner_blob_sha"],
+        "other_three_identical_to_1268_head": inv["other_three_identical_to_1268_head"],
+        "a2_added_tool": ({"path": added, "sha256": hashlib.sha256((repo / added).read_bytes()).hexdigest()}
+                          if (repo / added).exists() else None),
+        "versions": {"streamlit": sorted({r["streamlit_version"] for r in runs.values()}),
+                     "playwright": sorted({r["playwright_version"] for r in runs.values()}),
+                     "chromium": sorted({r["chromium_version"] for r in runs.values()})},
+        "runs": runs, "files": entries, "files_note": "files 不含 MANIFEST.json／SHA256SUMS 本身；SHA256SUMS 另涵蓋 MANIFEST.json。"}
+    (ev_dir / "MANIFEST.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    allf = sorted((p for p in ev_dir.rglob("*") if p.is_file() and p.name != "SHA256SUMS"), key=lambda p: p.relative_to(ev_dir).as_posix())
+    (ev_dir / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(ev_dir).as_posix()}\n" for p in allf),
+                                       encoding="utf-8")
+    return manifest
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(Path(tempfile.gettempdir()) / "onebrain_a1_evidence"))
     ap.add_argument("--cases", default=",".join(CASE_KEYS))
     ap.add_argument("--preview-css", action="store_true", help="另跑補充比較的預覽 CSS（⛔ 非 baseline）")
-    ap.add_argument("--python", default=sys.executable, help="用此 python 起 streamlit server（例：1.56.0 venv）")
+    ap.add_argument("--python", default=sys.executable, help="用此 python 起 streamlit server（例：1.56.0 的 venv）")
     ap.add_argument("--allow-in-repo", action="store_true")
-    a = ap.parse_args(argv)
+    ap.add_argument("--a2", action="store_true", help="A2 scratch 增補：clip 圖／開發面成對／新判定／不產 _DARK")
+    ap.add_argument("--a2-assemble", default=None, metavar="DIR", help="A2：由 DIR/streamlit_*/ 產生 MANIFEST.json 與 SHA256SUMS")
+    ap.add_argument("--a2-base-sha", default=None, help="A2：#1268 head 完整 40 位 SHA（--a2-assemble 用）")
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    a = ap.parse_args(raw_argv)
     repo = Path(__file__).resolve().parents[2]
+    if a.a2_assemble:
+        if not a.a2_base_sha:
+            print("--a2-assemble 需要 --a2-base-sha", file=sys.stderr)
+            return 2
+        m = assemble_a2_manifest(repo, Path(a.a2_assemble), a.a2_base_sha)
+        print(f"MANIFEST files={len(m['files'])}")
+        return 0
     out = Path(a.out).resolve()
     if repo in (out, *out.parents) and not a.allow_in_repo:
         print("拒絕：--out 在 repo 內（A1 證據預設不入庫；A2 另案）。需要請加 --allow-in-repo", file=sys.stderr)
@@ -628,7 +847,8 @@ def main(argv=None) -> int:
     if unknown:
         print(f"未知案例 {unknown}", file=sys.stderr)
         return 2
-    summary = run_all(repo, out, cases, preview_cases=(cases if a.preview_css else ()), python=a.python)
+    summary = run_all(repo, out, cases, preview_cases=(cases if a.preview_css else ()), python=a.python, a2=a.a2,
+                      invocation=_mask_invocation(raw_argv, repo) if a.a2 else None)
     bad = [r for r in summary["runs"] if r["failures"] or r["meta_failures"]]
     print(f"runs={len(summary['runs'])} failing={len(bad)} out={out}")
     return 1 if bad else 0
