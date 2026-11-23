@@ -1699,3 +1699,33 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **仍 HOLD／NOT VERIFIED（皆不變）**：#1237 NAS；#1107 Cloud deployed SHA 與 390／1280px；TWII DG-LIC／DG-PIT；OneBrain `NOT READY`；Stage F／G；Digest v2；G-F2；私人 Sheet；G-X1 Q2 延後；I1144-WIRING-GATE；Real 查股與跨頁 production wiring（使用者仍不能在 Real 查股）；#1119 workflow 清理 HOLD；C1／C2 HOLD。
 - **下一步唯一任務**：**待總管裁示**。#1199 7057937922 記有「可先做」候選：「單檔公開行情 Fact／VM 契約＋合成測試」——**僅為候選，非已授權**；任何 Real 接線須客戶明示批准。
 - **停止條件**：超出上述、動 #1237／部署／Secrets／真資料、或需解除任一 HOLD 即停手；不得將本段當 QA PASS。
+
+## 2026-11-23 Resume Checkpoint（永久交接；append-only；非 QA PASS；單組撰寫，待非作者 QA）
+- **說明**：本段取代 2026-11-21 第二段為現行接手點；舊段保留為歷史，一字未改。以下為**存檔當時快照，新對話須重核**（見最後「新對話第一步」）。
+- **快照**：main `913dd759eea50bc915206ebad0a2217385d8041e`（2026-11-23T19:49+08；#1271 合併 SHA `34f682b353f87dbc23ced27b13e011765f8f434a` 之上多一個 docs-only 直推 commit，新增 `docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`）。913dd759 的 main push CI：**NOT VERIFIED（存檔時未核）**。
+- **已合併（不得重做）**：#1267 UI2 baseline；#1269 `5116fd07…`（run 45044587008）；#1270 `e6d21a7f…`（run 45089840569）；#1271 `34f682b3…`（run 45092322986）——main push 五項＋Slow AppTest step success。
+- **Open Draft PR（均未 Ready／merge）**：
+  - #1273 head `8acb2af79677eae73802eefc2abb6c41d828d376`（C1：台股明細「新鮮度未判定」逐字 `TEXT_STALE_UNKNOWN`）；兩組非作者 QA PASS；同 head CI run 45107779198 五項 success；0 threads；base `34f682b3` 已落後 main 一個 docs-only commit；**待 Work 獨立 QA 與總管 Ready／merge 裁示**。
+  - #1272 head `14f86b8d5d12bc15662b477323ee5e41d1bdd4e9`（B 手機 Real 揭露）；Work 判功能 Must-Fix 0、UX Gate 待裁；run 45103613194 五項 success。
+  - #1268 head `711142ce38c5cdae07144ae164a72a3bb0f9df6a`（OneBrain 持股 FAKE Stage2 A1 tests-only）；兩組以上非作者 QA PASS；run 45106136896 五項 success；Q3-8 真瀏覽器 provenance Work **NOT VERIFIED**，待 A2 證據包授權。
+  - #1237 NAS security HOLD（base `3163e49d` 落後）。
+- **版本與正式性**：
+
+| 項目 | 現況 |
+|---|---|
+| 現行正式／實際運作 | repo 最新 main＋各現行有效 DEC／Contract |
+| New UI2 目前定位 | 僅 Real Preview（`streamlit run app_ui2.py`；非 production default；預設 FAKE）；Real 只接台股卡／日 K／位階橋接，其餘「尚未提供」 |
+| 有效讀法 | `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`＋DEC-128 及後續有效修正案 |
+| 產品目標版本 v1.0 | 薄 UI＋厚 Digest＋Topic Lenses＋What Changed；**DEC DRAFT，未經 #1199 正式核准** |
+| 未來候選 v1.1 | Catalyst Radar＋Signal Log；**HOLD** |
+| 視覺設計稿 | 優先讀使用者 2026-11-23 上傳的 `stock_newui2_onebrain_design_review_v2.html`（SHA-256 `efaa95f8da9f13d5fffc63ca4d0a57172fbc3eb9069ffabbe4a33d06e91538ae`，**不在 repo**；檔名 v2＝視覺稿版本，非產品 v2）；舊視覺稿僅歷史 |
+| 指引文件 | `docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`（DRAFT，非施工授權） |
+
+- **總管已裁示**（來源＝使用者 2026-11-23 派工訊息與 #1199 comment 7090430256／7091332355；**尚未寫入 `DECISIONS.md`，不得冒充 DEC 編號**；待總管指派 DEC 號）：D1=A、D2=D、D3=A；橫幅／位階卡／資料頁「已接入 2 項」另案文案 Gate（未授權改字）；G-F1=YES 僅唯讀 Gate 研究；C1 授權與「重用既有 `TEXT_STALE_UNKNOWN` 不算新文案」=Y（限逐字、既有相同語意）。
+- **G-F1 結論與解除條件**：見 #1199 comment 7091332355（階段 3 之前沒有任何一步能讓位階有值；最近解除條件＝DG-LIC 對證交所／櫃買取證範圍授權確認）。
+- **永久 HOLD**：NAS #1237、Cloud／production cutover、Auth／OAuth／Sheet／Secrets、真持股、付費或正式 OneBrain Provider／production caller、DG-LIC／PIT／COV／SCOPE（FinMind、TWII）、I1144-WIRING-GATE、DEC-185／187 workflows、producer、正式市場位階／公式、LINE 真推播。
+- **下一個唯一最高優先任務**：完成 #1273／#1272／#1268 的 Work 獨立 QA 與總管 Ready／merge 裁示（逐案，依 #1199 closure ledger；不得自行 Ready／merge）。其後依 #1199 comment 7099424817 的 A／B／C／Work 分工（A 盤點既有已核准規則→v1.0 MVP ruleset 候選與必要新 Gate；B 今日變化摘要文字線框；C Digest→短摘要投影契約；Work 獨立 QA），先盤點／線框／契約、不施工。
+- **已知過期／矛盾處**：本檔 2026-11-21 第二段所稱「下一步＝待總管裁示」已過期；PR #1273 描述內「尚待兩組 QA／CI」已過期（以 #1199 7091332355 為準）；BACKLOG `UI2-DATA-ITEMS-STALE-UNKNOWN` 在 #1273 合併前仍為「待評估」，實際已有 Draft #1273。
+- **新對話第一步**：重做 LIVE GitHub Verification Gate（main SHA、Open PR head／base、CI、threads、#1199 最新留言），先讀 `PROJECT_RULES.md`（含第 15、29 節）、READ_FIRST 檔、#1199 最新留言、`docs/DECISIONS.md` 最新 DEC、本段。
+- **永久交接錨點**：見 #1199 最新「A 永久交接」留言（總管於本分支合併前另貼；本段不記 comment ID）。
+- **停止條件與不得做**：超出範圍、需動 HOLD 項、需解鎖任一 Gate 即停手；本段不是 QA PASS。
