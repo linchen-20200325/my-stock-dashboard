@@ -1,7 +1,7 @@
 # New UI2「市場位階（Regime）」產品定義：客戶決策請示稿（2026-11-22）
 
 > **文件性質：REQUEST FOR DECISION（請示稿）／DOCS-ONLY／不是授權。**
-> - **日期**：2026-11-22。**基準**：origin/main `e2068a68`。
+> - **日期**：2026-11-22。**基準**：origin/main `e2068a68`（原撰寫基準）；**2026-11-23 差額修訂**：已併入 main `e6d21a7f`（worktree `ace11a7f`），並以 `git diff e2068a68 e6d21a7f -- shared/ui2_contract/text.py src/services/ui2/real_canonical.py` 核對，凡與 Real 橫幅、位階未載入／無法判定畫面有關的敘述均已改依現行原始碼（派工訊息稱該變更為 #1267，PR 編號作者未另行核對）。
 > - **作者**：單組作者（AI 執行組）。**未經非作者 QA，不得升格為決策依據或已驗證事實**；本文所有「推薦」皆為 RECOMMENDATION，不是裁示。
 > - **本文不做的事**：不改任何程式、測試、契約、BACKLOG、DECISIONS；不提案實作任何新文案、計數口徑、口徑鎖定測試；不放行任何 Gate。客戶若選了需要後續工作的選項，後續須另案、另走各自的 Gate（本文第 3 節逐項列出）。
 > - **標籤**：**FACT**＝作者本次讀檔／grep 直接確認（附出處檔名＋章節或符號，不寫行號）；**INFERENCE**＝由事實推得、未實測；**NOT VERIFIED**＝未驗證，不得當前提。
@@ -70,20 +70,23 @@
 
 | 路徑／條件 | 位階結果（畫面） | 既有測試斷言（已用 grep 確認存在） |
 |---|---|---|
-| **Real（`app_ui2.py` 預設）**，無 warroom、無狀態檔（Cloud 預期） | `⬜ 尚未載入`（NOT_EVALUATED）＋`⬜ 資料日未提供`；說明句＝L0「缺正式市場廣度」＋「這裡不提供更新，所以這一格維持尚未載入」 | `tests/test_ui2_real_feed.py::test_regime_unloaded_is_not_evaluated_with_the_l0_explanation`；`tests/test_batch_c21.py::TestRegimeMatrix::test_absent_cold_start_gate` |
+| **Real（`app_ui2.py` 預設）**，無 warroom、無狀態檔（Cloud 預期） | `⬜ 尚未載入`（NOT_EVALUATED）＋`⬜ 資料日未提供`；第一屏短句＝「資料日未提供」＋原因句＋**新增末句「尚無可用的市場位階資料，暫不顯示判讀。」**（`real_canonical.REGIME_NO_DATA_NOTE`，現行 main）；L2 說明句＝L0「缺正式市場廣度」＋「這裡不提供更新，所以這一格維持尚未載入」 | `tests/test_ui2_real_feed.py::test_regime_unloaded_is_not_evaluated_with_the_l0_explanation`；`tests/test_batch_c21.py::TestRegimeMatrix::test_absent_cold_start_gate` |
 | Real，無 warroom，**舊 `macro_state.json` 有效** | 仍 `⬜ 尚未載入`（不退舊檔） | `test_absent_cold_start_gate`（`old_only`／`both` 情境） |
-| Real，warroom 存在但健康分缺（廣度只有代理值） | `⬜ 無法判定`（UNDETERMINABLE），非「尚未評估」 | `tests/test_ui2_real_feed.py::test_regime_breadth_unevaluated_is_unable_to_determine_not_not_evaluated`；`tests/test_batch_c21.py::TestRegimeMatrix::test_no_health_breadth_gate` |
+| Real，warroom 存在但健康分缺（廣度只有代理值） | `⬜ 無法判定`（UNDETERMINABLE），非「尚未評估」；第一屏短句同樣以 `REGIME_NO_DATA_NOTE` 收尾（有真值與讀取失敗兩分支**不帶**此句） | `tests/test_ui2_real_feed.py::test_regime_breadth_unevaluated_is_unable_to_determine_not_not_evaluated`；`tests/test_batch_c21.py::TestRegimeMatrix::test_no_health_breadth_gate` |
 | Real，位階讀取例外 | 🔴 來源目前不可用（不當成未評估） | `tests/test_ui2_real_feed.py::test_regime_read_failure_is_unavailable_not_unevaluated` |
 | Real，位階「已載入」（目前**無已知的正常路徑**可達；僅為契約情境） | 顯示全站位階字（多頭等）＋`⬜ 資料日未提供`；🗂 計入「資料未備」 | `tests/test_ui2_real_feed.py::test_regime_loaded_uses_the_site_wide_label`；`tests/test_ui2_data_freshness_overview.py::test_all_missing` |
 | FAKE 場景（開發面 `?ui2_dev=1`） | 示意值（標 FAKE）；與真資料無關 | 既有 FAKE 場景測試（不在本題範圍） |
+
+**註（2026-11-23）**：`REGIME_NO_DATA_NOTE` 相關斷言在 `tests/test_ui2_real_feed.py`、`tests/test_ui2_v1u1_viewports_and_copy.py`（grep 命中）；本表第 1 欄原寫的測試名稱未變。
 
 **結論（FACT 彙整）**：在 Real 軸，位階目前**沒有任何已知路徑能在 Cloud 上載入有值**；「尚未載入」是結構性結果，不是某次抓取失敗。**最強成因是客戶自己的裁示**：DEC-074 B（客戶 2026-10-23，代理廣度不得計分、`BREADTH_PROXY_SCORING_ENABLED=False`）與 DEC-075 D-1(a)（位階一併「⬜ 未評估／資料不足」）；架構成因（無 UI2 寫入者、狀態檔不在 git）次之——即使架構補齊，旗標不動位階仍不載入（見 `test_absent_cold_start_gate`、`test_no_health_breadth_gate`）。
 
 ### 2.3 可能造成誤讀之處（只陳述事實；DEC-202 O2 的「非缺陷、影響低」判定針對「有值無日期」，**不涵蓋**本節「長期無值」情形，故此處不引為先例）
 
-- Real 頁首橫幅（`shared/ui2_contract/text.py::REAL_PREVIEW_BANNER_NOTE`）寫「**僅台股與市場位階為真資料**」。
-- 🗂 資料頁第一屏（`src/services/ui2/data_page.py::freshness_rows`）寫「固定清單 8 項」「**已接入畫面 2 項**｜尚未提供 6 項」；位階屬「已接入」，其狀態在計數中落「⬜ 尚未評估」（未載入時）或「⬜ 資料未備」（已載入但無資料日時）。
-- 「已接入」在此指「畫面已接上該事實的讀取」，**不等於**「目前有值」；兩者可能被讀者合併理解。BACKLOG `UI2-DATA-ITEMS-REGIME-LOADED-WORDING`（「待評估，不施工」）已登記同族的措辭疑慮（已載入時顯示「資料未備」）。
+- Real 頁首橫幅（`shared/ui2_contract/text.py::REAL_PREVIEW_BANNER_NOTE`，**現行 main**）寫「**目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。**」（舊字樣「僅台股與市場位階為真資料」已被取代，新橫幅**不再點名位階**；本稿初版曾引用舊字樣，已更正。）因此「橫幅宣稱位階為真資料」的矛盾**不再成立**。
+- 位階卡未載入／無法判定時，第一屏短句末尾現有「尚無可用的市場位階資料，暫不顯示判讀。」（`REGIME_NO_DATA_NOTE`），位階一側已直接說明無資料。
+- 🗂 資料頁第一屏（`src/services/ui2/data_page.py::freshness_rows`）寫「固定清單 8 項」「**已接入畫面 2 項**｜尚未提供 6 項」；位階屬「已接入」（此字樣與 `RegimeFact` 欄位、`REGIME_ASOF_NOTE`、`TEXT_NOT_LOADED`／`TEXT_ASOF_MISSING` 在現行 main 均未變），其狀態在計數中落「⬜ 尚未評估」（未載入時）或「⬜ 資料未備」（已載入但無資料日時）。
+- 「已接入」在此指「畫面已接上該事實的讀取」，**不等於**「目前有值」；**目前剩餘的誤讀風險只在這一側**：資料頁把位階計為已接入、其狀態恆為尚未載入（橫幅與位階卡一側已有明示文字）。BACKLOG `UI2-DATA-ITEMS-REGIME-LOADED-WORDING`（「待評估，不施工」）已登記同族的措辭疑慮（已載入時顯示「資料未備」）。
 
 ---
 
@@ -99,13 +102,13 @@
 
 | 選項 | 內容 | 優點 | 缺點 | 風險 |
 |---|---|---|---|---|
-| **A 接受現狀** | 位階長期顯示「⬜ 尚未載入」；不改任何畫面字句、計數、測試；僅維持 DEC-202 的文件揭露 | 零改動、不碰任何 Gate；畫面本身誠實（不造值、不補 0，符合 `CLAUDE.md` §1） | 客戶在 Preview 永遠看不到位階值；橫幅「僅台股與市場位階為真資料」與資料頁「已接入畫面 2 項」是否構成誤導，**由客戶判定** | 這是「**文字是否與事實相符**」的問題：文字說位階為真資料／已接入，事實是位階目前沒有值；兩者是否矛盾，需客戶看過那兩處文字後判斷（作者不替客戶下結論） |
+| **A 接受現狀** | 位階長期顯示「⬜ 尚未載入」；不改任何畫面字句、計數、測試；僅維持 DEC-202 的文件揭露 | 零改動、不碰任何 Gate；畫面本身誠實（不造值、不補 0，符合 `CLAUDE.md` §1） | 客戶在 Preview 永遠看不到位階值；資料頁「已接入畫面 2 項」把位階計為已接入、事實是位階目前沒有值，是否構成誤導，**由客戶判定**（現行橫幅已不點名位階，原橫幅矛盾不再成立） | 這是「**文字是否與事實相符**」的問題，現只剩資料頁計數一側：「已接入」＝畫面已接上讀取，但位階恆為尚未載入；位階卡另有「尚無可用的市場位階資料，暫不顯示判讀。」。是否仍易誤讀，需客戶看過資料頁計數（並對照位階卡新句與橫幅新字樣）後判斷（作者不替客戶下結論） |
 | **B 接受長期未載入，另案調整揭露** | 同意位階長期未載入，**並同意後續另案**評估新增揭露字句、改橫幅／計數口徑、口徑鎖定測試（**本文不提案這些的內容**） | 消除 2.3 的誤讀；揭露與事實更貼合 | 屬 DEC-202 明列「候選但未授權」的新文案／口徑變更；需新文案 Gate；動 `src/ui2/**` 會使 DEC-137 存證 `source_hash` 失效、須重生四份存證；連動 P3 evidence 基準 | 一次改字牽動多處測試與存證；文案若與 DEC-177 口徑不一致會產生新矛盾 |
 | **C 不接受** | 位階無值就不算 Real Preview 完成；把「位階有值」列為 Real Preview 驗收條件 | Real 軸名實相符 | 取決於決策 3 的資料來源（見 3.3），且受廣度旗標與來源授權雙重阻擋 | 卡住目前的 Offline Preview Ready 驗收；時程取決於外部授權（DG-LIC 等待條款原文／法務，時間不在 AI 手上） |
 
-**AI 總管推薦：A，前提是「客戶看過橫幅『僅台股與市場位階為真資料』與資料頁『已接入畫面 2 項』這兩處文字後，仍接受位階長期無值」。若客戶認為這兩處文字與事實不符，請改選 B。**
+**AI 總管推薦：A，前提是「客戶看過三處現行文字——橫幅『目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。』、位階卡『尚無可用的市場位階資料，暫不顯示判讀。』、資料頁『已接入畫面 2 項』——後，仍接受位階長期無值」。若客戶認為資料頁計數（目前唯一剩下的疑點）與事實不符，請改選 B。**
 **理由**：(1) **O2 不能當依據**：O2 只涵蓋「位階有值但無可驗證 as_of」，**未**涵蓋「長期無值」；後者的使用者影響是本次首次請示，**尚無既有判定**，客戶不應以為已有先例；(2) 位階缺值的最強成因是 DEC-074 B／DEC-075 D-1(a)（客戶既有裁示），其次是來源授權與無 UI2 寫入者，都是**資料來源／資料政策 Gate**，不是畫面問題，選 C 只是把畫面驗收綁到一個今天無法解的條件上；(3) B 的內容（新增揭露字句、改橫幅／計數口徑、口徑鎖定測試）屬 DEC-202 明列「候選但未授權」，本文不提案其內容，只請客戶表態要不要另案評估。
-**請客戶同時明示（選 A 或 B 皆需回答）**：「橫幅／資料頁計數口徑是否另案評估：〈另案／不另案〉」。選「另案」＝只同意 AI 總管另送新文案 Gate 請示，**不是**授權改字；選「不另案」＝該疑慮就此結案。（取代原先「有客戶抱怨才處理」的觸發式寫法。）
+**請客戶同時明示（選 A 或 B 皆需回答）**：「橫幅／位階卡文字／資料頁計數口徑是否另案評估：〈另案／不另案〉」。選「另案」＝只同意 AI 總管另送新文案 Gate 請示，**不是**授權改字；選「不另案」＝該疑慮就此結案。（取代原先「有客戶抱怨才處理」的觸發式寫法。）
 **後續所需 Gate**：A＝無；B＝新文案 Gate＋UI 變更草稿先行（若動版面）＋DEC-137 存證重生；C＝見決策 3。**是否動既有 Contract**：A 否；B 可能（`shared/ui2_contract/text.py` 文案常數屬契約檔，需另案）；C 是（見決策 3）。
 
 ### 3.2 決策 2：將來 as_of 日期規則（僅在位階日後真的有值時才適用）
@@ -149,10 +152,10 @@
 一行即可（選項字母只在各決策內有效，請帶決策編號）：
 
 ```
-決策1=〈A／B／C〉（橫幅／計數口徑：〈另案／不另案〉）、決策2=〈A／B／C／D〉、決策3=〈A／B／C／D〉
+決策1=〈A／B／C〉（橫幅／位階卡文字／計數口徑：〈另案／不另案〉）、決策2=〈A／B／C／D〉、決策3=〈A／B／C／D〉
 ```
 
-- **AI 總管推薦組合**：`決策1=A（橫幅／計數口徑：由客戶表態）、決策2=D、決策3=A`（＝維持現狀；位階長期顯示「⬜ 尚未載入」，不新增任何字句或契約）。推薦 A 的前提見 3.1（客戶看過兩處文字後仍接受）。
+- **AI 總管推薦組合**：`決策1=A（橫幅／位階卡文字／計數口徑：由客戶表態）、決策2=D、決策3=A`（＝維持現狀；位階長期顯示「⬜ 尚未載入」，不新增任何字句或契約）。推薦 A 的前提見 3.1（客戶看過橫幅、位階卡、資料頁計數三處現行文字後仍接受）。
 - **互相矛盾的組合**（例如決策 1=C 要求位階有值、決策 3=A 接受永遠無值）由總管追問，**不視為有效回覆**。
 - 本稿**不含** G-F1 的欄位；G-F1 另案單獨請示，本稿回覆不視為已答。
 - 沒答的項目視為**維持現狀**（等同各決策的推薦選項 A／D／A 的「不動」效果，但**不是**客戶裁示）。
@@ -165,7 +168,7 @@
 
 - **不是**授權：不授權任何程式、測試、契約、文案、資料來源、cron、Secrets、workflow、資料發布、接線或 UI 變更。
 - **不是** QA PASS：單組作者、未經非作者 QA、無 exact-head CI、無 main CI。
-- **不是** Cloud 驗證：Cloud 實際部署狀態（狀態檔是否存在、橫幅與資料頁實際字樣）NOT VERIFIED。
+- **不是** Cloud 驗證：Cloud 實際部署狀態（狀態檔是否存在、Cloud 上實際顯示的橫幅新字樣／位階卡新句／資料頁計數）NOT VERIFIED（上述現行字樣只依 main 原始碼）。
 - **不是**對 DEC-202 O2 的重新裁決：O2 現狀判定原樣有效。
 - **不是** Contract 變更提案：本文不提出修改 `shared/ui2_contract`、`RegimeFact` 或任何 service 的條文；若客戶選了需要契約變動的選項，須另案走 SG-10。
 - **不是**「某項已可接上」的宣稱：本文所有選項均尚未取得所需 Gate。
@@ -200,7 +203,9 @@ grep -n "G2F_IMPORT_ALLOWLIST\|compute_and_store_warroom_summary" tests/test_ui2
 grep -n "def test_regime_" tests/test_ui2_real_feed.py
 grep -n "def test_no_health_breadth_gate\|def test_absent_cold_start_gate" tests/test_batch_c21.py
 grep -n "def test_all_missing" tests/test_ui2_data_freshness_overview.py
-# 2.3 橫幅與計數文字
+# 2.3 橫幅、位階卡新句與計數文字
+grep -n "REGIME_NO_DATA_NOTE" src/services/ui2/real_canonical.py
+grep -rln "REGIME_NO_DATA_NOTE" tests
 grep -n "REAL_PREVIEW_BANNER_NOTE" shared/ui2_contract/text.py
 grep -n "已接入畫面" src/services/ui2/data_page.py
 # 3.3 G-F1
@@ -214,7 +219,7 @@ grep -n "\*\*G-F1\*\*" docs/BACKLOG.md
 - **「Q5」的確切指涉**（1.2）：本文列出兩個與位階相關的候選，**不猜**；若派工訊息另有所指請更正。
 - **DEC-177 Q5 是否由客戶逐題明示裁定**：repo 內僅見 `DEC-190`（方案 C、Q1=A、D-5）與 `DEC-179`（Q1～Q7 未答）；GPT 定稿留言（#1199 comment 6964559744）與客戶核准留言（6964576511）本次未讀（作者環境無網路）。
 - **派工來源留言（#1199 comment 7079173656）原文未讀**：三項待決策依派工訊息轉述。
-- **Cloud 實況**：Cloud 容器內 `macro_state.json`／`risk_cap_state.json` 是否存在；Cloud 部署版本；橫幅與資料頁實際字樣。
+- **Cloud 實況**：Cloud 容器內 `macro_state.json`／`risk_cap_state.json` 是否存在；Cloud 部署版本；Cloud 上實際顯示的橫幅新字樣、位階卡新句與資料頁計數（本稿只依 main 原始碼）。
 - **Legacy 與 UI2 是否共用 session**（決策 3 的 C）。
 - **`update_macro_forward_test.yml` 現在是否仍停用**（DEC-185 記錄的是 2026-11-14 狀態）。
 - **`signals.parquet` 的現況列數與值**：本文引用的 47／6 列等數字來自 repo 文件（量測日 2026-11-11），作者**未讀檔案值**，之後可能已變動。
