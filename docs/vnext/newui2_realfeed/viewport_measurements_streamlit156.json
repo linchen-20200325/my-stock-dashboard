@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "3fd15a2087f3fdc8c042c277c58969b56df47676",
-  "source_hash": "0f3a25b1e248a8b290540d4945b155bff4d3d80554ff9b02efa5397e464d49ea",
-  "generated_at": "2026-11-22T16:43:45+00:00",
+  "git_sha": "1b95c026ff383aa6300a7e90067a4b994162d6e2",
+  "source_hash": "5782f004e6199ee5c45ea7ea5557b851cd17f20a4c712c0a080f35f3aa218fcd",
+  "generated_at": "2026-11-23T13:14:20+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "streamlit_version": "1.56.0",
@@ -130,6 +130,11 @@
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
    },
    {
+    "id": "p2_real_nav_margin_109",
+    "rule": "（R1）📊 市場（Real-data Preview；僅手機寬度恰為 390；320／360／FAKE／桌機不適用）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791 ≥ 109px（與 p2_nav_margin_160 同量測錨點、同 ±0.05 誤差處理）；不達須停手回報，不得縮字、刪資訊或改設計。",
+    "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"
+   },
+   {
     "id": "kbar_primary_chart",
     "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
     "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"
@@ -145,7 +150,7 @@
     "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"
    }
   ],
-  "note": "Real-data Preview（唯讀 feed）：只接台股加權指數與市場位階兩項真資料，其餘欄位 ⬜＋原因；量測當下的真值會隨每日 cron 與本地狀態檔變動（證據為量測日快照）。"
+  "note": "Real-data Preview（唯讀）：目前僅部分台股資料已接入；其餘資料依各卡片狀態顯示。本報告記錄量測當下的資料及畫面狀態，不代表即時或正式生產環境。"
  },
  "summary": {
   "states": 19,
@@ -1497,7 +1502,7 @@
     "expander_box": {
      "top": 1366.5,
      "bottom": 2019.1,
-     "height": 652.6,
+     "height": 652.7,
      "left": 14.4,
      "right": 375.6
     },
@@ -1522,9 +1527,9 @@
      "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供",
      "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
     ],
-    "last_content_bottom": 417.1,
-    "scroll_end_bottom": 763.8,
-    "scroll_end_gap_to_nav": 27.2,
+    "last_content_bottom": 1030.1,
+    "scroll_end_bottom": 764.2,
+    "scroll_end_gap_to_nav": 26.8,
     "hscroll": {
      "doc": {
       "scrollWidth": 390,
@@ -2804,7 +2809,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.6,
+     "height": 652.7,
      "left": 80,
      "right": 1360
     },
@@ -4111,7 +4116,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.6,
+     "height": 652.7,
      "left": 80,
      "right": 1200
     },
