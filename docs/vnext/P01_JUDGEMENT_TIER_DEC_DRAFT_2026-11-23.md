@@ -13,7 +13,7 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 ## 2. 擬定條文（PROPOSED）
 **第 1 條 詞表**：「正式／研究參考／無法判定」僅為概念詞表，避開 L0/L1/L2；不批准任何 Enum、文案或實作。
 **第 2 條 兩級**：首版正式判定軸僅 FORMAL（正式）與 UNDETERMINABLE（無法判定）。**研究參考不是判定級別**。FORMAL＝§3 該功能前提全數成立；任一缺、過期逾限、為代理值、as_of 不明、持有為 None → UNDETERMINABLE，顯示既有「⬜ 無法判定」，不得為 0／中性／安全／預設。
-**第 3 條 推導**：等級由既有狀態推導，不是輸入、不入庫；不新增第六個資料態（DEC-124，:6254）、不新增公式／分數／信心數字。`UNDETERMINABLE` 已存在於 `shared/ui2_contract/models.py:42`（`JudgementState`）；UNDETERMINABLE≠NOT_EVALUATED（:3170 對映列，記錄 DEC-124 的取代語意）。
+**第 3 條 推導**：等級由既有狀態推導，不是輸入、不入庫；不新增第六個資料態（DEC-124，:6254）、不新增公式／分數／信心數字。`UNDETERMINABLE` 已存在於 `shared/ui2_contract/models.py`：`models.py:42` 起（`JudgementState`；`UNDETERMINABLE` 成員在 :45）；UNDETERMINABLE≠NOT_EVALUATED（:3170 對映列，記錄 DEC-124 的取代語意）。
 **第 4 條 AI**：AI 不得提升等級；AI 不可用≠SAFE／HOLD／中性（`docs/vnext/ONEBRAIN_ARCHITECTURE_DECISION_2026-10-31.md:16` 第 8 點）。
 **第 5 條 比較與日期**：無同口徑當期＋前次正式快照時只能標「不可比較」，⛔「今日無重大訊號變更」（Work QA 7101082181）；`fetched_at` 不得替代資料日（DEC-205，:10809 起）。
 **第 6 條 文案**：本草案不授權任何字樣變更；新字樣另走文案 Gate 與線框先行。
@@ -60,10 +60,13 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 理由：舊句 L1「可信研究參考」與 D-b=A 衝突，且 L0/L1/L2 與 CLAUDE.md §8.2、`docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md` 用語相撞。
 
 ## 7. HOLD 不變
-DEC-081／092／124／160；DG-LIC／PIT／COV／SCOPE／I1144（DEC-205 已裁 PIT＝B＋X、LIC＝A，DEC-215 已定 COV 母體口徑，皆「已裁示但未接線」，非解除）；Stage F／正式 caller；v1.1；NAS #1237；Cloud、Secrets、production LLM caller。
+DEC-081／092／124／160；DG-LIC／PIT／COV／SCOPE／I1144（DEC-205 已裁 PIT＝B＋X、LIC＝A，DEC-215 已定 COV 母體口徑，皆「已裁示但未接線」，非解除）；Stage F／正式 caller；v1.1（Catalyst Radar／Signal Log）；NAS #1237；Cloud、Secrets、正式 OneBrain Provider 與 production LLM caller；DEC-185／187 三支資料發布 workflow 維持停用；真實持股與 Auth／Sheet／Secrets；LINE 真推播；Digest v2（DEC-160）。
 
 ## 8. 開放項／NOT VERIFIED
 DG-LIC 現況；TWII 資料日與 Risk Cap／Real VM 狀態（Work QA 之說）；DEC-092／156／215／218 內文逐字、DEC-161 逐字；Risk Cap 行號；Cloud 實況；ADR-OB-001 僅讀第 2、8 點；Holdings 契約 :54／:80；舊 UI 是否已顯示三大法人／融資／板塊；§3 各列「現況」非逐項實測。本文未經新一輪非作者 QA。
 
 ## 9. 唯一下一步
 非作者 QA（本文＋READ_FIRST 第 24 行替換）→ 客戶於 #1199 正式 DEC 裁示。裁示前不動程式、文案、來源、workflow、caller 或 Gate。
+
+**待客戶裁示的問題**：請客戶於 #1199 裁示是否採納本草案為正式 DEC（編號由總管依治理流程指派）：採納／修改後採納／不採納。
+**A 線推薦**：採納——它只收斂判定語意、不授權任何實作、不解除任何 Gate、不改現行畫面。（此為推薦，非已核准；客戶裁示前本草案維持 DRAFT、不生效。）
