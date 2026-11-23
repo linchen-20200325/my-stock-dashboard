@@ -32,6 +32,26 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 | ETF 動作 | DEC-054 第 2~4 點、DEC-222 §二第 1 點（:11222；該節屬 AI 總管內部決定，非客戶裁示） | 沿用既有、可追溯的原規則（`action_branch.v1` 七分支碼）；Risk Cap 等護欄不得繞過；資料不足走原有「資料不足」分支、不硬給方向 | 無接線；NOT VERIFIED |
 | System Action | DEC-222 §二（:11214；客戶核准的是 M-A1） | 沿用既有規則（ETF 分支碼、個股 `swap_level` 四級、`RULE_ID_ALLOWLIST`）；`unjudged` 列為 undeterminable、不計入今日需處理；觀察清單不計入 | 各前提逐項 NOT VERIFIED；是否可交付見 §5(b) |
 
+## 3A. 呈現層 Level 0～2 與正式判定軸（FORMAL／UNDETERMINABLE）對照（PROPOSED；docs-only 差額，不改規則、不新增狀態）
+**來源（FACT；#1276 為 Draft，未合併）**：PR #1276 分支（Draft，未合併；DEC-224 尚未入庫；head 4f1ac1f1）：`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md:63-70`（Level 2＝所有原正式必要條件成立才照既有規則得正式結論；Level 1＝有可信可追溯價格／觀察事實但輔助條件不足，僅「研究參考」並揭露缺項，不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap；Level 0＝核心證據不足／過期／不可用，禁止投資結論；均非信心分數／公式／擇時／買賣權限）、`…PRODUCT_GOAL_V1_0_APPROVED…:13`（既有正式軸 FORMAL／UNDETERMINABLE 不新增第三值）、`…PRESENTATION_CONTRACT_DELTA_2026-11-24.md:3,8,10`（DIFF／NOT A CONTRACT OVERRIDE）、DEC-224 第 2 點（核准的是產品目標，不是施工／合併／部署 Gate；#1275 Must-Fix 與 DEC-124／081／092 仍走原 Gate）。以上在 #1276 合併前**都不是現行有效文件**。
+| 呈現層（#1276／DEC-224 用語） | 對照正式判定軸 | 限制 |
+|---|---|---|
+| Level 2 | FORMAL：§3 該功能的必要條件全部成立（只對該功能） | 照既有規則得結論，揭露資料日與來源 |
+| Level 0 | UNDETERMINABLE：顯示既有「⬜ 無法判定」 | 無投資結論；不得為 0／中性／安全 |
+| Level 1 | **沒有對應的正式判定值**（INFERENCE） | 僅呈現層「研究參考」：新鮮、合格、可追溯的觀察事實＋來源＋as_of＋揭露缺口。**不是**第三個正式結果；不新增 Enum／DataStatus／FieldState（DEC-124）；不產生位階／System Action／Risk Cap／信心。stale、PIT 不合格、未來日、歧義日的值**不得**成為 Level 1 內容（DEC-160／201／207；§4 第 9a、9b） |
+**粒度（INFERENCE，請正式 DEC Gate 確認）**：#1276 的「所有原正式必要條件／核心證據」依 §2／§3 與 Work Must-Fix 4 讀作**逐功能**，不是全站單一門檻。
+**用語**：本草案不使用 L0/L1/L2（與 CLAUDE.md §8.2 分層、S1-6 文案分級相撞）；「Level 0～2」是 #1276／DEC-224 的呈現用語，其字樣仍須文案 Gate。#1276 把 FORMAL／UNDETERMINABLE 當「既有」軸，**但本草案尚未生效**——兩者目前互相引用，須由正式 DEC 先定軸。
+| DEC／守衛 | 觸及條款 | 判定 |
+|---|---|---|
+| DEC-081 Q3=A（:2709） | 趨勢卡只顯示「尚未定義」，不自挑均線／漲跌幅／外資／國際指數代趨勢；原始資料可放第 3 層 | 第 3 層原始資料**已有許可**；Level 1 研究參考放進趨勢卡＝**衝突，需新裁示** |
+| DEC-092 Q2（:1088-1105；固定句 :1095） | 參考線須標「均線為參考，不等於正式台股趨勢判斷。」 | 帶固定句的參考線**已有許可**；其他形式的 Level 1 **需新呈現裁示** |
+| DEC-124（:6254；本文僅讀 :6313-6365 關鍵段） | 五態、無第六態；「無法判定」≠「未評估」；「尚未提供」＝capability | Level 當**狀態值**＝**衝突**；僅作呈現分組、不入 FieldState＝不衝突，但**需文案 Gate** |
+| DEC-160（:8067）、DEC-201／207 | stale 不當 fresh；未來日／歧義日拒用 | Level 1 不得引用上述值；**同向** |
+| DEC-054（:1588）第 4 點 | 不得繞過 Risk Cap | **同向**（Level 1 不放寬 Risk Cap） |
+| DEC-022（:1570） | 禁用語含「目標價」 | 研究參考文案**需審**（**需新呈現裁示**） |
+| `tests/test_ui2_guards.py:823` `_FORBIDDEN_TERMS` | 含「訊號可信度」「信心度」 | 「可信研究參考」字面不在清單內，但近似信心語意；是否被其他守衛擋 NOT VERIFIED，措辭**需文案審** |
+**與 #1276／READ_FIRST（FACT，模擬）**：`git merge-tree` 模擬 #1275（13fae4d4）與 #1276（4f1ac1f1）兩者合併無衝突、與順序無關；合併結果的 READ_FIRST 採 #1275 的新句，舊「L0/L1/L2 僅候選顯示分級」句不再出現。**NOT VERIFIED 一致性**：#1276 分支自己的 READ_FIRST 第 27 行仍是舊句；若 #1276 先單獨入主幹而 #1275 未合，主幹會暫時出現「核准橫幅＋舊 L0/L1/L2 句」。合併順序由總管定（建議 #1276 先、#1275 後，或同批處理；本文不改 #1276）。
+
 ## 4. 事實不升格清單（O-1=A；PROPOSED）
 下列事實**不得**升格為正式趨勢／Regime／Risk Cap／System Action／交易訊號／隱含信心。**本清單不是全面禁顯資料，也不是任何新取數許可**；各項只在其原 DEC 範圍內成立。
 | # | 事實項 | 許可依據與範圍 | 狀態 |
@@ -63,13 +83,13 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 理由：舊句 L1「可信研究參考」與 D-b=A 衝突，且 L0/L1/L2 與 CLAUDE.md §8.2、`docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md` 用語相撞；新句另以「任一該功能的必要條件未滿足」取代「全部成立／核心證據不可用」的整體式寫法，並明載不影響其他功能與已授權事實顯示（Work QA 7104683540 §1 Must-Fix 4）。
 
 ## 7. HOLD 不變
-DEC-081／092／124／160；DG-LIC／PIT／COV／SCOPE／I1144（DEC-205 已裁 PIT＝B＋X、LIC＝A，DEC-215 已定 COV 母體口徑，皆「已裁示但未接線」，非解除）；Stage F／正式 caller；v1.1（Catalyst Radar／Signal Log）；NAS #1237；Cloud、Secrets、正式 OneBrain Provider 與 production LLM caller；DEC-185／187 三支資料發布 workflow 維持停用；真實持股與 Auth／Sheet／Secrets；LINE 真推播；Digest v2（DEC-160）。
+DEC-081／092／124／160；DG-LIC／PIT／COV／SCOPE／I1144（DEC-205 已裁 PIT＝B＋X、LIC＝A，DEC-215 已定 COV 母體口徑，皆「已裁示但未接線」，非解除）；Stage F／正式 caller；v1.1（Catalyst Radar／Signal Log）；NAS #1237；Cloud、Secrets、正式 OneBrain Provider 與 production LLM caller；DEC-185／187 三支資料發布 workflow 維持停用；真實持股與 Auth／Sheet／Secrets；LINE 真推播；Digest v2（DEC-160）。**本草案仍為 DRAFT、未生效，仍待正式 DEC Gate**；#1276／DEC-224 只批准產品目標，不解除上列任何 HOLD。
 
 ## 8. 開放項／NOT VERIFIED
-DG-LIC 現況；TWII 資料日與 Risk Cap／Real VM 狀態（Work QA 之說）；DEC-092／156／215／218 內文逐字、DEC-161 逐字；Risk Cap 行號；Cloud 實況；ADR-OB-001 僅讀第 2、8 點；Holdings 契約 :54／:80；舊 UI 是否已顯示三大法人／融資／板塊；§3 各列「現況」非逐項實測；§3 Risk Cap 兩層、§4 第 1 項 DEC-156 各條件是否逐項成立；What Changed 當期＋前次快照是否可得；DEC-218 第 5 點重複代號的計數單位（列 vs 代號）未裁示。本文未經新一輪非作者 QA。
+DG-LIC 現況；TWII 資料日與 Risk Cap／Real VM 狀態（Work QA 之說）；DEC-092／156／215／218 內文逐字、DEC-161 逐字；Risk Cap 行號；Cloud 實況；ADR-OB-001 僅讀第 2、8 點；Holdings 契約 :54／:80；舊 UI 是否已顯示三大法人／融資／板塊；§3 各列「現況」非逐項實測；§3 Risk Cap 兩層、§4 第 1 項 DEC-156 各條件是否逐項成立；What Changed 當期＋前次快照是否可得；DEC-218 第 5 點重複代號的計數單位（列 vs 代號）未裁示。§3A：#1276 CI；#1199 comment 7110182570／7109632982 原文未重讀（僅讀 #1276 分支所轉錄之 DEC-224 與規格）；DEC-124 內文僅讀 :6313-6365 關鍵段；DEC-081／092／022 僅讀所引行；Level 1 文案是否被其他守衛擋。本文未經新一輪非作者 QA。
 
 ## 9. 唯一下一步
-非作者 QA（本文＋READ_FIRST 第 24 行替換）→ 客戶於 #1199 正式 DEC 裁示。裁示前不動程式、文案、來源、workflow、caller 或 Gate。
+非作者 QA（本文含 §3A＋READ_FIRST 第 24 行替換）→ 客戶於 #1199 正式 DEC 裁示（§3A 的 Level／軸對映與粒度也一併請裁示）。裁示前不動程式、文案、來源、workflow、caller 或 Gate。
 
 **待客戶裁示的問題**：請客戶於 #1199 裁示是否採納本草案為正式 DEC（編號由總管依治理流程指派）：採納／修改後採納／不採納。
 **A 線推薦**：採納——它只收斂判定語意、不授權任何實作、不解除任何 Gate、不改現行畫面。（此為推薦，非已核准；客戶裁示前本草案維持 DRAFT、不生效。）
