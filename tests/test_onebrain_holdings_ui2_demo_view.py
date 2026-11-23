@@ -75,9 +75,9 @@ TESTINFO_BODY = {
     "R1": "合成讀取結局：網路例外（不含持股內容）",
     "R2": "合成讀取結局：未選定投資組合（不含持股內容）",
     "R3": "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 1 筆資料為非數字",
-    "L1": "合成測試持股 FAKE-T1、FAKE-T2，均無組合鍵（不在本頁顯示）",
-    "L2": "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T1 有組合鍵（不在本頁顯示）",
-    "L3": "合成測試持股 FAKE-T1、FAKE-T2，均有組合鍵（不在本頁顯示）",
+    "L1": "合成測試持股 FAKE-T1、FAKE-T2，均無組合鍵（不出現在上方畫面）",
+    "L2": "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T1 有組合鍵（不出現在上方畫面）",
+    "L3": "合成測試持股 FAKE-T1、FAKE-T2，均有組合鍵（不出現在上方畫面）",
 }
 CAPTION_EXTRA_BANNED = ("零持股", "0 檔", "空倉", "正常", "安全", "完整", "中性")
 OUTCOME_WORDS = {A.OUTCOME_EXCEPTION_NETWORK: "網路例外", A.OUTCOME_NOT_SELECTED: "未選定投資組合"}
@@ -417,6 +417,7 @@ def _check_caption_text(info: str, cid: str | None = None) -> None:
     _check_caption_prefix(info)
     _check_caption_no_bare_rows(info)
     _check_caption_no_holdings_list_claim(info)
+    _check_caption_no_self_contradiction(info)
     _check_caption_banned(info)
     if cid is not None:
         assert info == TESTINFO_PREFIX + TESTINFO_BODY[cid], "說明整句與 oracle 不一致"
@@ -439,6 +440,15 @@ def _check_caption_no_bare_rows(info: str) -> None:
 def _check_caption_no_holdings_list_claim(info: str) -> None:
     assert info.count("持股清單") == 1 and "持股清單" not in info.replace("非持股清單內容", ""), \
         "「持股清單」只能出現在前綴的否定語「非持股清單內容」"
+
+
+OLD_SELF_CONTRADICTORY_PHRASE = "（不在本頁顯示）"        # 被取代：說明本身就在頁面上且點名代號 ⇒ 自相矛盾
+
+
+def _check_caption_no_self_contradiction(info: str) -> None:
+    assert "不在本頁" not in info and OLD_SELF_CONTRADICTORY_PHRASE not in info, "說明不得宣稱自己的文字不在本頁"
+    if "組合鍵" in info:      # L1／L2／L3 的「有／無組合鍵」本文須附範圍限定語（R1／R2／R3 沒有「不顯示」宣稱，不需要）
+        assert info.endswith("（不出現在上方畫面）"), "L 案例本文須以「（不出現在上方畫面）」收尾"
 
 
 def _check_caption_banned(info: str) -> None:
@@ -497,9 +507,9 @@ def test_testinfo_facts_cross_check_has_teeth():
     with pytest.raises(AssertionError):
         _check_body_facts("R3", "合成測試持股 FAKE-T1、FAKE-T2 可讀；另有 2 筆資料為非數字")
     with pytest.raises(AssertionError):
-        _check_body_facts("L2", "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T2 有組合鍵（不在本頁顯示）")
+        _check_body_facts("L2", "合成測試持股 FAKE-T1、FAKE-T2，僅 FAKE-T2 有組合鍵（不出現在上方畫面）")
     with pytest.raises(AssertionError):
-        _check_body_facts("L1", "合成測試持股 FAKE-T1，均無組合鍵（不在本頁顯示）")
+        _check_body_facts("L1", "合成測試持股 FAKE-T1，均無組合鍵（不出現在上方畫面）")
     with pytest.raises(AssertionError):
         _check_body_facts("R1", "合成讀取結局：未選定投資組合（不含持股內容）")
 
@@ -513,7 +523,7 @@ def test_testinfo_facts_follow_the_snapshot(monkeypatch):
 
 @pytest.mark.parametrize("cid", CASE_IDS)
 def test_synthetic_tickers_never_appear_in_slot(cid):
-    """本文寫「（不在本頁顯示）」＝槽內任何文字都不得出現合成代號（整頁版見 AppTest）。"""
+    """本文寫「（不出現在上方畫面）」＝槽內任何文字都不得出現合成代號（說明以外的整頁版見 AppTest）。"""
     sec = VM.build_section(demo.build_case_block(cid))
     text, _rows = _html_rows(sec)
     assert "FAKE-T" not in text and not any("FAKE-T" in t for t in _all_texts(sec))
@@ -552,6 +562,41 @@ def test_mutation_dropping_a_semantic_marker_turns_red(marker):
     with pytest.raises(AssertionError):
         _check_caption_text(bad, "L1")
     _check_caption_prefix(TESTINFO_PREFIX + TESTINFO_BODY["L1"])
+
+
+@pytest.mark.parametrize("cid", ("L1", "L2", "L3"))
+def test_mutation_old_self_contradictory_phrase_turns_red(monkeypatch, cid):
+    """舊句「（不在本頁顯示）」出現在任何本文 ⇒ 紅（子檢查單獨即可抓到，也會被整句 oracle 抓到）。"""
+    old = TESTINFO_BODY[cid].replace("（不出現在上方畫面）", OLD_SELF_CONTRADICTORY_PHRASE)
+    assert old != TESTINFO_BODY[cid]
+    with pytest.raises(AssertionError):
+        _check_caption_no_self_contradiction(TESTINFO_PREFIX + old)
+    with pytest.raises(AssertionError):
+        _check_caption_text(TESTINFO_PREFIX + old, cid)
+    monkeypatch.setitem(VM.TEST_INFO_BODY, cid, old)
+    with pytest.raises(AssertionError):
+        _check_caption_text(VM.test_info_text(cid), cid)
+    _check_caption_no_self_contradiction(TESTINFO_PREFIX + TESTINFO_BODY[cid])       # 對照：新句不紅
+    m = _good_measure(cid)
+    m["testinfo"]["text"] = TESTINFO_PREFIX + old
+    assert EV.evaluate_demo(m, _baseline_of(m))["testinfo_outside_slot"] != [], "證據判定器也要抓到舊句"
+
+
+def test_page_text_without_caption_helper_has_teeth():
+    """排除說明的斷言要有牙：說明本身含代號，若沒排除就會誤紅；若排除錯（把代號留在別處）則必紅。"""
+    class _V:
+        def __init__(self, v):
+            self.value = v
+
+    class _At:
+        markdown = [_V("槽")]
+        caption = [_V(TESTINFO_PREFIX + TESTINFO_BODY["L1"]), _V("其他說明")]
+        text, error, warning, info, success = [], [], [], [], []
+
+    rest = _page_blob_without_testinfo(_At)
+    assert "FAKE-T" not in rest and "其他說明" in rest and "FAKE-T" in _page_blob(_At)
+    _At.markdown = [_V("槽 FAKE-T1")]
+    assert "FAKE-T" in _page_blob_without_testinfo(_At)
 
 
 def test_mutation_holdings_list_claim_or_banned_word_in_caption_turns_red():
@@ -1561,6 +1606,14 @@ def _page_blob(at) -> str:
     return htmllib.unescape("\n".join(parts))
 
 
+def _page_blob_without_testinfo(at) -> str:
+    """整頁文字**排除**槽外「測試輸入說明」這則 caption（它本身在頁面上且點名合成代號）；其餘 caption／markdown／text／訊息照留。
+    ⚠️ `at.markdown` 不含 `st.caption`，所以「頁面其餘文字」必須明確地由 `_page_blob` 的各來源組成並剔除說明。"""
+    parts = [m.value for m in at.markdown] + [c.value for c in at.caption if "測試輸入說明" not in c.value] + [t.value for t in at.text]
+    parts += [e.value for e in (*at.error, *at.warning, *at.info, *at.success)]
+    return htmllib.unescape("\n".join(parts))
+
+
 def _visible(blob: str) -> str:
     """整頁 markdown 去 <style>／標籤後的可見字（供 hits_in）。"""
     return re.sub(r"<[^>]+>", " ", re.sub(r"<style.*?</style>", " ", blob, flags=re.S))
@@ -1621,8 +1674,13 @@ def test_apptest_normal_case(monkeypatch, cid):
     _check_caption_text(_testinfo_captions(at)[0], cid)
     assert want_caption not in _slot(blob) and TESTINFO_BODY[cid] not in _slot(blob), "說明不得在槽內"
     assert demo.CASES[cid].test_input not in blob, "demo 原 test_input（含裸『N 列』）不得出現在整頁"
-    page_markdown = "\n".join(m.value for m in at.markdown)
-    assert "FAKE-T" not in page_markdown, "本文說『不在本頁顯示』：合成代號不得出現在任何 markdown（含槽與持股清單區）"
+    # 本文說「（不出現在上方畫面）」：⚠️ AppTest 的 `at.markdown` **不含** `st.caption`，所以只掃 markdown 看不到說明本身；
+    # 說明本身就畫在頁面上且點名 FAKE-T1／FAKE-T2，故此處明確把「說明這則 caption」排除後，再掃頁面其餘全部文字（含 markdown／其他 caption／text／error 等）。
+    rest = _page_blob_without_testinfo(at)
+    assert "FAKE-T" not in rest, "合成代號不得出現在說明以外的任何頁面文字（含槽與持股清單區）"
+    assert "FAKE-T" not in "\n".join(m.value for m in at.markdown), "markdown 本身也不得含合成代號"
+    if "FAKE-T" in TESTINFO_BODY[cid]:
+        assert "FAKE-T" in _page_blob(at), "對照：整頁（含說明）確實含合成代號，所以上面必須先排除說明才是準確的斷言"
     assert set(at.session_state.filtered_state) <= {"ui2_account", "ui2_feed", "ui2_page", "ui2_scenario", "ui2_target_mode"}
     assert all(k.startswith("ui2_") for k in at.session_state.filtered_state)
 
