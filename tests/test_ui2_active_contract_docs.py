@@ -703,7 +703,7 @@ def test_p3_closure_is_recorded_in_backlog_and_active_contract():
 #: detail 雜湊→null（L1 `stale_reason` 不再原樣當畫面 detail；chip「⚠ 過期 N 天」、資料日、來源逐值不變）。其餘 86 個 key 逐欄不變。舊值 235770bb…c7df0。
 #: DEC-220（B-UI2-REAL-HOLDINGS-EXPECTATION-COPY-1，2026-11-21，#1199 comment 7056444741）重生：僅 `real/p4_target/*` **9 個 key** 的「是否需要行動」detail 雜湊
 #: （「動作權威＝💼 持股」→「目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放」）；每 key 僅 1 行，其餘 78 個 key（含全部 FAKE）逐欄不變。舊值 d49a298f…1fd31。
-_P3_BASELINE_SHA256 = "a185250f7df3b7a0aaa32e886506b166ecd3dac560d6933044910afae96177f2"
+_P3_BASELINE_SHA256 = "c5a0a1cb58135dae38429a59984d354fa56dea84110e0a30b9e25965a0dd03b8"
 
 
 def test_p3_evidence_baseline_file_is_pinned_by_sha256():
