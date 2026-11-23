@@ -338,6 +338,9 @@ REGIME_ASOF_NOTE = f"{TEXT_ASOF_MISSING}（市場位階未提供資料日）"
 REGIME_SEE_WHY = "原因：尚缺正式的市場廣度（漲跌家數）資料"
 #: 🎯 與 📊 同一句（跨頁一致性測試鎖定；舊版 🎯 指向 📊 的區塊，區塊不再是指引目標）。
 REGIME_SEE_WHY_MARKET = REGIME_SEE_WHY
+#: U1（總管核准）：市場位階缺值旁註——只併入 `regime_spec` 的兩個缺值分支（未載入／無法判定）的第一屏短句（brief），作為最後一句，
+#: 與既有「資料日未提供」「原因：…」並存、不替換。⛔ 有真值（is_loaded）與讀取失敗（unavailable）不得帶。
+REGIME_NO_DATA_NOTE = "尚無可用的市場位階資料，暫不顯示判讀。"
 #: L0 說明句提到「按更新」指正式網站；Real-data Preview 沒有可用的更新入口 ⇒ 另加連接句說清楚（⛔ 改 L0 原文）。
 PREVIEW_NO_REFRESH_NOTE = "註：上句的「按更新」指正式網站；這裡不提供更新，所以這一格維持尚未載入"
 PREVIEW_NO_REFRESH_SHORT = "這裡不提供更新，所以這一格維持尚未載入"
@@ -427,7 +430,7 @@ def regime_spec(snap: RealFeedSnapshot, key: str, label: str, *, brief: bool = T
     src = REGIME_SOURCE_FMT.format(source=f.source)
     if f.is_loaded:
         return {**base, "value": REGIME_LABEL[f.regime], "source": src, "reason": REGIME_ASOF_NOTE}
-    short = f"{REGIME_ASOF_NOTE}；{see_why}"
+    short = f"{REGIME_ASOF_NOTE}；{see_why}。{REGIME_NO_DATA_NOTE}"
     if f.source == RA.SOURCE_UNEVALUATED_BREADTH:
         return {**base, "state": "undeterminable", "sub_reason": TEXT_NOT_EVALUATED_DATA_SHORT, "source": src,
                 "reason": short if brief else f"{RA.UNEVALUATED_BREADTH_EXPLAIN}。{REGIME_ASOF_NOTE}"}

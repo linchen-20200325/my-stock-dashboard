@@ -289,6 +289,14 @@ def test_banner_constants_are_one_liners_without_engineering_words():
     assert "\n" not in T.PREVIEW_BANNER_TEXT + T.PREVIEW_BANNER_NOTE + T.REAL_PREVIEW_BANNER_NOTE
 
 
+def test_real_banner_note_is_the_approved_neutral_sentence():
+    """U1（總管核准）：Real 橫幅旁註逐字、單行、不得再宣稱「台股與市場位階均為真資料」類句（市場位階目前多為缺值）。"""
+    assert T.REAL_PREVIEW_BANNER_NOTE == "目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。"
+    assert "\n" not in T.REAL_PREVIEW_BANNER_NOTE and "\r" not in T.REAL_PREVIEW_BANNER_NOTE
+    assert hits_in(T.REAL_PREVIEW_BANNER_NOTE) == []
+    assert "位階" not in T.REAL_PREVIEW_BANNER_NOTE and "真資料" not in T.REAL_PREVIEW_BANNER_NOTE
+
+
 # ══════════════════════════════════════════════════════════════════ 渲染層（AppTest 整頁）
 def _at(dev: bool):
     from streamlit.testing.v1 import AppTest

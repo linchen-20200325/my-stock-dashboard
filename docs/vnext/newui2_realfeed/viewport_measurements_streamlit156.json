@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "748e8cd7a6da9e5ef24ea8ffdbcd9896800dbcdc",
-  "source_hash": "48baf09d1547a5f17bb269ff1f5464c8ff6695982d7aa7052dcdb0477e97ce53",
-  "generated_at": "2026-11-22T07:18:08+00:00",
+  "git_sha": "7e3afaf982b04c7f14f1b32ce94d3fcb532f7c90",
+  "source_hash": "47147802f2021aaef6270e9c236f35aa22753593bf2c7fad8c62834e47b63b2d",
+  "generated_at": "2026-11-22T10:23:10+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "streamlit_version": "1.56.0",
@@ -15,6 +15,10 @@
    ],
    "desktop": [
     1440,
+    900
+   ],
+   "desktop1280": [
+    1280,
     900
    ]
   },
@@ -144,8 +148,8 @@
   "note": "Real-data Preview（唯讀 feed）：只接台股加權指數與市場位階兩項真資料，其餘欄位 ⬜＋原因；量測當下的真值會隨每日 cron 與本地狀態檔變動（證據為量測日快照）。"
  },
  "summary": {
-  "states": 13,
-  "passed": 13,
+  "states": 19,
+  "passed": 19,
   "failed": []
  },
  "results": [
@@ -184,19 +188,19 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料",
+     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
      "top": 261.7,
-     "bottom": 335.8,
+     "bottom": 354.9,
      "left": 27.4,
      "right": 362.6,
-     "height": 74.1,
+     "height": 93.3,
      "width": 335.2
     },
     {
      "q": "ctx",
      "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
-     "top": 335.8,
-     "bottom": 391.7,
+     "top": 354.9,
+     "bottom": 410.8,
      "left": 27.4,
      "right": 362.6,
      "height": 55.9,
@@ -205,8 +209,8 @@
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 391.7,
-     "bottom": 446.6,
+     "top": 410.8,
+     "bottom": 465.8,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -215,8 +219,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
-     "top": 446.6,
-     "bottom": 501.5,
+     "top": 465.8,
+     "bottom": 520.7,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -285,7 +289,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 433.8,
+   "last_content_bottom": 434.0,
    "card_heights": [
     162,
     162,
@@ -297,8 +301,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1556,
-     "bottom": 1632.8,
+     "top": 1575.2,
+     "bottom": 1652.0,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -306,8 +310,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 1018.7,
-     "bottom": 1536,
+     "top": 1037.9,
+     "bottom": 1555.2,
      "left": 14.4,
      "right": 375.6,
      "height": 517.3,
@@ -318,8 +322,8 @@
     "spec_text": null,
     "slot_danger": 0,
     "chart": {
-     "top": 611.2,
-     "bottom": 1002.7,
+     "top": 630.4,
+     "bottom": 1021.9,
      "left": 14.4,
      "right": 375.6,
      "height": 391.5,
@@ -336,8 +340,8 @@
    "h1": null,
    "batch3": {
     "risk": {
-     "top": 518.5,
-     "bottom": 595.2,
+     "top": 537.7,
+     "bottom": 614.4,
      "left": 14.4,
      "right": 375.6,
      "height": 76.7,
@@ -353,10 +357,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 622.2,
+    "first_block_after_l1_top": 641.4,
     "risk_line_height": 24,
-    "scroll_end_bottom": 763.5,
-    "nav_margin_after_risk": 168.8
+    "scroll_end_bottom": 763.7,
+    "nav_margin_after_risk": 149.6
    },
    "failures": {},
    "pass": true
@@ -397,19 +401,19 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料⬜ 資料日未提供（市場位階未提供資料日）；",
+     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場",
      "top": 282.4,
-     "bottom": 375.7,
+     "bottom": 394.8,
      "left": 27.4,
      "right": 362.6,
-     "height": 93.3,
+     "height": 112.5,
      "width": 335.2
     },
     {
      "q": "ctx",
      "text": "Risk CapRisk ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源必要輸入不足：目前",
-     "top": 375.7,
-     "bottom": 431.6,
+     "top": 394.8,
+     "bottom": 450.8,
      "left": 27.4,
      "right": 362.6,
      "height": 55.9,
@@ -418,8 +422,8 @@
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合）⬜ 尚未提供（待 動作判斷功能尚未開放動作判斷功",
-     "top": 431.6,
-     "bottom": 510.5,
+     "top": 450.8,
+     "bottom": 529.7,
      "left": 27.4,
      "right": 362.6,
      "height": 78.9,
@@ -428,8 +432,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供（待系統動作整合）⬜ 尚未提供（待 動作判斷功能尚未開放動作判斷功",
-     "top": 510.5,
-     "bottom": 565.4,
+     "top": 529.7,
+     "bottom": 584.6,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -454,11 +458,11 @@
     "top1_clipped": false
    },
    "stress": {
-    "risk_top": 582.4,
-    "risk_bottom": 659.1,
-    "scroll_end_bottom": 764.4,
-    "scroll_end_gap_to_nav": 26.6,
-    "risk_bottom_at_scroll_end": -586.9
+    "risk_top": 601.6,
+    "risk_bottom": 678.3,
+    "scroll_end_bottom": 763.6,
+    "scroll_end_gap_to_nav": 27.4,
+    "risk_bottom_at_scroll_end": -587.7
    },
    "failures": {},
    "pass": true
@@ -1545,7 +1549,7 @@
    "mode": null,
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q4",
@@ -1569,7 +1573,7 @@
     },
     {
      "q": "q1",
-     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料",
+     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
      "top": 269.8,
      "bottom": 346.9,
      "left": 80,
@@ -1646,8 +1650,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -1757,7 +1761,7 @@
    "mode": "curated",
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q4",
@@ -1848,8 +1852,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -1953,7 +1957,7 @@
    "mode": "lookup",
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q4",
@@ -2044,8 +2048,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -2134,7 +2138,7 @@
    "mode": null,
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q1",
@@ -2225,8 +2229,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -2430,7 +2434,7 @@
    "mode": null,
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q1",
@@ -2511,8 +2515,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -2606,7 +2610,7 @@
    "mode": null,
    "account": null,
    "feed": "real",
-   "banner_text": "Real-data Preview（非正式 production default）僅台股與市場位階為真資料",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
    "elements": [
     {
      "q": "q1",
@@ -2727,8 +2731,8 @@
     "fontSize": 12,
     "top": 6.78125,
     "bottom": 21.21875,
-    "left": 542.765625,
-    "right": 934.828125,
+    "left": 425.296875,
+    "right": 1052.296875,
     "clipped": false,
     "row_top": 0,
     "row_bottom": 28
@@ -2800,7 +2804,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.7,
+     "height": 652.6,
      "left": 80,
      "right": 1360
     },
@@ -2836,6 +2840,1313 @@
      "main": {
       "scrollWidth": 1440,
       "clientWidth": 1440
+     }
+    },
+    "failures": []
+   }
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "real",
+   "mode": null,
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q4",
+     "text": "🚀 更新今日戰情 目前不提供更新",
+     "top": 125.1,
+     "bottom": 179.1,
+     "left": 80,
+     "right": 1200,
+     "height": 54,
+     "width": 1120
+    },
+    {
+     "q": "concl",
+     "text": "今日結論 ⬜ 尚未提供 今日結論尚未提供",
+     "top": 187.1,
+     "bottom": 261.8,
+     "left": 80,
+     "right": 1200,
+     "height": 74.7,
+     "width": 1120
+    },
+    {
+     "q": "q1",
+     "text": "市場目前狀態 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
+     "top": 269.8,
+     "bottom": 366.0,
+     "left": 80,
+     "right": 448,
+     "height": 96.3,
+     "width": 368
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+     "top": 269.8,
+     "bottom": 366.0,
+     "left": 456,
+     "right": 824,
+     "height": 96.3,
+     "width": 368
+    },
+    {
+     "q": "q2",
+     "text": "是否需要行動 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+     "top": 374.0,
+     "bottom": 432.0,
+     "left": 80,
+     "right": 1200,
+     "height": 57.9,
+     "width": 1120
+    },
+    {
+     "q": "q3",
+     "text": "下一步 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+     "top": 440.0,
+     "bottom": 497.9,
+     "left": 80,
+     "right": 1200,
+     "height": 57.9,
+     "width": 1120
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 0
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 81,
+    "bottom": 109.1,
+    "banner_bottom": 21.2,
+    "qa_top": 125.1
+   },
+   "last_content_bottom": 538.0,
+   "card_heights": [
+    183,
+    183,
+    183,
+    183,
+    183,
+    183
+   ],
+   "expanders": [],
+   "p2": {
+    "onebrain": {
+     "top": 1076.4,
+     "bottom": 1118.0,
+     "left": 80,
+     "right": 1200,
+     "height": 41.6,
+     "width": 1120
+    },
+    "slot": null,
+    "grid": {
+     "top": 885.4,
+     "bottom": 1068.4,
+     "left": 80,
+     "right": 1200,
+     "height": 183.1,
+     "width": 1120
+    },
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": {
+     "top": 513.9,
+     "bottom": 869.4,
+     "left": 80,
+     "right": 1200,
+     "height": 355.5,
+     "width": 1120
+    },
+    "chart_state": "stale",
+    "chart_bars": 20,
+    "chart_graphics": 2,
+    "chart_svg_h": 220,
+    "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 13 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_danger": 0
+   },
+   "h1": null,
+   "batch3": {
+    "risk": {
+     "top": 269.8,
+     "bottom": 366.0,
+     "left": 832,
+     "right": 1200,
+     "height": 96.3,
+     "width": 368,
+     "inside_l1": true,
+     "text": "今日主要風險 ⬜ 尚未提供 今日風險摘要尚未開放"
+    },
+    "mode_box": null,
+    "mode_content": null,
+    "font_sizes": {
+     "q1": 16,
+     "ctx": null
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 524.9,
+    "risk_line_height": 24,
+    "scroll_end_bottom": 867.8,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "real",
+   "mode": "curated",
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q4",
+     "text": "🔍 代碼／名稱 查詢",
+     "top": 177.1,
+     "bottom": 218.7,
+     "left": 80,
+     "right": 1200,
+     "height": 41.6,
+     "width": 1120
+    },
+    {
+     "q": "q1",
+     "text": "精選摘要 ⬜ 尚未提供 精選尚未開放（需連網取得，且候選的組合方式尚待定義）",
+     "top": 280.3,
+     "bottom": 335.2,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "top": 335.2,
+     "bottom": 371.0,
+     "left": 93,
+     "right": 1187,
+     "height": 35.7,
+     "width": 1094
+    },
+    {
+     "q": "q2",
+     "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
+     "top": 371.0,
+     "bottom": 425.9,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q3",
+     "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
+     "top": 425.9,
+     "bottom": 480.8,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 1
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 81,
+    "bottom": 109.1,
+    "banner_bottom": 21.2,
+    "qa_top": 275.3
+   },
+   "last_content_bottom": 481.9,
+   "card_heights": [
+    142,
+    142
+   ],
+   "expanders": [
+    {
+     "title": "keyboard_arrow_right 選股條件（收合）",
+     "open": false
+    }
+   ],
+   "p2": {
+    "onebrain": null,
+    "slot": null,
+    "grid": {
+     "top": 505.8,
+     "bottom": 647.9,
+     "left": 80,
+     "right": 1200,
+     "height": 142.1,
+     "width": 1120
+    },
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
+   },
+   "h1": null,
+   "batch3": {
+    "risk": null,
+    "mode_box": {
+     "top": 117.1,
+     "bottom": 157.1,
+     "left": 80,
+     "right": 1200,
+     "height": 40,
+     "width": 1120,
+     "labels": [
+      "市場精選",
+      "即時查一檔"
+     ],
+     "checked_count": 1,
+     "checked_index": 0
+    },
+    "mode_content": {
+     "curated": true,
+     "lookup": false
+    },
+    "font_sizes": {
+     "q1": 16,
+     "ctx": 12.48
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 505.8,
+    "risk_line_height": null,
+    "scroll_end_bottom": 867.7,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "real",
+   "mode": "lookup",
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q4",
+     "text": "🔍 代碼／名稱 查詢",
+     "top": 177.1,
+     "bottom": 218.7,
+     "left": 80,
+     "right": 1200,
+     "height": 41.6,
+     "width": 1120
+    },
+    {
+     "q": "q1",
+     "text": "查詢摘要 ⬜ 尚未提供 即時查一檔尚未開放",
+     "top": 280.3,
+     "bottom": 335.2,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "top": 335.2,
+     "bottom": 371.0,
+     "left": 93,
+     "right": 1187,
+     "height": 35.7,
+     "width": 1094
+    },
+    {
+     "q": "q2",
+     "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
+     "top": 371.0,
+     "bottom": 425.9,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q3",
+     "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
+     "top": 425.9,
+     "bottom": 480.8,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 1
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 81,
+    "bottom": 109.1,
+    "banner_bottom": 21.2,
+    "qa_top": 275.3
+   },
+   "last_content_bottom": 538.0,
+   "card_heights": [],
+   "expanders": [],
+   "p2": {
+    "onebrain": null,
+    "slot": null,
+    "grid": null,
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
+   },
+   "h1": null,
+   "batch3": {
+    "risk": null,
+    "mode_box": {
+     "top": 117.1,
+     "bottom": 157.1,
+     "left": 80,
+     "right": 1200,
+     "height": 40,
+     "width": 1120,
+     "labels": [
+      "市場精選",
+      "即時查一檔"
+     ],
+     "checked_count": 1,
+     "checked_index": 1
+    },
+    "mode_content": {
+     "curated": false,
+     "lookup": true
+    },
+    "font_sizes": {
+     "q1": 16,
+     "ctx": 12.48
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": null,
+    "risk_line_height": null,
+    "scroll_end_bottom": 867.7,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "real",
+   "mode": null,
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "組合狀態 ⬜ 尚未提供 需登入並讀取 Sheet，目前尚未開放",
+     "top": 169.4,
+     "bottom": 228.3,
+     "left": 832,
+     "right": 1200,
+     "height": 58.9,
+     "width": 368
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+     "top": 169.4,
+     "bottom": 228.3,
+     "left": 80,
+     "right": 448,
+     "height": 58.9,
+     "width": 368
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 169.4,
+     "bottom": 228.3,
+     "left": 456,
+     "right": 824,
+     "height": 58.9,
+     "width": 368
+    },
+    {
+     "q": "q2",
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "top": 236.3,
+     "bottom": 275.0,
+     "left": 80,
+     "right": 1200,
+     "height": 38.7,
+     "width": 1120
+    },
+    {
+     "q": "q4",
+     "text": "🚀 更新持股戰情 目前不提供更新；需登入後才能讀取持股",
+     "top": 77,
+     "bottom": 139.7,
+     "left": 975.6,
+     "right": 1200,
+     "height": 62.7,
+     "width": 224.4
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 2
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 77,
+    "bottom": 141,
+    "banner_bottom": 21.2,
+    "qa_top": 169.4
+   },
+   "last_content_bottom": 538.7,
+   "card_heights": [],
+   "expanders": [],
+   "p2": {
+    "onebrain": {
+     "top": 283.0,
+     "bottom": 324.6,
+     "left": 80,
+     "right": 1200,
+     "height": 41.6,
+     "width": 1120
+    },
+    "slot": null,
+    "grid": null,
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
+   },
+   "h1": {
+    "vw": 1280,
+    "status": {
+     "top": 141,
+     "bottom": 161.390625,
+     "left": 80,
+     "right": 1200,
+     "height": 20.390625,
+     "width": 1120,
+     "segs": [
+      {
+       "seg": "portfolio",
+       "text": "組合：⬜ 尚未提供",
+       "left": 80,
+       "right": 194.859375,
+       "clipped": false
+      },
+      {
+       "seg": "asof",
+       "text": "資料日 ⬜ 資料日未提供",
+       "left": 208.859375,
+       "right": 353.625,
+       "clipped": false
+      },
+      {
+       "seg": "judged",
+       "text": "判得出 ⬜ 尚未提供",
+       "left": 367.625,
+       "right": 485.203125,
+       "clipped": false
+      }
+     ]
+    },
+    "onebrain": {
+     "top": 283.015625,
+     "bottom": 324.609375,
+     "left": 80,
+     "right": 1200,
+     "height": 41.59375,
+     "width": 1120
+    },
+    "primary": {
+     "top": 340.609375,
+     "bottom": 580.609375,
+     "left": 80,
+     "right": 818.65625,
+     "height": 240,
+     "width": 738.65625,
+     "graphics": 0,
+     "danger": 0,
+     "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
+     "title_cy": 364.40625,
+     "chip_cy": 392.5625
+    },
+    "cap": {
+     "top": 340.609375,
+     "bottom": 580.609375,
+     "left": 830.65625,
+     "right": 1200,
+     "height": 240,
+     "width": 369.34375,
+     "danger": 0,
+     "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
+    },
+    "table": {
+     "top": 596.609375,
+     "bottom": 726.671875,
+     "left": 80,
+     "right": 1200,
+     "height": 130.0625,
+     "width": 1120,
+     "data_rows": 0,
+     "more_visible": false,
+     "th": [
+      {
+       "text": "代碼",
+       "left": 93.5,
+       "right": 230.125,
+       "clipped": false
+      },
+      {
+       "text": "名稱",
+       "left": 230.125,
+       "right": 366.75,
+       "clipped": false
+      },
+      {
+       "text": "持股比例",
+       "left": 366.75,
+       "right": 503.375,
+       "clipped": false
+      },
+      {
+       "text": "成本",
+       "left": 503.375,
+       "right": 640,
+       "clipped": false
+      },
+      {
+       "text": "現價",
+       "left": 640,
+       "right": 776.625,
+       "clipped": false
+      },
+      {
+       "text": "報酬",
+       "left": 776.625,
+       "right": 913.25,
+       "clipped": false
+      },
+      {
+       "text": "策略",
+       "left": 913.25,
+       "right": 1049.875,
+       "clipped": false
+      },
+      {
+       "text": "System Action",
+       "left": 1049.875,
+       "right": 1186.5,
+       "clipped": false
+      }
+     ]
+    }
+   },
+   "batch3": {
+    "risk": null,
+    "mode_box": null,
+    "mode_content": null,
+    "font_sizes": {
+     "q1": 16,
+     "ctx": null
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 295.0,
+    "risk_line_height": null,
+    "scroll_end_bottom": 868.4,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "real",
+   "mode": null,
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "連線狀態 ⬜ 尚未提供 需登入 Google 才能顯示，目前尚未開放",
+     "top": 130.1,
+     "bottom": 185.0,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q2",
+     "text": "連線異常 ⬜ 尚未提供 需登入 Google 才能顯示，目前尚未開放",
+     "top": 185.0,
+     "bottom": 239.9,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q3",
+     "text": "下一步 ⬜ 尚未提供 需登入 Google 才能顯示，目前尚未開放",
+     "top": 239.9,
+     "bottom": 294.8,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q4",
+     "text": "帳戶管理 登入與 Sheet 操作尚未開放",
+     "top": 294.8,
+     "bottom": 368.5,
+     "left": 93,
+     "right": 1187,
+     "height": 73.7,
+     "width": 1094
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 3
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 81,
+    "bottom": 109.1,
+    "banner_bottom": 21.2,
+    "qa_top": 125.1
+   },
+   "last_content_bottom": 426.2,
+   "card_heights": [
+    142,
+    142,
+    142,
+    142
+   ],
+   "expanders": [
+    {
+     "title": "keyboard_arrow_right Audit：Decision Digest",
+     "open": false
+    },
+    {
+     "title": "keyboard_arrow_right Audit：Rule Registry（唯讀）",
+     "open": false
+    }
+   ],
+   "p2": {
+    "onebrain": null,
+    "slot": null,
+    "grid": {
+     "top": 393.5,
+     "bottom": 535.6,
+     "left": 80,
+     "right": 1200,
+     "height": 142.1,
+     "width": 1120
+    },
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
+   },
+   "h1": null,
+   "batch3": {
+    "risk": null,
+    "mode_box": null,
+    "mode_content": null,
+    "font_sizes": {
+     "q1": 16,
+     "ctx": null
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 393.5,
+    "risk_line_height": null,
+    "scroll_end_bottom": 867.9,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop1280",
+   "viewport": {
+    "w": 1280,
+    "h": 900
+   },
+   "page": "p4_data",
+   "scenario": "real",
+   "mode": null,
+   "account": null,
+   "feed": "real",
+   "banner_text": "Real-data Preview（非正式 production default）目前僅部分台股資料已接入；各項指標請以卡片顯示的資料日與狀態為準。",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "資料健康度 ⬜ 尚未提供 完整資料健康度尚未開放；本頁先顯示資料新鮮度摘要",
+     "top": 130.1,
+     "bottom": 185.0,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "資料新鮮度總覽 固定清單 8 項",
+     "top": 185.0,
+     "bottom": 220.0,
+     "left": 93,
+     "right": 1187,
+     "height": 35,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "接入狀態 已接入畫面 2 項｜尚未提供 6 項",
+     "top": 220.0,
+     "bottom": 255.0,
+     "left": 93,
+     "right": 1187,
+     "height": 35,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "新鮮度 資料日在規則內 0 項｜⚠ 過期或可能已過期 1 項｜⬜ 資料未備 0 項",
+     "top": 255.0,
+     "bottom": 290.0,
+     "left": 93,
+     "right": 1187,
+     "height": 35,
+     "width": 1094
+    },
+    {
+     "q": "ctx",
+     "text": "其他狀態 🔴 來源目前不可用或資料異常 0 項｜⬜ 尚未評估 1 項 資料日在規則內只表示資料日未超過規則，不是買賣訊號。",
+     "top": 290.0,
+     "bottom": 344.2,
+     "left": 93,
+     "right": 1187,
+     "height": 54.2,
+     "width": 1094
+    },
+    {
+     "q": "q2",
+     "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 344.2,
+     "bottom": 399.1,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q3",
+     "text": "下一步 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "top": 399.1,
+     "bottom": 454.0,
+     "left": 93,
+     "right": 1187,
+     "height": 54.9,
+     "width": 1094
+    },
+    {
+     "q": "q4",
+     "text": "查看資料健康度 完整資料健康度尚未開放",
+     "top": 454.0,
+     "bottom": 527.7,
+     "left": 93,
+     "right": 1187,
+     "height": 73.7,
+     "width": 1094
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 73,
+    "left": 0,
+    "right": 1280,
+    "height": 73,
+    "width": 1280,
+    "position": "fixed",
+    "visibility": "visible",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的",
+     "🗂 資料"
+    ],
+    "checked_index": 4
+   },
+   "top_nav": {
+    "page_radiogroups": 1,
+    "bottom_fixed_navs": 0,
+    "group": {
+     "overflow_x": "auto",
+     "scroll_w": 1280,
+     "client_w": 1280,
+     "last_right": 1280,
+     "last_left_after_scroll": 1024,
+     "last_right_after_scroll": 1280
+    },
+    "drawer_dom": 0,
+    "rail_padding": false
+   },
+   "banner_box": {
+    "height": 14.4375,
+    "lineHeight": 14.4,
+    "fontSize": 12,
+    "top": 6.78125,
+    "bottom": 21.21875,
+    "left": 345.296875,
+    "right": 972.296875,
+    "clipped": false,
+    "row_top": 0,
+    "row_bottom": 28
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "main": {
+     "scrollWidth": 1280,
+     "clientWidth": 1280
+    },
+    "qa_clipped": false,
+    "top1_clipped": false
+   },
+   "title": {
+    "top": 81,
+    "bottom": 109.1,
+    "banner_bottom": 21.2,
+    "qa_top": 125.1
+   },
+   "last_content_bottom": 481.8,
+   "card_heights": [],
+   "expanders": [
+    {
+     "title": "keyboard_arrow_right 各項明細",
+     "open": false
+    }
+   ],
+   "p2": {
+    "onebrain": null,
+    "slot": null,
+    "grid": null,
+    "slot_graphics": 0,
+    "slot_text": null,
+    "spec_text": null,
+    "slot_danger": 0,
+    "chart": null,
+    "chart_state": null,
+    "chart_bars": 0,
+    "chart_graphics": 0,
+    "chart_svg_h": null,
+    "chart_legend": null,
+    "chart_text": null,
+    "chart_danger": 0
+   },
+   "h1": null,
+   "batch3": {
+    "risk": null,
+    "mode_box": null,
+    "mode_content": null,
+    "font_sizes": {
+     "q1": 16,
+     "ctx": null
+    },
+    "account": null,
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 556.7,
+    "risk_line_height": null,
+    "scroll_end_bottom": 867.6,
+    "nav_margin_after_risk": null
+   },
+   "failures": {},
+   "pass": true,
+   "expanded": {
+    "collapsed_before": true,
+    "open": true,
+    "expander_box": {
+     "top": 1228.8,
+     "bottom": 1881.5,
+     "height": 652.6,
+     "left": 80,
+     "right": 1200
+    },
+    "row_count": 8,
+    "row_labels": [
+     "台股加權指數",
+     "外資買賣超",
+     "融資餘額",
+     "M1B／M2",
+     "台灣 PMI",
+     "板塊資金流",
+     "市場位階",
+     "基本面季報"
+    ],
+    "rows": [
+     "台股加權指數 資料日 2026-11-09 ⚠ 過期或可能已過期",
+     "外資買賣超 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "融資餘額 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "M1B／M2 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "台灣 PMI ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "板塊資金流 ⬜ 尚未提供 完整資料健康度開放後才可查看",
+     "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供",
+     "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
+    ],
+    "last_content_bottom": 521.5,
+    "scroll_end_bottom": 868.2,
+    "scroll_end_gap_to_nav": null,
+    "hscroll": {
+     "doc": {
+      "scrollWidth": 1280,
+      "clientWidth": 1280
+     },
+     "main": {
+      "scrollWidth": 1280,
+      "clientWidth": 1280
      }
     },
     "failures": []

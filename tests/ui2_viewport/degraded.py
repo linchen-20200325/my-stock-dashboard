@@ -45,7 +45,7 @@ def start_degraded_server(repo: Path) -> tuple[subprocess.Popen, str]:
 
 
 def run_degraded(url: str) -> list[dict]:
-    """五頁 × 兩 viewport：既有判定（`_record`）＋降級警示量測＋手機 📊 的 nav margin。"""
+    """五頁 × 每個 viewport（`MV.VIEWPORTS`，現為三個）：既有判定（`_record`）＋降級警示量測＋手機 📊 的 nav margin。"""
     from playwright.sync_api import sync_playwright
 
     from shared.ui2_contract.pages import FEED_REAL, PAGE_IDS, PAGE_LABELS, SCENARIO_REAL
