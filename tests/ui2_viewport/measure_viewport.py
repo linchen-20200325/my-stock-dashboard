@@ -154,7 +154,7 @@ THRESHOLDS: list[dict[str, str]] = [
     {"id": "p2_real_nav_margin_109",
      "rule": "（R1）📊 市場（Real-data Preview；僅手機寬度恰為 390；320／360／FAKE／桌機不適用）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791 "
              "≥ 109px（與 p2_nav_margin_160 同量測錨點、同 ±0.05 誤差處理）；不達須停手回報，不得縮字、刪資訊或改設計。",
-     "source": "總管裁示 #1199 comment 7100852561／7101402062（R1，暫採 ≥109.0px；非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"},
+     "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"},
     {"id": "kbar_primary_chart",
      "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖"
              "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px"
