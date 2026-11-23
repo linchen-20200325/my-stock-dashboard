@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import math
 import os
 import re
 import socket
@@ -401,10 +402,26 @@ def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     if mobile and m.get("scenario") in P2_NAV_MARGIN_SCENARIOS and nb is not None and ntop is not None:
         if ntop - nb < P2_NAV_MARGIN_MIN_PX - 0.05:
             out[k2].append(f"手機 {m.get('scenario')}：導覽餘裕 {ntop - nb:.1f}px < {P2_NAV_MARGIN_MIN_PX}px")
+    # R1 適用案例＝feed==real ∧ 視窗寬恰 390 ∧ p4_market（函式開頭已限）∧ 非 stress 壓力態列（壓力態走 evaluate_stress，
+    # 本來就沒有 risk 錨點；其紀錄 nav_margin_after_risk 合法為 null，不在此套用）。
+    # fail-closed：適用案例的錨點缺鍵／None／非數值（含 bool）／NaN／±Inf／差值非有限 ＝ 無法證明餘裕達標 → 記失敗，不得靜默通過。
     if (m.get("feed") == "real" and m.get("viewport", {}).get("w") == P2_REAL_NAV_MARGIN_VIEWPORT_W
-            and nb is not None and ntop is not None):
-        if ntop - nb < P2_REAL_NAV_MARGIN_MIN_PX - 0.05:
-            out[k3].append(f"Real 390：導覽餘裕 {ntop - nb:.1f}px < {P2_REAL_NAV_MARGIN_MIN_PX:g}px")
+            and m.get("mode") != "stress"):
+        def _finite_num(x) -> bool:
+            return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+        try:
+            ntop3 = _nav_line(m)
+        except (KeyError, TypeError):
+            ntop3 = None
+        if not (_finite_num(nb) and _finite_num(ntop3)):
+            out[k3].append(f"Real 390：導覽餘裕量測錨點缺值或非有限數（first_block_after_l1_top={nb!r}、底部保留線={ntop3!r}），"
+                           "無法判定 ≥109px（fail-closed）")
+        else:
+            margin3 = ntop3 - nb
+            if not math.isfinite(margin3):
+                out[k3].append(f"Real 390：導覽餘裕差值非有限（{margin3!r}），無法判定 ≥109px（fail-closed）")
+            elif margin3 < P2_REAL_NAV_MARGIN_MIN_PX - 0.05:
+                out[k3].append(f"Real 390：導覽餘裕 {margin3:.1f}px < {P2_REAL_NAV_MARGIN_MIN_PX:g}px")
 
 
 #: DEC-141 W-11 批 1 判定常數（判定器自己的字面值，獨立於被測的 `shared/ui2_contract/text.py`，避免 mutation 時判定器跟著被改）。
