@@ -55,7 +55,7 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 > 3. **L0/L1/L2 僅候選顯示分級**：L2 必要正式條件全部滿足；L1 部分輔助證據缺失時只顯示可信研究參考及缺口，不得形成簡化正式位階/動作；L0 核心證據不可用時無法判定。不是新演算法/風險分數的授權。
 
 擬替換（單行）：
-> 3. **正式判定首版僅 FORMAL／UNDETERMINABLE 兩級**：必要正式條件全部成立才為 FORMAL；核心證據不可用時為 UNDETERMINABLE（無法判定）；研究事實可依既有 DEC 展示，但不得升格為正式位階/動作/趨勢；不使用 L0/L1/L2 作新判定級別。不是新演算法/風險分數的授權。
+> 3. **正式判定首版僅 FORMAL／UNDETERMINABLE 兩級**（提案，未生效）：必要正式條件全部成立才為 FORMAL；核心證據不可用時為 UNDETERMINABLE（無法判定）；研究事實可依既有 DEC 展示，但不得升格為正式位階/動作/趨勢；不使用 L0/L1/L2 作新判定級別。不是新演算法/風險分數的授權。
 
 理由：舊句 L1「可信研究參考」與 D-b=A 衝突，且 L0/L1/L2 與 CLAUDE.md §8.2、`docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md` 用語相撞。
 
