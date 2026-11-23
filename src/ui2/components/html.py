@@ -167,6 +167,12 @@ def degraded_notice_html(text: str) -> str:
     return f'<div role="status" data-ui2-degraded="1">{chip_html(text, ChipTone.DANGER)}</div>'
 
 
+def real_mobile_note_html(text: str) -> str:
+    """Real-data Preview 手機揭露小字：橫幅旁註（`.ui2-banner__note--wide`）在 ≤640px 隱藏，這裡補一個只在手機顯示的同句。
+    `text` 由呼叫端傳入 `REAL_PREVIEW_BANNER_NOTE`（⛔ 不在此重寫第二份字串）；一律 escape。CSS 預設 `display:none`、≤640px 才 `block`。"""
+    return f'<div class="ui2-real-mobile-note">{escape(text)}</div>'
+
+
 def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> str:
     """第一屏一列：欄位 label／value／狀態 chip／原因。緊湊單列，手機優先。
 

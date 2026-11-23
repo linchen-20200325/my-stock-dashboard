@@ -24,7 +24,7 @@ from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import RealFeedSnapshot, get_real_page_vm
 from src.services.ui2.real_feed import read_real_snapshot
 from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_FEED_DEGRADED_TEXT, REAL_PREVIEW_BANNER_NOTE
-from src.ui2.components.html import degraded_notice_html, top_status_row_html
+from src.ui2.components.html import degraded_notice_html, real_mobile_note_html, top_status_row_html
 from src.ui2.shell.css import CSS
 from src.ui2.views import VIEWS
 from src.ui2.views.target import render_with_lookup
@@ -40,7 +40,7 @@ DEV_FLAG_PARAM = "ui2_dev"             # 開發面旗標（query parameter）
 DEV_SURFACE_TITLE = "🧪 開發／測試工具（非產品內容）"
 
 _FEED_LABELS = {
-    FEED_FAKE: "FAKE 場景", FEED_REAL: "Real-data Preview（唯讀；只接 2 項真資料）",
+    FEED_FAKE: "FAKE 場景", FEED_REAL: "Real-data Preview（唯讀）",
 }
 
 _ACCOUNT_LABELS = {
@@ -112,6 +112,8 @@ def run(diag_check=None, lookup_input: bool = False) -> None:
     page = st.session_state[KEY_PAGE]
     if degraded:         # 導覽之後、第一屏內容之前；五頁相同
         st.markdown(degraded_notice_html(REAL_FEED_DEGRADED_TEXT), unsafe_allow_html=True)
+    if not vm.is_fake and vm.banner_text and not degraded:   # 手機 Real 揭露小字（桌機 CSS 隱藏；FAKE 不輸出；降級態不輸出：該句指向卡片，降級時卡片數值已隱藏）；文字＝橫幅旁註同一常數
+        st.markdown(real_mobile_note_html(REAL_PREVIEW_BANNER_NOTE), unsafe_allow_html=True)
     if page == P4_DATA:      # 🔌 連線診斷：唯一注入點（只傳給資料頁；其他頁 render 簽名不變）
         VIEWS[page](vm, diag_check=diag_check)
     elif page == P4_TARGET and lookup_input is True:    # 股票代號輸入（功能開關開；預設關＝下方原呼叫不變）

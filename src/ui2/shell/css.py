@@ -13,6 +13,11 @@ CSS = """
   background:rgba(128,128,128,.10);font-size:.8rem;line-height:1.4}
 .ui2-banner__note{display:inline;opacity:.8;font-size:.72rem;margin-left:.5em}
 @media (max-width:640px){.ui2-banner__note--wide{display:none}}   /* 手機：長標示（Real-data）不再附說明，維持單行 */
+/* Real 手機揭露小字：橫幅旁註在手機被隱藏（上一行），這裡補同一句；預設隱藏、≤640px 才顯示（自然換行、不截斷）。
+   桌機（≥641px）連同 Streamlit 元素容器一併 display:none（空容器仍會佔 1rem 元素間距，會擠動頁面）。 */
+.ui2-real-mobile-note{display:none}
+@media (max-width:640px){.ui2-real-mobile-note{display:block;font-size:.8rem;line-height:1.4;opacity:.75;white-space:normal;overflow-wrap:anywhere;margin:0 0 .25rem 0}}
+@media (min-width:641px){[data-testid="stElementContainer"]:has(.ui2-real-mobile-note){display:none}}
 /* P1：UI2 專用——隱藏 Streamlit 開發者工具列（Deploy／⋮）；只作用於本入口（app_ui2.py）載入的 CSS，不動 .streamlit/config.toml。
    ⚠ Streamlit Cloud 上是否本來就不顯示／是否能被此規則隱藏：未驗（BACKLOG NUI2-PREVIEW-DEV-SURFACE）。 */
 [data-testid="stToolbar"],[data-testid="stAppDeployButton"],.stAppDeployButton,[data-testid="stMainMenu"]{display:none !important}

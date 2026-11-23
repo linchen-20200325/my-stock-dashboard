@@ -3,7 +3,7 @@
     streamlit run app_ui2.py
 
 ⚠️ 這是 **Preview 入口**，不是 production default：`app.py` 不引用本檔、不加路由、不加 `?ui=2`
-（Architecture Gate §7／§8；Cutover 另走 Gate）。一般入口（無 `?ui2_dev=1`）預設以 **Real-data Preview**（唯讀；只接 2 項真資料）呈現
+（Architecture Gate §7／§8；Cutover 另走 Gate）。一般入口（無 `?ui2_dev=1`）預設以 **Real-data Preview**（唯讀）呈現
 （客戶 D2=A，#1199 comment 7052908287；本檔只在 session 尚無 `ui2_feed` 時播種為 Real，不覆蓋使用者／開發面已選的值）。
 Real 缺值如實顯示（⬜／STALE），⛔ 不自動 fallback 到 FAKE。FAKE 場景、資料來源、帳戶示意態的切換
 只在 `?ui2_dev=1` 開發面（一般畫面不顯示；`ui2_dev` 不是登入證據，見 `src/ui2/shell/app.py`）。
