@@ -11284,3 +11284,20 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 - 開關開的真瀏覽器量測（單組、未入庫）：`UI2_LOOKUP_INPUT=1 python -m tests.ui2_viewport.measure_viewport --shots none --feed real --out <scratch>`（環境變數由 server 子行程繼承；腳本本身不認得開關，存證不入庫）：Real 13／13 pass（含 `p2_nav_margin_160` 與標的頁第一屏判定）；標的頁手機 q4（狀態列）top／bottom＝298／321、q1 頂＝336（關閉時 q4＝186／228、q1＝289），第一屏可用高 791 內；桌機 q4＝289／312、q1＝327。**輸入元件在開關開時推遲摘要約 47 px**（版面變化＝新元件的直接後果）。提交互動（輸入→按查詢）只以 AppTest 驗，真瀏覽器互動＝NOT VERIFIED；Streamlit 1.56.0 開關開同樣 13／13 pass、數值相同（手機 q4 298／321、q1 頂 336；桌機 q4 289／312、q1 頂 327）。量測視窗為手機 390×844、桌機 1440×900。
 - 兩組非作者 QA、PR exact-head 原生 CI、merge 均未完成；本條不是 QA PASS。
 - 編號：本條原編 DEC-222；origin/main（#1255）已用 DEC-222（System Action Aggregator M-A2），故有意識改號為 DEC-223，不是漏刪；合併時若再被佔則順延。
+
+
+### DEC-224｜UI2-ONEBRAIN-PRODUCT-V1.0：2026-11-23 客戶核准產品目標及五項安全修正（2026-11-24 回存；僅產品架構，不是施工 Gate）
+
+**地位：APPROVED PRODUCT TARGET；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 一手核准：[Issue #1199 comment 7110182570](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7110182570)；協作紅線：[7110402272](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7110402272)；G-F3 精確方向：[7109632982](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7109632982)。完整十一章產品規格：[UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md](vnext/UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md)；保護性摘要：[UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md](vnext/UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md)。正式版本標記：`UI2-ONEBRAIN-PRODUCT-V1.0-APPROVED-2026-11-23`。
+
+1. **薄 UI／厚 Digest／五頁**：📊市場、🎯標的、💼持股、👤我的、🗂資料；手機 390×844 優先；首頁 Delta Strip＋原正式市場位階/Risk Cap/System Action 狀態＋OneBrain 四主題。完整資料日、缺項、來源、證據、反證可展開。**資料≠規則≠AI 推理≠UI**；Risk Cap/System Action 僅由既有確定性規則決定。
+2. **Level 0–2**：L2 正式必備證據全足才按原規則下正式結論；L1 有可信觀察事實但輔助證據缺乏時只顯示有來源及缺項之**研究參考**；不得改正式位階、Risk Cap、System Action；L0 核心證據缺/過期無法判定，無投資結論。這只批准呈現方向，**不新增正式第三判定態、DataStatus、信心分數、公式或買賣權限**。#1275 Must-Fix 和 DEC-124/081/092 仍走原 Gate。
+3. **Delta Strip/不可比較**：📊和💼首屏規劃比較當期/前次有效快照，須**同來源、同口徑、日期有效、PIT/授權合規、可追溯，指定訊號完整檢查**；否則目標文案「⬜ 暫無足夠資料比較今日變化」。即便可說「今日無重大訊號變更」，也不等於安全或續抱。新正式文案仍需 FieldVM／Active Presentation Contract Copy Gate，未核准正式比較管線。
+4. **OneBrain 四 Topic Lenses**：大盤／產業前瞻／持股健檢／反方風險；首屏核心觀察 **≤3 句、<100 個字**（強制揭露徽章與計數口徑另由既有 Contract Gate 確認），全 trace 及缺值/反證不可因縮減刪除。快取契約目標包含 digest/coverage/evidence、origin、source/as_of、schema、ruleset/risk_cap/system_action、contract、topic/lens definition、model、prompt 等維度，取用時再判 freshness，關鍵變化或過期必失效；開頁不呼叫同步 LLM。**不放行正式 Provider、caller、producer、儲存或 batch**。
+5. **LINE v1.0** 僅允許四類合成事件契約（動作切換/風控/持股異常/資料斷線）及去重、冷卻、失敗政策的設計；真實通知／帳號／Secrets/caller HOLD。**What-If** 限唯讀記憶體試算的規劃；真持股未接要誠實顯示「⬜ 需先接入持股」，不寫 Sheet、不交易、不改正式動作。
+6. **v1.1 HOLD**：Catalyst Radar、Canonical Evidence Store、不可變 Signal Log（30/60/90 天追蹤）、真新聞/外部資料/付費模型/正式通知皆未授權。Radar 四步研究防線，事件可信度、投資命題可信度、交易吸引力分離；不可宣稱已提供。
+7. **G-F3=A2-i 仍有效**：Digest v1 的 MISSING/NO_INPUT 與 schema 不變；stale/fetch_failed 只於 coverage/audit 保存，不可作 Risk Cap/正式 System Action 之支持證據；S1 G-F4 仍僅設計。missing≠0、unknown≠safe、STALE≠fresh、Real≠FAKE。
+8. **施工與驗收**：先查 main、Open/Draft PR head/base、五項 CI（含 Slow AppTest step）、review/threads、有效 DEC/Contract。已有同 head PASS 不重做、非作者 QA、單檔單 writer、最小改動；有真正選擇才比三個**全部合法**方案，不為純文件修訂/固定 Must-Fix 硬湊三案，不增 Gate。A/B/C/Work 卡片固定三行【範圍鎖定】【誠實降級】【退回門檻】，完整逐字見規格第十一章。
+
+**版本優先序**：本 DEC 將舊 READ_FIRST v1.0「DEC DRAFT」產品方向改為正式已核准**產品目標**；**不覆蓋既有正式 Rules/DEC/Active Contract**。正式 UI copy、Level 結果、雙快照比較、Digest v2、LLM caller、真持股/Sheet/OAuth、Cloud、NAS #1237、PR #1237、真 LINE、v1.1、資料授權/作業流程全須各自既有 Gate。發生衝突記差額、維持 HOLD，不把產品方向當建置授權。
+
