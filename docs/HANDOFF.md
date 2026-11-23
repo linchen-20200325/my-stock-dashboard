@@ -1700,7 +1700,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **下一步唯一任務**：**待總管裁示**。#1199 7057937922 記有「可先做」候選：「單檔公開行情 Fact／VM 契約＋合成測試」——**僅為候選，非已授權**；任何 Real 接線須客戶明示批准。
 - **停止條件**：超出上述、動 #1237／部署／Secrets／真資料、或需解除任一 HOLD 即停手；不得將本段當 QA PASS。
 
-## 2026-11-23 Resume Checkpoint（永久交接；append-only；非 QA PASS；單組撰寫，待非作者 QA）
+## 2026-11-23 Resume Checkpoint（最新接手點）（永久交接；append-only；非 QA PASS；單組撰寫，待非作者 QA）
 - **說明**：本段取代 2026-11-21 第二段為現行接手點；舊段保留為歷史，一字未改。以下為**存檔當時快照，新對話須重核**（見最後「新對話第一步」）。
 - **快照**：main `913dd759eea50bc915206ebad0a2217385d8041e`（2026-11-23T19:49+08；#1271 合併 SHA `34f682b353f87dbc23ced27b13e011765f8f434a` 之上多一個 docs-only 直推 commit，新增 `docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`；直推是否合乎 DEC-172（PROCESS.md §4 D1）由總管認定，本文不作先例）。913dd759 的 main push CI：**NOT VERIFIED（存檔時未核）**。
 - **已合併（不得重做）**：#1267 UI2 baseline；#1269 `5116fd07…`（run 45044587008）；#1270 `e6d21a7f…`（run 45089840569）；#1271 `34f682b3…`（run 45092322986）——main push 五項＋Slow AppTest step success。
@@ -1714,7 +1714,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 | 項目 | 現況 |
 |---|---|
 | 現行正式／實際運作 | repo 最新 main＋各現行有效 DEC／Contract |
-| New UI2 目前定位 | 僅 Real Preview（`streamlit run app_ui2.py`；非 production default；預設 FAKE）；Real 只接台股卡／日 K／位階橋接，其餘「尚未提供」 |
+| New UI2 目前定位 | Preview 入口（`streamlit run app_ui2.py`；非 production default；一般入口預設 **Real-data Preview**〔`app_ui2.py` 第 25–27 行播種 `ui2_feed=real`〕；FAKE 僅經 `?ui2_dev=1` 開發面切換）；Real 只接台股卡／日 K／位階橋接（位階通常無值），其餘「尚未提供」 |
 | 有效讀法 | `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`＋DEC-128 及後續有效修正案 |
 | 產品目標版本 v1.0 | 薄 UI＋厚 Digest＋Topic Lenses＋What Changed；**DEC DRAFT，未經 #1199 正式核准** |
 | 未來候選 v1.1 | Catalyst Radar＋Signal Log；**HOLD** |
