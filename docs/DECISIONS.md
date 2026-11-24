@@ -11301,3 +11301,21 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 
 **版本優先序**：本 DEC 將舊 READ_FIRST v1.0「DEC DRAFT」產品方向改為正式已核准**產品目標**；**不覆蓋既有正式 Rules/DEC/Active Contract**。正式 UI copy、Level 結果、雙快照比較、Digest v2、LLM caller、真持股/Sheet/OAuth、Cloud、NAS #1237、PR #1237、真 LINE、v1.1、資料授權/作業流程全須各自既有 Gate。發生衝突記差額、維持 HOLD，不把產品方向當建置授權。
 
+### DEC-225｜正式判定二分（FORMAL／UNDETERMINABLE）：客戶採納 #1275 草案，逐功能依原 DEC；Level 0～2 僅為呈現／投影層（客戶 2026-11-24 #1199 comment 7131139974；只追加；docs-only；非 QA PASS；單組撰寫）
+
+**地位：客戶已採納的判定語意登記；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 本條**只登記語意**，不新增 Enum、資料狀態、公式、UI 文案、來源、workflow、caller，也不解除任何 Gate。本條隨 PR #1275 提出；**#1275 合併前不得稱已入 main**（#1275 維持 Draft，合併須總管既有正式 Merge Gate 裁示）。
+
+- **決策者**：客戶。**日期**：2026-11-24。
+- **來源**：[Issue #1199 comment 7131139974](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7131139974)（客戶本輪明示，依該留言所載原文：「2. #1275：採納正式判定二分，依治理程序編列DEC」）；該留言所載 #1275 原草案差額 QA PASS／Must-Fix 0：[7121987043](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7121987043)、[7111783774](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7111783774)（本條撰寫時未重讀這兩則原文）；Level 0～2 呈現層澄清：[7131356946](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7131356946) §3。基準 main `98d0168629a8f873fed85398247a52f146d276d6`（DEC-224 已入庫；本條編號 DEC-225 於撰寫時 `grep -c "DEC-225" docs/DECISIONS.md` 為 0，未被占用）。
+- **完整逐功能前提與歷史**：`docs/vnext/P01_JUDGEMENT_TIER_DEC_DRAFT_2026-11-23.md`（原草稿內容保留，狀態改為已採納）。
+
+#### 一、裁示內容
+
+1. **採納 FORMAL／UNDETERMINABLE 為首版正式判定二分。** 條件**逐功能**依各自原 DEC（市場位階／Regime、Risk Cap、台股指數日 K 事實顯示、個股、持股、Digest／OneBrain、ETF 動作、System Action），**不併成單一總門檻**；任一該功能的必要條件未滿足 ⇒ 只有該功能為 UNDETERMINABLE（顯示既有「⬜ 無法判定」，不得為 0／中性／安全／預設），不影響其他功能與已依既有 DEC 授權的事實顯示。**研究參考不是判定級別。**
+2. **Level 0～2 僅為客戶核准的呈現／投影層**（7131356946 §3；DEC-224 第 2 點）：Level 2 ↔ FORMAL；Level 0 ↔ UNDETERMINABLE；**Level 1＝核心價格證據有效、輔助證據不足時，僅有來源與缺口揭露的研究參考，不是第三個正式結果**，不新增 Enum／DataStatus／FieldState／信心分數，不得回寫規則，不得形成位階／System Action，不得放寬 Risk Cap；stale、PIT 不合格、未來日、歧義日的值不得成為其內容。Level 字樣與版面仍受原 Copy／Contract 限制。
+3. **「正式判定成立」≠「正式產品已部署可用」**：(a) 上游規則與輸入證據已具正式判定條件，與 (b) 經核准的 production caller／consumer 真正部署且可交付，是兩件事。(b) 缺失 ⇒ 不得對使用者宣稱「正式生產輸出可用」，但不得反過來說 (a) 因無 caller 而不成立。**此為新增治理條件**；不授權 Stage F 或任何新 caller。
+4. **事實不升格清單（O-1）**：TWII 日 K 序列、資料日／來源／is_stale 揭露、最新收盤值、既有指數／均線參考線（須帶固定句「均線為參考，不等於正式台股趨勢判斷。」）、國際既有可追溯資料系列（P01 §4 第 1～5 項）依其原 DEC 顯示；**不得**升格為正式趨勢／Regime／Risk Cap／System Action／交易訊號／隱含信心。stale 值僅限已定的降級顯示、不得當 fresh（第 9a 項）；未來日／歧義日／最新日重複走拒用路徑（第 9b 項）。與前收比較的日漲跌幅（第 6 項）、UI2 三大法人／融資／板塊顯示（第 8 項）＝NOT PERMITTED／NOT VERIFIED；外資或其他單一指標當趨勢（第 7 項）＝NOT PERMITTED。**本清單不是全面禁顯資料，也不是任何取數許可。**
+5. **與既有 DEC／Contract 的關係**：DEC-081 Q3＝A、DEC-092 Q2、DEC-124 的 Contract／Copy 層呈現裁示（例如 Level 1 研究參考能否放進趨勢卡、字樣）**仍須另過原 Gate**；本條**不覆寫**原 DEC 或 Active Presentation Contract。現行 `shared/ui2_contract/models.py` 的 `JudgementState` 僅有 `UNDETERMINABLE` 成員、無 `FORMAL`——本條**不授權**新增 Enum 成員或任何程式／schema 變更。
+6. **HOLD 不變**：DG-LIC／PIT／COV／SCOPE、I1144、DEC-185 三支資料發布 workflow 維持停用、NAS #1237、Cloud、Secrets、真實持股與 Auth／Sheet、正式 OneBrain Provider／production LLM caller、Stage F／正式 caller、Digest v2（DEC-160）、LINE 真推播、v1.1 皆維持原狀。
+
+⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一撰寫組依 P01 草稿、客戶留言原文與 main 現況撰寫，**未經第二組獨立複驗**；P01 草稿本身的 §3 各列「現況」為非逐項實測（見其 §8）。**本條不是 QA PASS，不宣稱任何功能已接線、已上線或已達 FORMAL。**
