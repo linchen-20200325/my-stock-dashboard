@@ -34,7 +34,7 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 | System Action | DEC-222 §二（:11214；客戶核准的是 M-A1） | 沿用既有規則（ETF 分支碼、個股 `swap_level` 四級、`RULE_ID_ALLOWLIST`）；`unjudged` 列為 undeterminable、不計入今日需處理；觀察清單不計入 | 各前提逐項 NOT VERIFIED；是否可交付見 §5(b) |
 
 ## 3A. 呈現層 Level 0～2 與正式判定軸（FORMAL／UNDETERMINABLE）對照（PROPOSED；docs-only 差額，不改規則、不新增狀態）
-**來源（FACT；#1276 為 Draft，未合併）**：PR #1276（已合併，main 98d01686；DEC-224 已入庫；2026-11-24 以 main 現文重讀）：`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md:65-72`（Level 2＝所有原正式必要條件成立才照既有規則得正式結論；Level 1＝核心價格證據有效、輔助證據（例如廣度）不足時最多是有來源與缺口揭露的研究參考，不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap；Level 0＝核心證據不足／過期／不可用，禁止投資結論；均非信心分數／公式／擇時／買賣權限）、`…PRODUCT_GOAL_V1_0_APPROVED…:13`（既有正式軸 FORMAL／UNDETERMINABLE 不新增第三值）、`…PRESENTATION_CONTRACT_DELTA_2026-11-24.md:3,8,10`（DIFF／NOT A CONTRACT OVERRIDE）、DEC-224 第 2 點（核准的是產品目標，不是施工／合併／部署 Gate；#1275 Must-Fix 與 DEC-124／081／092 仍走原 Gate）。以上自 #1276 合併起為 main 上的現行文件（DEC-224 地位＝核准產品目標，不是施工／合併／部署 Gate）。
+**來源（FACT；#1276 已合併，2026-11-24 更正）**：PR #1276（已合併，main 98d01686；DEC-224 已入庫；2026-11-24 以 main 現文重讀）：`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md:65-72`（Level 2＝所有原正式必要條件成立才照既有規則得正式結論；Level 1＝核心價格證據有效、輔助證據（例如廣度）不足時最多是有來源與缺口揭露的研究參考，不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap；Level 0＝核心證據不足／過期／不可用，禁止投資結論；均非信心分數／公式／擇時／買賣權限）、`…PRODUCT_GOAL_V1_0_APPROVED…:13`（既有正式軸 FORMAL／UNDETERMINABLE 不新增第三值）、`…PRESENTATION_CONTRACT_DELTA_2026-11-24.md:3,8,10`（DIFF／NOT A CONTRACT OVERRIDE）、DEC-224 第 2 點（核准的是產品目標，不是施工／合併／部署 Gate；#1275 Must-Fix 與 DEC-124／081／092 仍走原 Gate）。以上自 #1276 合併起為 main 上的現行文件（DEC-224 地位＝核准產品目標，不是施工／合併／部署 Gate）。
 | 呈現層（#1276／DEC-224 用語） | 對照正式判定軸 | 限制 |
 |---|---|---|
 | Level 2 | FORMAL：§3 該功能的必要條件全部成立（只對該功能） | 照既有規則得結論，揭露資料日與來源 |
