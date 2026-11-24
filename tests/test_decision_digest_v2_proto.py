@@ -687,10 +687,39 @@ def test_pit_limitation_a_very_old_fake_as_of_is_not_caught():
 # ══════════════════════════════════════════════════════════════════════
 # freshness 欄位間蘊含（自報、不可覆算；只檢查欄位間蘊含）
 # ══════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("fr", [F.STALE, None])
-def test_used_segment_requires_fresh(fr):
-    x = v2_of(make_digest(), base_cov(), audit(m=fr))
-    assert [v.code for v in validate_v2(x)] == ["freshness_used_requires_fresh"]
+def test_used_segment_with_none_audit_is_not_rejected_and_none_is_not_rewritten_to_fresh():
+    """客戶裁示 7129866680 §C-1：`used ⇒ FRESH` 已移除。None＝未判定，不被任何規則拒絕、也不被改寫成 FRESH
+    （None 不等於 FRESH，亦不是正式投資行動證據；驗證器不建構、不改寫）。"""
+    x = v2_of(make_digest(), base_cov(), audit(m=None))
+    assert x.coverage.base.segments[0].used is True and x.coverage.audit[0].evidence_freshness is None
+    assert validate_v2(x) == ()
+    assert x.coverage.audit[0].evidence_freshness is None and x.coverage.audit[0].evidence_freshness is not F.FRESH
+
+
+def test_used_segment_with_stale_audit_no_longer_triggers_the_removed_used_requires_fresh_code():
+    """只斷言已移除的碼不再出現；不暗示 stale 可被採用（STALE≠fresh 由 INV-1～4 與 A2-i 窄拒絕負責，見上方 INV 測試）。"""
+    x = v2_of(make_digest(), base_cov(), audit(m=F.STALE))
+    assert "freshness_used_requires_fresh" not in codes(x)
+
+
+def test_removed_used_requires_fresh_rule_is_locked_out_and_value_domain_unchanged():
+    """守衛：違規碼集合不含已移除的 `freshness_used_requires_fresh`；值域仍為 FRESH／STALE／None（裸字串仍拒收）。"""
+    tree = _module_ast()
+    emitted: set = set()                                                  # 實際會被發出的違規碼（`_viol(stage, code, …)` 第 2 引數；不含 docstring）
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_viol" and len(n.args) >= 2:
+            c = n.args[1]
+            if isinstance(c, ast.Constant):
+                emitted.add(c.value)
+            elif isinstance(c, ast.JoinedStr):
+                emitted.add("".join(p.value for p in c.values if isinstance(p, ast.Constant)))
+    assert emitted and "freshness_used_requires_fresh" not in emitted
+    assert "freshness_without_as_of" in emitted                           # 仍有效的 as_of 蘊含
+    for used_none in (v2_ok(), v2_of(make_digest(), base_cov(), audit(m=None, r=None, h=None, a=None))):
+        assert not any(v.code == "freshness_used_requires_fresh" for v in validate_v2(used_none))
+    assert P.EVIDENCE_FRESHNESS_VALUES == frozenset({F.FRESH, F.STALE})
+    aud = (SegmentAudit(SEGMENT_MARKET, "fresh", FT),) + audit()[1:]          # 裸字串仍拒收
+    assert "audit_freshness_domain" in codes(v2_of(make_digest(), base_cov(), aud))
 
 
 def test_no_withheld_reason_to_freshness_implication_exists_no_source():
@@ -757,5 +786,3 @@ def test_real_v1_assembly_stale_still_degrades_to_missing_no_input_and_reason_li
     assert by["market"].withheld_reason == "stale" and by["risk_cap"].withheld_reason == "stale"
     x = v2_of(a.digest, a.coverage, audit(m=F.STALE, r=F.STALE))
     assert validate_v2(x) == ()
-    # 不得把『過期』偽裝成已採用：used=True 的段自報 STALE／None 會被 used⇒FRESH 擋下
-    assert "freshness_used_requires_fresh" in codes(v2_of(a.digest, a.coverage, audit(h=F.STALE)))

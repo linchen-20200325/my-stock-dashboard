@@ -45,12 +45,14 @@
 **不拒絕**：market 段 STALE 事實、未被引用且無行動規則的 STALE 事實（控制組）。v1 對 STALE 的降級行為
 （MISSING／NO_INPUT）一個字都不動。
 
-⚠️ 欄位間蘊含只有兩條，出處據實如下：
-  - fresh／stale ⇒ base 該段 as_of 非 None：出自公開 7110475027「矛盾輸入 Fail Loud」條款（戳 None 但 freshness 為 FRESH／STALE ＝矛盾資料）。
-  - used ⇒ FRESH：僅出自 C 線私有草稿 v3_draft.md，**INFERENCE**；與 R4「None＝未判定」有張力（used 段若自報 None 會被拒），待總管確認。
-  - 已移除 `withheld_reason == stale ⇒ STALE`（無來源出處）。
+⚠️ 欄位間蘊含只有一條：fresh／stale ⇒ base 該段 as_of 非 None（出自公開 7110475027「矛盾輸入 Fail Loud」條款：
+戳 None 但 freshness 為 FRESH／STALE ＝矛盾資料）。
+  - `used ⇒ FRESH` 已依客戶裁示 #1199 7129866680 §C-1 移除（含 `freshness_used_requires_fresh` 碼）：
+    `evidence_freshness=None`＝未判定（R4），**不得視為 FRESH，也不得作為正式投資行動證據**；v2 不改寫該值。
+  - `withheld_reason == stale ⇒ STALE` 已先前移除（無來源出處）。
+  - STALE≠fresh 由 INV-1～4（A2-i 窄拒絕）負責，不由 audit 的蘊含負責。
 
-PIT（單向上界）只對 `used=True` 的段強制；未採用段的 as_of／fetched_at 只供稽核（例如 `pit_violation` 段本來就可能帶未來日）。
+PIT（單向上界）只對 `used=True` 的段強制（與 evidence_freshness 無關）；未採用段的 as_of／fetched_at 只供稽核（例如 `pit_violation` 段本來就可能帶未來日）。
 
 分層：L0 風格；執行期無 I/O、不呼叫 streamlit。⚠️ 但 import 圖經 `src.services.decision_digest_assembly`（`AssembledDigest`）
 會帶入該模組的依賴（含 streamlit 等），所以**不是**純 L0 import 閉包。
@@ -258,9 +260,6 @@ def _stage_pit_freshness(x: DecisionDigestV2) -> list:
                     out.append(_viol(STAGE_PIT_FRESHNESS, "pit_as_of_after_fetched",
                                      f"{path}: as_of({seg.as_of}) 晚於 fetched_at 的台北日"))
         fr = a.evidence_freshness
-        if seg.used and fr is not FreshnessStatus.FRESH:
-            out.append(_viol(STAGE_PIT_FRESHNESS, "freshness_used_requires_fresh",
-                             f"{path}: used=True 時 evidence_freshness 必須是 FRESH（STALE／None 不得冒充已採用）：{fr!r}"))
         if fr in EVIDENCE_FRESHNESS_VALUES and seg.as_of is None:
             out.append(_viol(STAGE_PIT_FRESHNESS, "freshness_without_as_of",
                              f"{path}: evidence_freshness={fr!r} 時 base 該段 as_of 必須非 None（無戳＋FRESH／STALE 是矛盾資料）"))
