@@ -14,6 +14,11 @@ wrapper 只在下列條件**全部**成立時，把預設的「🤖 OneBrain 持
   UI2_OBDEMO_PREVIEW_CSS=1 補充比較用的預覽 CSS（⛔ 非現況、非 baseline、非 DEC-137；Q10）
   UI2_OBDEMO_SEAL=1        在 server 進程封網（拒絕非 loopback 的 `connect`／`getaddrinfo` 並計數）
   UI2_OBDEMO_SEAL_LOG=path 封網拒絕紀錄（JSON lines；由證據 runner 讀回寫進 meta）
+  UI2_OBDEMO_TOPICS=0      退回 #1268 原本的「單一持股摘要槽」（無四主題選擇器；原 15/15 證據與舊測試的來源）；未設或其他值＝四主題（預設）
+
+四主題（大盤／產業前瞻／持股健檢／反方風險；`tests/onebrain_holdings_ui2_demo_topics.py`）：槽外一個「🧪 FAKE 預覽控制」群組（`st.radio`，
+key＝`ui2_obdemo_topic`）供點選；wrapper 在每次 rerun 依 `st.session_state` 的選擇換槽內容（位置不變、仍注入現行 `onebrain` 槽）。選擇器只在
+「本次 run 確實注入」時才畫（Real／非持股頁／非 cold 都沒有）。⛔ 零正式 LLM／Provider／網路；⛔ 不連真資料、不寫快取。
 
 wrapper 的哨兵與計數放在 **shell 模組**（不是 launcher 全域）：AppTest／streamlit 每次 rerun 都會重新執行本檔，
 launcher 全域在 pytest 側讀不到，也不會跨 rerun 保留。⛔ 不做 `os.chdir`（`degraded_launcher` 會 chdir，在 AppTest 同進程會洩漏 cwd；
@@ -44,6 +49,7 @@ if str(_ROOT) not in sys.path:
 
 from shared.ui2_contract.pages import P4_HOLD, SCENARIO_COLD  # noqa: E402
 from tests import onebrain_holdings_ui2_demo as demo  # noqa: E402
+from tests import onebrain_holdings_ui2_demo_topics as T  # noqa: E402
 from tests import onebrain_holdings_ui2_demo_vm as VM  # noqa: E402
 
 _log = logging.getLogger(__name__)
@@ -53,6 +59,7 @@ ENV_FAILCLOSED = "UI2_OBDEMO_FAILCLOSED"
 ENV_PREVIEW_CSS = "UI2_OBDEMO_PREVIEW_CSS"
 ENV_SEAL = "UI2_OBDEMO_SEAL"
 ENV_SEAL_LOG = "UI2_OBDEMO_SEAL_LOG"
+ENV_TOPICS = "UI2_OBDEMO_TOPICS"
 
 SHELL_MODULE = "src.ui2.shell.app"
 ORIG_ATTR = "_obdemo_orig_get_preview_page_vm"      # 原函式（哨兵；存在＝已安裝）
@@ -60,6 +67,21 @@ CSS_ATTR = "_obdemo_orig_css"                       # 原 CSS（哨兵）
 STATE_ATTR = "_obdemo_state"                        # 計數與當次 run 狀態
 SEAL_ATTR = "_obdemo_seal_state"                    # 掛在 socket 模組上的封網狀態
 TESTINFO_KEY = "ui2_obdemo_testinfo"                # 槽外測試資訊容器 key（⛔ 不是 session_state）
+CTRL_KEY = "ui2_obdemo_ctrl"                        # 「🧪 FAKE 預覽控制」群組容器 key（選擇器＋測試輸入說明；⛔ 不是 session_state）
+DEFAULT_TOPIC = T.DEFAULT_TOPIC
+CTRL_TITLE = "🧪 FAKE 預覽控制（測試用；非產品內容、非持股清單）"
+#: 控制群組自己的樣式（只作用在 `.st-key-ui2_obdemo_ctrl`；虛線框＋貼底，切主題時不必捲到頁尾）。⛔ 不動 shell.CSS、不動槽的樣式。
+CTRL_CSS = (
+    # Streamlit ≥1.5x 會把 `st.container(key=…)` 包在 `stLayoutWrapper` 裡：sticky 必須設在外層 wrapper（內層的包含區塊只有它自己那麼高）；
+    # 舊版沒有 wrapper 時，直接設在 `.st-key-…` 本身即可。兩條都設、互不衝突（`:has(> …)` 只選到「直接包著它」的 wrapper，不會選到主區塊）。
+    "<style>.st-key-ui2_obdemo_ctrl,[data-testid=\"stLayoutWrapper\"]:has(>.st-key-ui2_obdemo_ctrl){position:sticky;bottom:0;z-index:99990}"
+    ".st-key-ui2_obdemo_ctrl{margin:16px 0 0 0;padding:6px 12px 8px 12px;gap:.15rem;"
+    "border:2px dashed currentColor;border-radius:8px;background:var(--ui2-nav-bg,#161b22);color:var(--ui2-nav-fg,#e6edf3)}"
+    ".st-key-ui2_obdemo_ctrl [data-testid=\"stMarkdownContainer\"]{margin:0}"
+    ".st-key-ui2_obdemo_ctrl [data-testid=\"stCaptionContainer\"]{font-size:.72rem;line-height:1.3}"
+    ".st-key-ui2_obdemo_ctrl [role=\"radiogroup\"]{gap:.1rem .9rem}"
+    ".ui2-obdemo-head{font-weight:700;font-size:.82rem;line-height:1.25;margin:0}</style>"
+)
 
 #: PREVIEW-ONLY（Q10）：⛔ 非現況、非 baseline、非 DEC-137 正式；只作補充比較。主證據一律是未改 CSS 的現況。
 PREVIEW_CSS = (
@@ -95,7 +117,7 @@ def get_state(shell=None) -> dict:
     shell = shell or _shell()
     st = getattr(shell, STATE_ATTR, None)
     if st is None:
-        st = {"installs": 0, "calls": 0, "injected": False, "case": None, "failclosed": False,
+        st = {"installs": 0, "calls": 0, "injected": False, "case": None, "failclosed": False, "topic": None,
               "lock": threading.Lock()}
         setattr(shell, STATE_ATTR, st)
     return st
@@ -108,6 +130,25 @@ def selected_case() -> str | None:
     if raw not in demo.CASES:
         raise ValueError(f"{ENV_CASE}={raw!r} 不是已知案例 {tuple(demo.CASES)}")
     return raw
+
+
+def topics_enabled() -> bool:
+    """四主題為預設；`UI2_OBDEMO_TOPICS=0／false／off` ⇒ 退回 #1268 原本的單一槽。"""
+    v = os.environ.get(ENV_TOPICS)
+    return not (isinstance(v, str) and v.strip().lower() in ("0", "false", "off"))
+
+
+def selected_topic(session_state=None) -> str:
+    """目前選的主題（`st.session_state[ui2_obdemo_topic]`；沒選 ⇒ 預設）。未知值 ⇒ ValueError（不靜默改成預設）。"""
+    if session_state is None:
+        import streamlit as st
+        session_state = st.session_state
+    v = session_state.get(T.KEY_TOPIC)
+    if v is None:
+        return DEFAULT_TOPIC
+    if v not in T.TOPICS:
+        raise ValueError(f"{T.KEY_TOPIC}={v!r} 不是已知主題 {T.TOPICS}")
+    return v
 
 
 def inject_section(vm, section):
@@ -155,6 +196,26 @@ def build_demo_section(case_id: str, failclosed: bool, shell=None):
         return _failclosed_fallback_section(case_id, e), True
 
 
+def build_demo_topic_section(case_id: str, topic: str, failclosed: bool, shell=None):
+    """（案例, 主題）→ (該主題的示範 SectionVM, 是否 fail-closed)。fail-closed 判定與舊槽一致：只在 launcher 內讓 `ASM.assemble_digest`
+    暫時 raise（持鎖、finally 還原）後以 `demo.build_case_block` 判定；內容由 `T.build_topic_section` 依該結果誠實降級。"""
+    if failclosed:
+        asm = demo.ASM
+        with get_state(shell)["lock"]:
+            real = asm.assemble_digest
+            asm.assemble_digest = _raise_assemble
+            try:
+                block = demo.build_case_block(case_id)
+            finally:
+                asm.assemble_digest = real
+        if block.fail_closed is not True:
+            raise RuntimeError("fail-closed 注入未生效（示範鏈沒有 fail-closed）")
+    else:
+        block = demo.build_case_block(case_id)
+    fc = block.fail_closed is True
+    return T.build_topic_section(topic, case_id, fail_closed=fc), fc
+
+
 def testinfo_wanted(state: dict) -> bool:
     """槽外測試資訊只在「本次 run 確實注入、且非 fail-closed」才畫（與 #1265 一致）。"""
     return bool(state.get("injected")) and not state.get("failclosed")
@@ -168,7 +229,14 @@ def _make_wrapper(orig, shell):
         vm = orig(page_id, scenario_id, *args, **kwargs)       # 先原樣轉發（mode／account／top_n 照傳）
         case_id = selected_case()
         if page_id == P4_HOLD and scenario_id == SCENARIO_COLD and case_id is not None:
-            section, fc = build_demo_section(case_id, _truthy(os.environ.get(ENV_FAILCLOSED)), shell)
+            failclosed = _truthy(os.environ.get(ENV_FAILCLOSED))
+            if topics_enabled():
+                topic = selected_topic()
+                section, fc = build_demo_topic_section(case_id, topic, failclosed, shell)
+                st.update(topic=topic)
+            else:
+                section, fc = build_demo_section(case_id, failclosed, shell)
+                st.update(topic=None)
             vm = inject_section(vm, section)
             st.update(injected=True, case=case_id, failclosed=fc)
         return vm
@@ -300,6 +368,18 @@ def seal_rejected_count() -> int:
     return 0 if st is None else st["rejected"]
 
 
+def render_controls(st, state: dict) -> None:
+    """「🧪 FAKE 預覽控制」群組（槽外；⛔ 不在 `onebrain` 槽的 DOM 內）：四主題選擇器＋（非 fail-closed 時）槽外測試輸入說明。
+    只在「本次 run 確實注入」時才畫 ⇒ Real／非持股頁／非 cold 沒有選擇器；離開持股頁後 Streamlit 會丟掉該 widget 狀態（回到預設主題）。"""
+    with st.container(key=CTRL_KEY):
+        st.markdown(CTRL_CSS + f'<div class="ui2-obdemo-head">{CTRL_TITLE}</div>', unsafe_allow_html=True)
+        st.radio("OneBrain 主題（預覽）", T.TOPICS, index=T.TOPICS.index(DEFAULT_TOPIC), key=T.KEY_TOPIC, horizontal=True,
+                 label_visibility="collapsed")
+        if testinfo_wanted(state):
+            with st.container(key=TESTINFO_KEY):
+                st.caption(T.test_info_text(state["case"]))
+
+
 def main() -> None:
     import streamlit as st
 
@@ -307,10 +387,12 @@ def main() -> None:
     if _truthy(os.environ.get(ENV_SEAL)):
         seal_network(os.environ.get(ENV_SEAL_LOG) or None)
     state = get_state()
-    state.update(injected=False, case=None, failclosed=False)        # 每次 rerun 重置當次 run 狀態
+    state.update(injected=False, case=None, failclosed=False, topic=None)        # 每次 rerun 重置當次 run 狀態
     runpy.run_path(str(_ROOT / "app_ui2.py"), run_name="__main__")
-    # 槽外測試資訊（Q3-8）：獨立容器；只在「本次 run 確實注入、且非 fail-closed」才畫；⛔ 不進 `onebrain` 槽的 DOM
-    if testinfo_wanted(state):
+    if state.get("injected") and topics_enabled():
+        render_controls(st, state)
+    elif testinfo_wanted(state):
+        # 槽外測試資訊（Q3-8；單一槽模式）：獨立容器；只在「本次 run 確實注入、且非 fail-closed」才畫；⛔ 不進 `onebrain` 槽的 DOM
         with st.container(key=TESTINFO_KEY):
             st.caption(VM.test_info_text(state["case"]))
 

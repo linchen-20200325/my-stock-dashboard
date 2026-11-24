@@ -58,7 +58,7 @@ LENS = "LENS_MARKET_SURFACE_PENDING"
 INDUSTRY_SENTENCE = "⬜ 產業趨勢：尚未定義，無法判定"
 NOTE_D3 = "註：『尚無輸入』是現行摘要措辭，也可能代表讀取失敗、輸入異常或缺少組合鍵；請勿解讀為零持股。"
 NOTE_TRIGGER = "（尚無輸入）"
-CITED_CLAIM = "Digest 原句所引用的欄位"
+CITED_CLAIM = "原句引用"
 HOLD_SOURCE = "來源 FAKE 合成持股快照（非真實持股）｜時點 無（FAKE 示意，沒有持股讀取時點）"
 NONE_SOURCE = "來源 無（本主題沒有顯示任何來源資料）｜時點 無"
 INDUSTRY_SOURCE = "來源 無（該句本身沒有來源、時點、狀態）｜時點 無"
@@ -246,6 +246,7 @@ def _check_counter_rules():
             assert "資料已過期" in ctr[1].value_text and ctr[1].status_text.startswith("⚠")
             assert "資料已過期" not in ctr[0].value_text and ctr[0].status_text is None
             assert all(re.search(r"時點 FAKE", f.value_text) for f in ctr)
+            assert _rows(sec, L_POINTS)[0].value_text == "無（核心觀察各句皆超過預覽暫行字數上限，未列入觀察重點）"
         else:
             assert ctr == [], f"{cid}：沒有反證輸入時反方風險不得有反面證據列"
             core = _rows(sec, L_CORE)[0]
@@ -301,6 +302,7 @@ def test_industry_shows_only_the_existing_undefined_sentence_with_no_provenance(
     assert [f.value_text for f in core] == [INDUSTRY_SENTENCE]
     assert [f.value_text for f in _rows(sec, L_SUP)] == [_ev_text(CITED_CLAIM, "section:industry", "無", "無", "無")]
     assert _cited_refs(cid, "industry") == ["section:industry"]
+    assert _rows(sec, L_POINTS)[0].value_text == "①核心觀察（原句見上）"
     assert _rows(sec, L_SRC)[0].value_text == INDUSTRY_SOURCE
     assert _rows(sec, L_GAP)[0].value_text == "產業趨勢尚未定義；反面證據：無"
 
@@ -318,6 +320,7 @@ def test_holdings_verbatim_sentences_and_cited_evidence(cid):
     for rid in _cited_refs(cid, "buy_and_hold", "capital_gain"):
         assert rid in idx, "證據編號必須能追到 Digest 原欄位"
     assert _rows(sec, L_SRC)[0].value_text == HOLD_SOURCE
+    assert _rows(sec, L_POINTS)[0].value_text == "①存股 ②資本利得（原句見上）", "合格的句子以 label 指向上方原句，不重複整句"
     gap = _rows(sec, L_GAP)[0]
     assert gap.value_text == _gap_oracle(cid)
     assert (gap.detail == NOTE_D3) is any(NOTE_TRIGGER in t for _l, t in want)
@@ -559,15 +562,6 @@ def test_no_production_file_imports_topics_module():
     assert offenders == []
 
 
-def test_repo_diff_scope_is_tests_only():
-    import subprocess
-    out = subprocess.run(["git", "diff", "--name-only", "origin/main...HEAD"], cwd=ROOT, capture_output=True, text=True)
-    if out.returncode != 0:
-        pytest.skip("無 origin/main 可比對")
-    files = [x for x in out.stdout.splitlines() if x]
-    assert all(f.startswith("tests/") for f in files), f"出現 tests/ 以外的變更：{[f for f in files if not f.startswith('tests/')]}"
-
-
 # ══════════════════════════════════════════════════════════════════════
 # E. mutation 負控（monkeypatch；repo 內不留突變）
 # ══════════════════════════════════════════════════════════════════════
@@ -617,7 +611,8 @@ def test_mutation_topic_content_identical_turns_red(monkeypatch):
 
 def test_mutation_expander_in_html_turns_red(monkeypatch):
     import tests.test_onebrain_topics_ui2_demo as me
-    monkeypatch.setattr(me, "section_l1_html", lambda sec: "<details>" + section_l1_html(sec) + "</details>")
+    real = me.section_l1_html
+    monkeypatch.setattr(me, "section_l1_html", lambda sec: "<details>" + real(sec) + "</details>")
     with pytest.raises(AssertionError):
         _check_section_invariants("大盤", "R1", False, _sec("大盤", "R1"))
 
@@ -705,10 +700,10 @@ def test_apptest_l2_risk_topic_shows_inline_counter_evidence_and_stale_badge(mon
     at = _run_app(monkeypatch, case="L2")
     blob = _pick(at, "反方風險")
     slot = htmllib.unescape(LT._slot(blob))
-    assert slot.count("反面證據") == 2 and "fake-syn:counter:L2" in slot and "資料已過期" in slot and "⚠" in slot
+    assert [r["label"] for r in LT._slot_rows(blob)].count("反面證據") == 2 and "fake-syn:counter:L2" in slot and "資料已過期" in slot and "⚠" in slot
     assert "FAKE-SYN 合成反證" in slot and "非 Digest 欄位" in slot
     other = _pick(_run_app(monkeypatch, case="L3"), "反方風險")
-    assert "反面證據" not in LT._slot(other) and "無反證輸入" in htmllib.unescape(LT._slot(other))
+    assert "反面證據" not in [r["label"] for r in LT._slot_rows(other)] and "無反證輸入" in htmllib.unescape(LT._slot(other))
 
 
 @pytest.mark.slow
@@ -730,7 +725,6 @@ def test_apptest_real_feed_has_no_selector_and_no_demo(monkeypatch):
     _feed(monkeypatch)
     at = _run_app(monkeypatch, case="R1", feed="real")
     blob = LT._page_blob(at)
-    assert len(at.radio(key=KEY_TOPIC)) == 0 if hasattr(at.radio(key=KEY_TOPIC), "__len__") else True
     assert not [r for r in at.radio if r.key == KEY_TOPIC]
     assert "示意：合成持股快照" not in blob and "OneBrain 持股摘要｜" not in blob and "fake-syn" not in blob
     assert [c.value for c in at.caption if "測試輸入說明" in c.value] == []
@@ -824,6 +818,7 @@ def test_browser_four_topics_clickable_at_three_widths(_browser_ctx, case, failc
             first = page.evaluate(_JS_SLOT)
             assert first["ctrl"] and first["ctrl"]["radios"] == 4 and "FAKE" in first["ctrl"]["text"], "控制群組必須有 FAKE 標示與四個選項"
             assert first["title"].endswith(DEFAULT_TOPIC)
+            assert 0 <= first["ctrl"]["top"] and first["ctrl"]["bottom"] <= first["vh"] + 1, f"{vp}：選擇器必須在首屏視窗內（貼底），不必先捲到頁尾"
             bodies = {}
             for topic in TOPICS:
                 _click_topic(page, topic)

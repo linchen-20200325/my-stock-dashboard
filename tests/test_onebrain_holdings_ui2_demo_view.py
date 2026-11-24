@@ -102,6 +102,7 @@ def _always_uninstall(monkeypatch):
     """每個測試前後都還原 launcher（函式、哨兵、shell.CSS、封網）；結束時斷言沒有洩漏。
     ⚠️ 必須**依賴 monkeypatch**：fixture 反向拆除 ⇒ 本 fixture 的 `uninstall()` 先於 monkeypatch 復原。
     否則被測試 monkeypatch 過的 `shell.get_preview_page_vm`（記錄器／lambda）會被 `uninstall()` 當成「原函式」寫回、洩漏給後面的測試檔。"""
+    monkeypatch.setenv(L.ENV_TOPICS, "0")        # 本檔守的是 #1268 原本的「單一持股摘要槽」；四主題另見 tests/test_onebrain_topics_ui2_demo.py
     L.uninstall()
     cwd = os.getcwd()
     yield
@@ -1798,7 +1799,7 @@ def test_apptest_testinfo_caption_does_not_linger_across_pages_and_scenarios(mon
 def _launcher_source_without_reset() -> str:
     """突變：把 `main()` 每次 rerun 的「重置當次 run 狀態」拿掉（AppTest 以 from_string 跑；`__file__` 不存在 ⇒ 改寫 `_ROOT` 為固定 repo 根）。"""
     src = LAUNCHER_PATH.read_text(encoding="utf-8")
-    reset, root = "state.update(injected=False, case=None, failclosed=False)", "Path(__file__).resolve().parents[2]"
+    reset, root = "state.update(injected=False, case=None, failclosed=False, topic=None)", "Path(__file__).resolve().parents[2]"
     assert src.count(reset) == 1 and src.count(root) == 1, "launcher 重置行／_ROOT 行變了：突變失去對象，請同步本測試"
     return src.replace(reset, "pass").replace(root, f"Path({str(ROOT)!r})")
 

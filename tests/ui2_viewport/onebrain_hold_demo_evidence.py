@@ -601,7 +601,7 @@ def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, preview_cases=(), py
 
 
 def _env_for(case: str, preview: bool) -> dict:
-    env = {"UI2_OBDEMO_CASE": "R1" if case == FAILCLOSED else case}
+    env = {"UI2_OBDEMO_CASE": "R1" if case == FAILCLOSED else case, "UI2_OBDEMO_TOPICS": "0"}   # 本 runner 量的是 #1268 原單一槽；四主題見 onebrain_topics_evidence.py
     if case == FAILCLOSED:
         env["UI2_OBDEMO_FAILCLOSED"] = "1"
     if preview:
