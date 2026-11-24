@@ -75,15 +75,15 @@ CTRL_CSS = (
     # Streamlit ≥1.5x 會把 `st.container(key=…)` 包在 `stLayoutWrapper` 裡：sticky 必須設在外層 wrapper（內層的包含區塊只有它自己那麼高）；
     # 舊版沒有 wrapper 時，直接設在 `.st-key-…` 本身即可。兩條都設、互不衝突（`:has(> …)` 只選到「直接包著它」的 wrapper，不會選到主區塊）。
     "<style>.st-key-ui2_obdemo_ctrl,[data-testid=\"stLayoutWrapper\"]:has(>.st-key-ui2_obdemo_ctrl){position:sticky;bottom:0;z-index:99990}"
-    ".st-key-ui2_obdemo_ctrl{margin:16px 0 0 0;padding:4px 10px 6px 10px;gap:.1rem;"
+    ".st-key-ui2_obdemo_ctrl{margin:16px 0 0 0;padding:3px 10px 4px 10px;gap:0;"
     "border:2px dashed currentColor;border-radius:8px;background:var(--ui2-nav-bg,#161b22);color:var(--ui2-nav-fg,#e6edf3)}"
     # 頁尾保留貼底群組的高度（含上方 16px 與餘裕），捲到底時最後一列內容不會被群組蓋住（SF-B；只在本群組有畫時才輸出這條樣式）
     ".block-container{padding-bottom:180px !important}"
     ".st-key-ui2_obdemo_ctrl [data-testid=\"stMarkdownContainer\"]{margin:0}"
-    ".st-key-ui2_obdemo_ctrl [data-testid=\"stCaptionContainer\"]{font-size:.68rem;line-height:1.25}"
+    ".st-key-ui2_obdemo_ctrl [data-testid=\"stCaptionContainer\"]{font-size:.64rem;line-height:1.2}"
     ".st-key-ui2_obdemo_ctrl [role=\"radiogroup\"]{gap:0 .7rem}"
     ".st-key-ui2_obdemo_ctrl [role=\"radiogroup\"] p{font-size:.85rem}"
-    ".ui2-obdemo-head{font-weight:700;font-size:.78rem;line-height:1.2;margin:0}</style>"
+    ".ui2-obdemo-head{font-weight:700;font-size:.76rem;line-height:1.15;margin:0}</style>"
 )
 
 #: PREVIEW-ONLY（Q10）：⛔ 非現況、非 baseline、非 DEC-137 正式；只作補充比較。主證據一律是未改 CSS 的現況。
