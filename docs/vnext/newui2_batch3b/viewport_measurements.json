@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.59.2",
-  "git_sha": "3fd15a2087f3fdc8c042c277c58969b56df47676",
-  "source_hash": "0f3a25b1e248a8b290540d4945b155bff4d3d80554ff9b02efa5397e464d49ea",
-  "generated_at": "2026-11-22T16:45:50+00:00",
+  "git_sha": "97024fe3202c4f49ecb57ea39fb1fea7d01f7161",
+  "source_hash": "ea94b4b63f8136cdb07a33400d0d876619c5606d448c05bcbfda1d1042a4c5e8",
+  "generated_at": "2026-11-23T18:54:27+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "viewports": {
@@ -127,6 +127,11 @@
     "id": "p2_nav_margin_160",
     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；不達須停手回報，不得縮字、刪資訊或改設計。",
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
+   },
+   {
+    "id": "p2_real_nav_margin_109",
+    "rule": "（R1）📊 市場（Real-data Preview；僅手機寬度恰為 390；320／360／FAKE／桌機不適用）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791 ≥ 109px（與 p2_nav_margin_160 同量測錨點、同 ±0.05 誤差處理）；不達須停手回報，不得縮字、刪資訊或改設計。",
+    "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"
    },
    {
     "id": "kbar_primary_chart",
