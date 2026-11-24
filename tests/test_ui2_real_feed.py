@@ -904,6 +904,8 @@ def _paths(vm: PageVM):
         yield "first/conclusion", fs.conclusion
     if vm.context.main_risk is not None:
         yield "main_risk", vm.context.main_risk
+    if vm.context.delta is not None:                  # B-UI2-DELTA-BELOW：未接線＝capability＋原因、無值／來源／資料日、原因句無數字
+        yield "delta", vm.context.delta
     for c in vm.context.cards:
         yield f"cards/{c.card_id}", c.field
     for sec in vm.context.sections:

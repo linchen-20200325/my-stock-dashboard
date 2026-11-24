@@ -338,6 +338,22 @@ class PageContext:
     #: 📊 市場頁台股日 K 主圖（Issue #1099 PR-2）。None＝這個 feed 沒有提供日 K 事實（FAKE 示意軸恆為 None，
     #: L5 照舊畫誠實空槽；⛔ FAKE K 棒）。
     kbar: KbarChartVM | None = None
+    #: 📊／💼「今日變化」Delta Strip 專用唯讀欄位（B-UI2-DELTA-BELOW；客戶 #1199 comment 7131915767／總管 7132044876）。
+    #: 其他三頁（🎯 👤 🗂）恆為 None。沒有比較管線 ⇒ **恆為 capability `⬜ 尚未提供`＋原因**（建構時強制，見 `__post_init__`）；
+    #: ⛔ 帶值／changed／unchanged／「今日無重大訊號變更」／補 0；⛔ 新資料態（DEC-124 三軸不變）。
+    #: 放在 `PageContext`（頁面級唯讀欄位，與 `main_risk`／`kbar` 同型）而非 `FirstScreenVM`：它不是第一屏四問之一，
+    #: 且 `hold_l1_v2_html` 本就以 `first_screen` 為輸入、不需因此改動第一屏型別。
+    delta: FieldVM | None = None
+
+    def __post_init__(self) -> None:
+        d = self.delta
+        if d is None:
+            return
+        if not isinstance(d, FieldVM):
+            raise TypeError(f"PageContext.delta 必須是 FieldVM 或 None，收到 {d!r}")
+        # fail closed：今日沒有任何比較管線／同口徑快照 ⇒ 只允許「尚未提供」capability 欄。要放行其他軸須另走 Contract Gate。
+        if d.capability is not CapabilityState.NOT_PROVIDED:
+            raise ValueError(f"PageContext.delta 目前只允許 capability NOT_PROVIDED（不可比較），收到 {d.layer} 軸 {d.state!r}")
 
 
 @dataclass(frozen=True)
