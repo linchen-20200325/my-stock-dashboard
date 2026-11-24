@@ -21,10 +21,20 @@
 
 ## 重現
 
+截圖與量測由 repo 內的 `tests/ui2_viewport/delta_shots.py` 產生（非 pytest 測試，檔名不以 `test_` 開頭；只重用 `tests/ui2_viewport/measure_viewport.py` 與 `degraded.py`／`degraded_launcher.py` 的既有 helper，不改任何產品程式）。於 repo 根目錄執行：
+
 ```
-S=<venv>; $S/bin/python -I <scratch>/tools/delta_shots.py <out_dir> <meas.json>   # 需設 WM=<worktree>
+PYTHONDONTWRITEBYTECODE=1 <venv>/bin/python -m tests.ui2_viewport.delta_shots --out <dir> --json <file>
 ```
-（腳本只重用 `tests/ui2_viewport/measure_viewport.py` 的 `start_server`／`launch_chromium`／`_select_box`／`click_nav`／`_screenshot` 與 `degraded.py`；沒有改任何產品程式。）
+
+- `<venv>`：Streamlit 1.59.2＋playwright 1.64.1＋Chromium＋Pillow 的 venv（本批用 `v159`）。
+- `--out`：PNG 輸出目錄（必填，不預設；請指向 repo 外的暫存目錄，勿覆蓋本目錄證據）。`--json`：量測 JSON 輸出檔（必填）。
+- 輸出為 12 shot × view／full ＝ **24 張 PNG** 與 12 筆量測 JSON（與本目錄 `delta_measurements.json` 同結構）。
+- ⚠️ 輸出為證據截圖與量測，**非驗收通過聲明**。
+
+## 張數
+
+本目錄共 **24 張 PNG**（12 shot × `view`／`full`）：`real_*`（📊／💼 × 390／1280／1440）6 shot、`fake_stale_*`／`fake_unavailable_*`（📊／💼 × 390）4 shot、`real_degraded_*`（📊／💼 × 390）2 shot。先前回報稱 22 張為誤，以 `git ls-tree` 實測的 24 張為準。
 
 ## 內容摘要
 
