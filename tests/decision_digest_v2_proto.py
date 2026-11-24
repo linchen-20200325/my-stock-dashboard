@@ -20,7 +20,8 @@
     （PIT 因此只有單向上界：擋得了未來日，擋不了很舊的假日期）。
 
 ═══ 刻意「沒有」的東西（授權明文排除；有人加進來＝越權）═══════════════════
-- 任何 v1↔v2 互轉函式、由 v1 補建 coverage／audit 的函式、由 v2 重建 v1 的函式。驗證器**只驗證，不建構**。
+- 任何 v1↔v2 互轉函式、由 v1 補建 coverage／audit 的函式、由 v2 重建 v1 的函式。驗證器**只驗證，不建構**：不產生也不回傳任何 v1／v2 物件；
+  僅在 `_stage_base` 借用 `AssembledDigest.__post_init__` 一致性檢查（結果丟棄；測試以 AST 守衛鎖定恰好 1 處、且為獨立 Expr 語句）。
   （測試內的 v2 實例由測試明確組裝；`tests/test_decision_digest_v2_proto.py` 有反射／AST 守衛鎖住本檔的公開名單。）
 - assembler／producer／快取／Topic Lens／expected_*／N·M／INV-5（來源 S5：ActionRef 須有標的自己的 OK 行動事實）。
   ⇒ 「System Action 方向」僅**部分**強制；「STALE 不得冒充 fresh」**不**強制；**不得**宣稱 stale 已保留、
@@ -44,12 +45,17 @@
 **不拒絕**：market 段 STALE 事實、未被引用且無行動規則的 STALE 事實（控制組）。v1 對 STALE 的降級行為
 （MISSING／NO_INPUT）一個字都不動。
 
-⚠️ 下列欄位間蘊含為**本原型的實作選擇（INFERENCE）**，不是來源逐字（來源只說「僅能機器檢查欄位間蘊含（used⇒fresh 等）」
-與「fresh／stale ⇒ as_of 非 None」）：used ⇒ FRESH；`withheld_reason == stale` ⇒ STALE；fresh／stale ⇒ base 該段 as_of 非 None。
+⚠️ 欄位間蘊含只有兩條，出處據實如下：
+  - fresh／stale ⇒ base 該段 as_of 非 None：出自公開 7110475027「矛盾輸入 Fail Loud」條款（戳 None 但 freshness 為 FRESH／STALE ＝矛盾資料）。
+  - used ⇒ FRESH：僅出自 C 線私有草稿 v3_draft.md，**INFERENCE**；與 R4「None＝未判定」有張力（used 段若自報 None 會被拒），待總管確認。
+  - 已移除 `withheld_reason == stale ⇒ STALE`（無來源出處）。
 
 PIT（單向上界）只對 `used=True` 的段強制；未採用段的 as_of／fetched_at 只供稽核（例如 `pit_violation` 段本來就可能帶未來日）。
 
-分層：L0 風格（標準函式庫＋`shared.*`＋v1 `AssembledDigest` 的建構檢查）；零 I/O、零 streamlit。
+分層：L0 風格；執行期無 I/O、不呼叫 streamlit。⚠️ 但 import 圖經 `src.services.decision_digest_assembly`（`AssembledDigest`）
+會帶入該模組的依賴（含 streamlit 等），所以**不是**純 L0 import 閉包。
+⚠️ `_all_facts` 是 v1 `shared.decision_digest` 的**私有**依賴（取 evidence_refs 解析的同一份事實集）；v1 frozen，
+但若 v1 改名／移除會直接 ImportError——這是刻意的 fail-loud，不是 bug。
 """
 from __future__ import annotations
 
@@ -61,7 +67,7 @@ from shared.decision_digest import (
     TW_TZ, DataStatus, DecisionDigest, _all_facts,
 )
 from shared.decision_digest_coverage import (
-    SEGMENTS, WITHHELD_STALE, DigestCoverage, validate_coverage,
+    SEGMENTS, DigestCoverage, validate_coverage,
 )
 from shared.decision_digest_rules import ACTION_RULE_IDS, validate_strict
 from shared.freshness_policy import FreshnessStatus
@@ -156,7 +162,7 @@ def _stage_base(x: DecisionDigestV2) -> list:
             out.append(_viol(STAGE_BASE, f"base_{code}", msg))
         return out
     try:
-        AssembledDigest(x.digest, base)   # 只借它的建構檢查（不保留物件、不是轉換）
+        AssembledDigest(x.digest, base)   # 只借 __post_init__ 一致性檢查；結果丟棄（不賦值、不 return、不傳出）
     except ValueError as e:
         return [_viol(STAGE_BASE, "base_digest_inconsistent", str(e))]
     return []
@@ -255,9 +261,6 @@ def _stage_pit_freshness(x: DecisionDigestV2) -> list:
         if seg.used and fr is not FreshnessStatus.FRESH:
             out.append(_viol(STAGE_PIT_FRESHNESS, "freshness_used_requires_fresh",
                              f"{path}: used=True 時 evidence_freshness 必須是 FRESH（STALE／None 不得冒充已採用）：{fr!r}"))
-        if seg.withheld_reason == WITHHELD_STALE and fr is not FreshnessStatus.STALE:
-            out.append(_viol(STAGE_PIT_FRESHNESS, "freshness_stale_reason_mismatch",
-                             f"{path}: withheld_reason=stale 時 evidence_freshness 必須是 STALE：{fr!r}"))
         if fr in EVIDENCE_FRESHNESS_VALUES and seg.as_of is None:
             out.append(_viol(STAGE_PIT_FRESHNESS, "freshness_without_as_of",
                              f"{path}: evidence_freshness={fr!r} 時 base 該段 as_of 必須非 None（無戳＋FRESH／STALE 是矛盾資料）"))

@@ -239,8 +239,20 @@ def test_module_has_no_conversion_or_rebuild_functions_only_validate_and_assert(
 
 
 def test_validator_never_constructs_v1_or_v2_objects():
-    """驗證器只驗證，不建構：不呼叫 v1／v2 型別建構子（`AssembledDigest(…)` 僅作一致性檢查、不保留物件）。"""
+    """驗證器只驗證，不建構：不呼叫 v1／v2 型別建構子。唯一例外：`_stage_base` 內借用 `AssembledDigest.__post_init__`
+    一致性檢查——全模組恰好 1 個呼叫、位於 `_stage_base`、且為獨立 Expr 語句（不得賦值／return／傳出）。"""
     tree = _module_ast()
+    parents = {c: n for n in ast.walk(tree) for c in ast.iter_child_nodes(n)}
+    ad_calls = [n for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and ((isinstance(n.func, ast.Name) and n.func.id == "AssembledDigest")
+                                                or (isinstance(n.func, ast.Attribute) and n.func.attr == "AssembledDigest"))]
+    assert len(ad_calls) == 1
+    call = ad_calls[0]
+    assert isinstance(parents[call], ast.Expr)                      # 結果丟棄：不賦值、不 return、不傳出
+    fn = call
+    while not isinstance(fn, ast.FunctionDef):
+        fn = parents[fn]
+    assert fn.name == "_stage_base"
     called = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     called |= {n.func.attr for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     banned = {"DecisionDigest", "DigestCoverage", "SegmentEvidence", "DecisionDigestV2", "DigestCoverageV2",
@@ -250,7 +262,7 @@ def test_validator_never_constructs_v1_or_v2_objects():
 
 def test_zero_production_caller_for_the_prototype():
     """只准 tests/ 引用本原型（`ALLOWED_CALLERS` 與 v1 家族守衛都不動）。"""
-    roots = [REPO / "shared", REPO / "src", REPO / "scripts"]
+    roots = [REPO / d for d in ("shared", "src", "scripts", "infra", "mcp_server", "tools")]   # 不存在的目錄略過
     files = [p for r in roots if r.exists() for p in r.rglob("*.py") if "__pycache__" not in p.parts]
     files += [p for p in REPO.glob("*.py")]
     hits = [str(p.relative_to(REPO)) for p in files if "decision_digest_v2_proto" in p.read_text(encoding="utf-8", errors="ignore")]
@@ -569,6 +581,42 @@ def _every_fact(d):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 位置覆蓋（N4／N5／N6）：INV 不得只看「第一個」
+# ══════════════════════════════════════════════════════════════════════
+def test_n4_stale_fact_in_second_evidence_ref_of_an_action_is_caught():
+    spec = [("0050", T_CUT, "cut"), ("0056", T_TPF, "take_profit_force")]
+    first = action("0050", T_CUT, "cut", 1, evidence=("action_fact:pf-A:0050", "market.regime"))   # STALE 在第 2 個 ref
+    d = make_digest(market_facts=STALE_MARKET, entries=[entry(s, t, c) for s, t, c in spec],
+                    items=[first, action("0056", T_TPF, "take_profit_force", 2)])
+    assert validate_strict(d) == () and len(first.evidence_refs) == 2
+    x = v2_of(d, base_cov(segs=MARKET_STALE_SEGS), MARKET_STALE_AUDIT)
+    vs = validate_v2(x)
+    assert [v.code for v in vs] == ["inv1_stale_evidence_ref"] and "market.regime" in vs[0].message
+
+
+@pytest.mark.parametrize("position", [1, 2])
+def test_n5_stale_action_fact_in_a_non_first_entry_is_caught(position):
+    sa = _stale_entry_fact("cut", symbol="0050")
+    ents = [entry("0056", T_TPF, "take_profit_force"), entry("0058", T_TPP, "take_profit_partial")]
+    ents.insert(position, entry("0050", facts=(sa,)))
+    d = make_digest(entries=ents, items=[action("0056", T_TPF, "take_profit_force", 1)])
+    assert validate_strict(d) == () and ents[0].facts[0].status is DataStatus.OK
+    x = v2_of(d, base_cov(total=1, shown=1, hold=False), audit())
+    vs = validate_v2(x)
+    assert [v.code for v in vs] == ["inv4_stale_action_fact"] and f"entries[{position}]" in vs[0].message
+
+
+def test_n6_stale_action_fact_as_second_fact_of_an_entry_is_caught():
+    note_ok = ok_text("note:0050", "備註")                                  # rule=None、OK
+    sa = _stale_entry_fact("cut", symbol="0050")
+    d = make_digest(entries=[entry("0050", facts=(note_ok, sa)), entry("0056", T_TPF, "take_profit_force")],
+                    items=[action("0056", T_TPF, "take_profit_force", 1)])
+    assert validate_strict(d) == ()
+    x = v2_of(d, base_cov(total=1, shown=1, hold=False), audit())
+    assert [v.code for v in validate_v2(x)] == ["inv4_stale_action_fact"]
+
+
+# ══════════════════════════════════════════════════════════════════════
 # PIT（單向上界；只對 used 段）
 # ══════════════════════════════════════════════════════════════════════
 def test_pit_zero_action_baseline_is_valid():
@@ -608,6 +656,20 @@ def test_pit_as_of_after_fetched_taipei_date_is_rejected_and_same_taipei_day_pas
     assert validate_v2(ok) == ()
 
 
+def test_n10_taipei_day_differs_from_utc_day_boundary():
+    """generated_at＝UTC 10-27 23:30（台北已是 10-28 07:30）：as_of／fetched 的比較必須用台北日，不是 UTC 日。"""
+    gen = datetime(2026, 10, 27, 23, 30, tzinfo=timezone.utc)
+    fetched = datetime(2026, 10, 27, 23, 0, tzinfo=timezone.utc)                 # 台北 10-28 07:00，早於 generated
+    def x_with(as_of):
+        d = make_digest(entries=[], items=[], generated_at=gen)
+        segs = segs_with(holdings=seg(SEGMENT_HOLDINGS, as_of=as_of), actions=seg(SEGMENT_ACTIONS, as_of=as_of))
+        return v2_of(d, base_cov(total=0, shown=0, segs=segs, hold=False, act=False), audit(fetched=fetched))
+    assert gen.date() != gen.astimezone(timezone(timedelta(hours=8))).date()
+    assert validate_v2(x_with(date(2026, 10, 28))) == ()                         # 台北日當天：合規（UTC 日會誤判）
+    over = x_with(date(2026, 10, 29))
+    assert set(codes(over)) == {"pit_as_of_after_generated", "pit_as_of_after_fetched"}
+
+
 def test_pit_unused_segment_dates_are_audit_only_not_enforced():
     """未採用段（例如 pit_violation）的 as_of／fetched_at 只供稽核，本就可能帶未來日。"""
     d = make_digest(market_facts=[missing("market.regime"), missing("market.light"), missing("market.health")])
@@ -631,10 +693,11 @@ def test_used_segment_requires_fresh(fr):
     assert [v.code for v in validate_v2(x)] == ["freshness_used_requires_fresh"]
 
 
-@pytest.mark.parametrize("fr", [F.FRESH, None])
-def test_withheld_stale_requires_stale_freshness(fr):
-    x = v2_of(make_digest(market_facts=STALE_MARKET), base_cov(segs=MARKET_STALE_SEGS), audit(m=fr))
-    assert [v.code for v in validate_v2(x)] == ["freshness_stale_reason_mismatch"]
+def test_no_withheld_reason_to_freshness_implication_exists_no_source():
+    """已移除 `withheld_reason=stale ⇒ STALE`（無來源出處）：withheld stale 的段不因 audit 自報而被額外拒絕。"""
+    for fr in (F.FRESH, F.STALE, None):
+        x = v2_of(make_digest(market_facts=STALE_MARKET), base_cov(segs=MARKET_STALE_SEGS), audit(m=fr))
+        assert validate_v2(x) == ()
 
 
 @pytest.mark.parametrize("fr", [F.FRESH, F.STALE])
@@ -694,5 +757,5 @@ def test_real_v1_assembly_stale_still_degrades_to_missing_no_input_and_reason_li
     assert by["market"].withheld_reason == "stale" and by["risk_cap"].withheld_reason == "stale"
     x = v2_of(a.digest, a.coverage, audit(m=F.STALE, r=F.STALE))
     assert validate_v2(x) == ()
-    # 不得把『過期』偽裝成已採用：同一份資料若自報 FRESH 且 used=False/stale → 欄位間蘊含不成立
-    assert "freshness_stale_reason_mismatch" in codes(v2_of(a.digest, a.coverage, audit(m=F.FRESH, r=F.STALE)))
+    # 不得把『過期』偽裝成已採用：used=True 的段自報 STALE／None 會被 used⇒FRESH 擋下
+    assert "freshness_used_requires_fresh" in codes(v2_of(a.digest, a.coverage, audit(h=F.STALE)))
