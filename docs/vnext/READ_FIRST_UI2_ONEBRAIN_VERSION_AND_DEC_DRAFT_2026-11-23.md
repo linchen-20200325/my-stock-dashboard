@@ -1,3 +1,6 @@
+> **⚠️ 2026-11-24 版本更正：本文件下方關於 v1.0「仍 DRAFT／未核准」均為 2026-11-23 歷史狀態，現已被正式核准產品規格取代，切勿再以舊文字派工。**  
+> **最新產品基準**：[`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md`](UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md)（完整十一章）＋[`UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md`](UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md)（五項安全修正與差額），版本 `UI2-ONEBRAIN-PRODUCT-V1.0-APPROVED-2026-11-23`，正式 DEC-224。核准來源：[Issue #1199/7110182570](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7110182570)。**核准的是產品目標，不是正式 UI／資料／Rules／模型施工或 Ready／merge／deploy**；遇有效 Active Contract 差額保持原 Gate。設計稿 v2 仍只是離線視覺稿；v1.1 Radar／Signal Log／Canonical Evidence Store 全 HOLD。
+
 # READ FIRST｜New UI2 × OneBrain 版本指引及 2026-11-23 決策封存
 
 > **閱讀入口（2026-11-23）｜DRAFT，非正式施工 Gate**。此文件是新增的版本索引與產品討論封存；**不取代 GitHub Issue #1199、已生效 DEC/Contract、ADR-OB-001、當前 main/PR/CI/QA**。任何後續工作先查 GitHub live 狀態，不可套用此日 SHA 作為永遠最新。
