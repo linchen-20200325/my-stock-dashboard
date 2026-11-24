@@ -20,12 +20,11 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 **第 6 條 文案**：本草案不授權任何字樣變更；新字樣另走文案 Gate 與線框先行。
 
 ## 3. 逐功能 FORMAL 前提（PROPOSED；**非單一總門檻**，各列只依自己的原 DEC；任一該功能的必要條件未滿足只影響該功能）
-本表只列「正式判定」的前提；**已授權的事實顯示（含 TWII 日 K）不在本表，見 §4**；「是否已部署可交付」不在本表，見 §5(b)。
+本表只列「正式判定」的前提；**已授權的事實顯示（含 TWII 日 K 顯示）不是本表的正式功能，不適用 FORMAL／UNDETERMINABLE 軸，見 §4**；「是否已部署可交付」不在本表，見 §5(b)。
 | 功能 | 原依據 | 必要條件（判定面） | 現況 |
 |---|---|---|---|
 | 市場位階 | DEC-074 B（:2173）、DEC-075 D-1(a)（:2198）、DEC-161（:8078） | 代理廣度不可計分（DEC-074 B）；受 breadth 影響而無法依既有正式規則可靠計算的元件 →「⬜ 未評估／資料不足」，位階一併未評估（DEC-075 D-1(a)），失效只影響實際依賴它的元件，不重設權重。「位階須有 as_of」＝**INFERENCE／待裁示**：DEC-161 只是 G-F1 唯讀契約授權，不是該條件的出處 | 否：`RegimeFact` 無 as_of（`src/services/ui2/real_canonical.py:160`） |
 | Risk Cap | DEC-054 第 3、4 點（:1588）、`shared/risk_cap_policy.py:55-116`、`src/services/macro_state_locker.py:666-694` | **(i) Required Core 5 輸入**（`REQUIRED_CORE_INPUTS`：VIX、台灣 PMI 當月、台灣 PMI 前月、外資期貨淨空單、加權指數跌破 MA5）**各依自己的新鮮度**：新鮮度非 FRESH 或計分值為 None ⇒ 無法評估，本輪不產生新上限。**(ii) 有效輸出快照**（與 (i) 是不同層次，不得混為一談）：專用 `risk_cap_state.json`（`RISK_CAP_STATE_FILE`）；`required_core_ok` 為布林 `True`（`is True`，不收 1／"true"）；`risk_cap_ruleset_version` 等於現行規則版本 `risk_cap.v2`（`RISK_CAP_RULESET_VERSION`）；`market_regime` 非 None／「系統異常」；**快照期限 7 曆日**（`MACRO_VERDICT_MAX_AGE_DAYS`，由 `macro_state_is_expired` 判；這是快照期限，不是 Core 輸入的新鮮度）；`exposure_limit_pct` 為 0~100 的整數值（`_valid_new_cap`），上限值為 null 或缺 ⇒ 沒有上限，格式不合法 ⇒ 沒有上限＋錯誤。讀端只取自本檔，不退回 `macro_state.json`。**Optional 輸入**（`OPTIONAL_INPUTS`：M1B／M2、BIAS240、PCR）缺項 ⇒ 依原規則續算、不計分，但須揭露為未評估（`not_evaluated`）；M1B／M2 在 `risk_cap.v2` 為依定義停用，不算未評估。**判定**：無有效快照（缺檔、ruleset 不符、`required_core_ok` 非 True、逾 7 曆日、上限值不合法）→ 無法判定；Core 輸入缺項只影響「是否產生新快照」（本輪不寫檔、不產生新上限），讀端仍可沿用 7 曆日內的有效快照（出處：`docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7.1 第 2 列〔:200；該文自標為研究結論，非裁示〕、`src/services/risk_cap_apply.py` `REASON_CORE_MISSING`、`macro_state_locker.py:666-694`） | 否（UI2 數值 Gate 前恆 ⬜ 無法判定）；兩層各自是否成立 NOT VERIFIED |
-| TWII 日 K | （事實顯示，不是正式趨勢判定） | 不在本表：屬 §4 第 1~3 項已授權事實顯示，條件見 §4 第 1 項；正式趨勢維持「尚未定義」 | 見 §4 |
 | 個股 | DEC-215（:10967）、DEC-213（:10932） | 母體＝可評分全集，排除列另行揭露 | 無接線；各前提逐項 NOT VERIFIED |
 | 持股 | DEC-215 §一第 2 點、DEC-218 §一（:11085）、Holdings 契約 §A 註（:47-55，過渡期規則 :53）、§C-6（:119） | 範圍＝「👤 我的」選定的**單一本組合**（DEC-218 Q2=(a)）；**持有全集**（Q1=B）含個股**與 ETF**、觀察清單不計入，**與 DEC-215 可評分全集分開計數、各有各的分母**（不得把所有 held 直接叫可評分，分母不得由輸出截斷倒推）；IN-U（張數／均價空白的合法持有列）保留不得刪；總量未知＝UNKNOWN／None，不得為 0／中性／SAFE；**過期值可留在持有全集並標 STALE／資料日，但不因有過期數值就自動算已評估**；重複代號須揭露、不得默默去重。**過渡期**（Holdings 契約 §A 註，客戶 #1199 7071998333）：任一無效列 ⇒ **整段 `holdings_rows=None`**（不是 `[]`，也不是剔除後的部分列），只能說「無法判定」。**§C-6 的「獨立 expected 母體」只是契約候選（`is_complete=False` 直到有獨立 expected），屬 DEC-213 I3 的 G2 Gate（客戶獨立授權）——不是已解的 G2，不得讀成已具備獨立完整性分母** | 無接線；各前提逐項 NOT VERIFIED |
 | Digest／OneBrain（單期） | ADR-OB-001（`docs/vnext/ONEBRAIN_ARCHITECTURE_DECISION_2026-10-31.md:7-18`，本文僅讀第 2、4、8 點）、DEC-054 第 2、3 點、DEC-160 裁示 2（:8067） | **單期**正式前提：正式上游輸入（Canonical Data → Deterministic Rules／Risk Engine）成立；所用規則可追溯（來源／as_of）；缺值或 PIT／過期不合格者依 DEC-160 裁示 2 與 DEC-054 第 3 點降級——不當 fresh、不補 0／中性／SAFE，並揭露缺口。OneBrain 僅解釋，不改寫 Risk Cap、規則或公式（ADR-OB-001 第 4 點）。**不含**「前次快照」（那是 What Changed，見下列） | 各前提逐項 NOT VERIFIED |
@@ -37,7 +36,7 @@ D-a=A（詞表）、D-b=A（僅 FORMAL／UNDETERMINABLE）、D-c=A（先 docs）
 **來源（FACT；#1276 已合併，2026-11-24 更正）**：PR #1276（已合併，main 98d01686；DEC-224 已入庫；2026-11-24 以 main 現文重讀）：`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md:65-72`（Level 2＝所有原正式必要條件成立才照既有規則得正式結論；Level 1＝核心價格證據有效、輔助證據（例如廣度）不足時最多是有來源與缺口揭露的研究參考，不得新增正式市場位階、正式第三狀態、動作或放寬 Risk Cap；Level 0＝核心證據不足／過期／不可用，禁止投資結論；均非信心分數／公式／擇時／買賣權限）、`…PRODUCT_GOAL_V1_0_APPROVED…:13`（既有正式軸 FORMAL／UNDETERMINABLE 不新增第三值）、`…PRESENTATION_CONTRACT_DELTA_2026-11-24.md:3,8,10`（DIFF／NOT A CONTRACT OVERRIDE）、DEC-224 第 2 點（核准的是產品目標，不是施工／合併／部署 Gate；#1275 Must-Fix 與 DEC-124／081／092 仍走原 Gate）。以上自 #1276 合併起為 main 上的現行文件（DEC-224 地位＝核准產品目標，不是施工／合併／部署 Gate）。
 | 呈現層（#1276／DEC-224 用語） | 對照正式判定軸 | 限制 |
 |---|---|---|
-| Level 2 | FORMAL：§3 該功能的必要條件全部成立（只對該功能） | 照既有規則得結論，揭露資料日與來源 |
+| Level 2 | FORMAL：§3 該功能的必要條件全部成立（只對該功能） | 照既有規則得結論，揭露資料日與來源；§3 以外的事實顯示（如 TWII 日 K）不適用此對映 |
 | Level 0 | UNDETERMINABLE：顯示既有「⬜ 無法判定」 | 無投資結論；不得為 0／中性／安全 |
 | Level 1 | **沒有對應的正式判定值**（INFERENCE） | 僅呈現層「研究參考」：新鮮、合格、可追溯的觀察事實＋來源＋as_of＋揭露缺口。**不是**第三個正式結果；不新增 Enum／DataStatus／FieldState（DEC-124）；不產生位階／System Action／Risk Cap／信心。stale、PIT 不合格、未來日、歧義日的值**不得**成為 Level 1 內容（DEC-160／201／207；§4 第 9a、9b） |
 **粒度（INFERENCE，請正式 DEC Gate 確認）**：#1276 的「所有原正式必要條件／核心證據」依 §2／§3 與 Work Must-Fix 4 讀作**逐功能**，不是全站單一門檻。
