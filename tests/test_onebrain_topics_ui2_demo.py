@@ -34,6 +34,7 @@ import tests.onebrain_holdings_ui2_demo_vm as VM
 import tests.test_onebrain_holdings_ui2_demo_view as LT
 import tests.ui2_viewport.onebrain_hold_demo_evidence as EV
 import tests.ui2_viewport.onebrain_hold_demo_launcher as L
+import tests.ui2_viewport.onebrain_topics_evidence as EVT
 from shared.decision_digest import Availability, DataStatus
 from shared.decision_digest_grounding import Ref, build_ref_index
 from shared.ui2_contract.models import FieldState, JudgementState
@@ -66,6 +67,8 @@ RISK_FIXTURE_SOURCE = "來源 FAKE-SYN 合成反證（非 Digest 欄位）｜時
 FIXTURE_CASES = ("L2",)
 CORE_MAX_SENTENCES, CORE_LT_CODEPOINTS, POINT_LT_CODEPOINTS = 3, 100, 25
 L_CORE, L_POINTS, L_SUP, L_CTR, L_GAP, L_SRC = "核心觀察", "觀察重點", "支持證據", "反面證據", "缺項", "來源時點"
+L_CITE = "引用（非支持證據）"          # Digest 原句所引用的欄位：只是引用，不是支持證據（SF-A）
+D7_OVER = "預覽暫行口徑超限（D7 未裁"    # 暫行口徑超限降級的原因字樣（SF-C）；與「資料不可用」區分
 LABELS = {"示意", "核心觀察", "持股判讀", "存股", "資本利得", "觀察重點", "支持證據", "反面證據", "缺項", "來源時點"}
 #: 任何主題、任何案例、任何位置都不得出現
 NEVER_ANYWHERE = ("顯示＝規則式摘要", "FakeProvider", "§C", "示範鏈", "與本頁其他 FAKE 數字無關", "is_complete")
@@ -158,7 +161,7 @@ def _gap_oracle(cid):
     n_unset = sum(1 for e in h.entries if e.strategy.value == "未分類")
     if n_unset > 0:
         gaps.append(f"尚未設定投資策略分類 {n_unset} 檔")
-    return "；".join(gaps)
+    return "；".join([*gaps, "支持證據：無"])
 
 
 def _expected_labels(topic, cid, fc=False):
@@ -166,7 +169,7 @@ def _expected_labels(topic, cid, fc=False):
     if fc or topic == "大盤":
         return base
     if topic == "產業前瞻":
-        return ["示意", L_CORE, L_POINTS, L_SUP, L_GAP, L_SRC]
+        return ["示意", L_CORE, L_POINTS, L_CITE, L_GAP, L_SRC]
     if topic == "持股健檢":
         if _holdings_is_over_limit(cid):
             return base
@@ -174,7 +177,7 @@ def _expected_labels(topic, cid, fc=False):
         mid = ["持股判讀"] if d.holdings.availability is not Availability.AVAILABLE else []
         n_sup = len(_cited_refs(cid, "buy_and_hold", "capital_gain"))
         return ["示意", *mid, *("存股" for _ in dict(_chain(cid)[1].lines)["buy_and_hold"]),
-                *("資本利得" for _ in dict(_chain(cid)[1].lines)["capital_gain"]), L_POINTS, *([L_SUP] * n_sup), L_GAP, L_SRC]
+                *("資本利得" for _ in dict(_chain(cid)[1].lines)["capital_gain"]), L_POINTS, *([L_CITE] * n_sup), L_GAP, L_SRC]
     if cid in FIXTURE_CASES:
         return ["示意", L_CORE, L_POINTS, L_CTR, L_CTR, L_GAP, L_SRC]
     return base
@@ -186,6 +189,8 @@ def _core_sentences(sec):
     for f in sec.fields:
         if f.label in ("存股", "資本利得") or (f.label == L_CORE and not isinstance(f.state, JudgementState)):
             out.append(f.value_text)
+        elif f.label == L_CORE and (f.detail or "").startswith("⬜ 產業趨勢"):     # 產業前瞻：原句放在無法判定徽章列的 detail（SF-D）
+            out.append(f.detail)
     return out
 
 
@@ -214,7 +219,8 @@ def _check_section_invariants(topic, cid, fc, sec):
     # 缺值不補 0：任何列都不得出現單獨的 0／0%／N/A 之類
     assert not re.search(r"(?<![\d.])0(?:\.0+)?%?(?![\d.])", text), f"疑似補 0：{text}"
     # 支持／反面證據列：每列都有證據編號／來源／時點／狀態
-    for f in (*_rows(sec, L_SUP), *_rows(sec, L_CTR)):
+    assert not _rows(sec, L_SUP), "本預覽沒有任何真正的支持證據：不得出現標「支持證據」的列（只有「引用（非支持證據）」）"
+    for f in (*_rows(sec, L_CITE), *_rows(sec, L_CTR)):
         for k in ("證據編號 ", "｜來源 ", "｜時點 ", "｜狀態 "):
             assert k in f.value_text, f"證據列缺 {k}：{f.value_text}"
     # 單一來源時點列
@@ -299,12 +305,14 @@ def test_industry_shows_only_the_existing_undefined_sentence_with_no_provenance(
     assert _sentences(cid, "industry") == (INDUSTRY_SENTENCE,)
     sec = _sec("產業前瞻", cid)
     core = _rows(sec, L_CORE)
-    assert [f.value_text for f in core] == [INDUSTRY_SENTENCE]
-    assert [f.value_text for f in _rows(sec, L_SUP)] == [_ev_text(CITED_CLAIM, "section:industry", "無", "無", "無")]
+    assert len(core) == 1 and core[0].state is JudgementState.UNDETERMINABLE and core[0].status_text == UNDET, \
+        "unavailable 主題的狀態標記一致：同徽章、同 judgement/undeterminable（SF-D）"
+    assert core[0].value_text is None and core[0].detail == INDUSTRY_SENTENCE, "Digest 原句逐字放在徽章列下方"
+    assert [f.value_text for f in _rows(sec, L_CITE)] == [_ev_text(CITED_CLAIM, "section:industry", "無", "無", "無")]
     assert _cited_refs(cid, "industry") == ["section:industry"]
     assert _rows(sec, L_POINTS)[0].value_text == "①核心觀察（原句見上）"
     assert _rows(sec, L_SRC)[0].value_text == INDUSTRY_SOURCE
-    assert _rows(sec, L_GAP)[0].value_text == "產業趨勢尚未定義；反面證據：無"
+    assert _rows(sec, L_GAP)[0].value_text == "產業趨勢尚未定義；支持證據：無｜反面證據：無"
 
 
 @pytest.mark.parametrize("cid", [c for c in CASE_IDS if c not in ("L1", "L2")])
@@ -313,7 +321,7 @@ def test_holdings_verbatim_sentences_and_cited_evidence(cid):
     want = [("存股" if k == "buy_and_hold" else "資本利得", t) for k in ("buy_and_hold", "capital_gain") for t in _sentences(cid, k)]
     got = [(f.label, f.value_text) for f in sec.fields if f.label in ("存股", "資本利得")]
     assert got == want, "Digest 原句必須逐字、依原順序"
-    sup = [f.value_text for f in _rows(sec, L_SUP)]
+    sup = [f.value_text for f in _rows(sec, L_CITE)]
     assert sup == [_ev_text(CITED_CLAIM, rid, "無", "無", "無") for rid in _cited_refs(cid, "buy_and_hold", "capital_gain")]
     d, _s = _chain(cid)
     idx = build_ref_index(d)
@@ -336,9 +344,12 @@ def test_holdings_over_limit_degrades_to_undeterminable_with_badge_and_no_droppe
     assert _labels(sec) == ["示意", L_CORE, L_POINTS, L_GAP, L_SRC]
     core = sec.fields[1]
     assert core.state is JudgementState.UNDETERMINABLE and D7_MARK in core.detail and "不截斷" in core.detail
+    assert D7_OVER in core.detail and "並非資料不可用" in core.detail, "原因必須明示為暫行口徑超限，且與資料不可用在文字上可區分（SF-C）"
     assert not any(f.label in ("存股", "資本利得") for f in sec.fields), "超限不得顯示被截斷的句子"
-    assert _rows(sec, L_SUP) == []
+    assert _rows(sec, L_CITE) == []
     assert _rows(sec, L_GAP)[0].value_text == _gap_oracle(cid)
+    for other, ocid in (("大盤", cid), ("反方風險", cid), ("持股健檢", "R1")):          # 其他「無法判定」原因的字樣不得冒用「暫行口徑超限」
+        assert D7_OVER not in _all_text(_sec(other, ocid)) and D7_OVER not in _all_text(_sec(other, ocid, True))
 
 
 def test_counter_fixture_only_in_declared_cases_and_not_derived_from_digest():
@@ -394,6 +405,7 @@ def _ev(status, **kw):
 def test_evidence_field_status_texts(status, state, mark):
     f = T.evidence_field(_ev(status))
     assert f.state is state and f.label == L_SUP
+    assert T.evidence_field(dataclasses.replace(_ev(status), kind="cite")).label == L_CITE
     assert f.value_text == _ev_text("示意證據", "fake-syn:x:1", "FAKE 來源", "FAKE 示意日 2026-10-26", mark)
     assert (f.status_text or "").startswith("⚠") is (status is DataStatus.STALE)
 
@@ -431,7 +443,7 @@ def test_failclosed_all_four_topics_degrade_honestly():
         sec = _sec(topic, "L3", True)
         assert _labels(sec) == ["示意", L_CORE, L_POINTS, L_GAP, L_SRC]
         assert sec.fields[1].state is JudgementState.UNDETERMINABLE
-        assert not any(f.label in ("存股", "資本利得", L_SUP, L_CTR) for f in sec.fields)
+        assert not any(f.label in ("存股", "資本利得", L_SUP, L_CITE, L_CTR) for f in sec.fields)
         if topic != "大盤":
             assert "示意內容未能產生" in _all_text(sec)
 
@@ -766,6 +778,40 @@ def test_mutation_selector_that_only_swaps_the_label_turns_red(monkeypatch):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# E2. 疊層遮擋判定器（SF-B）：貼底控制群組不得遮住槽內任何文字
+# ══════════════════════════════════════════════════════════════════════
+def _occ(**over):
+    base = {"texts": {"0": "示意：合成持股快照", "1": "核心觀察"}, "ever_exposed": {"0": True, "1": True},
+            "first_row_exposed_at_top": True, "bar_present": True, "bar_height": 90, "viewport_h": 844}
+    base.update(over)
+    return base
+
+
+def _assert_occlusion_judge_has_teeth():
+    assert EVT.check_occlusion(_occ()) == []
+    hidden = EVT.check_occlusion(_occ(ever_exposed={"0": True, "1": False}))
+    assert hidden and "核心觀察" in hidden[0], "任一槽內文字從未完整露出 ⇒ 必須回報"
+    first = EVT.check_occlusion(_occ(first_row_exposed_at_top=False))
+    assert first and "示意" in first[0], "捲動最上方時『示意』揭露列被遮 ⇒ 必須回報"
+    assert EVT.check_occlusion(_occ(bar_present=False, first_row_exposed_at_top=False)) == [], "沒有控制群組（Real 等）不適用遮擋判定"
+
+
+def test_occlusion_judge_has_teeth():
+    _assert_occlusion_judge_has_teeth()
+
+
+def test_mutation_occlusion_judge_that_always_passes_turns_red(monkeypatch):
+    monkeypatch.setattr(EVT, "check_occlusion", lambda occ: [])
+    with pytest.raises(AssertionError):
+        _assert_occlusion_judge_has_teeth()
+
+
+def test_ctrl_css_reserves_space_below_content_and_is_compact():
+    css = L.CTRL_CSS
+    assert "padding-bottom" in css and ".block-container" in css, "頁尾必須保留貼底群組的高度，內容才捲得出來"
+
+
+# ══════════════════════════════════════════════════════════════════════
 # G. 真瀏覽器 390／1280／1440（ui2_browser）
 # ══════════════════════════════════════════════════════════════════════
 @pytest.fixture(scope="module")
@@ -858,6 +904,29 @@ def test_browser_real_feed_has_no_selector_or_demo(_browser_ctx):
         assert m["ctrl"] is None and "OneBrain 持股摘要｜" not in (m["title"] or "")
         assert not any("fake-syn" in r["value"] or "示意：合成" in r["value"] for r in m["rows"])
         ctx.close()
+    finally:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+@pytest.mark.ui2_browser
+@pytest.mark.parametrize("case,failclosed", [("R1", False), ("L2", False), ("L3", True)])
+def test_browser_sticky_bar_never_hides_slot_text(_browser_ctx, case, failclosed):
+    """貼底控制群組在『最上捲動位置的第一列（示意揭露）』與『逐步捲動後每個槽內文字元素』都必須能完整露出（不被貼底群組或頂部導覽遮住）。"""
+    p, b = _browser_ctx
+    env = {"UI2_OBDEMO_CASE": case, **({"UI2_OBDEMO_FAILCLOSED": "1"} if failclosed else {})}
+    proc, url, log = EV.start_server(ROOT, env, sys.executable)
+    try:
+        for vp, (vw, vh) in EV.VIEWPORTS.items():
+            ctx = EV._new_context(b, vw, vh, [])
+            page = ctx.new_page()
+            EV._open_hold_fake(page, url)
+            for topic in TOPICS:
+                _click_topic(page, topic)
+                occ = EVT.measure_occlusion(page)
+                assert occ["bar_present"] and occ["texts"], (vp, topic)
+                assert EVT.check_occlusion(occ) == [], (vp, topic, case, EVT.check_occlusion(occ))
+            ctx.close()
     finally:
         proc.kill()
         proc.wait(timeout=10)
