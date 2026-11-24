@@ -54,7 +54,9 @@ KEY_TOPIC = "ui2_obdemo_topic"              # st.radio 的 session key（ui2_ �
 # ══════════════════════════════════════════════════════════════════════
 L_DEMO, L_JUDGE = VM.LABEL_DEMO, VM.LABEL_JUDGEMENT
 L_CORE, L_POINTS, L_SUPPORT, L_COUNTER, L_GAP, L_SRC = "核心觀察", "觀察重點", "支持證據", "反面證據", "缺項", "來源時點"
-LABELS = (L_DEMO, L_CORE, L_JUDGE, VM.LABEL_BUY_AND_HOLD, VM.LABEL_CAPITAL_GAIN, L_POINTS, L_SUPPORT, L_COUNTER, L_GAP, L_SRC)
+#: Digest 原句所引用的欄位（`section:*`）：只是「引用」，**不是**支持證據（本預覽的原句皆為「無法判定」類句子，標成支持證據會被讀成「無法判定卻有支持證據」）。
+L_CITE = "引用（非支持證據）"
+LABELS = (L_DEMO, L_CORE, L_JUDGE, VM.LABEL_BUY_AND_HOLD, VM.LABEL_CAPITAL_GAIN, L_POINTS, L_CITE, L_COUNTER, L_GAP, L_SRC)
 
 # ══════════════════════════════════════════════════════════════════════
 # 預覽暫行口徑（D7 未裁）
@@ -76,11 +78,10 @@ POINTS_NONE_UNAVAILABLE = "無（本主題無法判定，沒有可列入的重�
 POINTS_NONE_TOO_LONG = "無（核心觀察各句皆超過預覽暫行字數上限，未列入觀察重點）"
 CITED_CLAIM = "原句引用"
 GAP_MARKET = "大盤對外句型尚未裁示；支持證據：無｜反面證據：無"
-GAP_INDUSTRY = "產業趨勢尚未定義；反面證據：無"
+GAP_INDUSTRY = "產業趨勢尚未定義；支持證據：無｜反面證據：無"
 GAP_RISK_NO_INPUT = "無反證輸入（Digest 沒有反證欄位）；支持證據：無｜反面證據：無"
 GAP_RISK_FIXTURE = "支持證據：無（本主題只呈現反面證據）"
 GAP_DEGRADED = "示意內容未能產生；支持證據：無｜反面證據：無"
-GAP_NONE_LISTED = "本預覽未列出缺項"
 SRC_NONE = "來源 無（本主題沒有顯示任何來源資料）｜時點 無"
 SRC_INDUSTRY = "來源 無（該句本身沒有來源、時點、狀態）｜時點 無"
 SRC_HOLDINGS = f"來源 {VM.SOURCE_VALUE}｜時點 {VM.ASOF_VALUE}"
@@ -89,6 +90,11 @@ NO_VALUE = "無"
 STATUS_OK = "有資料"
 STATUS_INSUFFICIENT = "資料不足"
 _CIRCLED = "①②③"
+
+
+def _over_limit_detail(reason: str) -> str:
+    """暫行口徑超限而降級的原因（與「資料不可用」在文字上可區分）：⛔ 不截斷、不丟句。"""
+    return f"{D7_MARK}｜原因：預覽暫行口徑超限（D7 未裁）：{reason}；不截斷、不丟句；並非資料不可用"
 
 
 class TopicError(RuntimeError):
@@ -100,7 +106,7 @@ class TopicError(RuntimeError):
 # ══════════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
 class Evidence:
-    kind: str                       # "support"｜"counter"
+    kind: str                       # "cite"（Digest 原句引用）｜"counter"（合成反證）｜"support"（保留給日後真正的支持證據；本預覽不使用）
     ev_id: str                      # 證據編號：Digest 的引用 id，或 `fake-syn:` 開頭的合成夾具 id
     claim: str
     source: Optional[str]           # None＝該引用本身沒有來源 ⇒ 照實顯示「無」
@@ -142,6 +148,8 @@ def evidence_field(ev: Evidence) -> FieldVM:
     STALE ⇒ 既有「資料已過期」字樣＋`⚠` 徽章；PROXY ⇒ 既有「代理估算」字樣；MISSING ⇒ 缺值態（不帶 value）。"""
     if ev.kind == "support":
         label = L_SUPPORT
+    elif ev.kind == "cite":
+        label = L_CITE
     elif ev.kind == "counter":
         label = L_COUNTER
     else:
@@ -259,7 +267,7 @@ def _cited_refs(summary, *keys) -> list:
 
 def _cited_evidence(ref_ids) -> tuple:
     """Digest 原句所引用的欄位：`section:*`／`holding:*` 引用本身沒有 source／as_of／status ⇒ 照實「無」。"""
-    return tuple(Evidence("support", rid, CITED_CLAIM, None, None, None, False) for rid in ref_ids)
+    return tuple(Evidence("cite", rid, CITED_CLAIM, None, None, None, False) for rid in ref_ids)
 
 
 def _holdings_gaps(digest) -> str:
@@ -272,7 +280,7 @@ def _holdings_gaps(digest) -> str:
     n_unset = sum(1 for e in h.entries if e.strategy is StrategyType.UNCLASSIFIED)
     if n_unset > 0:
         gaps.append(f"{MARK_STRATEGY_UNSET} {n_unset} 檔")
-    return "；".join(gaps) or GAP_NONE_LISTED
+    return "；".join([*gaps, "支持證據：無"])
 
 
 def _view_market() -> TopicView:
@@ -286,9 +294,10 @@ def _view_industry(case_id: str) -> TopicView:
         raise TopicError("產業段應恰有 1 句")
     reason = check_core(sents)
     if reason is not None:
-        return _unavailable(TOPIC_INDUSTRY, f"{D7_MARK}：{reason}；不截斷、不丟句，本主題改列無法判定", GAP_INDUSTRY, SRC_INDUSTRY)
+        return _unavailable(TOPIC_INDUSTRY, _over_limit_detail(reason), GAP_INDUSTRY, SRC_INDUSTRY)
     sup = [evidence_field(e) for e in _cited_evidence(_cited_refs(summary, "industry"))]
-    return TopicView(TOPIC_INDUSTRY, (_d(L_DEMO, VM.DISCLOSURE_FIRST), _d(L_CORE, sents[0]), _points_row([(L_CORE, sents[0])]), *sup,
+    # 核心觀察列與大盤／反方風險同一種狀態標記（⬜ 無法判定徽章＋judgement/undeterminable）；Digest 原句逐字放在徽章列的說明行。
+    return TopicView(TOPIC_INDUSTRY, (_d(L_DEMO, VM.DISCLOSURE_FIRST), _undeterminable(L_CORE, sents[0]), _points_row([(L_CORE, sents[0])]), *sup,
                                       _d(L_GAP, GAP_INDUSTRY), _d(L_SRC, SRC_INDUSTRY)))
 
 
@@ -300,7 +309,7 @@ def _view_holdings(case_id: str) -> TopicView:
     if reason is not None:
         return TopicView(TOPIC_HOLDINGS, (
             _d(L_DEMO, VM.DISCLOSURE_FIRST),
-            _undeterminable(L_CORE, f"{D7_MARK}：{reason}；不截斷、不丟句，本主題改列無法判定"),
+            _undeterminable(L_CORE, _over_limit_detail(reason)),
             _points_row(()), _d(L_GAP, gap_text), _d(L_SRC, SRC_HOLDINGS)))
     rows = [_d(L_DEMO, VM.DISCLOSURE_FIRST)]
     if digest.holdings.availability is not Availability.AVAILABLE:

@@ -39,7 +39,7 @@ FILES = ("tests/onebrain_holdings_ui2_demo_topics.py", "tests/ui2_viewport/onebr
 NEVER = ("顯示＝規則式摘要", "FakeProvider", "§C", "示範鏈", "與本頁其他 FAKE 數字無關", "is_complete")
 MARKET_WORDS = ("bull", "🟢", "72.5", "市場位階", "市場燈號", "市場健康度")
 CHECKS = ("topic_title", "disclosure_first", "rows_match_vm", "no_expander", "ctrl_present_with_fake_marker", "ctrl_outside_slot",
-          "no_horizontal_overflow", "no_forbidden_text", "d7_marker_in_slot")
+          "no_horizontal_overflow", "no_forbidden_text", "d7_marker_in_slot", "no_occlusion")
 
 _JS_EXTRA = r"""
 () => {
@@ -54,6 +54,67 @@ _JS_EXTRA = r"""
           vh: innerHeight, vw: innerWidth};
 }
 """
+
+
+_JS_OCC = r"""
+() => {
+  const slot = document.querySelector('[data-ui2-l1="onebrain"]');
+  const bar = document.querySelector('.st-key-ui2_obdemo_ctrl');
+  const nav = document.querySelector('.st-key-ui2_nav');
+  const main = document.querySelector('[data-testid="stMain"]');
+  const r = e => e.getBoundingClientRect();
+  const els = slot ? [...slot.querySelectorAll('.ui2-section-title,.ui2-row__label,.ui2-row__value,.ui2-row__detail,.ui2-chip')]
+                        .filter(e => (e.innerText || '').trim()) : [];
+  const first = slot ? slot.querySelector('.ui2-row') : null;
+  return {vh: innerHeight, nav_bottom: nav ? r(nav).bottom : 0, bar_top: bar ? r(bar).top : null, bar_height: bar ? r(bar).height : 0,
+          scroll_max: main ? main.scrollHeight - main.clientHeight : 0,
+          els: els.map(e => ({t: r(e).top, b: r(e).bottom, h: r(e).height, text: e.innerText.trim().slice(0, 30)})),
+          first: first ? {t: r(first).top, b: r(first).bottom} : null};
+}
+"""
+OCC_STEP_PX = 120
+
+
+def _scroll_to(page, y: float) -> None:
+    page.evaluate("(y) => { const m = document.querySelector('[data-testid=\"stMain\"]'); if (m) m.scrollTo({top: y, behavior: 'instant'}); }", y)
+    page.wait_for_timeout(80)
+
+
+def _exposed(el: dict, nav_bottom: float, bar_top, vh: float) -> bool:
+    """文字元素完整落在『頂部導覽之下、貼底控制群組之上』的可見帶內。"""
+    floor = vh if bar_top is None else bar_top
+    return el["h"] > 0 and el["t"] >= nav_bottom - 0.5 and el["b"] <= floor + 0.5
+
+
+def measure_occlusion(page) -> dict:
+    """逐步捲動（最上→最下）量測：槽內每個文字元素是否「曾經完整露出」（沒被頂部導覽／貼底控制群組遮住）；
+    並單獨記錄最上捲動位置時『示意』揭露列（槽內第一列）是否完整露出。量完捲回最上。"""
+    _scroll_to(page, 0)
+    top = page.evaluate(_JS_OCC)
+    out = {"bar_present": top["bar_top"] is not None, "bar_height": round(top["bar_height"], 1), "viewport_h": top["vh"],
+           "texts": {str(i): e["text"] for i, e in enumerate(top["els"])}, "ever_exposed": {str(i): False for i in range(len(top["els"]))},
+           "first_row_exposed_at_top": bool(top["first"]) and top["first"]["t"] >= top["nav_bottom"] - 0.5
+           and top["first"]["b"] <= (top["vh"] if top["bar_top"] is None else top["bar_top"]) + 0.5}
+    ys = list(range(0, int(top["scroll_max"]) + 1, OCC_STEP_PX)) + [int(top["scroll_max"])]
+    for y in ys:
+        _scroll_to(page, y)
+        cur = page.evaluate(_JS_OCC)
+        for i, e in enumerate(cur["els"]):
+            if i < len(out["ever_exposed"]) and _exposed(e, cur["nav_bottom"], cur["bar_top"], cur["vh"]):
+                out["ever_exposed"][str(i)] = True
+    _scroll_to(page, 0)
+    return out
+
+
+def check_occlusion(occ: dict) -> list[str]:
+    """純函式判定：貼底控制群組存在時，(1) 槽內每個文字元素都必須在某個捲動位置完整露出；(2) 最上捲動位置時『示意』揭露列必須完整露出。
+    沒有控制群組（Real 等）⇒ 不適用。"""
+    if not occ.get("bar_present"):
+        return []
+    out = [f"槽內文字從未完整露出（被貼底控制群組或頂部導覽遮住）：{occ['texts'][i]}" for i, ok in occ["ever_exposed"].items() if not ok]
+    if not occ.get("first_row_exposed_at_top"):
+        out.append(f"捲動最上方時，『示意』揭露列被貼底控制群組遮住（群組高 {occ.get('bar_height')}px／視窗高 {occ.get('viewport_h')}px）")
+    return out
 
 
 def _sha(p: Path) -> str:
@@ -93,6 +154,7 @@ def evaluate_topic(m: dict, topic: str, case: str, failclosed: bool) -> dict[str
             hit += [w for w in MARKET_WORDS if w in text]
         if hit:
             out["no_forbidden_text"].append(f"{scope}出現 {hit}")
+    out["no_occlusion"] += check_occlusion(m["occlusion"])
     if T.D7_MARK not in (m.get("slot_text") or ""):
         out["d7_marker_in_slot"].append("槽內缺『預覽暫行口徑（D7 未裁，非正式）』標示")
     return out
@@ -106,6 +168,7 @@ def measure_topic(page, case: str, failclosed: bool, vp: str, vw: int, vh: int, 
     EV._scroll_top(page)
     m = page.evaluate(EV._JS_DEMO)
     m["extra"] = page.evaluate(_JS_EXTRA)
+    m["occlusion"] = measure_occlusion(page)
     m.update(case=case, failclosed=failclosed, topic=topic, viewport={"name": vp, "w": vw, "h": vh}, css_variant="baseline")
     return m
 
@@ -216,7 +279,7 @@ def run_all(repo: Path, out_root: Path, cases=CASE_KEYS, *, python: str = sys.ex
                 for topic, m in by_topic.items():
                     checks = failures(evaluate_topic(m, topic, case, fc))
                     topics_out[topic] = {"failures": checks, "pass": not checks, "fold": EV.fold_report(m), "layout": EV.row_layout(m),
-                                         "row_count": len(m["rows"]), "slot": m["slot"], "ctrl": m["extra"]["ctrl"], "rows": m["rows"]}
+                                         "row_count": len(m["rows"]), "slot": m["slot"], "ctrl": m["extra"]["ctrl"], "rows": m["rows"], "occlusion": m["occlusion"]}
                 distinct = len({_body(m) for m in by_topic.values()})
                 per_vp[vp] = {"topics": topics_out, "distinct_topic_bodies": distinct,
                               "content_changes_with_topic": distinct == len(T.TOPICS)}
