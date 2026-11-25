@@ -8,7 +8,7 @@
 ## 1. 版本
 
 - 最新核准產品基準 **v1.0**（2026-11-23 共識；DEC-224，APPROVED PRODUCT TARGET，**非施工／merge／部署授權**）。出處：`docs/DECISIONS.md` DEC-224、`docs/vnext/UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md`。
-- **V1.1**＝僅調整「新對話如何接續讀取」的索引版本，不改產品範圍、規則或授權。**定義來源為客戶派工卡；#1199 與 repo 皆未見其定義＝NOT VERIFIED。**
+- **V1.1**＝僅調整「新對話如何接續讀取」的索引版本，不改產品範圍、規則或授權。**V1.1 定義全文未見；僅 #1199 留言 7164122838 提及輕量讀取原則（客戶派工卡逐字全文＝NOT VERIFIED）。**
 - ⚠️ 與規格第十章「v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，全部 HOLD）」**不是同一件事，勿混淆**。
 
 ## 2. 讀取順序（本檔只是定位入口；V1.1 輕量接續與正式驗收分開）
