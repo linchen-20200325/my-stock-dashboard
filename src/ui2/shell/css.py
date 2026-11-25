@@ -196,6 +196,12 @@ CSS = """
   .ui2-ht__x{display:table-cell}
   .ui2-ht__more{display:none}
 }
+/* B-UI2-DELTA-BELOW：「今日變化」唯讀列（📊 Primary 之後；💼 `.ui2-qa` 之後同容器）。單行 flex（窄時才折行、不截斷）；
+   ⛔ 圖形／箭頭／色彩暗示變動方向——只有 label＋灰底虛線 capability chip＋原因。 */
+.ui2-delta{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;border:1px solid rgba(128,128,128,.4);border-radius:10px;
+  padding:6px 12px;margin:8px 0;line-height:1.5;min-width:0}
+.ui2-delta .ui2-chip{white-space:nowrap}
+.ui2-delta__detail{font-size:.8rem;opacity:.75;min-width:0;overflow-wrap:anywhere}
 /* P2：OneBrain Outlook（上移後）與台股 Primary 誠實空槽——依內容高度；灰底說明、⛔ 紅、⛔ 圖 */
 .ui2-m-onebrain .ui2-row{border-bottom:0;padding:2px 0 4px 0}
 @media (min-width:769px){

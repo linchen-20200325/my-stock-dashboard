@@ -69,16 +69,18 @@ def test_dom_order_risk_then_primary_slot_then_cards_then_onebrain(monkeypatch):
     for label, vm in _all_vms():
         chunks = _render_chunks(vm, monkeypatch)
         blob = "\n".join(chunks)
+        # B-UI2-DELTA-BELOW（D1＝BELOW）：Primary 與指標卡之間多一個唯讀「今日變化」列（`data-ui2-delta`）；其餘順序不變
         order = ['class="ui2-pagetitle"', 'class="ui2-m-l1"', 'class="ui2-risk"', 'data-ui2-l1="primary_slot"',
-                 'class="ui2-grid"', 'data-ui2-l1="onebrain"']
+                 'data-ui2-delta="1"', 'class="ui2-grid"', 'data-ui2-l1="onebrain"']
         pos = {k: blob.index(k) for k in order}
         assert [pos[k] for k in order] == sorted(pos[k] for k in order), label
         # 今日主要風險在 L1 容器內；空槽緊接 L1 容器，指標卡緊接空槽，OneBrain 緊接指標卡（中間沒有別的區塊）
         i_l1 = next(i for i, c in enumerate(chunks) if 'class="ui2-m-l1"' in c)
         assert 'class="ui2-risk"' in chunks[i_l1], label
         assert 'data-ui2-l1="primary_slot"' in chunks[i_l1 + 1], label
-        assert 'class="ui2-grid"' in chunks[i_l1 + 2], label
-        assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 3], label
+        assert 'data-ui2-delta="1"' in chunks[i_l1 + 2], label          # BELOW：今日變化緊接 Primary 之後
+        assert 'class="ui2-grid"' in chunks[i_l1 + 3], label
+        assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 4], label
         assert pos['data-ui2-l1="onebrain"'] > pos['class="ui2-grid"'], label          # OneBrain 在指標卡之後（明確斷言）
         assert blob.count("OneBrain Outlook") == 1 and blob.count('data-ui2-l1="onebrain"') == 1, label   # 不重複
 
@@ -101,7 +103,8 @@ def test_dom_order_in_the_real_streamlit_page_default_lane():
     at.run(timeout=60)
     assert not at.exception
     blob = "\n".join(m.value for m in at.markdown)
-    idx = [blob.index(k) for k in ('class="ui2-risk"', 'data-ui2-l1="primary_slot"', 'class="ui2-grid"', 'data-ui2-l1="onebrain"')]
+    idx = [blob.index(k) for k in ('class="ui2-risk"', 'data-ui2-l1="primary_slot"', 'data-ui2-delta="1"', 'class="ui2-grid"',
+                                   'data-ui2-l1="onebrain"')]
     assert idx == sorted(idx)
     assert blob.count('data-ui2-l1="onebrain"') == 1
     assert "SPEC｜" in blob
@@ -201,14 +204,18 @@ def test_onebrain_content_is_unchanged_only_its_position_moves(monkeypatch):
         _page.render_sections(vm)
         strip = lambda cs: sorted(re.sub(r"<[^>]+>", " ", "\n".join(cs)).split())   # noqa: E731
         slot_txt = sorted(re.sub(r"<[^>]+>", " ", _slot_of(new)).split())
-        new_wo_slot = [c for c in new if 'data-ui2-l1="primary_slot"' not in c]
+        # BELOW（B-UI2-DELTA-BELOW）：唯讀「今日變化」是本批唯一新增區塊；與空槽同樣先抽出，其餘區塊集合仍須與舊版逐字相同
+        delta_chunks = [c for c in new if 'data-ui2-delta="1"' in c]
+        assert len(delta_chunks) == 1, label
+        delta_txt = sorted(re.sub(r"<[^>]+>", " ", delta_chunks[0]).split())
+        new_wo_slot = [c for c in new if 'data-ui2-l1="primary_slot"' not in c and 'data-ui2-delta="1"' not in c]
         wrapper = re.compile(r'^<div class="ui2-m-onebrain" data-ui2-l1="onebrain">(.*)</div>$', re.S)
         for i, c in enumerate(new_wo_slot):                         # 去掉 OneBrain 外層 wrapper 後與舊版區塊逐字相同
             m = wrapper.match(c)
             if m:
                 new_wo_slot[i] = m.group(1)
         assert sorted(new_wo_slot) == sorted(old), label            # 區塊集合逐字相同（只差順序）
-        assert strip(new) == sorted(strip(old) + slot_txt), label    # 文字集合＝舊＋空槽
+        assert strip(new) == sorted(strip(old) + slot_txt + delta_txt), label    # 文字集合＝舊＋空槽＋今日變化列
 
 
 def test_vm_onebrain_section_is_untouched():

@@ -24,7 +24,7 @@
 
 1. **薄 UI、厚 Digest、Topic Lenses**：五頁維持「📊市場／🎯標的／💼持股／👤我的／🗂資料」，Dark-only、390px 優先。首屏聚焦可信 Delta Strip、正式市場位階/Risk Cap 狀態、一句核心結論；四鏡頭「大盤／產業前瞻／持股健檢／反方風險」。短摘要最多 3 句且少於 100 字，不得省略完整 Digest 的 evidence、provenance、missing、counter-evidence。
 2. **正式/研究軌隔離**：已核准的 Rules → Risk Cap → System Action → Decision Digest 唯一正式動作權威；OneBrain 僅解釋，不能改寫 Risk Cap、公式或發交易指令。「提前布局」為研究觀察而非自動買進。
-3. **L0/L1/L2 僅候選顯示分級**：L2 必要正式條件全部滿足；L1 部分輔助證據缺失時只顯示可信研究參考及缺口，不得形成簡化正式位階/動作；L0 核心證據不可用時無法判定。不是新演算法/風險分數的授權。
+3. **正式判定首版僅 FORMAL／UNDETERMINABLE 兩級**（DEC-225 採納）：該功能必要條件全部成立才為 FORMAL；任一該功能的必要條件未滿足 → 該功能 UNDETERMINABLE（無法判定），只影響該功能，不影響其他功能與已授權的事實顯示；研究事實可依既有 DEC 展示，但不得升格為正式位階/動作/趨勢。不是新演算法/風險分數的授權。
 4. **What Changed**：僅同來源、同口徑、時間有效、可回查的前次快照，且指定訊號完整檢查後，才可顯示「今日無重大訊號變更」。否則誠實顯示「不可比較」；無變化不代表安全、亦非維持昨日策略。
 5. **OneBrain 快取/成本**：以 evidence/digest + rule/contract + topic + model + prompt + as_of 等版本因子作有效性辨識；新關鍵證據或過期必失效。盤後預計算、開頁不同步呼叫 LLM 是目標設計，未批准 Provider/成本/Secrets/caller 前不得接線。
 6. **LINE**：v1.0 僅規劃動作切換、風控、持股異常、資料斷線之確定性事件契約、去重/冷卻/失敗政策；真實推播、授權與部署 HOLD。

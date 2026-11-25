@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.59.2",
-  "git_sha": "3fd15a2087f3fdc8c042c277c58969b56df47676",
-  "source_hash": "0f3a25b1e248a8b290540d4945b155bff4d3d80554ff9b02efa5397e464d49ea",
-  "generated_at": "2026-11-22T16:45:50+00:00",
+  "git_sha": "8a36b0492eeeebfc629d03c68e0b77519b33cf8d",
+  "source_hash": "28bf3f7e8adb400ac5858f421b410ee5eb6e89b517cec4950d8f39bc7da91702",
+  "generated_at": "2026-11-24T13:07:32+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "viewports": {
@@ -127,6 +127,11 @@
     "id": "p2_nav_margin_160",
     "rule": "（P2）📊 市場（手機；stale／unavailable 場景，FAKE 與 Real）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791（＝視窗高 − 53；DEC-134 前＝底部導覽上緣，同一條線）≥ 160px；不達須停手回報，不得縮字、刪資訊或改設計。",
     "source": "客戶 2026-11-04 (19)『導覽餘裕維持既有 ≥160px 的驗收門檻；未達就停止，不擅自更改設計』"
+   },
+   {
+    "id": "p2_real_nav_margin_109",
+    "rule": "（R1）📊 市場（Real-data Preview；僅手機寬度恰為 390；320／360／FAKE／桌機不適用）：今日主要風險之後第一個內容區塊頂緣距底部保留線 791 ≥ 109px（與 p2_nav_margin_160 同量測錨點、同 ±0.05 誤差處理）；不達須停手回報，不得縮字、刪資訊或改設計。",
+    "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"
    },
    {
     "id": "kbar_primary_chart",
@@ -288,7 +293,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.0,
+   "last_content_bottom": 433.8,
    "card_heights": [
     139,
     139,
@@ -300,8 +305,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1155.2,
-     "bottom": 1232.0,
+     "top": 1208.0,
+     "bottom": 1284.8,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -316,8 +321,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 702.3,
-     "bottom": 1135.2,
+     "top": 755.0,
+     "bottom": 1188.0,
      "left": 14.4,
      "right": 375.6,
      "height": 433.0,
@@ -358,7 +363,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 603.0,
     "risk_line_height": 24,
-    "scroll_end_bottom": 763.8,
+    "scroll_end_bottom": 763.5,
     "nav_margin_after_risk": 188.0
    },
    "failures": {},
@@ -459,9 +464,9 @@
    "stress": {
     "risk_top": 544,
     "risk_bottom": 620.7,
-    "scroll_end_bottom": 763.5,
-    "scroll_end_gap_to_nav": 27.5,
-    "risk_bottom_at_scroll_end": -206.3
+    "scroll_end_bottom": 764.2,
+    "scroll_end_gap_to_nav": 26.8,
+    "risk_bottom_at_scroll_end": -258.3
    },
    "failures": {},
    "pass": true
@@ -969,13 +974,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.5,
+   "last_content_bottom": 434.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 610.7,
-     "bottom": 699.5,
+     "top": 655.4,
+     "bottom": 744.2,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -1030,16 +1035,16 @@
      ]
     },
     "onebrain": {
-     "top": 610.671875,
-     "bottom": 699.453125,
+     "top": 655.390625,
+     "bottom": 744.171875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 715.453125,
-     "bottom": 765.046875,
+     "top": 760.171875,
+     "bottom": 809.765625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -1047,12 +1052,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 739.25,
-     "chip_cy": 737.25
+     "title_cy": 783.96875,
+     "chip_cy": 781.96875
     },
     "cap": {
-     "top": 497.890625,
-     "bottom": 594.671875,
+     "top": 542.609375,
+     "bottom": 639.390625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -1061,8 +1066,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 781.046875,
-     "bottom": 976.515625,
+     "top": 825.765625,
+     "bottom": 1021.234375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -1107,10 +1112,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 508.9,
+    "first_block_after_l1_top": 553.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.3,
-    "nav_margin_after_risk": 282.1
+    "scroll_end_bottom": 764.0,
+    "nav_margin_after_risk": 237.4
    },
    "failures": {},
    "pass": true
@@ -1590,7 +1595,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.2,
+   "last_content_bottom": 433.9,
    "card_heights": [
     121,
     121,
@@ -1602,8 +1607,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1100.4,
-     "bottom": 1177.2,
+     "top": 1153.1,
+     "bottom": 1229.9,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -1618,8 +1623,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 702.9,
-     "bottom": 1080.4,
+     "top": 755.6,
+     "bottom": 1133.1,
      "left": 14.4,
      "right": 375.6,
      "height": 377.5,
@@ -1660,7 +1665,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 585.5,
     "risk_line_height": 24,
-    "scroll_end_bottom": 763.9,
+    "scroll_end_bottom": 763.7,
     "nav_margin_after_risk": 205.5
    },
    "failures": {},
@@ -1761,9 +1766,9 @@
    "stress": {
     "risk_top": 526.6,
     "risk_bottom": 622.5,
-    "scroll_end_bottom": 763.8,
-    "scroll_end_gap_to_nav": 27.2,
-    "risk_bottom_at_scroll_end": -168.5
+    "scroll_end_bottom": 763.6,
+    "scroll_end_gap_to_nav": 27.4,
+    "risk_bottom_at_scroll_end": -221.5
    },
    "failures": {},
    "pass": true
@@ -2278,13 +2283,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.6,
+   "last_content_bottom": 434.3,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 590.8,
-     "bottom": 679.5,
+     "top": 635.5,
+     "bottom": 724.3,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -2339,16 +2344,16 @@
      ]
     },
     "onebrain": {
-     "top": 590.765625,
-     "bottom": 679.546875,
+     "top": 635.484375,
+     "bottom": 724.265625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 695.546875,
-     "bottom": 745.140625,
+     "top": 740.265625,
+     "bottom": 789.859375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -2356,12 +2361,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 719.34375,
-     "chip_cy": 717.34375
+     "title_cy": 764.0625,
+     "chip_cy": 762.0625
     },
     "cap": {
-     "top": 477.984375,
-     "bottom": 574.765625,
+     "top": 522.703125,
+     "bottom": 619.484375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -2370,8 +2375,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 761.140625,
-     "bottom": 956.609375,
+     "top": 805.859375,
+     "bottom": 1001.328125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -2416,10 +2421,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 489.0,
+    "first_block_after_l1_top": 533.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.4,
-    "nav_margin_after_risk": 302.0
+    "scroll_end_bottom": 764.1,
+    "nav_margin_after_risk": 257.3
    },
    "failures": {},
    "pass": true
@@ -2899,7 +2904,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 434.1,
    "card_heights": [
     143,
     143,
@@ -2911,8 +2916,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1151.6,
-     "bottom": 1228.3,
+     "top": 1204.3,
+     "bottom": 1281.1,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -2927,8 +2932,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 708.6,
-     "bottom": 1131.6,
+     "top": 761.3,
+     "bottom": 1184.3,
      "left": 14.4,
      "right": 375.6,
      "height": 423.0,
@@ -2969,7 +2974,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 591.3,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.1,
+    "scroll_end_bottom": 763.8,
     "nav_margin_after_risk": 199.7
    },
    "failures": {},
@@ -3070,9 +3075,9 @@
    "stress": {
     "risk_top": 573.7,
     "risk_bottom": 632.2,
-    "scroll_end_bottom": 764,
-    "scroll_end_gap_to_nav": 27.0,
-    "risk_bottom_at_scroll_end": -213.8
+    "scroll_end_bottom": 763.7,
+    "scroll_end_gap_to_nav": 27.3,
+    "risk_bottom_at_scroll_end": -266.8
    },
    "failures": {},
    "pass": true
@@ -3587,13 +3592,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 434.0,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 591.5,
-     "bottom": 680.3,
+     "top": 636.2,
+     "bottom": 725.0,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -3648,16 +3653,16 @@
      ]
     },
     "onebrain": {
-     "top": 591.484375,
-     "bottom": 680.265625,
+     "top": 636.203125,
+     "bottom": 724.984375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 696.265625,
-     "bottom": 745.859375,
+     "top": 740.984375,
+     "bottom": 790.578125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -3665,12 +3670,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 720.0625,
-     "chip_cy": 718.0625
+     "title_cy": 764.78125,
+     "chip_cy": 762.78125
     },
     "cap": {
-     "top": 478.703125,
-     "bottom": 575.484375,
+     "top": 523.421875,
+     "bottom": 620.203125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -3679,8 +3684,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 761.859375,
-     "bottom": 957.328125,
+     "top": 806.578125,
+     "bottom": 1002.046875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -3725,10 +3730,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 489.7,
+    "first_block_after_l1_top": 534.4,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.1,
-    "nav_margin_after_risk": 301.3
+    "scroll_end_bottom": 763.8,
+    "nav_margin_after_risk": 256.6
    },
    "failures": {},
    "pass": true
@@ -4208,7 +4213,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.5,
+   "last_content_bottom": 434.2,
    "card_heights": [
     143,
     143,
@@ -4220,8 +4225,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1169.8,
-     "bottom": 1246.5,
+     "top": 1222.5,
+     "bottom": 1299.2,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -4236,8 +4241,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 726.8,
-     "bottom": 1149.8,
+     "top": 779.5,
+     "bottom": 1202.5,
      "left": 14.4,
      "right": 375.6,
      "height": 423.0,
@@ -4278,7 +4283,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 609.5,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.3,
+    "scroll_end_bottom": 764,
     "nav_margin_after_risk": 181.5
    },
    "failures": {},
@@ -4379,9 +4384,9 @@
    "stress": {
     "risk_top": 573.7,
     "risk_bottom": 669.5,
-    "scroll_end_bottom": 764.4,
-    "scroll_end_gap_to_nav": 26.6,
-    "risk_bottom_at_scroll_end": -213.5
+    "scroll_end_bottom": 764.1,
+    "scroll_end_gap_to_nav": 26.9,
+    "risk_bottom_at_scroll_end": -266.5
    },
    "failures": {},
    "pass": true
@@ -4896,13 +4901,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 434.0,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 591.5,
-     "bottom": 680.3,
+     "top": 636.2,
+     "bottom": 725.0,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -4957,16 +4962,16 @@
      ]
     },
     "onebrain": {
-     "top": 591.484375,
-     "bottom": 680.265625,
+     "top": 636.203125,
+     "bottom": 724.984375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 696.265625,
-     "bottom": 745.859375,
+     "top": 740.984375,
+     "bottom": 790.578125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -4974,12 +4979,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 720.0625,
-     "chip_cy": 718.0625
+     "title_cy": 764.78125,
+     "chip_cy": 762.78125
     },
     "cap": {
-     "top": 478.703125,
-     "bottom": 575.484375,
+     "top": 523.421875,
+     "bottom": 620.203125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -4988,8 +4993,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 761.859375,
-     "bottom": 957.328125,
+     "top": 806.578125,
+     "bottom": 1002.046875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -5034,10 +5039,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 489.7,
+    "first_block_after_l1_top": 534.4,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.1,
-    "nav_margin_after_risk": 301.3
+    "scroll_end_bottom": 763.8,
+    "nav_margin_after_risk": 256.6
    },
    "failures": {},
    "pass": true
@@ -5517,7 +5522,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.7,
+   "last_content_bottom": 434.4,
    "card_heights": [
     166,
     166,
@@ -5529,8 +5534,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1233.9,
-     "bottom": 1310.7,
+     "top": 1286.6,
+     "bottom": 1363.4,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -5545,8 +5550,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 746.0,
-     "bottom": 1213.9,
+     "top": 798.7,
+     "bottom": 1266.6,
      "left": 14.4,
      "right": 375.6,
      "height": 467.9,
@@ -5587,7 +5592,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 628.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.4,
+    "scroll_end_bottom": 764.1,
     "nav_margin_after_risk": 162.4
    },
    "failures": {},
@@ -5688,9 +5693,9 @@
    "stress": {
     "risk_top": 616.0,
     "risk_bottom": 711.9,
-    "scroll_end_bottom": 763.7,
-    "scroll_end_gap_to_nav": 27.3,
-    "risk_bottom_at_scroll_end": -259.1
+    "scroll_end_bottom": 764.4,
+    "scroll_end_gap_to_nav": 26.6,
+    "risk_bottom_at_scroll_end": -311.1
    },
    "failures": {},
    "pass": true
@@ -6205,13 +6210,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.5,
+   "last_content_bottom": 434.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 610.7,
-     "bottom": 699.5,
+     "top": 655.4,
+     "bottom": 744.2,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -6266,16 +6271,16 @@
      ]
     },
     "onebrain": {
-     "top": 610.671875,
-     "bottom": 699.453125,
+     "top": 655.390625,
+     "bottom": 744.171875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 715.453125,
-     "bottom": 765.046875,
+     "top": 760.171875,
+     "bottom": 809.765625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -6283,12 +6288,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 739.25,
-     "chip_cy": 737.25
+     "title_cy": 783.96875,
+     "chip_cy": 781.96875
     },
     "cap": {
-     "top": 497.890625,
-     "bottom": 594.671875,
+     "top": 542.609375,
+     "bottom": 639.390625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -6297,8 +6302,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 781.046875,
-     "bottom": 976.515625,
+     "top": 825.765625,
+     "bottom": 1021.234375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -6343,10 +6348,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 508.9,
+    "first_block_after_l1_top": 553.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.3,
-    "nav_margin_after_risk": 282.1
+    "scroll_end_bottom": 764.0,
+    "nav_margin_after_risk": 237.4
    },
    "failures": {},
    "pass": true
@@ -6826,7 +6831,7 @@
     "banner_bottom": 17.9,
     "qa_top": 134.0
    },
-   "last_content_bottom": 434.5,
+   "last_content_bottom": 434.2,
    "card_heights": [
     143,
     143,
@@ -6838,8 +6843,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1172.8,
-     "bottom": 1249.5,
+     "top": 1225.5,
+     "bottom": 1302.2,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -6854,8 +6859,8 @@
      "width": 361.2
     },
     "grid": {
-     "top": 727.8,
-     "bottom": 1152.8,
+     "top": 780.5,
+     "bottom": 1205.5,
      "left": 14.4,
      "right": 375.6,
      "height": 425.0,
@@ -6896,7 +6901,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 610.5,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.3,
+    "scroll_end_bottom": 764,
     "nav_margin_after_risk": 180.5
    },
    "failures": {},
@@ -6997,9 +7002,9 @@
    "stress": {
     "risk_top": 597.8,
     "risk_bottom": 674.5,
-    "scroll_end_bottom": 764.4,
-    "scroll_end_gap_to_nav": 26.6,
-    "risk_bottom_at_scroll_end": -215.5
+    "scroll_end_bottom": 764.1,
+    "scroll_end_gap_to_nav": 26.9,
+    "risk_bottom_at_scroll_end": -268.5
    },
    "failures": {},
    "pass": true
@@ -7514,13 +7519,13 @@
     "banner_bottom": 17.9,
     "qa_top": 184.7
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 434.0,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 592.5,
-     "bottom": 681.3,
+     "top": 637.2,
+     "bottom": 726.0,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -7575,16 +7580,16 @@
      ]
     },
     "onebrain": {
-     "top": 592.484375,
-     "bottom": 681.265625,
+     "top": 637.203125,
+     "bottom": 725.984375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 697.265625,
-     "bottom": 746.859375,
+     "top": 741.984375,
+     "bottom": 791.578125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -7592,12 +7597,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 721.0625,
-     "chip_cy": 719.0625
+     "title_cy": 765.78125,
+     "chip_cy": 763.78125
     },
     "cap": {
-     "top": 479.703125,
-     "bottom": 576.484375,
+     "top": 524.421875,
+     "bottom": 621.203125,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -7606,8 +7611,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 762.859375,
-     "bottom": 958.328125,
+     "top": 807.578125,
+     "bottom": 1003.046875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -7652,10 +7657,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 490.7,
+    "first_block_after_l1_top": 535.4,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.1,
-    "nav_margin_after_risk": 300.3
+    "scroll_end_bottom": 763.8,
+    "nav_margin_after_risk": 255.6
    },
    "failures": {},
    "pass": true
@@ -8503,7 +8508,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.3,
+   "last_content_bottom": 538.0,
    "card_heights": [
     142,
     142,
@@ -8515,8 +8520,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 754.7,
-     "bottom": 796.3,
+     "top": 807.4,
+     "bottom": 849.0,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -8531,8 +8536,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 604.6,
-     "bottom": 746.7,
+     "top": 657.3,
+     "bottom": 799.4,
      "left": 80,
      "right": 1360,
      "height": 142.1,
@@ -8573,7 +8578,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 505.3,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -9082,13 +9087,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -9143,16 +9148,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -9160,12 +9165,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -9174,8 +9179,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -9244,9 +9249,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -9727,7 +9732,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.1,
+   "last_content_bottom": 537.8,
    "card_heights": [
     124,
     124,
@@ -9739,8 +9744,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 715.5,
-     "bottom": 757.1,
+     "top": 768.2,
+     "bottom": 809.8,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -9755,8 +9760,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 707.5,
+     "top": 636.6,
+     "bottom": 760.2,
      "left": 80,
      "right": 1360,
      "height": 123.7,
@@ -9797,7 +9802,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.9,
+    "scroll_end_bottom": 867.6,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -10313,13 +10318,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -10374,16 +10379,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -10391,12 +10396,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -10405,8 +10410,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -10475,9 +10480,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -10958,7 +10963,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.0,
+   "last_content_bottom": 537.8,
    "card_heights": [
     146,
     146,
@@ -10970,8 +10975,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 720.5,
-     "bottom": 762.0,
+     "top": 773.2,
+     "bottom": 814.8,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -10986,8 +10991,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 566.1,
-     "bottom": 712.5,
+     "top": 618.8,
+     "bottom": 765.2,
      "left": 80,
      "right": 1360,
      "height": 146.4,
@@ -11028,7 +11033,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 466.8,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.8,
+    "scroll_end_bottom": 867.5,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -11544,13 +11549,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -11605,16 +11610,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -11622,12 +11627,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -11636,8 +11641,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -11706,9 +11711,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -12189,7 +12194,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 537.8,
+   "last_content_bottom": 538.6,
    "card_heights": [
     146,
     146,
@@ -12201,8 +12206,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 738.2,
-     "bottom": 779.8,
+     "top": 791.0,
+     "bottom": 832.6,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -12217,8 +12222,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 730.2,
+     "top": 636.6,
+     "bottom": 783.0,
      "left": 80,
      "right": 1360,
      "height": 146.4,
@@ -12259,7 +12264,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.6,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -12775,13 +12780,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -12836,16 +12841,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -12853,12 +12858,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -12867,8 +12872,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -12937,9 +12942,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -13420,7 +13425,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.3,
+   "last_content_bottom": 538.0,
    "card_heights": [
     169,
     169,
@@ -13432,8 +13437,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 760.7,
-     "bottom": 802.3,
+     "top": 813.4,
+     "bottom": 855.0,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -13448,8 +13453,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 752.7,
+     "top": 636.6,
+     "bottom": 805.4,
      "left": 80,
      "right": 1360,
      "height": 168.8,
@@ -13490,7 +13495,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -14006,13 +14011,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -14067,16 +14072,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -14084,12 +14089,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -14098,8 +14103,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -14168,9 +14173,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -14651,7 +14656,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 537.8,
+   "last_content_bottom": 538.6,
    "card_heights": [
     148,
     148,
@@ -14663,8 +14668,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 740.2,
-     "bottom": 781.8,
+     "top": 793.0,
+     "bottom": 834.6,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -14679,8 +14684,8 @@
      "width": 1280
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 732.2,
+     "top": 636.6,
+     "bottom": 785.0,
      "left": 80,
      "right": 1360,
      "height": 148.4,
@@ -14721,7 +14726,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.6,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -15237,13 +15242,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -15298,16 +15303,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -15315,12 +15320,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -15329,8 +15334,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -15399,9 +15404,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -16250,7 +16255,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.3,
+   "last_content_bottom": 538.0,
    "card_heights": [
     142,
     142,
@@ -16262,8 +16267,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 754.7,
-     "bottom": 796.3,
+     "top": 807.4,
+     "bottom": 849.0,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -16278,8 +16283,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 604.6,
-     "bottom": 746.7,
+     "top": 657.3,
+     "bottom": 799.4,
      "left": 80,
      "right": 1200,
      "height": 142.1,
@@ -16320,7 +16325,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 505.3,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -16829,13 +16834,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -16890,16 +16895,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -16907,12 +16912,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -16921,8 +16926,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -16991,9 +16996,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -17474,7 +17479,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.1,
+   "last_content_bottom": 537.8,
    "card_heights": [
     124,
     124,
@@ -17486,8 +17491,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 715.5,
-     "bottom": 757.1,
+     "top": 768.2,
+     "bottom": 809.8,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -17502,8 +17507,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 707.5,
+     "top": 636.6,
+     "bottom": 760.2,
      "left": 80,
      "right": 1200,
      "height": 123.7,
@@ -17544,7 +17549,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.9,
+    "scroll_end_bottom": 867.6,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -18060,13 +18065,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -18121,16 +18126,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -18138,12 +18143,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -18152,8 +18157,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -18222,9 +18227,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -18705,7 +18710,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.0,
+   "last_content_bottom": 537.8,
    "card_heights": [
     146,
     146,
@@ -18717,8 +18722,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 720.5,
-     "bottom": 762.0,
+     "top": 773.2,
+     "bottom": 814.8,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -18733,8 +18738,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 566.1,
-     "bottom": 712.5,
+     "top": 618.8,
+     "bottom": 765.2,
      "left": 80,
      "right": 1200,
      "height": 146.4,
@@ -18775,7 +18780,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 466.8,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.8,
+    "scroll_end_bottom": 867.5,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -19291,13 +19296,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -19352,16 +19357,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -19369,12 +19374,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -19383,8 +19388,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -19453,9 +19458,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -19936,7 +19941,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 537.8,
+   "last_content_bottom": 538.6,
    "card_heights": [
     146,
     146,
@@ -19948,8 +19953,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 738.2,
-     "bottom": 779.8,
+     "top": 791.0,
+     "bottom": 832.6,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -19964,8 +19969,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 730.2,
+     "top": 636.6,
+     "bottom": 783.0,
      "left": 80,
      "right": 1200,
      "height": 146.4,
@@ -20006,7 +20011,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.6,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -20522,13 +20527,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -20583,16 +20588,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -20600,12 +20605,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -20614,8 +20619,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -20684,9 +20689,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -21167,7 +21172,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.3,
+   "last_content_bottom": 538.0,
    "card_heights": [
     169,
     169,
@@ -21179,8 +21184,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 760.7,
-     "bottom": 802.3,
+     "top": 813.4,
+     "bottom": 855.0,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -21195,8 +21200,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 752.7,
+     "top": 636.6,
+     "bottom": 805.4,
      "left": 80,
      "right": 1200,
      "height": 168.8,
@@ -21237,7 +21242,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -21753,13 +21758,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -21814,16 +21819,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -21831,12 +21836,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -21845,8 +21850,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -21915,9 +21920,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -22398,7 +22403,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 537.8,
+   "last_content_bottom": 538.6,
    "card_heights": [
     148,
     148,
@@ -22410,8 +22415,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 740.2,
-     "bottom": 781.8,
+     "top": 793.0,
+     "bottom": 834.6,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -22426,8 +22431,8 @@
      "width": 1120
     },
     "grid": {
-     "top": 583.9,
-     "bottom": 732.2,
+     "top": 636.6,
+     "bottom": 785.0,
      "left": 80,
      "right": 1200,
      "height": 148.4,
@@ -22468,7 +22473,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 484.6,
     "risk_line_height": 24,
-    "scroll_end_bottom": 867.6,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -22984,13 +22989,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 538.4,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 283.0,
-     "bottom": 324.6,
+     "top": 335.7,
+     "bottom": 377.3,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -23045,16 +23050,16 @@
      ]
     },
     "onebrain": {
-     "top": 283.015625,
-     "bottom": 324.609375,
+     "top": 335.734375,
+     "bottom": 377.328125,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -23062,12 +23067,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 364.40625,
-     "chip_cy": 392.5625
+     "title_cy": 417.125,
+     "chip_cy": 445.28125
     },
     "cap": {
-     "top": 340.609375,
-     "bottom": 580.609375,
+     "top": 393.328125,
+     "bottom": 633.328125,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -23076,8 +23081,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 596.609375,
-     "bottom": 726.671875,
+     "top": 649.328125,
+     "bottom": 779.390625,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -23146,9 +23151,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 295.0,
+    "first_block_after_l1_top": 347.7,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.4,
+    "scroll_end_bottom": 868.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
