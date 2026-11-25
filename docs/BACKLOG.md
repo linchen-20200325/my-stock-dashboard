@@ -3205,3 +3205,13 @@
 
 > **仍 HOLD／NOT VERIFIED／未做（皆不變，本批無一解除）**：Cloud 部署 SHA／Main file／entrypoint（NOT VERIFIED）；切換與回退 R1～R4（NOT RUN）；資料接線（`I1144-WIRING-GATE`）、P2 的 A2／A3／A4、`I1144`、`DG-SCOPE`／`DG-COV`／`DG-LIC`／`DG-PIT`（HOLD）；M-A3～M-A6（未做）；`NUI2-CUTOVER`、C1～C7、G11、`?ui=1`（未實作）。
 > 本段不取代 DECISIONS；本批不新增 DEC。#1260（C 線 OneBrain 契約 §A）、#1258／#1261 不在本段範圍。
+
+## 2026-11-25｜UI2 第一批入庫後治理同步登記（只追加；不改既有列；依據 `git log origin/main`（main＝`2fd0773e120d27f2093078dae67404eded333fc5`）、`docs/DECISIONS.md` DEC-224／225／226 與 #1199 comment 7149294747／7150179168／7152187882／7154447230／7148182082／7148133320／7148028894；登記不等於施工授權、不暗示任何 Gate 已解除；本段單組撰寫，非 QA PASS）
+
+| ID | 狀態 | 內容與邊界 | 依據 |
+|---|---|---|---|
+| ↳ 註記：UI2-DATA-ITEMS-STALE-UNKNOWN（📌 狀態更新，有意識的更新，不是漏刪；2026-11-25；決策者：治理 writer；既有列與註記原文未改） | **已實作並入庫**：#1273 → main `f1be8cd3`（C1；逐字沿用 `TEXT_STALE_UNKNOWN`；main push run 45538954409 五項＋Slow step success）。上方「待評估／待 Work 獨立 QA 與總管 Ready／merge 裁示」註記為 2026-11-23 快照，**已過期** | 僅「新鮮度未判定」明細列字樣沿用既有文案；**不改首屏計數歸類**；`UI2-DATA-ITEMS-REGIME-LOADED-WORDING`／`POSITION-1` 不因此解決。#1273 PR 描述內過期句（「尚待 QA／CI」）屬收尾文件項，依 §-1 僅在有任務觸發時處理 | A 回存 7152187882；客戶 7151544405 |
+| **UI2-P1-FOLLOWUP**（後續可選項；非新 Gate） | **待決策，未施工** | #1280（P-1）QA Nit 可選項：`.ui2-row__detail` 為 `div` 置於 `span` 內、字級約 0.3px、README 仍寫 base `8d6e50be`；皆可選、未啟動 push。#1280 PR 描述 Test plan 勾選為合併前舊狀態（真相源為 7154447230／7152832319／7153155541） | B 回存 7154447230 |
+| **UI2-INLINE-EVIDENCE-BLK-1-7** | **待決策／待客戶裁示，不施工** | 行內證據／反證 BLK-1～7（B 7148021302）：Real 無證據欄位、Digest v1 無反證、新文案／D7／C3 未裁、台股抓取時間等資料承載需授權、位階無資料日、首屏 109.0／160 餘裕、「預設展開」vs Contract §3。**不得以 P-1 完成視為已解**；新文案須 Copy／Contract Gate | 7148021302；7154447230 |
+| **GOV-DEC226-SYNC**（本 PR #1274；DEC-226＋`PROJECT_RULES.md` 第 35 節） | **文件同步待完成**：隨 #1274 Draft 提出；待非作者 QA、同 head 五項 CI、總管 Ready／merge | 派工提示語精簡一鍵複製格式、專案 AI O 備援獨立 QA、Hard Output Gate 索引（已有 DEC-104／DEC-118，未新增）；僅工作流程，不授權產品碼／部署／解除 HOLD。**入 main 前不得宣稱已生效** | 7148182082；7148133320；7148028894；DEC-147 |
+| **GOV-HANDOFF-1125**（本 PR） | **文件同步待完成**：`docs/HANDOFF.md`「2026-11-25 最新接手點」；`docs/PROJECT_STATE.md` 本日段 | 保留 #1274 既有 2026-11-23 區塊與 2 行 ID 註記不動；2026-11-23 段「最新接手點」字樣降為歷史（見 HANDOFF 說明） | 本 PR |

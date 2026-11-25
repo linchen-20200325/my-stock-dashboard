@@ -1730,3 +1730,32 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
 - **永久交接錨點**：見 #1199 最新「A 永久交接」留言（總管於本分支合併前另貼）；合併後以 #1199 實際留言 7100246540 為準。
 - **建議 Model／Effort**：Sonnet 5.5／Medium（遇架構或權限衝突升 High，仍不得越 Gate）。
 - **停止條件與不得做**：超出範圍、需動 HOLD 項、需解鎖任一 Gate 即停手；本段不是 QA PASS。
+
+## 2026-11-25 最新接手點（Resume Checkpoint；永久交接；append-only；非 QA PASS；單組撰寫，待非作者 QA；隨 PR #1274 提出，#1274 合併前不得稱已入 main）
+- **說明**：本段為 2026-11-25 現行接手點；上方「2026-11-23 Resume Checkpoint（最新接手點）」段標題中的「最新接手點」字樣**自本日起降為歷史**（📌 有意識的降級註記，不是漏刪；決策者：治理 writer，依 `PROJECT_RULES.md` 第 15 節／第 33 節交接制度；該段一字未改，其內容為 2026-11-23 快照，**已多處過期，以本段與 GitHub 為準**）。以下為**存檔當時快照，新對話須重核**。
+- **快照**：main `2fd0773e120d27f2093078dae67404eded333fc5`（2026-11-25；#1280 squash）。⚠️ 撰寫時已 `git merge origin/main` 進本分支（non-force）；若 main 已前進，以 GitHub live 為準。
+- **本輪已入庫（皆 squash 入 main；不得重做）**：
+
+| PR | main merge SHA | 內容 | main push CI／#1199 回存證據 |
+|---|---|---|---|
+| #1276 | `98d01686` | DEC-224：UI2 × OneBrain 產品目標 v1.0＋五項安全修正（docs；僅產品目標，非施工 Gate） | 客戶核准紀錄 7110182570；回存 7110952486 |
+| #1277 | `7cb16001` | Real 📊 390 導覽餘裕 ≥109.0px 回歸守衛＋DEC-137 四份 JSON 重產 | （本段未重核 CI） |
+| #1279 | `8d6e50be` | 📊／💼 今日變化 Delta Strip（BELOW；恆「不可比較」） | run 45520913196 五項＋Slow step success；B 回存 7149294747；客戶裁示 7147969987／Cloud Gate A 7148847917 |
+| #1275 | `b2221236` | **DEC-225**：正式判定二分 FORMAL／UNDETERMINABLE（含 P01、READ_FIRST 第 27 行更正） | run 45526124917 五項＋Slow step success；A 回存 7150179168 |
+| #1273 | `f1be8cd3` | C1：台股資料明細「新鮮度未判定」逐字沿用 `TEXT_STALE_UNKNOWN` | run 45538954409 五項＋Slow step success；A 回存 7152187882；客戶裁示 7151544405 |
+| #1280 | `2fd0773e` | P-1：🎯 context 行／💼 今日需處理 補畫既有 detail（`snapshot_html` 不納入） | run 45555206606 五項＋Slow step success；B 回存 7154447230；Work 驗收 7153155541；B 自派 QA 7152832319 |
+
+- **DEC-224／225 已生效於 main**：DEC-224 於 #1276（`98d01686`）；DEC-225 於 #1275（`b2221236`）。DEC-225 要點（僅事實，不擴權）：FORMAL／UNDETERMINABLE 逐功能依原 DEC 前置條件；Level 0～2 僅呈現／投影層，不新增 Enum／DataStatus／信心分數；Level 1＝核心價格證據有效且輔助證據不足時的研究參考，非第三正式結果；台股指數日 K 屬事實顯示；O-2「正式判定成立≠正式產品已部署可用」不授權 Stage F／新 caller；**Level／Delta Strip 新文案、正式 AI 功能仍須另過 Copy／Contract Gate**。
+- **新增治理（本 PR；待入 main）**：**DEC-226**＋`PROJECT_RULES.md` 第 35 節——總管派工提示語「精簡一鍵複製格式」（7148182082）、專案 AI O＝Work 專用條件式備援獨立 QA（7148133320；承 7148028894）、Hard Output Gate 索引（已有 DEC-104／DEC-118，不重複新增；本輪指示來源＝客戶派工卡，#1199 無逐字）。**僅工作流程／輸出格式，不授權任何產品碼或解除 HOLD**；入 main 前標「文件同步待完成」。
+- **尚未入庫、仍 Draft 的 PR（均未 Ready／merge；head 為撰寫時 `gh api` 實查）**：
+  - #1268 head `826cc9e6`（C：OneBrain 持股 FAKE Stage2 A1 tests-only；客戶 7147969987 接受 SF1 可捲讀密度**僅限隔離 FAKE 預覽**，**不授權 Ready／merge 或正式接線**）。
+  - #1278 head `a863b747`（G-F4 K2 `decision_digest.v2` tests-only 原型；Draft，非 merge 授權）。
+  - #1237 head `c406fb5f`（NAS 中繼站 fail-closed 安全補丁候選；**HOLD merge／部署**）。
+  - #1274 head `e3de13ef` ＋本批（本 PR；Draft）：HANDOFF／BACKLOG／PROJECT_STATE／PROJECT_RULES／DECISIONS 治理同步；**待非作者 QA 與總管 Ready／merge 裁示**。
+  - 上列 PR 於撰寫時皆 `behind` main（`gh api pulls/<n>.mergeable_state`）；合併前須 non-force 同步並只驗新增差額。
+- **HOLD 清單（皆未解除）**：v1.1（Catalyst Radar／Signal Log）；#1237 NAS；Cloud（#1107，被動更新僅限客戶已授權的 PR；不授權主動 deploy／Reboot／production 切換）；真持股；Sheet／OAuth；Secrets；正式 LINE；付費 AI／production Provider／caller；未核准來源／公式；歷史快照寫入／比較 producer；AI 快取寫入／排程；DEC-185 三支停用 workflows（`update_macro_history`、`update_sector_flow`、`update_macro_forward_test`）；DG-LIC／DG-PIT／DG-COV／DG-SCOPE、I1144-WIRING-GATE 維持原狀。
+- **NOT VERIFIED**：Streamlit Cloud 實際追蹤分支／是否被動更新／runtime 畫面；手機實機觸控；CI Python 3.11 vs 沙箱 3.13（CI 已覆蓋）；Real 場景為沙箱快取（日 K 2026-11-09、位階未載入）；branch protection（API 403）；#1277 main push CI 本段未重核；專案 AI O 是否已被實際啟用。
+- **下一個唯一安全工作點**：**總管規劃下一批**（B 待命，僅在有具名授權且不依賴 DEC-225 Level 新文案／C3／D7 的差額時才以隔離 worktree 施工）。本 PR（#1274）由總管依既有 Gate 決定非作者 QA 與 Ready／merge；任何人不得自行 Ready／merge。**行內證據／反證 BLK-1～7**（B 7148021302：Real 無證據欄位、Digest v1 無反證、新文案／D7／C3 未裁、台股抓取時間等資料承載需授權、位階無資料日、首屏 109.0／160 餘裕、「預設展開」vs Contract §3）與**新文案／D7／C3 仍未裁**——不得自行開工。
+- **新對話第一步（應先讀的 SSOT）**：重做 LIVE GitHub Verification Gate（main SHA、Open／Draft PR head／base、五項 CI、threads、#1199 最新留言）；讀 `PROJECT_RULES.md`（第 15、31.2、33、34、**35** 節）、`docs/DECISIONS.md` 最新 DEC（DEC-224／225／**226**）、`docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`（第 27 行已由 #1275 更正）、`docs/BACKLOG.md` 與 `docs/PROJECT_STATE.md` 本日段、#1199 最新留言（尤其 7147969987、7148028894、7148133320、7148182082、7154447230）；最新總管派工以 #1199 為準。
+- **建議 Model／Effort**：Sonnet 5.5／Medium（遇架構或權限衝突升 High，仍不得越 Gate）。
+- **停止條件與不得做**：超出上述、需動 HOLD 項、需解鎖任一 Gate、需 Ready／merge 本 PR 即停手；本段不是 QA PASS。
