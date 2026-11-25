@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "8d6e50be44021e2dd163aadbcb2fc385b36c3d98",
+  "git_sha": "2fd0773e120d27f2093078dae67404eded333fc5",
   "source_hash": "2a62b4e197829d7d9d798e83bff5995531a7253f4a5a31dae2de00442b6f3c1a",
-  "generated_at": "2026-11-25T01:02:39+00:00",
+  "generated_at": "2026-11-25T16:28:42+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "streamlit_version": "1.59.2",
@@ -294,7 +294,7 @@
     "banner_bottom": 17.9,
     "qa_top": 173.8
    },
-   "last_content_bottom": 434.5,
+   "last_content_bottom": 434.2,
    "card_heights": [
     162,
     162,
@@ -339,7 +339,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -364,7 +364,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 681.2,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.2,
+    "scroll_end_bottom": 763.9,
     "nav_margin_after_risk": 109.8
    },
    "failures": {},
@@ -465,9 +465,9 @@
    "stress": {
     "risk_top": 641.4,
     "risk_bottom": 718.1,
-    "scroll_end_bottom": 764.2,
-    "scroll_end_gap_to_nav": 26.8,
-    "risk_bottom_at_scroll_end": -639.9
+    "scroll_end_bottom": 763.8,
+    "scroll_end_gap_to_nav": 27.2,
+    "risk_bottom_at_scroll_end": -838.9
    },
    "failures": {},
    "pass": true
@@ -1502,7 +1502,7 @@
     "expander_box": {
      "top": 1366.5,
      "bottom": 2019.1,
-     "height": 652.6,
+     "height": 652.7,
      "left": 14.4,
      "right": 375.6
     },
@@ -1528,8 +1528,8 @@
      "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
     ],
     "last_content_bottom": 417.1,
-    "scroll_end_bottom": 763.8,
-    "scroll_end_gap_to_nav": 27.2,
+    "scroll_end_bottom": 763.9,
+    "scroll_end_gap_to_nav": 27.1,
     "hscroll": {
      "doc": {
       "scrollWidth": 390,
@@ -1679,7 +1679,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.5,
+   "last_content_bottom": 538.7,
    "card_heights": [
     183,
     183,
@@ -1724,7 +1724,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1749,7 +1749,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 505.7,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.3,
+    "scroll_end_bottom": 868.5,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -2986,7 +2986,7 @@
     "banner_bottom": 21.2,
     "qa_top": 125.1
    },
-   "last_content_bottom": 538.7,
+   "last_content_bottom": 537.9,
    "card_heights": [
     183,
     183,
@@ -3031,7 +3031,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -3056,7 +3056,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 524.9,
     "risk_line_height": 24,
-    "scroll_end_bottom": 868.5,
+    "scroll_end_bottom": 867.7,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -4116,7 +4116,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.6,
+     "height": 652.7,
      "left": 80,
      "right": 1200
     },

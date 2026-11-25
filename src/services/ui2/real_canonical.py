@@ -58,16 +58,16 @@ from shared.upstream_state import UPSTREAM_TEXT_FETCH_FAILED, upstream_state_tex
 from shared import twii_ohlc_contract as OC
 from shared.ui2_contract.pages import (
     MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
-    SCENARIO_REAL,
+    PAGE_LABELS, SCENARIO_REAL,
 )
 from shared.ui2_contract.text import (
     RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE, TEXT_STALE_UNKNOWN,
 )
 from src.services.ui2.data_page import (
-    FRESHNESS_ITEM_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
+    FRESHNESS_ITEM_LABELS, FRESHNESS_ROW_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
     S_IN_RULE, S_MISSING, S_NOT_EVALUATED, S_STALE, S_UNAVAILABLE, S_UNDETERMINABLE, counts_from_states,
-    data_page_canonical, item_detail_specs,
+    data_page_canonical, freshness_rows, item_detail_specs,
 )
 from src.services.ui2.market_vm import build_market_page_vm
 from src.services.ui2.skeleton_vm import build_skeleton_page_vm
@@ -820,6 +820,40 @@ def _data(snap: RealFeedSnapshot) -> dict:
     return data_page_canonical(counts_from_states(freshness_states(snap)), items=freshness_item_specs(snap))
 
 
+# ── 📊 頁尾「接入狀態」（B 線方案 A；客戶授權 #1199 comment 7167315139，依 7160953590／7162031909／7164432247）──
+#: 區塊 id（📊 sections 尾端的唯一一個 L1 區塊；識別字只准出現在本檔，`tests/test_ui2_market_wired_status.py` 守衛）。
+WIRED_STATUS_SECTION_ID = "market_wired_status"
+#: 第二欄 label（新字串 #1）。第一欄 label 沿用既有導覽頁名 `PAGE_LABELS[P4_DATA]`、區塊標題沿用既有 `FRESHNESS_ROW_LABELS[1]`。
+#: 兩欄 label 都不得等於區塊標題（`_label_repeats_title` 只在單欄區塊隱藏重複標籤；兩欄時兩個 label 都會畫）。
+WIRED_STATUS_LABEL = "其中"
+#: 第二欄 detail（新字串 #2；單一常數，客戶可改字）。語意：「已接入」只代表畫面有讀取路徑，⛔ 當成今日有值／市場判斷依據。
+WIRED_STATUS_DETAIL = "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。"
+
+
+def _wired_status_section(snap: RealFeedSnapshot) -> dict | None:
+    """📊 頁尾「接入狀態」區塊 canonical（純）；顯示條件不成立 → `None`（⛔ 補假列／補 0）。
+
+    畫出 ＝ (a) 已接入兩項（台股、位階）狀態皆非 `S_UNAVAILABLE`（正常缺值 missing、stale、not_evaluated、undeterminable、in_rule
+    皆畫；`snap.twii is None` 由台股卡 unavailable 擋），且 (b) 台股上游訊號不是 FETCH_FAILED（含 legacy：upstream_state 為空
+    但 has_upstream_error）。(b) 逐字重用 `twii_card_spec` 自己的算式；NO_NEW_DATA／UNDETERMINED／無錯誤皆照畫。
+    兩欄值＝`freshness_rows` 既有 `fresh_total`／`fresh_wired` 的 value（與 🗂 逐字一致；N、K 由 `FRESHNESS_ITEMS` 現算）。
+    ⛔ 新增來源／公式／取數；⛔ chip／freshness／capability。"""
+    states = freshness_states(snap)
+    if any(v == S_UNAVAILABLE for v in states.values()):
+        return None
+    t = snap.twii
+    if t is None:           # 防呆：(a) 已擋（台股卡 unavailable）；不可達時仍 fail closed，⛔ 當成可畫
+        return None
+    up = _upstream_state_text(t.upstream_state) or (_UPSTREAM_ERROR_TEXT if t.has_upstream_error else "")
+    if up == UPSTREAM_TEXT_FETCH_FAILED:
+        return None
+    rows = {r["key"]: r for r in freshness_rows(counts_from_states(states))}
+    return {"key": WIRED_STATUS_SECTION_ID, "title": FRESHNESS_ROW_LABELS[1], "level": "L1", "fields": [
+        {**rows["fresh_total"], "label": PAGE_LABELS[P4_DATA], "reason": None},
+        {**rows["fresh_wired"], "label": WIRED_STATUS_LABEL, "reason": WIRED_STATUS_DETAIL},
+    ]}
+
+
 def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     """`page_id`×snapshot → canonical dict（`is_fake=False`、`scenario='real'`）。每次回新 dict。"""
     if page_id not in PAGE_IDS:
@@ -828,6 +862,10 @@ def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
         raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap)!r}")
     c = {P4_MARKET: lambda: _market(snap), P4_TARGET: lambda: _target(snap),
          P4_HOLD: _hold, P4_ME: _me, P4_DATA: lambda: _data(snap)}[page_id]()
+    if page_id == P4_MARKET:
+        wired = _wired_status_section(snap)
+        if wired is not None:                   # 新 list 附加於尾端（⛔ 就地改 `_market` 回傳的 sections）
+            c = {**c, "sections": [*c["sections"], wired]}
     c["scenario"] = SCENARIO_REAL
     c["is_fake"] = False
     return c

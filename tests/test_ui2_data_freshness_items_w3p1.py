@@ -485,9 +485,15 @@ def test_shown_folds_gain_exactly_one_entry_and_three_places_agree():
 def test_wired_paths_gain_exactly_two_exact_tuples_and_no_wildcard_or_prefix():
     data_paths = {k for k in RF.WIRED_PATHS if k[0] == P4_DATA}
     assert data_paths == {(P4_DATA, f"first/context_rows/{i}") for i in range(4)} | _NEW_WIRED
-    assert RF.WIRED_PATHS - data_paths == frozenset({
+    # 📊 頁尾「接入狀態」（B 線；#1199 comment 7167315139／7160953590／7164432247）：非資料頁集合由原 5 個**精確增為 7 個**——
+    # 恰增兩個 `P4_MARKET` 精確 tuple（`/0`、`/1`），無其他差異、無 wildcard／前綴；市場項只在這個非資料頁集合斷言，
+    # **不**混入 🗂 資料頁的等式（見 tests/test_ui2_data_freshness_overview.py 對應註記）。
+    original_five = frozenset({
         (P4_MARKET, "cards/twii"), (P4_MARKET, "first/current_state"), (P4_MARKET, "sections/why/0"),
         (P4_TARGET, "first/context_rows/0"), (P4_TARGET, "lookup/snapshot/5")})
+    market_two = frozenset({(P4_MARKET, "sections/market_wired_status/0"), (P4_MARKET, "sections/market_wired_status/1")})
+    assert RF.WIRED_PATHS - data_paths == original_five | market_two
+    assert len(RF.WIRED_PATHS - data_paths) == 7 and not (original_five & market_two)
     assert not any(("*" in p or p.endswith("/") or p.endswith(f"{SEC_ID}")) for _, p in RF.WIRED_PATHS)
     # 精確對到真實存在的列（二個 index 由最終 VM 實證）
     vm = get_real_page_vm(P4_DATA, snap(twii(), "", regime("unloaded")))

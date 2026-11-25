@@ -21,7 +21,7 @@ import pytest
 
 from shared.decision_digest_terms import MISSING_GLYPH, RISK_CAP_HIDDEN_WORDING, SECTION_LABELS
 from shared.ui2_contract.models import CapabilityState, PageVM
-from shared.ui2_contract.pages import ACCOUNT_IDS, P4_ME, PAGE_IDS, SCENARIO_IDS
+from shared.ui2_contract.pages import ACCOUNT_IDS, P4_MARKET, P4_ME, PAGE_IDS, SCENARIO_IDS
 from src.services.decision_digest_summary import build_rule_summary
 from src.services.ui2 import scenarios as SC
 from src.services.ui2.preview_feed import get_preview_page_vm
@@ -133,9 +133,18 @@ def test_real_digest_is_the_original_empty_slot():
 def test_real_fingerprints_and_non_digest_fake_fingerprints_equal_committed_baseline():
     """Real 五頁（含 👤 digest／registry）指紋與 base 逐值相同；FAKE 除 p4_me 的 digest 區塊外亦同。"""
     base = json.loads(BASELINE.read_text(encoding="utf-8"))
+    # 📊 頁尾「接入狀態」（B 線；#1199 comment 7167315139）：Real 📊 在顯示條件成立的組合多一個 L1 區塊（baseline 之後的**加性**變更）。
+    # 本等式是逐值相等（不是子集合），所以只准**剪掉那一個**區塊再比對，且「哪些 snapshot 該有」以字面釘死
+    # （其餘 section／欄位／卡片／首屏／context rows 仍逐值相等；該區塊本身的形狀由 📊 接入狀態的形狀鎖測試檔鎖定）。
+    from tests.test_ui2_market_wired_status import SEC_ID as _WIRED_SEC
+    drawn = {"loaded", "unloaded", "unevaluated", "stale", "stale_unknown", "missing"}
     for name, snap in _snapshots().items():
         for page in PAGE_IDS:
-            assert fingerprint(get_real_page_vm(page, snap)) == base[f"real/{page}/{name}"], (page, name)
+            cur = fingerprint(get_real_page_vm(page, snap))
+            extra = cur["sections"].pop(_WIRED_SEC, None)
+            assert (extra is not None) == (page == P4_MARKET and name in drawn), (page, name)
+            assert extra is None or len(extra["fields"]) == 2, (page, name)
+            assert cur == base[f"real/{page}/{name}"], (page, name)
     for page in PAGE_IDS:
         for sc in SCENARIO_IDS:
             for acct in (ACCOUNT_IDS if page == P4_ME else (None,)):
