@@ -8,8 +8,8 @@
 ## 1. 版本
 
 - 最新核准產品基準 **v1.0**（2026-11-23 共識；DEC-224，APPROVED PRODUCT TARGET，**非施工／merge／部署授權**）。出處：`docs/DECISIONS.md` DEC-224、`docs/vnext/UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md`。
-- **V1.1**＝僅調整「新對話如何接續讀取」的索引版本，不改產品範圍、規則或授權。**V1.1 定義全文未見；僅 #1199 留言 7164122838 提及輕量讀取原則（客戶派工卡逐字全文＝NOT VERIFIED）。**
-- ⚠️ 與規格第十章「v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，全部 HOLD）」**不是同一件事，勿混淆**。
+- **V1.1**＝僅調整「新對話如何接續讀取」的索引版本，不改產品範圍、規則或授權。本輪客戶明示接續方式已回存 c7165164441；早期派工卡逐字全文仍 NOT VERIFIED。
+- ⚠️ 與規格第十章「MF-AC2 A 整合口徑、B Y 守衛及接入裁示、#1274 Merge Gate、#1281 文件/新 head 驗收及 Merge 授權、#1268/#1278 原 Draft 限制；v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，全部 HOLD）」**不是同一件事，勿混淆**。
 
 ## 2. 讀取順序（本檔只是定位入口；V1.1 輕量接續與正式驗收分開）
 
@@ -24,7 +24,7 @@
 6. 有效 DEC／Contract 為準：DEC-224、DEC-225（`docs/DECISIONS.md`）；ADR-OB-001（`docs/vnext/ONEBRAIN_ARCHITECTURE_DECISION_2026-10-31.md`）；`docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`（檔首已更正：舊「DRAFT／未核准」文字勿再用來派工）。
 
 **效力與衝突**：`PROJECT_RULES.md` 第 25 節只定效力順位，不是接續程序，本檔不重述。本節若與 READ FIRST 第四節第 3 點、第 25 節或第 15 節讀序有衝突，**以有效正式規則為準，並提請裁示（#1199）**；本檔不改寫、不覆蓋正式規則，不新增 Gate、不降低原 Gate。
-**NOT VERIFIED**：V1.1 客戶派工卡逐字全文於可回查來源未找到；可回查的 c7164122838 明文為 V1.1 輕量讀取、日常接續與正式驗收分離、正式 Gate 完整保留。本節修正依據 Work c7164471316（MF-RESUME-1）。
+**證據入口**：c7164122838、Work c7164471316（MF-RESUME-1）、本輪客戶明示接續方式回存 c7165164441。早期派工卡逐字全文仍 NOT VERIFIED；正式規則及原 Gate 不變。
 
 ## 3. 三行硬約束（每張派工卡固定保留；出處 c7110402272，與規格第十一章比對）
 
@@ -41,7 +41,11 @@
 - **C**（歸納，非客戶逐字派工）｜OneBrain 資料承載與 Digest v2 設計／驗收矩陣；隔離 FAKE 預覽（#1268，tests-only）、K2 原型（#1278，tests-only）｜不改共用 UI／Contract、不改正式 Digest v1；不得開正式 Provider／caller、真資料或快取寫入（客戶原文 c7131915767）；另「本輪設計規劃不取數」為 C 自身回存（c7156469742、c7162202145），非客戶原文｜驗收：合成證據、正負控、Work 獨立驗收（c7131915767、c7162202145）
 - **Work**（歸納，非客戶逐字派工）｜獨立唯讀驗收：只核新增差額、原 Merge Gate、main push CI 五項＋Slow 實際 step；不重跑已 PASS 矩陣、不施工、不合併。無法執行時由備援角色 O 承接未驗差額（條件式，非第四條施工線）｜驗收：PASS／HOLD／NOT VERIFIED 附可回查證據（c7147969987、c7148133320）
 
-## 5. 現況快照（2026-11-25 查證；過期即不可信）
+## 5. 現況快照（2026-11-25；過期即不可信）
+
+- **最新接續存檔：c7165164441**（FACT／APPROVED／PROPOSED／HOLD／NOT VERIFIED；先讀此留言及其後有效裁示）。
+- APPROVED：A/B/C 並列、最多三活躍施工線、單一寫者與檔案隔離；D 唯讀不占施工槽位、O 原條件式備援；Work 功能→畫面→正式 Gate，不降低原 Gate。
+- 永久靜默：禁止過程回報及碎碎念，證據寫 GitHub；必要裁示／重大 FAIL／整批完成才回報，最多五行。
 
 | 項目 | 快照 | 出處 |
 |---|---|---|
@@ -52,9 +56,12 @@
 | #1237 | NAS 安全補丁候選；head `c406fb5f`；Draft；HOLD merge／部署 | PR 頁 |
 | 最新客戶正式裁示 | c7151544405（#1273 Cloud Gate A、#1280 P-1 A；已依序入庫） | c7151544405 |
 | 近期客戶指示 | 一鍵複製精簡派工格式 c7148182082；備援 O c7148133320；Work 備援 c7148028894；V1.2 唯讀盤點放行 c7164122838（不授權實作或刪除） | 各留言 |
-| #1281（本檔） | docs-only Draft；head 以 PR 頁為準；Work 判技術 CI PASS、文件驗收 HOLD（MF-RESUME-1）；不 Ready／merge | c7164471316 |
-| 各線最新回存 | A c7164463719｜B c7164432247｜C c7163715572｜Work c7164471316（#1199 共 549 則，最後一則 c7164471316，13:54Z） | 各留言 |
+| #1281（本檔） | FACT：同步前 head `0a553ad7`、68 行，MF-RESUME-1 修正已呈現；同步後 exact head、CI／獨立 QA NOT VERIFIED；Draft，不 Ready／merge | c7164471316、c7165164441 |
+| 各線最新回存 | A c7164463719｜B c7164432247｜C c7163715572｜Work c7164471316（同步前快照 549 則；本輪存檔 c7165164441） | 各留言 |
 | 未完成（只列指標） | Digest v2 裁示包 A c7161029065＋補註 c7161067915；MF-AC2 更正 C c7162202145；B 接入狀態裁示包 c7160953590／c7162031909（待客戶回覆）；B Y 守衛採 Work 兩條測試定位、仍 HOLD（c7164432247）；#1274 待授權。Work c7162964168 判定：B 兩項設計差額 PASS、Y 守衛定稿仍 HOLD；C 歸因更正與負控 PASS、A 整合口徑仍 HOLD（A c7161029065 §2.4 仍待採用 C 更正 c7162202145）；#1274 治理 QA PASS 沿用、Merge Gate HOLD。其後 A c7164463719 回存標題為採用 C 更正（Work 尚未複驗） | 各留言 |
+
+- PROPOSED：Work 先驗 #1281 同步後新差額，再驗 A MF-AC2 整合口徑，後驗 #1268 尚未通過的實際功能與畫面；B 等 Y 守衛裁示，C 回原授權內功能差額，D/O 暫不啟動。
+- NOT VERIFIED：上述歷史 PASS 指標未於本輪逐則重讀；完整 LIVE Gate、最新 CI 與 reviews/threads 待驗，不將歷史或作者證據冒充即時 PASS。
 
 ## 6. HOLD（非窮舉；來源：規格第十一章與 c7162261882；**本檔不解除任何 HOLD**）
 
