@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "8a36b0492eeeebfc629d03c68e0b77519b33cf8d",
-  "source_hash": "28bf3f7e8adb400ac5858f421b410ee5eb6e89b517cec4950d8f39bc7da91702",
-  "generated_at": "2026-11-24T13:04:47+00:00",
+  "git_sha": "8d6e50be44021e2dd163aadbcb2fc385b36c3d98",
+  "source_hash": "2a62b4e197829d7d9d798e83bff5995531a7253f4a5a31dae2de00442b6f3c1a",
+  "generated_at": "2026-11-25T01:02:39+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "157.0.8103.78",
   "streamlit_version": "1.59.2",
@@ -339,7 +339,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 15 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -507,19 +507,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 384.0,
-     "bottom": 419.7,
+     "bottom": 523.1,
      "left": 27.4,
      "right": 362.6,
-     "height": 35.7,
+     "height": 139.2,
      "width": 335.2
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 419.7,
-     "bottom": 493.8,
+     "top": 523.1,
+     "bottom": 597.2,
      "left": 27.4,
      "right": 362.6,
      "height": 74.1,
@@ -528,8 +528,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 493.8,
-     "bottom": 548.7,
+     "top": 597.2,
+     "bottom": 652.1,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -598,7 +598,7 @@
     "banner_bottom": 17.9,
     "qa_top": 324.0
    },
-   "last_content_bottom": 378.1,
+   "last_content_bottom": 378.6,
    "card_heights": [
     159,
     159
@@ -613,8 +613,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 573.7,
-     "bottom": 733.1,
+     "top": 677.1,
+     "bottom": 836.6,
      "left": 14.4,
      "right": 375.6,
      "height": 159.5,
@@ -660,10 +660,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 573.7,
+    "first_block_after_l1_top": 677.1,
     "risk_line_height": null,
-    "scroll_end_bottom": 763.9,
-    "nav_margin_after_risk": 217.3
+    "scroll_end_bottom": 764.3,
+    "nav_margin_after_risk": 113.9
    },
    "failures": {},
    "pass": true
@@ -703,19 +703,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 384.0,
-     "bottom": 419.7,
+     "bottom": 523.1,
      "left": 27.4,
      "right": 362.6,
-     "height": 35.7,
+     "height": 139.2,
      "width": 335.2
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 419.7,
-     "bottom": 493.8,
+     "top": 523.1,
+     "bottom": 597.2,
      "left": 27.4,
      "right": 362.6,
      "height": 74.1,
@@ -724,8 +724,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 493.8,
-     "bottom": 548.7,
+     "top": 597.2,
+     "bottom": 652.1,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -794,7 +794,7 @@
     "banner_bottom": 17.9,
     "qa_top": 324.0
    },
-   "last_content_bottom": 433.9,
+   "last_content_bottom": 434.3,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -843,7 +843,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 763.6,
+    "scroll_end_bottom": 764.1,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -894,19 +894,19 @@
     },
     {
      "q": "q2",
-     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
      "top": 395.3,
-     "bottom": 431.0,
+     "bottom": 450.2,
      "left": 27.4,
      "right": 362.6,
-     "height": 35.7,
+     "height": 54.9,
      "width": 335.2
     },
     {
      "q": "q4",
      "text": "🚀 更新持股戰情 目前不提供更新；需登入後才能讀取持股",
-     "top": 431.0,
-     "bottom": 504.7,
+     "top": 450.2,
+     "bottom": 523.9,
      "left": 27.4,
      "right": 362.6,
      "height": 73.7,
@@ -975,13 +975,13 @@
     "banner_bottom": 17.9,
     "qa_top": 224.5
    },
-   "last_content_bottom": 434.0,
+   "last_content_bottom": 434.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 695.2,
-     "bottom": 784.0,
+     "top": 714.4,
+     "bottom": 803.2,
      "left": 14.4,
      "right": 375.6,
      "height": 88.8,
@@ -1036,16 +1036,16 @@
      ]
     },
     "onebrain": {
-     "top": 695.203125,
-     "bottom": 783.984375,
+     "top": 714.390625,
+     "bottom": 803.171875,
      "left": 14.390625,
      "right": 375.609375,
      "height": 88.78125,
      "width": 361.21875
     },
     "primary": {
-     "top": 799.984375,
-     "bottom": 849.578125,
+     "top": 819.171875,
+     "bottom": 868.765625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 49.59375,
@@ -1053,12 +1053,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供",
-     "title_cy": 823.78125,
-     "chip_cy": 821.78125
+     "title_cy": 842.96875,
+     "chip_cy": 840.96875
     },
     "cap": {
-     "top": 582.421875,
-     "bottom": 679.203125,
+     "top": 601.609375,
+     "bottom": 698.390625,
      "left": 14.390625,
      "right": 375.609375,
      "height": 96.78125,
@@ -1067,8 +1067,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 865.578125,
-     "bottom": 1061.046875,
+     "top": 884.765625,
+     "bottom": 1080.234375,
      "left": 14.390625,
      "right": 375.609375,
      "height": 195.46875,
@@ -1113,10 +1113,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 593.4,
+    "first_block_after_l1_top": 612.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 763.8,
-    "nav_margin_after_risk": 197.6
+    "scroll_end_bottom": 764.0,
+    "nav_margin_after_risk": 178.4
    },
    "failures": {},
    "pass": true
@@ -1502,7 +1502,7 @@
     "expander_box": {
      "top": 1366.5,
      "bottom": 2019.1,
-     "height": 652.7,
+     "height": 652.6,
      "left": 14.4,
      "right": 375.6
     },
@@ -1528,8 +1528,8 @@
      "基本面季報 ⬜ 尚未提供 完整資料健康度開放後才可查看"
     ],
     "last_content_bottom": 417.1,
-    "scroll_end_bottom": 763.9,
-    "scroll_end_gap_to_nav": 27.1,
+    "scroll_end_bottom": 763.8,
+    "scroll_end_gap_to_nav": 27.2,
     "hscroll": {
      "doc": {
       "scrollWidth": 390,
@@ -1724,7 +1724,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 15 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -1790,19 +1790,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 335.2,
-     "bottom": 371.0,
+     "bottom": 390.2,
      "left": 93,
      "right": 1347,
-     "height": 35.7,
+     "height": 54.9,
      "width": 1254
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 371.0,
-     "bottom": 425.9,
+     "top": 390.2,
+     "bottom": 445.1,
      "left": 93,
      "right": 1347,
      "height": 54.9,
@@ -1811,8 +1811,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 425.9,
-     "bottom": 480.8,
+     "top": 445.1,
+     "bottom": 500.0,
      "left": 93,
      "right": 1347,
      "height": 54.9,
@@ -1881,7 +1881,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 481.9,
+   "last_content_bottom": 482.1,
    "card_heights": [
     142,
     142
@@ -1896,8 +1896,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 505.8,
-     "bottom": 647.9,
+     "top": 525.0,
+     "bottom": 667.1,
      "left": 80,
      "right": 1360,
      "height": 142.1,
@@ -1943,9 +1943,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 505.8,
+    "first_block_after_l1_top": 525.0,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.7,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -1986,19 +1986,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 335.2,
-     "bottom": 371.0,
+     "bottom": 390.2,
      "left": 93,
      "right": 1347,
-     "height": 35.7,
+     "height": 54.9,
      "width": 1254
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 371.0,
-     "bottom": 425.9,
+     "top": 390.2,
+     "bottom": 445.1,
      "left": 93,
      "right": 1347,
      "height": 54.9,
@@ -2007,8 +2007,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 425.9,
-     "bottom": 480.8,
+     "top": 445.1,
+     "bottom": 500.0,
      "left": 93,
      "right": 1347,
      "height": 54.9,
@@ -2077,7 +2077,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 538.0,
+   "last_content_bottom": 538.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -2126,7 +2126,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.7,
+    "scroll_end_bottom": 867.9,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -2177,12 +2177,12 @@
     },
     {
      "q": "q2",
-     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
      "top": 236.3,
-     "bottom": 275.0,
+     "bottom": 294.2,
      "left": 80,
      "right": 1360,
-     "height": 38.7,
+     "height": 57.9,
      "width": 1280
     },
     {
@@ -2258,13 +2258,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.4,
+   "last_content_bottom": 538.6,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 335.7,
-     "bottom": 377.3,
+     "top": 354.9,
+     "bottom": 396.5,
      "left": 80,
      "right": 1360.0,
      "height": 41.6,
@@ -2319,16 +2319,16 @@
      ]
     },
     "onebrain": {
-     "top": 335.734375,
-     "bottom": 377.328125,
+     "top": 354.921875,
+     "bottom": 396.515625,
      "left": 80,
      "right": 1359.984375,
      "height": 41.59375,
      "width": 1279.984375
     },
     "primary": {
-     "top": 393.328125,
-     "bottom": 633.328125,
+     "top": 412.515625,
+     "bottom": 652.515625,
      "left": 80,
      "right": 925.328125,
      "height": 240,
@@ -2336,12 +2336,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 417.125,
-     "chip_cy": 445.28125
+     "title_cy": 436.3125,
+     "chip_cy": 464.46875
     },
     "cap": {
-     "top": 393.328125,
-     "bottom": 633.328125,
+     "top": 412.515625,
+     "bottom": 652.515625,
      "left": 937.328125,
      "right": 1359.984375,
      "height": 240,
@@ -2350,8 +2350,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 649.328125,
-     "bottom": 779.390625,
+     "top": 668.515625,
+     "bottom": 798.578125,
      "left": 80,
      "right": 1359.984375,
      "height": 130.0625,
@@ -2420,9 +2420,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 347.7,
+    "first_block_after_l1_top": 366.9,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -3031,7 +3031,7 @@
     "chart_graphics": 2,
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
-    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 15 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 16 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
     "chart_danger": 0
    },
    "h1": null,
@@ -3097,19 +3097,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 335.2,
-     "bottom": 371.0,
+     "bottom": 390.2,
      "left": 93,
      "right": 1187,
-     "height": 35.7,
+     "height": 54.9,
      "width": 1094
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 371.0,
-     "bottom": 425.9,
+     "top": 390.2,
+     "bottom": 445.1,
      "left": 93,
      "right": 1187,
      "height": 54.9,
@@ -3118,8 +3118,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 425.9,
-     "bottom": 480.8,
+     "top": 445.1,
+     "bottom": 500.0,
      "left": 93,
      "right": 1187,
      "height": 54.9,
@@ -3188,7 +3188,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 481.9,
+   "last_content_bottom": 482.1,
    "card_heights": [
     142,
     142
@@ -3203,8 +3203,8 @@
     "onebrain": null,
     "slot": null,
     "grid": {
-     "top": 505.8,
-     "bottom": 647.9,
+     "top": 525.0,
+     "bottom": 667.1,
      "left": 80,
      "right": 1200,
      "height": 142.1,
@@ -3250,9 +3250,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 505.8,
+    "first_block_after_l1_top": 525.0,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.7,
+    "scroll_end_bottom": 867.8,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -3293,19 +3293,19 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
      "top": 335.2,
-     "bottom": 371.0,
+     "bottom": 390.2,
      "left": 93,
      "right": 1187,
-     "height": 35.7,
+     "height": 54.9,
      "width": 1094
     },
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作，目前也無法查詢是否持有；持股頁與 OneBrain 的 Real 功能尚未開放",
-     "top": 371.0,
-     "bottom": 425.9,
+     "top": 390.2,
+     "bottom": 445.1,
      "left": 93,
      "right": 1187,
      "height": 54.9,
@@ -3314,8 +3314,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 425.9,
-     "bottom": 480.8,
+     "top": 445.1,
+     "bottom": 500.0,
      "left": 93,
      "right": 1187,
      "height": 54.9,
@@ -3384,7 +3384,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 538.0,
+   "last_content_bottom": 538.2,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -3433,7 +3433,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.7,
+    "scroll_end_bottom": 867.9,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -3484,12 +3484,12 @@
     },
     {
      "q": "q2",
-     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合）",
+     "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
      "top": 236.3,
-     "bottom": 275.0,
+     "bottom": 294.2,
      "left": 80,
      "right": 1200,
-     "height": 38.7,
+     "height": 57.9,
      "width": 1120
     },
     {
@@ -3565,13 +3565,13 @@
     "banner_bottom": 21.2,
     "qa_top": 169.4
    },
-   "last_content_bottom": 538.4,
+   "last_content_bottom": 538.6,
    "card_heights": [],
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 335.7,
-     "bottom": 377.3,
+     "top": 354.9,
+     "bottom": 396.5,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -3626,16 +3626,16 @@
      ]
     },
     "onebrain": {
-     "top": 335.734375,
-     "bottom": 377.328125,
+     "top": 354.921875,
+     "bottom": 396.515625,
      "left": 80,
      "right": 1200,
      "height": 41.59375,
      "width": 1120
     },
     "primary": {
-     "top": 393.328125,
-     "bottom": 633.328125,
+     "top": 412.515625,
+     "bottom": 652.515625,
      "left": 80,
      "right": 818.65625,
      "height": 240,
@@ -3643,12 +3643,12 @@
      "graphics": 0,
      "danger": 0,
      "text": "產業曝險／集中度 ⬜ 尚未提供 需登入並讀取持股後才會顯示，目前尚未開放 SPEC｜單位 %（產業別占持股比例）｜來源 ⬜ 尚未提供｜資料日 ⬜ 資料日未提供｜缺值不補",
-     "title_cy": 417.125,
-     "chip_cy": 445.28125
+     "title_cy": 436.3125,
+     "chip_cy": 464.46875
     },
     "cap": {
-     "top": 393.328125,
-     "bottom": 633.328125,
+     "top": 412.515625,
+     "bottom": 652.515625,
      "left": 830.65625,
      "right": 1200,
      "height": 240,
@@ -3657,8 +3657,8 @@
      "text": "建議持股水位（市場端） ⬜ 尚未提供 市場端建議區間尚未開放；這不是投資上限"
     },
     "table": {
-     "top": 649.328125,
-     "bottom": 779.390625,
+     "top": 668.515625,
+     "bottom": 798.578125,
      "left": 80,
      "right": 1200,
      "height": 130.0625,
@@ -3727,9 +3727,9 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 347.7,
+    "first_block_after_l1_top": 366.9,
     "risk_line_height": null,
-    "scroll_end_bottom": 868.1,
+    "scroll_end_bottom": 868.3,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -4116,7 +4116,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.7,
+     "height": 652.6,
      "left": 80,
      "right": 1200
     },

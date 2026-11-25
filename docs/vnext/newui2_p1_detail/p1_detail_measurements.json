@@ -1,0 +1,2297 @@
+[
+ {
+  "shot": "real_target",
+  "viewport": "390x844",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 324.0,
+   "bottom": 661.1,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 337.1,
+   "width": 361.2
+  },
+  "ctxline": {
+   "box": {
+    "top": 384.0,
+    "bottom": 523.1,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 139.2,
+    "width": 335.2
+   },
+   "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 389.0,
+      "bottom": 469.2,
+      "left": 27.4,
+      "right": 362.6,
+      "height": 80.3,
+      "width": 335.2
+     },
+     "detail_text": "⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
+     "detail_box": {
+      "top": 411.7,
+      "bottom": 469.2,
+      "left": 27.4,
+      "right": 362.6,
+      "height": 57.6,
+      "width": 335.2
+     }
+    },
+    {
+     "box": {
+      "top": 473.2,
+      "bottom": 517.1,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 498.0,
+      "bottom": 517.1,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 39493
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "390x844",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 224.5,
+   "bottom": 532.9,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 308.3,
+   "width": 361.2
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 395.3,
+    "bottom": 450.2,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 425.0,
+    "bottom": 444.2,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 19.2,
+    "width": 335.2
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 132.8,
+   "bottom": 577.6,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 444.8,
+   "width": 361.2
+  },
+  "png_bytes": 36525
+ },
+ {
+  "shot": "fake_ok_target",
+  "viewport": "390x844",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 284.2,
+   "bottom": 478.8,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 194.5,
+   "width": 361.2
+  },
+  "ctxline": {
+   "box": {
+    "top": 324.2,
+    "bottom": 379.1,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "市場位階 震盪 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 329.2,
+      "bottom": 373.1,
+      "left": 27.4,
+      "right": 124.0,
+      "height": 43.9,
+      "width": 96.6
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 329.2,
+      "bottom": 373.1,
+      "left": 136.0,
+      "right": 353.6,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 354.0,
+      "bottom": 373.1,
+      "left": 136.0,
+      "right": 353.6,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 29414
+ },
+ {
+  "shot": "fake_ok_hold",
+  "viewport": "390x844",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 184.7,
+   "bottom": 473.2,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 288.4,
+   "width": 361.2
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 335.5,
+    "bottom": 390.5,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 365.3,
+    "bottom": 384.5,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 19.2,
+    "width": 335.2
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 93,
+   "bottom": 517.9,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 424.9,
+   "width": 361.2
+  },
+  "png_bytes": 32288
+ },
+ {
+  "shot": "fake_stale_target",
+  "viewport": "390x844",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 284.2,
+   "bottom": 530.2,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 246.0,
+   "width": 361.2
+  },
+  "ctxline": {
+   "box": {
+    "top": 349.0,
+    "bottom": 430.6,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 81.6,
+    "width": 335.2
+   },
+   "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 354.0,
+      "bottom": 376.7,
+      "left": 27.4,
+      "right": 205.9,
+      "height": 22.7,
+      "width": 178.5
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 380.7,
+      "bottom": 424.6,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 405.4,
+      "bottom": 424.6,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 31081
+ },
+ {
+  "shot": "fake_stale_hold",
+  "viewport": "390x844",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 184.7,
+   "bottom": 473.9,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 289.2,
+   "width": 361.2
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 336.3,
+    "bottom": 391.2,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 366.0,
+    "bottom": 385.2,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 19.2,
+    "width": 335.2
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 93,
+   "bottom": 518.6,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 425.6,
+   "width": 361.2
+  },
+  "png_bytes": 32840
+ },
+ {
+  "shot": "fake_unavailable_target",
+  "viewport": "390x844",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 284.2,
+   "bottom": 544.6,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 260.3,
+   "width": 361.2
+  },
+  "ctxline": {
+   "box": {
+    "top": 344.1,
+    "bottom": 445.0,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 100.8,
+    "width": 335.2
+   },
+   "text": "市場位階 🔴 來源目前不可用 FAKE 來源逾時（示意） Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 349.1,
+      "bottom": 391.0,
+      "left": 27.4,
+      "right": 204.4,
+      "height": 41.9,
+      "width": 177.0
+     },
+     "detail_text": "FAKE 來源逾時（示意）",
+     "detail_box": {
+      "top": 371.9,
+      "bottom": 391.0,
+      "left": 27.4,
+      "right": 204.4,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 395.0,
+      "bottom": 439.0,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 419.8,
+      "bottom": 439.0,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 30969
+ },
+ {
+  "shot": "fake_unavailable_hold",
+  "viewport": "390x844",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 184.7,
+   "bottom": 493.1,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 308.3,
+   "width": 361.2
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 355.5,
+    "bottom": 410.4,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 385.2,
+    "bottom": 404.4,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 19.2,
+    "width": 335.2
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 93,
+   "bottom": 537.8,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 444.8,
+   "width": 361.2
+  },
+  "png_bytes": 33128
+ },
+ {
+  "shot": "real_target",
+  "viewport": "1280x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 509.0,
+   "left": 80,
+   "right": 1200,
+   "height": 233.6,
+   "width": 1120
+  },
+  "ctxline": {
+   "box": {
+    "top": 335.2,
+    "bottom": 390.2,
+    "left": 93,
+    "right": 1187,
+    "height": 54.9,
+    "width": 1094
+   },
+   "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 93,
+      "right": 866.5,
+      "height": 43.9,
+      "width": 773.5
+     },
+     "detail_text": "⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
+     "detail_box": {
+      "top": 363.0,
+      "bottom": 382.2,
+      "left": 93,
+      "right": 866.5,
+      "height": 19.2,
+      "width": 773.5
+     }
+    },
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 878.5,
+      "right": 1096.1,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 365.0,
+      "bottom": 384.2,
+      "left": 878.5,
+      "right": 1096.1,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 42847
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "1280x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1200,
+   "height": 124.8,
+   "width": 1120
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1200,
+    "height": 57.9,
+    "width": 1120
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1187,
+    "height": 19.2,
+    "width": 1094
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1200,
+   "height": 261.9,
+   "width": 1120
+  },
+  "png_bytes": 52559
+ },
+ {
+  "shot": "fake_ok_target",
+  "viewport": "1280x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 469.9,
+   "left": 80,
+   "right": 1200,
+   "height": 194.5,
+   "width": 1120
+  },
+  "ctxline": {
+   "box": {
+    "top": 315.3,
+    "bottom": 370.2,
+    "left": 93,
+    "right": 1187,
+    "height": 54.9,
+    "width": 1094
+   },
+   "text": "市場位階 震盪 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 320.3,
+      "bottom": 364.2,
+      "left": 93,
+      "right": 189.6,
+      "height": 43.9,
+      "width": 96.6
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 320.3,
+      "bottom": 364.2,
+      "left": 201.6,
+      "right": 419.2,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 345.1,
+      "bottom": 364.2,
+      "left": 201.6,
+      "right": 419.2,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 32436
+ },
+ {
+  "shot": "fake_ok_hold",
+  "viewport": "1280x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1200,
+   "height": 124.8,
+   "width": 1120
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1200,
+    "height": 57.9,
+    "width": 1120
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1187,
+    "height": 19.2,
+    "width": 1094
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1200,
+   "height": 261.9,
+   "width": 1120
+  },
+  "png_bytes": 48047
+ },
+ {
+  "shot": "fake_stale_target",
+  "viewport": "1280x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 470.6,
+   "left": 80,
+   "right": 1200,
+   "height": 195.2,
+   "width": 1120
+  },
+  "ctxline": {
+   "box": {
+    "top": 316.1,
+    "bottom": 371.0,
+    "left": 93,
+    "right": 1187,
+    "height": 54.9,
+    "width": 1094
+   },
+   "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 321.1,
+      "bottom": 365.0,
+      "left": 93,
+      "right": 271.5,
+      "height": 43.9,
+      "width": 178.5
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 321.1,
+      "bottom": 365.0,
+      "left": 283.5,
+      "right": 501.0,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 345.8,
+      "bottom": 365.0,
+      "left": 283.5,
+      "right": 501.0,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 33851
+ },
+ {
+  "shot": "fake_stale_hold",
+  "viewport": "1280x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1200,
+   "height": 124.8,
+   "width": 1120
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1200,
+    "height": 57.9,
+    "width": 1120
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1187,
+    "height": 19.2,
+    "width": 1094
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1200,
+   "height": 261.9,
+   "width": 1120
+  },
+  "png_bytes": 48105
+ },
+ {
+  "shot": "fake_unavailable_target",
+  "viewport": "1280x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 489.8,
+   "left": 80,
+   "right": 1200,
+   "height": 214.4,
+   "width": 1120
+  },
+  "ctxline": {
+   "box": {
+    "top": 335.2,
+    "bottom": 390.2,
+    "left": 93,
+    "right": 1187,
+    "height": 54.9,
+    "width": 1094
+   },
+   "text": "市場位階 🔴 來源目前不可用 FAKE 來源逾時（示意） Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 93,
+      "right": 270.0,
+      "height": 43.9,
+      "width": 177.0
+     },
+     "detail_text": "FAKE 來源逾時（示意）",
+     "detail_box": {
+      "top": 363.0,
+      "bottom": 382.2,
+      "left": 93,
+      "right": 270.0,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 365.0,
+      "bottom": 384.2,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 35786
+ },
+ {
+  "shot": "fake_unavailable_hold",
+  "viewport": "1280x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1200,
+   "height": 124.8,
+   "width": 1120
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1200,
+    "height": 57.9,
+    "width": 1120
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1187,
+    "height": 19.2,
+    "width": 1094
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1200,
+   "height": 261.9,
+   "width": 1120
+  },
+  "png_bytes": 48663
+ },
+ {
+  "shot": "real_target",
+  "viewport": "1440x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 509.0,
+   "left": 80,
+   "right": 1360,
+   "height": 233.6,
+   "width": 1280
+  },
+  "ctxline": {
+   "box": {
+    "top": 335.2,
+    "bottom": 390.2,
+    "left": 93,
+    "right": 1347,
+    "height": 54.9,
+    "width": 1254
+   },
+   "text": "市場位階 ⬜ 尚未載入 ⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 93,
+      "right": 866.5,
+      "height": 43.9,
+      "width": 773.5
+     },
+     "detail_text": "⬜ 資料日未提供（市場位階未提供資料日）；原因：尚缺正式的市場廣度（漲跌家數）資料。尚無可用的市場位階資料，暫不顯示判讀。",
+     "detail_box": {
+      "top": 363.0,
+      "bottom": 382.2,
+      "left": 93,
+      "right": 866.5,
+      "height": 19.2,
+      "width": 773.5
+     }
+    },
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 878.5,
+      "right": 1096.1,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 365.0,
+      "bottom": 384.2,
+      "left": 878.5,
+      "right": 1096.1,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 43268
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "1440x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1360,
+   "height": 124.8,
+   "width": 1280
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1360,
+    "height": 57.9,
+    "width": 1280
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1347,
+    "height": 19.2,
+    "width": 1254
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1360,
+   "height": 261.9,
+   "width": 1280
+  },
+  "png_bytes": 52785
+ },
+ {
+  "shot": "fake_ok_target",
+  "viewport": "1440x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 469.9,
+   "left": 80,
+   "right": 1360,
+   "height": 194.5,
+   "width": 1280
+  },
+  "ctxline": {
+   "box": {
+    "top": 315.3,
+    "bottom": 370.2,
+    "left": 93,
+    "right": 1347,
+    "height": 54.9,
+    "width": 1254
+   },
+   "text": "市場位階 震盪 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 320.3,
+      "bottom": 364.2,
+      "left": 93,
+      "right": 189.6,
+      "height": 43.9,
+      "width": 96.6
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 320.3,
+      "bottom": 364.2,
+      "left": 201.6,
+      "right": 419.2,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 345.1,
+      "bottom": 364.2,
+      "left": 201.6,
+      "right": 419.2,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 32750
+ },
+ {
+  "shot": "fake_ok_hold",
+  "viewport": "1440x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1360,
+   "height": 124.8,
+   "width": 1280
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1360,
+    "height": 57.9,
+    "width": 1280
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1347,
+    "height": 19.2,
+    "width": 1254
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1360,
+   "height": 261.9,
+   "width": 1280
+  },
+  "png_bytes": 48382
+ },
+ {
+  "shot": "fake_stale_target",
+  "viewport": "1440x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 470.6,
+   "left": 80,
+   "right": 1360,
+   "height": 195.2,
+   "width": 1280
+  },
+  "ctxline": {
+   "box": {
+    "top": 316.1,
+    "bottom": 371.0,
+    "left": 93,
+    "right": 1347,
+    "height": 54.9,
+    "width": 1254
+   },
+   "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-chip"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 321.1,
+      "bottom": 365.0,
+      "left": 93,
+      "right": 271.5,
+      "height": 43.9,
+      "width": 178.5
+     },
+     "detail_text": null,
+     "detail_box": null
+    },
+    {
+     "box": {
+      "top": 321.1,
+      "bottom": 365.0,
+      "left": 283.5,
+      "right": 501.0,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 345.8,
+      "bottom": 365.0,
+      "left": 283.5,
+      "right": 501.0,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 33998
+ },
+ {
+  "shot": "fake_stale_hold",
+  "viewport": "1440x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1360,
+   "height": 124.8,
+   "width": 1280
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1360,
+    "height": 57.9,
+    "width": 1280
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1347,
+    "height": 19.2,
+    "width": 1254
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1360,
+   "height": 261.9,
+   "width": 1280
+  },
+  "png_bytes": 48824
+ },
+ {
+  "shot": "fake_unavailable_target",
+  "viewport": "1440x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 275.3,
+   "bottom": 489.8,
+   "left": 80,
+   "right": 1360,
+   "height": 214.4,
+   "width": 1280
+  },
+  "ctxline": {
+   "box": {
+    "top": 335.2,
+    "bottom": 390.2,
+    "left": 93,
+    "right": 1347,
+    "height": 54.9,
+    "width": 1254
+   },
+   "text": "市場位階 🔴 來源目前不可用 FAKE 來源逾時（示意） Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 93,
+      "right": 270.0,
+      "height": 43.9,
+      "width": 177.0
+     },
+     "detail_text": "FAKE 來源逾時（示意）",
+     "detail_box": {
+      "top": 363.0,
+      "bottom": 382.2,
+      "left": 93,
+      "right": 270.0,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 340.2,
+      "bottom": 384.2,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 365.0,
+      "bottom": 384.2,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 36259
+ },
+ {
+  "shot": "fake_unavailable_hold",
+  "viewport": "1440x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 169.4,
+   "bottom": 294.2,
+   "left": 80,
+   "right": 1360,
+   "height": 124.8,
+   "width": 1280
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 236.3,
+    "bottom": 294.2,
+    "left": 80,
+    "right": 1360,
+    "height": 57.9,
+    "width": 1280
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 268.0,
+    "bottom": 287.2,
+    "left": 93,
+    "right": 1347,
+    "height": 19.2,
+    "width": 1254
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 77,
+   "bottom": 338.9,
+   "left": 80,
+   "right": 1360,
+   "height": 261.9,
+   "width": 1280
+  },
+  "png_bytes": 49441
+ },
+ {
+  "shot": "real_degraded_target",
+  "viewport": "390x844",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 310.0,
+   "bottom": 608.7,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 298.7,
+   "width": 361.2
+  },
+  "ctxline": {
+   "box": {
+    "top": 369.9,
+    "bottom": 470.7,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 100.8,
+    "width": 335.2
+   },
+   "text": "市場位階 🔴 來源目前不可用 市場位階暫時無法讀取 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 374.9,
+      "bottom": 416.8,
+      "left": 27.4,
+      "right": 204.4,
+      "height": 41.9,
+      "width": 177.0
+     },
+     "detail_text": "市場位階暫時無法讀取",
+     "detail_box": {
+      "top": 397.6,
+      "bottom": 416.8,
+      "left": 27.4,
+      "right": 204.4,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 420.8,
+      "bottom": 464.7,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 445.5,
+      "bottom": 464.7,
+      "left": 27.4,
+      "right": 244.9,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 34760
+ },
+ {
+  "shot": "real_degraded_hold",
+  "viewport": "390x844",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 390,
+  "doc_cw": 390,
+  "vw": 390,
+  "vh": 844,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 210.5,
+   "bottom": 518.8,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 308.3,
+   "width": 361.2
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 381.2,
+    "bottom": 436.1,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 54.9,
+    "width": 335.2
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 410.9,
+    "bottom": 430.1,
+    "left": 27.4,
+    "right": 362.6,
+    "height": 19.2,
+    "width": 335.2
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 118.7,
+   "bottom": 563.5,
+   "left": 14.4,
+   "right": 375.6,
+   "height": 444.8,
+   "width": 361.2
+  },
+  "png_bytes": 35176
+ },
+ {
+  "shot": "real_degraded_target",
+  "viewport": "1280x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 301.1,
+   "bottom": 534.7,
+   "left": 80,
+   "right": 1200,
+   "height": 233.6,
+   "width": 1120
+  },
+  "ctxline": {
+   "box": {
+    "top": 361.0,
+    "bottom": 415.9,
+    "left": 93,
+    "right": 1187,
+    "height": 54.9,
+    "width": 1094
+   },
+   "text": "市場位階 🔴 來源目前不可用 市場位階暫時無法讀取 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 366.0,
+      "bottom": 409.9,
+      "left": 93,
+      "right": 270.0,
+      "height": 43.9,
+      "width": 177.0
+     },
+     "detail_text": "市場位階暫時無法讀取",
+     "detail_box": {
+      "top": 388.7,
+      "bottom": 407.9,
+      "left": 93,
+      "right": 270.0,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 366.0,
+      "bottom": 409.9,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 390.7,
+      "bottom": 409.9,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 40552
+ },
+ {
+  "shot": "real_degraded_hold",
+  "viewport": "1280x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1280,
+  "doc_cw": 1280,
+  "vw": 1280,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 195.1,
+   "bottom": 319.9,
+   "left": 80,
+   "right": 1200,
+   "height": 124.8,
+   "width": 1120
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 262.0,
+    "bottom": 319.9,
+    "left": 80,
+    "right": 1200,
+    "height": 57.9,
+    "width": 1120
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 293.7,
+    "bottom": 312.9,
+    "left": 93,
+    "right": 1187,
+    "height": 19.2,
+    "width": 1094
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 102.7,
+   "bottom": 364.6,
+   "left": 80,
+   "right": 1200,
+   "height": 261.9,
+   "width": 1120
+  },
+  "png_bytes": 53261
+ },
+ {
+  "shot": "real_degraded_target",
+  "viewport": "1440x900",
+  "page": "target",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "q2",
+   "q3"
+  ],
+  "qa": {
+   "top": 301.1,
+   "bottom": 534.7,
+   "left": 80,
+   "right": 1360,
+   "height": 233.6,
+   "width": 1280
+  },
+  "ctxline": {
+   "box": {
+    "top": 361.0,
+    "bottom": 415.9,
+    "left": 93,
+    "right": 1347,
+    "height": 54.9,
+    "width": 1254
+   },
+   "text": "市場位階 🔴 來源目前不可用 市場位階暫時無法讀取 Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險尚無正式來源",
+   "n_items": 2,
+   "item_children": [
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ],
+    [
+     "ui2-row__label",
+     "ui2-chip",
+     "ui2-row__detail"
+    ]
+   ],
+   "items": [
+    {
+     "box": {
+      "top": 366.0,
+      "bottom": 409.9,
+      "left": 93,
+      "right": 270.0,
+      "height": 43.9,
+      "width": 177.0
+     },
+     "detail_text": "市場位階暫時無法讀取",
+     "detail_box": {
+      "top": 388.7,
+      "bottom": 407.9,
+      "left": 93,
+      "right": 270.0,
+      "height": 19.2,
+      "width": 177.0
+     }
+    },
+    {
+     "box": {
+      "top": 366.0,
+      "bottom": 409.9,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 43.9,
+      "width": 217.5
+     },
+     "detail_text": "必要輸入不足：目前曝險尚無正式來源",
+     "detail_box": {
+      "top": 390.7,
+      "bottom": 409.9,
+      "left": 282.0,
+      "right": 499.6,
+      "height": 19.2,
+      "width": 217.5
+     }
+    }
+   ],
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "action_row": null,
+  "png_bytes": 40813
+ },
+ {
+  "shot": "real_degraded_hold",
+  "viewport": "1440x900",
+  "page": "hold",
+  "hscroll": false,
+  "doc_sw": 1440,
+  "doc_cw": 1440,
+  "vw": 1440,
+  "vh": 900,
+  "anchors": [
+   "q1",
+   "ctx",
+   "ctx",
+   "q2",
+   "q4"
+  ],
+  "qa": {
+   "top": 195.1,
+   "bottom": 319.9,
+   "left": 80,
+   "right": 1360,
+   "height": 124.8,
+   "width": 1280
+  },
+  "ctxline": null,
+  "action_row": {
+   "box": {
+    "top": 262.0,
+    "bottom": 319.9,
+    "left": 80,
+    "right": 1360,
+    "height": 57.9,
+    "width": 1280
+   },
+   "text": "今日需處理 ⬜ 尚未提供（待系統動作整合） 動作判斷功能尚未開放",
+   "children": [
+    "ui2-row__label",
+    "ui2-chip",
+    "ui2-row__detail"
+   ],
+   "detail_text": "動作判斷功能尚未開放",
+   "detail_box": {
+    "top": 293.7,
+    "bottom": 312.9,
+    "left": 93,
+    "right": 1347,
+    "height": 19.2,
+    "width": 1254
+   },
+   "clipped": false,
+   "overlap": false,
+   "overflow_right": false
+  },
+  "hold_l1": {
+   "top": 102.7,
+   "bottom": 364.6,
+   "left": 80,
+   "right": 1360,
+   "height": 261.9,
+   "width": 1280
+  },
+  "png_bytes": 54046
+ }
+]

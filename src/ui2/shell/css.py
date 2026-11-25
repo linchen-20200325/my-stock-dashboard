@@ -127,6 +127,7 @@ CSS = """
 .ui2-risk{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px 8px 12px;margin:8px 0;line-height:1.5}
 .ui2-ctxline{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.78rem}
 .ui2-ctxline__item{white-space:nowrap}
+.ui2-ctxline__item .ui2-row__detail{white-space:normal}
 .ui2-search{display:flex;gap:8px;align-items:center;margin:4px 0 2px 0}
 .ui2-searchbox{flex:1 1 auto;min-width:0;border:1px dashed currentColor;border-radius:8px;padding:6px 10px;opacity:.65;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
