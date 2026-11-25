@@ -167,6 +167,12 @@ def degraded_notice_html(text: str) -> str:
     return f'<div role="status" data-ui2-degraded="1">{chip_html(text, ChipTone.DANGER)}</div>'
 
 
+def real_mobile_note_html(text: str) -> str:
+    """Real-data Preview 手機揭露小字：橫幅旁註（`.ui2-banner__note--wide`）在 ≤640px 隱藏，這裡補一個只在手機顯示的同句。
+    `text` 由呼叫端傳入 `REAL_PREVIEW_BANNER_NOTE`（⛔ 不在此重寫第二份字串）；一律 escape。CSS 預設 `display:none`、≤640px 才 `block`。"""
+    return f'<div class="ui2-real-mobile-note">{escape(text)}</div>'
+
+
 def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> str:
     """第一屏一列：欄位 label／value／狀態 chip／原因。緊湊單列，手機優先。
 
@@ -181,6 +187,19 @@ def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> st
     return (f'<div class="ui2-qrow" data-ui2-q="{qid}"{qname} data-axis="{field.layer}" data-state="{_state_attr(field)}">'
             f'{q}<span class="ui2-row__label">{escape(field.label)}</span> '
             f'{value}{status_chip_html(field)}{detail}</div>')
+
+
+def delta_below_html(field: FieldVM | None) -> str:
+    """「今日變化」Delta Strip（B-UI2-DELTA-BELOW；📊 Primary 之後／💼 `.ui2-qa` 之後）：單一唯讀列＝label＋狀態 chip＋原因。
+
+    純呈現：只畫 `PageContext.delta` 這一個 FieldVM 既有的 label／chip／detail，⛔ 任何比較運算、⛔ 數字、⛔ 補值。
+    `None` → 空字串（📊／💼 的 VM 恆帶此欄；其餘頁不呼叫）。`data-ui2-delta` 是量測／測試錨點，**不是** `data-ui2-q`。
+    """
+    if field is None:
+        return ""
+    detail = f'<span class="ui2-delta__detail">{escape(field.detail)}</span>' if shown(field.detail) else ""
+    return (f'<div class="ui2-delta" data-ui2-delta="1" data-axis="{field.layer}" data-state="{_state_attr(field)}">'
+            f'<span class="ui2-row__label">{escape(field.label)}</span> {status_chip_html(field)}{detail}</div>')
 
 
 def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
@@ -245,13 +264,14 @@ def hold_status_html(fs: FirstScreenVM) -> str:
 def hold_action_row_html(field: FieldVM | None) -> str:
     """今日需處理**單行**（Q6）：取代「是否需要行動／下一步」兩列的**畫面**（VM 兩欄位原樣保留，只是不再各占一列）。
     內容＝VM 既有動作欄的 Capability 空槽字樣（Aggregator 前 `⬜ 尚未提供（待系統動作整合）`）；
-    ⛔ 計算動作、⛔ 「今日無需調整」、⛔ 把缺動作當全部續抱。保留錨點 `data-ui2-q="q2"`。"""
+    ⛔ 計算動作、⛔ 「今日無需調整」、⛔ 把缺動作當全部續抱。保留錨點 `data-ui2-q="q2"`。
+    P-1：`field` 非 None 且有可顯示的 `detail` → 在 chip 之後補畫（與 📊 同一套渲染）；`field is None` 與舊版逐位相同。"""
     if field is None:
-        axis, state, chip = "capability", "not_provided", _hold_slot_chip()
+        axis, state, chip, detail = "capability", "not_provided", _hold_slot_chip(), ""
     else:
-        axis, state, chip = field.layer, _state_attr(field), status_chip_html(field)
+        axis, state, chip, detail = field.layer, _state_attr(field), status_chip_html(field), _row_detail_html(field)
     return (f'<div class="ui2-qrow" data-ui2-q="q2" data-ui2-qname="是否需要行動" data-axis="{axis}" '
-            f'data-state="{state}"><span class="ui2-row__label">{escape(_T.HOLD_ACTION_LABEL)}</span> {chip}</div>')
+            f'data-state="{state}"><span class="ui2-row__label">{escape(_T.HOLD_ACTION_LABEL)}</span> {chip}{detail}</div>')
 
 
 def hold_first_screen_html(fs: FirstScreenVM) -> str:
@@ -264,9 +284,11 @@ def hold_first_screen_html(fs: FirstScreenVM) -> str:
     return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
 
 
-def hold_l1_v2_html(title_html: str, fs: FirstScreenVM) -> str:
-    """標題 → 組合狀態行 → 第一屏（`hold_l1_html` 的 W-11 批 1 版；容器 class 不變，桌機規則沿用）。"""
-    return '<div class="ui2-h-l1">' + title_html + hold_status_html(fs) + hold_first_screen_html(fs) + "</div>"
+def hold_l1_v2_html(title_html: str, fs: FirstScreenVM, delta: FieldVM | None = None) -> str:
+    """標題 → 組合狀態行 → 第一屏 →（B-UI2-DELTA-BELOW）今日變化列（`hold_l1_html` 的 W-11 批 1 版；容器 class 不變，桌機規則沿用）。
+    `delta` 緊接 `.ui2-qa`（含主 CTA 列）之後、同一個 `.ui2-h-l1` 容器內；`None`（預設）＝與舊版輸出逐位相同。"""
+    return ('<div class="ui2-h-l1">' + title_html + hold_status_html(fs) + hold_first_screen_html(fs)
+            + delta_below_html(delta) + "</div>")
 
 
 def hold_table_html() -> str:
@@ -356,10 +378,16 @@ def _ctx_chip(field: FieldVM) -> str:
     return neutral_status_chip_html(field)
 
 
+def _row_detail_html(field: FieldVM) -> str:
+    """P-1：欄位 `detail` 一小行（與 📊 `qa_row_html` 同 class／同 escape／同 `shown()` 過濾）。無可顯示的 detail → 空字串（⛔ 補值）。"""
+    return f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
+
+
 def ctxline_html(rows: tuple[FieldVM, ...]) -> str:
-    """🎯 標的頁 W-4：市場位階＋Risk Cap 一行（小字級、置於查詢摘要之下；不搶查一檔／基本面／valuation）。"""
+    """🎯 標的頁 W-4：市場位階＋Risk Cap 一行（小字級、置於查詢摘要之下；不搶查一檔／基本面／valuation）。
+    P-1：各項在 chip 之後、同一個 item 內補畫該欄位既有的 `detail`（與 📊 同一套渲染；無 detail → 與舊版逐位相同）。"""
     items = "".join(f'<span class="ui2-ctxline__item"><span class="ui2-row__label">{escape(r.label)}</span> '
-                    f'{_ctx_chip(r)}</span>' for r in rows)
+                    f'{_ctx_chip(r)}{_row_detail_html(r)}</span>' for r in rows)
     return f'<div class="ui2-qrow ui2-ctxline" data-ui2-q="ctx">{items}</div>'
 
 

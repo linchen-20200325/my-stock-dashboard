@@ -1,3 +1,6 @@
+> **⚠️ 2026-11-24 版本更正：本文件下方關於 v1.0「仍 DRAFT／未核准」均為 2026-11-23 歷史狀態，現已被正式核准產品規格取代，切勿再以舊文字派工。**  
+> **最新產品基準**：[`UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md`](UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md)（完整十一章）＋[`UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md`](UI2_ONEBRAIN_PRODUCT_GOAL_V1_0_APPROVED_2026-11-23.md)（五項安全修正與差額），版本 `UI2-ONEBRAIN-PRODUCT-V1.0-APPROVED-2026-11-23`，正式 DEC-224。核准來源：[Issue #1199/7110182570](https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7110182570)。**核准的是產品目標，不是正式 UI／資料／Rules／模型施工或 Ready／merge／deploy**；遇有效 Active Contract 差額保持原 Gate。設計稿 v2 仍只是離線視覺稿；v1.1 Radar／Signal Log／Canonical Evidence Store 全 HOLD。
+
 # READ FIRST｜New UI2 × OneBrain 版本指引及 2026-11-23 決策封存
 
 > **閱讀入口（2026-11-23）｜DRAFT，非正式施工 Gate**。此文件是新增的版本索引與產品討論封存；**不取代 GitHub Issue #1199、已生效 DEC/Contract、ADR-OB-001、當前 main/PR/CI/QA**。任何後續工作先查 GitHub live 狀態，不可套用此日 SHA 作為永遠最新。
@@ -21,7 +24,7 @@
 
 1. **薄 UI、厚 Digest、Topic Lenses**：五頁維持「📊市場／🎯標的／💼持股／👤我的／🗂資料」，Dark-only、390px 優先。首屏聚焦可信 Delta Strip、正式市場位階/Risk Cap 狀態、一句核心結論；四鏡頭「大盤／產業前瞻／持股健檢／反方風險」。短摘要最多 3 句且少於 100 字，不得省略完整 Digest 的 evidence、provenance、missing、counter-evidence。
 2. **正式/研究軌隔離**：已核准的 Rules → Risk Cap → System Action → Decision Digest 唯一正式動作權威；OneBrain 僅解釋，不能改寫 Risk Cap、公式或發交易指令。「提前布局」為研究觀察而非自動買進。
-3. **L0/L1/L2 僅候選顯示分級**：L2 必要正式條件全部滿足；L1 部分輔助證據缺失時只顯示可信研究參考及缺口，不得形成簡化正式位階/動作；L0 核心證據不可用時無法判定。不是新演算法/風險分數的授權。
+3. **正式判定首版僅 FORMAL／UNDETERMINABLE 兩級**（DEC-225 採納）：該功能必要條件全部成立才為 FORMAL；任一該功能的必要條件未滿足 → 該功能 UNDETERMINABLE（無法判定），只影響該功能，不影響其他功能與已授權的事實顯示；研究事實可依既有 DEC 展示，但不得升格為正式位階/動作/趨勢。不是新演算法/風險分數的授權。
 4. **What Changed**：僅同來源、同口徑、時間有效、可回查的前次快照，且指定訊號完整檢查後，才可顯示「今日無重大訊號變更」。否則誠實顯示「不可比較」；無變化不代表安全、亦非維持昨日策略。
 5. **OneBrain 快取/成本**：以 evidence/digest + rule/contract + topic + model + prompt + as_of 等版本因子作有效性辨識；新關鍵證據或過期必失效。盤後預計算、開頁不同步呼叫 LLM 是目標設計，未批准 Provider/成本/Secrets/caller 前不得接線。
 6. **LINE**：v1.0 僅規劃動作切換、風控、持股異常、資料斷線之確定性事件契約、去重/冷卻/失敗政策；真實推播、授權與部署 HOLD。

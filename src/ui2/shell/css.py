@@ -13,6 +13,11 @@ CSS = """
   background:rgba(128,128,128,.10);font-size:.8rem;line-height:1.4}
 .ui2-banner__note{display:inline;opacity:.8;font-size:.72rem;margin-left:.5em}
 @media (max-width:640px){.ui2-banner__note--wide{display:none}}   /* 手機：長標示（Real-data）不再附說明，維持單行 */
+/* Real 手機揭露小字：橫幅旁註在手機被隱藏（上一行），這裡補同一句；預設隱藏、≤640px 才顯示（自然換行、不截斷）。
+   桌機（≥641px）連同 Streamlit 元素容器一併 display:none（空容器仍會佔 1rem 元素間距，會擠動頁面）。 */
+.ui2-real-mobile-note{display:none}
+@media (max-width:640px){.ui2-real-mobile-note{display:block;font-size:.8rem;line-height:1.4;opacity:.75;white-space:normal;overflow-wrap:anywhere;margin:0 0 .25rem 0}}
+@media (min-width:641px){[data-testid="stElementContainer"]:has(.ui2-real-mobile-note){display:none}}
 /* P1：UI2 專用——隱藏 Streamlit 開發者工具列（Deploy／⋮）；只作用於本入口（app_ui2.py）載入的 CSS，不動 .streamlit/config.toml。
    ⚠ Streamlit Cloud 上是否本來就不顯示／是否能被此規則隱藏：未驗（BACKLOG NUI2-PREVIEW-DEV-SURFACE）。 */
 [data-testid="stToolbar"],[data-testid="stAppDeployButton"],.stAppDeployButton,[data-testid="stMainMenu"]{display:none !important}
@@ -122,6 +127,7 @@ CSS = """
 .ui2-risk{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px 8px 12px;margin:8px 0;line-height:1.5}
 .ui2-ctxline{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.78rem}
 .ui2-ctxline__item{white-space:nowrap}
+.ui2-ctxline__item .ui2-row__detail{white-space:normal}
 .ui2-search{display:flex;gap:8px;align-items:center;margin:4px 0 2px 0}
 .ui2-searchbox{flex:1 1 auto;min-width:0;border:1px dashed currentColor;border-radius:8px;padding:6px 10px;opacity:.65;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -191,6 +197,12 @@ CSS = """
   .ui2-ht__x{display:table-cell}
   .ui2-ht__more{display:none}
 }
+/* B-UI2-DELTA-BELOW：「今日變化」唯讀列（📊 Primary 之後；💼 `.ui2-qa` 之後同容器）。單行 flex（窄時才折行、不截斷）；
+   ⛔ 圖形／箭頭／色彩暗示變動方向——只有 label＋灰底虛線 capability chip＋原因。 */
+.ui2-delta{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;border:1px solid rgba(128,128,128,.4);border-radius:10px;
+  padding:6px 12px;margin:8px 0;line-height:1.5;min-width:0}
+.ui2-delta .ui2-chip{white-space:nowrap}
+.ui2-delta__detail{font-size:.8rem;opacity:.75;min-width:0;overflow-wrap:anywhere}
 /* P2：OneBrain Outlook（上移後）與台股 Primary 誠實空槽——依內容高度；灰底說明、⛔ 紅、⛔ 圖 */
 .ui2-m-onebrain .ui2-row{border-bottom:0;padding:2px 0 4px 0}
 @media (min-width:769px){

@@ -62,7 +62,7 @@ from shared.ui2_contract.pages import (
 )
 from shared.ui2_contract.text import (
     RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
-    TEXT_RISK_CAP_UNDETERMINABLE,
+    TEXT_RISK_CAP_UNDETERMINABLE, TEXT_STALE_UNKNOWN,
 )
 from src.services.ui2.data_page import (
     FRESHNESS_ITEM_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
@@ -758,11 +758,13 @@ def freshness_states(snap: RealFeedSnapshot) -> dict[str, str]:
             "regime": item_state_of_spec(regime_spec(snap, "regime", "市場位階"))}
 
 
-def _twii_item_spec(state: str, spec: dict) -> dict:
+def _twii_item_spec(state: str, spec: dict, *, stale_unknown: bool = False) -> dict:
     """台股列（W3-P1「各項明細」）：只轉述 `twii_card_spec` 與 `freshness_states` 已決定的狀態。
     R1：只有 in_rule／stale 且資料日是有效 ISO 日期才顯示日期；missing／unavailable／undeterminable 不顯示 spec 可能殘留的 as_of。
     R2：上游抓取失敗（卡片 reason 已含既有 `UPSTREAM_TEXT_FETCH_FAILED`）即使 in_rule 也帶該句（⛔ 寫成更新成功／最新）。
-    R3：日 K 不參與（本函式不讀 kbar）。⛔ 重算新鮮度、⛔ 讀時鐘、⛔ source／fetched_at／published_at。"""
+    R3：日 K 不參與（本函式不讀 kbar）。⛔ 重算新鮮度、⛔ 讀時鐘、⛔ source／fetched_at／published_at。
+    `stale_unknown`＝事實 `is_stale is None`（新鮮度未判定）：明細列與卡片同字樣 `TEXT_STALE_UNKNOWN`（⛔ 當成確定過期）；
+    狀態仍是 stale（首屏計數不變）。⛔ 以 `stale_days is None` 推斷——`is_stale=True` 且 age_days=None（未來日）不是「未判定」。"""
     base: dict[str, Any] = {"key": "item_twii", "label": FRESHNESS_ITEM_LABELS["twii"], "as_of": None, "source": None}
     if state in (S_IN_RULE, S_STALE):
         as_of = spec.get("as_of") if _is_valid_iso_date(spec.get("as_of")) else None
@@ -772,7 +774,8 @@ def _twii_item_spec(state: str, spec: dict) -> dict:
             if failed:
                 parts.append(_UPSTREAM_ERROR_TEXT)
             return {**base, "value": ITEM_TEXT_IN_RULE, "as_of": as_of, "reason": "；".join(parts) or None}
-        return {**base, "state": "stale", "sub_reason": ITEM_TEXT_STALE, "as_of": as_of,
+        return {**base, "state": "stale", "sub_reason": TEXT_STALE_UNKNOWN if stale_unknown else ITEM_TEXT_STALE,
+                "as_of": as_of,
                 "value": ITEM_ASOF_FMT.format(as_of=as_of) if as_of else TEXT_ASOF_MISSING,
                 "reason": _UPSTREAM_ERROR_TEXT if failed else None}
     if state == S_MISSING:
@@ -806,7 +809,8 @@ def freshness_item_specs(snap: RealFeedSnapshot) -> list[dict]:
     其餘六項 `⬜ 尚未提供`（⛔ 失敗）。"""
     states = freshness_states(snap)
     return item_detail_specs({
-        "twii": _twii_item_spec(states["twii"], twii_card_spec(snap)),
+        "twii": _twii_item_spec(states["twii"], twii_card_spec(snap),
+                                stale_unknown=snap.twii is not None and snap.twii.is_stale is None),
         "regime": _regime_item_spec(states["regime"], regime_spec(snap, "regime", "市場位階")),
     })
 
