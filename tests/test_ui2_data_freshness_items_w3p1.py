@@ -159,11 +159,40 @@ def test_twii_in_rule_shows_rule_wording_and_the_valid_date_only():
     assert f.detail == "資料日 2026-11-13" and f.freshness.as_of == "2026-11-13" and f.freshness.source is None
 
 
-def test_twii_stale_and_unknown_freshness_show_the_stale_chip_and_the_date():
-    for k in ("stale", "stale_unknown"):
-        f = items(TWII_SNAPS[k])[TWII_I]
-        assert (f.state, f.status_text, f.value_text) == (FieldState.STALE, STALE_CHIP, "資料日 2026-11-10"), k
-        assert f.freshness.as_of == "2026-11-10"
+def test_twii_stale_shows_the_stale_chip_and_the_date():
+    f = items(TWII_SNAPS["stale"])[TWII_I]
+    assert (f.state, f.status_text, f.value_text) == (FieldState.STALE, STALE_CHIP, "資料日 2026-11-10")
+    assert f.freshness.as_of == "2026-11-10"
+
+
+# UI2-DATA-ITEMS-STALE-UNKNOWN：is_stale=None（新鮮度未判定）→ 明細列與卡片同字樣 TEXT_STALE_UNKNOWN（逐字，只重用既有常數）
+STALE_UNKNOWN_LITERAL = "⚠ 可能已過期"
+
+
+def test_twii_unknown_freshness_row_uses_the_card_unknown_wording_not_the_stale_chip():
+    assert T.TEXT_STALE_UNKNOWN == STALE_UNKNOWN_LITERAL
+    f = items(TWII_SNAPS["stale_unknown"])[TWII_I]
+    assert (f.state, f.status_text, f.value_text) == (FieldState.STALE, STALE_UNKNOWN_LITERAL, "資料日 2026-11-10")
+    assert f.status_text != STALE_CHIP and f.freshness.as_of == "2026-11-10"
+
+
+def test_twii_unknown_freshness_without_a_date_keeps_date_missing_and_unknown_wording():
+    f = items(snap(twii(is_stale=None, age_days=None, as_of=None), "", regime("unloaded")))[TWII_I]
+    assert (f.status_text, f.value_text) == (STALE_UNKNOWN_LITERAL, ASOF_MISSING)
+
+
+def test_twii_true_stale_with_unknown_age_still_uses_the_stale_chip():
+    """is_stale=True 但 age_days=None（例：未來日由 L3 轉成）≠ 未判定：維持 ⚠ 過期或可能已過期。"""
+    f = items(snap(twii(is_stale=True, age_days=None, as_of="2026-11-10"), "", regime("unloaded")))[TWII_I]
+    assert f.status_text == STALE_CHIP
+
+
+def test_unknown_freshness_is_still_counted_as_stale_on_the_first_screen_and_card_wording_matches():
+    s = TWII_SNAPS["stale_unknown"]
+    assert freshness_states(s)["twii"] == DP.S_STALE
+    assert OV.counts(s).stale == 1 and OV.counts(s).in_rule == 0
+    card = get_real_page_vm(P4_MARKET, s)
+    assert STALE_UNKNOWN_LITERAL in repr(card)
 
 
 def test_twii_stale_without_a_date_says_date_not_provided_and_never_invents_one():
@@ -570,7 +599,11 @@ def check_items_shapes(vm: PageVM) -> list[str]:
                 ok_val = f.value_text == (f"資料日 {f.freshness.as_of}" if f.freshness.as_of else ASOF_MISSING)
             else:
                 ok_val = f.value_text == want_val
-            if not (ok_val and f.status_text == want_chip):
+            if f.state is FieldState.STALE:      # 兩個核准字樣：確定過期 `STALE_CHIP`／新鮮度未判定 `STALE_UNKNOWN_LITERAL`
+                want_chip_ok = f.status_text in (STALE_CHIP, STALE_UNKNOWN_LITERAL)
+            else:
+                want_chip_ok = f.status_text == want_chip
+            if not (ok_val and want_chip_ok):
                 bad.append(f"#{i}: twii 值／字樣不符 {f.value_text!r}／{f.status_text!r}")
             if f.state in (FieldState.OK, FieldState.STALE):
                 if f.freshness.as_of is not None and not _DATE_RX.fullmatch(f.freshness.as_of):
