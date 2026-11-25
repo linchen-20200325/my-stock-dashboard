@@ -1236,14 +1236,15 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 
 > 往後總管對 A/B/C/Work/O 等工作線提供提示語，依優先序逐項展示「派工 N｜角色：任務（必要時標最高優先）」，下一行為建議模型／模式／Effort，下一行為一鍵複製完整提示語的按鈕；不預設展開長篇提示語、不重複展示同一內容。複製內容仍須完整、可獨立開工，包含 Repo、SSOT、READ FIRST、LIVE Gate、任務範圍、授權、驗收、禁止事項及交接。若介面不支援複製按鈕，才提供最小可複製文字區塊。模型及 Effort 依原 Minimum Sufficient Effort，不固定 High。此僅改總管提示語展示，不減少任何安全揭露、裁示或 QA 標準。
 
-- **範圍**：只改「總管提示語**展示**」；複製內容仍須完整可獨立開工（與第 32.6 節新對話提示語須完整、第 22.4 節同向，不取代）。模型／Effort 依第 17 節（Minimum Sufficient Effort），**不固定 High**。
+- **範圍**：只改「總管提示語**展示**」；本展示屬第 3 節 Hard Output Gate 五類之一（例如需客戶手動操作的派工），不構成進度／下一步輸出理由，不改 ≤5 行與 🔴 ≤12 行限制；第 18 節停手等「改好了」Gate 不被取代；複製內容仍須完整可獨立開工（與第 32 節第 6 點新對話提示語須完整、第 22.4 節同向，不取代）。模型／Effort 依第 17 節（Minimum Sufficient Effort），**不固定 High**。
 - 示例畫面（派工序號｜角色及任務標題；建議模型／模式／Effort；單一「複製…派工」按鈕）**不在 repo**，NOT VERIFIED；以上文字規則為準。
 
 ### 35.2 專案 AI O：Work 專用條件式備援獨立 QA（7148133320；承 7148028894）
 
 - **定位**：O 為 Work 的**第一順位備援驗收角色，不是第四條施工線**（最多三條活躍工程線不變）；平時待命，僅在 Work 額度不足、工具不可用或確定無法執行**且有未驗差額**時，由總管**具名派工**。**不代表 Work 現已耗盡**；本節也**不證明 O 已被啟用**（NOT VERIFIED）。
-- **職責**：只接未驗差額、原 Merge Gate 與 main push CI 查證；先核非作者資格、當下 main／head／base、授權及 closure ledger；沿用已 PASS 的同 head 證據、不重跑；**每個差額僅一位驗收 owner**，原需多組獨立 QA 者仍保留。
+- **職責**：只接未驗差額、原 Merge Gate 與 main push CI 查證；先核非作者資格、當下 main／head／base、授權及 #1199 最新 closure ledger 留言（總管維護；repo 內無獨立定義）；沿用已 PASS 的同 head 證據、不重跑；**每個差額僅一位驗收 owner**——此為責任歸屬，不減少 `CLAUDE.md` §-2 規則 4 與原需多組獨立 QA 的組數，原需多組獨立 QA 者仍保留。**啟用 O 時，須在 #1199 最新 closure ledger 留言或 #1199 回存中記錄 Work 不可執行的具體證據與未驗差額**；O 的驗收回存（由總管具名派工之非作者驗收實例）以 append-only 寫入 #1199（不指定特定 Agent 定義）。
 - **驗收標準與 Work 完全相同**：exact-head diff、五項 CI、Slow AppTest 實際 step、reviews／threads、DEC／Contract／ADR、必要真瀏覽器、正負控、MF／SF、PASS／HOLD／NOT VERIFIED 及可回查證據。
+- **來源讀法**：除引號內客戶原句外，其餘為總管整理；以 #1199 留言原文為準。
 - **無資格不得假稱 PASS**：O（或任何備援）若無必要工具、證據或**非作者資格**，不得假稱 PASS；依 7148028894 交其他合格非作者，或標 NOT VERIFIED／HOLD 停於原 Gate。**不得作者自驗冒充獨立 PASS。**
 - **禁止**：不施工、不共編、不 Ready／merge／deploy、不改 Secrets、正式投資規則或解除 HOLD；僅可依派工 append-only 回存驗收證據至 #1199。A／B／C 原 owner、合併順序、部署權限、任何 HOLD 均不因備援而變。
 - **Work 額度耗盡備援交接（7148028894 要點，撰寫組轉述）**：備援 QA 交**未參與該差額撰寫、修正或共同施工**者；先核實既有 WIP、交接點與非作者資格，避免 Work 恢復後重跑；Work 恢復先讀 closure ledger，只接未驗差額、不重派同 head。留言內針對當時 #1275／#1273／#1279／#1268 的指派為**時點範例，不是永久名單**。
@@ -1256,5 +1257,5 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 
 ### 35.4 不是什麼
 
-- 不是施工授權、不是 Gate 解除；不改任何既有 HOLD（v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows）。
+- 不是施工授權、不是 Gate 解除；不改任何既有 HOLD（v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows、AI 快取寫入／排程、DG-LIC／PIT／COV／SCOPE、I1144-WIRING-GATE 等；其餘既有 HOLD 不變，括號不構成窮舉）。
 - 不降低任何安全揭露、客戶裁示或獨立 QA 標準；不新增 SSOT 檔。

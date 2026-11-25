@@ -11325,7 +11325,7 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 > **地位：客戶工作流程／輸出格式裁示的治理登記；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 僅治理／工作流程，**不改任何投資規則**，不授權任何產品碼、部署、Secrets 變更，也不解除任何 HOLD、不新增 Gate、不降低任何安全揭露／裁示／獨立 QA 標準。本條隨 PR #1274 提出；**#1274 合併前不得稱已入 main**（#1274 維持 Draft；合併須總管既有正式 Merge Gate 裁示與非作者 QA）。
 > 2026-11-25 補登（ID 取下一個未用號；撰寫時 `git grep -n "DEC-226"` 於 origin/main `2fd0773e120d27f2093078dae67404eded333fc5` 與所有 open PR 〔#1278、#1268、#1237、#1274〕均 0 命中，DEC-225 為上一號）。
 
-- **決策者**：客戶（經總管於 #1199 回存轉錄；留言以 repo 帳號發表，**客戶親撰成分僅以留言內引號標示之原句為準**，其餘為總管整理）。**日期**：2026-11-25。｜**效力日期**：2026-11-25 起；**文件同步狀態**：本條入 main 前為「文件同步待完成」（7148182082 明文：「未完成入 main 前標文件同步待完成」）。
+- **決策者**：客戶（經總管於 #1199 回存轉錄；留言以 repo 帳號發表，**客戶親撰成分僅以留言內引號標示之原句為準**，其餘為總管整理）。**日期**：2026-11-25。｜**適用**：客戶指示自 2026-11-25 起適用；repo 條文入 main 前標文件同步待完成（7148182082 明文：「未完成入 main 前標文件同步待完成」）。
 - **治理 writer**：依 `PROJECT_RULES.md` 第 31.2 節／DEC-147 由 Claude Code 唯一治理 writer 寫入（7148182082 明文派工）；先 LIVE Gate、確認同檔無在製衝突（撰寫時 open PR #1278、#1268、#1237 均未動 `PROJECT_RULES.md`／`docs/DECISIONS.md`／`docs/HANDOFF.md`／`docs/BACKLOG.md`／`docs/PROJECT_STATE.md`，`gh api pulls/<n>/files` 實查）。
 
 #### 一、總管派工提示語採「精簡一鍵複製格式」（來源 7148182082）
@@ -11379,6 +11379,6 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 
 - **落點**：`PROJECT_RULES.md` 新第 35 節（35.1 派工提示語格式、35.2 AI O 備援、35.3 Hard Output Gate 索引）；`docs/HANDOFF.md`「2026-11-25 最新接手點」；`docs/BACKLOG.md` 本日登記；`docs/PROJECT_STATE.md` 本日現況。五檔均只追加。
 - **與其他 DEC 的關係**：落實 DEC-147（治理 writer＝Claude Code；`PROJECT_RULES.md` 第 31.2 節）；與 DEC-104／DEC-118（Hard Output Gate）、DEC-177（預防性交接）、DEC-178（`PROJECT_RULES.md` 第 34 節專業 Agent 路由：O **不是** `.claude/agents/` 的新 Agent 定義，也不新增任何 agent 檔）、DEC-224／DEC-225（本輪 UI2 產品目標與判定二分）並存；不取代、不放寬 `CLAUDE.md` §-2（獨立 QA、不得作者自驗）。
-- **HOLD 不變**：v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows 皆維持原狀。
+- **HOLD 不變**：v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows、AI 快取寫入／排程、DG-LIC／PIT／COV／SCOPE、I1144-WIRING-GATE 等皆維持原狀；其餘既有 HOLD 不變，括號不構成窮舉。
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一治理 writer 依 #1199 三則留言原文與 main 現況撰寫，**未經第二組獨立複驗**；「Hard Output Gate 本輪指示」內容為派工卡轉述（逐字 NOT FOUND）；兩則留言全文雖逐字保存，但留言以 repo 帳號發表、客戶親撰成分僅限引號內原句。**本條不是 QA PASS，不宣稱任何功能已接線、已上線，亦不宣稱 O 已被啟用。**

@@ -1752,7 +1752,7 @@ Model／Mode／Effort：Sonnet 5.5（不可用則選目前高可靠程式模型�
   - #1278 head `a863b747`（G-F4 K2 `decision_digest.v2` tests-only 原型；Draft，非 merge 授權）。
   - #1237 head `c406fb5f`（NAS 中繼站 fail-closed 安全補丁候選；**HOLD merge／部署**）。
   - #1274 head `e3de13ef` ＋本批（本 PR；Draft）：HANDOFF／BACKLOG／PROJECT_STATE／PROJECT_RULES／DECISIONS 治理同步；**待非作者 QA 與總管 Ready／merge 裁示**。
-  - 上列 PR 於撰寫時皆 `behind` main（`gh api pulls/<n>.mergeable_state`）；合併前須 non-force 同步並只驗新增差額。
+  - #1268、#1278、#1237 於撰寫時皆 `behind` main（`gh api pulls/<n>.mergeable_state`；#1274 已 non-force 同步、非 behind）；合併前須 non-force 同步並只驗新增差額。
 - **HOLD 清單（皆未解除）**：v1.1（Catalyst Radar／Signal Log）；#1237 NAS；Cloud（#1107，被動更新僅限客戶已授權的 PR；不授權主動 deploy／Reboot／production 切換）；真持股；Sheet／OAuth；Secrets；正式 LINE；付費 AI／production Provider／caller；未核准來源／公式；歷史快照寫入／比較 producer；AI 快取寫入／排程；DEC-185 三支停用 workflows（`update_macro_history`、`update_sector_flow`、`update_macro_forward_test`）；DG-LIC／DG-PIT／DG-COV／DG-SCOPE、I1144-WIRING-GATE 維持原狀。
 - **NOT VERIFIED**：Streamlit Cloud 實際追蹤分支／是否被動更新／runtime 畫面；手機實機觸控；CI Python 3.11 vs 沙箱 3.13（CI 已覆蓋）；Real 場景為沙箱快取（日 K 2026-11-09、位階未載入）；branch protection（API 403）；#1277 main push CI 本段未重核；專案 AI O 是否已被實際啟用。
 - **下一個唯一安全工作點**：**總管規劃下一批**（B 待命，僅在有具名授權且不依賴 DEC-225 Level 新文案／C3／D7 的差額時才以隔離 worktree 施工）。本 PR（#1274）由總管依既有 Gate 決定非作者 QA 與 Ready／merge；任何人不得自行 Ready／merge。**行內證據／反證 BLK-1～7**（B 7148021302：Real 無證據欄位、Digest v1 無反證、新文案／D7／C3 未裁、台股抓取時間等資料承載需授權、位階無資料日、首屏 109.0／160 餘裕、「預設展開」vs Contract §3）與**新文案／D7／C3 仍未裁**——不得自行開工。
