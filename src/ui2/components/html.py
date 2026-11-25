@@ -264,13 +264,14 @@ def hold_status_html(fs: FirstScreenVM) -> str:
 def hold_action_row_html(field: FieldVM | None) -> str:
     """今日需處理**單行**（Q6）：取代「是否需要行動／下一步」兩列的**畫面**（VM 兩欄位原樣保留，只是不再各占一列）。
     內容＝VM 既有動作欄的 Capability 空槽字樣（Aggregator 前 `⬜ 尚未提供（待系統動作整合）`）；
-    ⛔ 計算動作、⛔ 「今日無需調整」、⛔ 把缺動作當全部續抱。保留錨點 `data-ui2-q="q2"`。"""
+    ⛔ 計算動作、⛔ 「今日無需調整」、⛔ 把缺動作當全部續抱。保留錨點 `data-ui2-q="q2"`。
+    P-1：`field` 非 None 且有可顯示的 `detail` → 在 chip 之後補畫（與 📊 同一套渲染）；`field is None` 與舊版逐位相同。"""
     if field is None:
-        axis, state, chip = "capability", "not_provided", _hold_slot_chip()
+        axis, state, chip, detail = "capability", "not_provided", _hold_slot_chip(), ""
     else:
-        axis, state, chip = field.layer, _state_attr(field), status_chip_html(field)
+        axis, state, chip, detail = field.layer, _state_attr(field), status_chip_html(field), _row_detail_html(field)
     return (f'<div class="ui2-qrow" data-ui2-q="q2" data-ui2-qname="是否需要行動" data-axis="{axis}" '
-            f'data-state="{state}"><span class="ui2-row__label">{escape(_T.HOLD_ACTION_LABEL)}</span> {chip}</div>')
+            f'data-state="{state}"><span class="ui2-row__label">{escape(_T.HOLD_ACTION_LABEL)}</span> {chip}{detail}</div>')
 
 
 def hold_first_screen_html(fs: FirstScreenVM) -> str:
@@ -377,10 +378,16 @@ def _ctx_chip(field: FieldVM) -> str:
     return neutral_status_chip_html(field)
 
 
+def _row_detail_html(field: FieldVM) -> str:
+    """P-1：欄位 `detail` 一小行（與 📊 `qa_row_html` 同 class／同 escape／同 `shown()` 過濾）。無可顯示的 detail → 空字串（⛔ 補值）。"""
+    return f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
+
+
 def ctxline_html(rows: tuple[FieldVM, ...]) -> str:
-    """🎯 標的頁 W-4：市場位階＋Risk Cap 一行（小字級、置於查詢摘要之下；不搶查一檔／基本面／valuation）。"""
+    """🎯 標的頁 W-4：市場位階＋Risk Cap 一行（小字級、置於查詢摘要之下；不搶查一檔／基本面／valuation）。
+    P-1：各項在 chip 之後、同一個 item 內補畫該欄位既有的 `detail`（與 📊 同一套渲染；無 detail → 與舊版逐位相同）。"""
     items = "".join(f'<span class="ui2-ctxline__item"><span class="ui2-row__label">{escape(r.label)}</span> '
-                    f'{_ctx_chip(r)}</span>' for r in rows)
+                    f'{_ctx_chip(r)}{_row_detail_html(r)}</span>' for r in rows)
     return f'<div class="ui2-qrow ui2-ctxline" data-ui2-q="ctx">{items}</div>'
 
 
