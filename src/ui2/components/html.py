@@ -189,6 +189,19 @@ def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> st
             f'{value}{status_chip_html(field)}{detail}</div>')
 
 
+def delta_below_html(field: FieldVM | None) -> str:
+    """「今日變化」Delta Strip（B-UI2-DELTA-BELOW；📊 Primary 之後／💼 `.ui2-qa` 之後）：單一唯讀列＝label＋狀態 chip＋原因。
+
+    純呈現：只畫 `PageContext.delta` 這一個 FieldVM 既有的 label／chip／detail，⛔ 任何比較運算、⛔ 數字、⛔ 補值。
+    `None` → 空字串（📊／💼 的 VM 恆帶此欄；其餘頁不呼叫）。`data-ui2-delta` 是量測／測試錨點，**不是** `data-ui2-q`。
+    """
+    if field is None:
+        return ""
+    detail = f'<span class="ui2-delta__detail">{escape(field.detail)}</span>' if shown(field.detail) else ""
+    return (f'<div class="ui2-delta" data-ui2-delta="1" data-axis="{field.layer}" data-state="{_state_attr(field)}">'
+            f'<span class="ui2-row__label">{escape(field.label)}</span> {status_chip_html(field)}{detail}</div>')
+
+
 def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
     """第一屏四問（客戶 (5)-9）：現在狀態／是否需要行動／下一步／主 CTA（單一緊湊區塊；題號不外露，錨點 `data-ui2-q`）。
 
@@ -270,9 +283,11 @@ def hold_first_screen_html(fs: FirstScreenVM) -> str:
     return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
 
 
-def hold_l1_v2_html(title_html: str, fs: FirstScreenVM) -> str:
-    """標題 → 組合狀態行 → 第一屏（`hold_l1_html` 的 W-11 批 1 版；容器 class 不變，桌機規則沿用）。"""
-    return '<div class="ui2-h-l1">' + title_html + hold_status_html(fs) + hold_first_screen_html(fs) + "</div>"
+def hold_l1_v2_html(title_html: str, fs: FirstScreenVM, delta: FieldVM | None = None) -> str:
+    """標題 → 組合狀態行 → 第一屏 →（B-UI2-DELTA-BELOW）今日變化列（`hold_l1_html` 的 W-11 批 1 版；容器 class 不變，桌機規則沿用）。
+    `delta` 緊接 `.ui2-qa`（含主 CTA 列）之後、同一個 `.ui2-h-l1` 容器內；`None`（預設）＝與舊版輸出逐位相同。"""
+    return ('<div class="ui2-h-l1">' + title_html + hold_status_html(fs) + hold_first_screen_html(fs)
+            + delta_below_html(delta) + "</div>")
 
 
 def hold_table_html() -> str:
