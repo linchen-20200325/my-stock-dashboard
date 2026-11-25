@@ -37,6 +37,19 @@ SPEC_STATE_HINTS = frozenset({None, "stale", "unavailable", "not_evaluated", "un
 #: 這些頁的 `action_needed` 不得由 canonical 提供（Aggregator 未實作；VM ⛔ 創造動作）。
 PAGES_ACTION_FROM_AGGREGATOR_ONLY = frozenset({"p4_market", "p4_hold"})
 
+#: 📊／💼「今日變化」Delta Strip（B-UI2-DELTA-BELOW）：唯讀、**恆不可比較**。兩個字串是本批僅有的新字串，只放在 VM 建構處
+#: （⛔ 進 `text.py` 的狀態前綴白名單；⛔ 目標句「⬜ 暫無足夠資料比較今日變化」與「今日無重大訊號變更」——未經 Copy Gate）。
+DELTA_LABEL = "今日變化"
+DELTA_NOT_PROVIDED_DETAIL = "今日變化比較功能尚未開放"
+PAGES_WITH_DELTA = frozenset({"p4_market", "p4_hold"})
+
+
+def delta_not_comparable_field() -> FieldVM:
+    """「今日變化」恆為 capability `⬜ 尚未提供`＋原因（無比較管線／同口徑前次快照）。
+    ⛔ 讀取任何資料、⛔ 計算變化、⛔ 帶值／freshness、⛔ 補 0；Real 與 FAKE 共用同一份（不含任何 FAKE 前綴，Real 不借用 FAKE）。"""
+    return FieldVM(DELTA_LABEL, None, None, TEXT_NOT_PROVIDED, DELTA_NOT_PROVIDED_DETAIL, FreshnessInfo(),
+                   capability=CapabilityState.NOT_PROVIDED)
+
 
 def field_from_spec(spec: Spec) -> FieldVM:
     label = str(spec["label"])
@@ -160,6 +173,8 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
     """canonical → PageVM。`top_n`／`mode` 只影響 `slice`，⛔ 影響 `context`（Gate §4.2-6／G3）。"""
     page = str(canonical["page"])
     banner = _banner_for(canonical)
+    if canonical.get("delta") is not None:        # 沒有比較管線：VM 不接收任何「變化」輸入（⛔ 算 Diff／接比較 producer）
+        raise ValueError(f"{page}: canonical 不得提供 delta（今日變化恆不可比較；比較管線未開放）")
     for key, only in (("conclusion", P4_MARKET), ("main_risk", P4_MARKET), ("kbar", P4_MARKET),
                       ("target", P4_TARGET), ("account", P4_ME)):
         if canonical.get(key) is not None and page != only:
@@ -207,7 +222,8 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
             main_risk=(field_from_spec(canonical["main_risk"])
                        if canonical.get("main_risk") is not None else None),
             target=target, account=account,
-            kbar=(kbar_from_spec(canonical["kbar"]) if canonical.get("kbar") is not None else None)),
+            kbar=(kbar_from_spec(canonical["kbar"]) if canonical.get("kbar") is not None else None),
+            delta=delta_not_comparable_field() if page in PAGES_WITH_DELTA else None),
         slice=PresentationSlice(top_n=top_n, visible_card_ids=visible, active_mode=active_mode),
         banner_text=banner,
     )

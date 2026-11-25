@@ -513,10 +513,11 @@ def test_chart_takes_exactly_the_primary_slot_position(monkeypatch):
     vm = get_real_page_vm(P4_MARKET, _feed(monkeypatch))
     chunks = _render(vm, monkeypatch)
     i_l1 = next(i for i, c in enumerate(chunks) if 'class="ui2-m-l1"' in c)
-    # Issue #1108 方向 B：L1 → 日 K 主圖 → 指標卡 → OneBrain
+    # Issue #1108 方向 B：L1 → 日 K 主圖 →（B-UI2-DELTA-BELOW）今日變化 → 指標卡 → OneBrain
     assert 'data-ui2-l1="primary_chart"' in chunks[i_l1 + 1]
-    assert 'class="ui2-grid"' in chunks[i_l1 + 2]
-    assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 3]
+    assert 'data-ui2-delta="1"' in chunks[i_l1 + 2]
+    assert 'class="ui2-grid"' in chunks[i_l1 + 3]
+    assert 'data-ui2-l1="onebrain"' in chunks[i_l1 + 4]
     # 與空槽版逐塊相同（只差 Primary 那一塊）
     slot_vm = dataclasses.replace(vm, context=dataclasses.replace(vm.context, kbar=None))
     slot_chunks = _render(slot_vm, monkeypatch)

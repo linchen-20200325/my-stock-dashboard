@@ -1,0 +1,374 @@
+[
+ {
+  "shot": "real_market",
+  "viewport": "390x844",
+  "delta": {
+   "top": 1077.7,
+   "bottom": 1114.4,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": false,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 183.8,
+   "bottom": 223.8,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 33400,
+   "full": 62632
+  }
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "390x844",
+  "delta": {
+   "top": 521.7,
+   "bottom": 558.4,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 438.0,
+   "bottom": 478.0,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 36084,
+   "full": 43179
+  }
+ },
+ {
+  "shot": "real_market",
+  "viewport": "1280x900",
+  "delta": {
+   "top": 885.4,
+   "bottom": 922.1,
+   "height": 36.7,
+   "left": 80,
+   "right": 1200,
+   "width": 1120,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": false,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 132.1,
+   "bottom": 172.1,
+   "left": 93,
+   "right": 244.2,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 44209,
+   "full": 62841
+  }
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "1280x900",
+  "delta": {
+   "top": 283.0,
+   "bottom": 319.7,
+   "height": 36.7,
+   "left": 80,
+   "right": 1200,
+   "width": 1120,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 79,
+   "bottom": 119,
+   "left": 1048.8,
+   "right": 1200,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 51200,
+   "full": 51941
+  }
+ },
+ {
+  "shot": "real_market",
+  "viewport": "1440x900",
+  "delta": {
+   "top": 866.2,
+   "bottom": 902.9,
+   "height": 36.7,
+   "left": 80,
+   "right": 1360,
+   "width": 1280,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": false,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 132.1,
+   "bottom": 172.1,
+   "left": 93,
+   "right": 244.2,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 46497,
+   "full": 66342
+  }
+ },
+ {
+  "shot": "real_hold",
+  "viewport": "1440x900",
+  "delta": {
+   "top": 283.0,
+   "bottom": 319.7,
+   "height": 36.7,
+   "left": 80,
+   "right": 1360,
+   "width": 1280,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 79,
+   "bottom": 119,
+   "left": 1208.8,
+   "right": 1360,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 51631,
+   "full": 52394
+  }
+ },
+ {
+  "shot": "fake_stale_market",
+  "viewport": "390x844",
+  "delta": {
+   "top": 726.8,
+   "bottom": 763.5,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 144.0,
+   "bottom": 184.0,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 35673,
+   "full": 51973
+  }
+ },
+ {
+  "shot": "fake_stale_hold",
+  "viewport": "390x844",
+  "delta": {
+   "top": 462.7,
+   "bottom": 499.4,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 379.0,
+   "bottom": 419.0,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 32364,
+   "full": 38675
+  }
+ },
+ {
+  "shot": "fake_unavailable_market",
+  "viewport": "390x844",
+  "delta": {
+   "top": 746.0,
+   "bottom": 782.7,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 144.0,
+   "bottom": 184.0,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 34888,
+   "full": 53355
+  }
+ },
+ {
+  "shot": "fake_unavailable_hold",
+  "viewport": "390x844",
+  "delta": {
+   "top": 481.9,
+   "bottom": 518.6,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 398.2,
+   "bottom": 438.2,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 32518,
+   "full": 39641
+  }
+ },
+ {
+  "shot": "real_degraded_market",
+  "viewport": "390x844",
+  "delta": {
+   "top": 728.0,
+   "bottom": 764.7,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 169.7,
+   "bottom": 209.7,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新今日戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 30987,
+   "full": 50705
+  }
+ },
+ {
+  "shot": "real_degraded_hold",
+  "viewport": "390x844",
+  "delta": {
+   "top": 507.6,
+   "bottom": 544.3,
+   "height": 36.7,
+   "left": 14.4,
+   "right": 375.6,
+   "width": 361.2,
+   "text": "今日變化 ⬜ 尚未提供 今日變化比較功能尚未開放",
+   "clipped": false,
+   "in_first_viewport": true,
+   "overflow_right": false,
+   "single_line": true
+  },
+  "page_horizontal_scroll": false,
+  "cta": {
+   "top": 423.9,
+   "bottom": 463.9,
+   "left": 27.4,
+   "right": 178.6,
+   "text": "🚀 更新持股戰情",
+   "in_view": true,
+   "hit_is_cta": true
+  },
+  "png_bytes": {
+   "view": 34079,
+   "full": 41447
+  }
+ }
+]

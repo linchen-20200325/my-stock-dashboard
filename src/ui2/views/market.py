@@ -2,7 +2,7 @@
 
 版面（Wireframes §2／Freeze §0.1.6／§16.1-M；P2 起依客戶 2026-11-04 (19)／DEC-133）：
 標題 → [今日結論 → 市場目前狀態 → Risk Cap → 是否需要行動 → 下一步 → 主 CTA] → **緊接**「今日主要風險」（L1，⛔ 被插隊）
-→ 🇹🇼 台股日 K 主圖／**誠實空槽**＋一行 SPEC → 核心指標卡 → 🤖 OneBrain Outlook（內容不變，只改位置）→ 其餘區塊。
+→ 🇹🇼 台股日 K 主圖／**誠實空槽**＋一行 SPEC →（B-UI2-DELTA-BELOW）今日變化（唯讀、恆不可比較）→ 核心指標卡 → 🤖 OneBrain Outlook（內容不變，只改位置）→ 其餘區塊。
 （Issue #1108 方向 B 起 OneBrain 移到指標卡之後；DEC-133 G-3 的舊順序「OneBrain → Primary → 指標卡」被 DEC-157 有意識取代，見 docs/DECISIONS.md。）
 （Active Contract §3.1：📊 整頁不承載完整 evidence 摺疊——P3 起 L2／L3 evidence 區塊不渲染，VM 完整保留。）
 桌機（≥769px）由 CSS 把 狀態／Risk Cap／今日主要風險 排成三 tile（見 shell/css.py）；手機堆疊。
@@ -16,7 +16,7 @@ from __future__ import annotations
 from html import escape
 
 from shared.ui2_contract.models import PageVM
-from src.ui2.components.html import kbar_chart_html, market_l1_html, primary_slot_html
+from src.ui2.components.html import delta_below_html, kbar_chart_html, market_l1_html, primary_slot_html
 from src.ui2.views._page import _md, render_cards, render_sections, render_title, section_l1_html
 
 ONEBRAIN_SECTION_ID = "onebrain"
@@ -32,6 +32,9 @@ def render(vm: PageVM) -> None:
     # 沒有日 K 事實（FAKE 示意軸）→ 照舊誠實空槽（⛔ FAKE K 棒）。
     twii = next((c for c in vm.context.cards if c.card_id == TWII_CARD_ID), None)
     _md(kbar_chart_html(vm.context.kbar) if vm.context.kbar is not None else primary_slot_html(twii))
+    # B-UI2-DELTA-BELOW（D1＝BELOW）：「今日變化」（唯讀、恆不可比較）在 Primary 之後、核心指標卡之前；位置在量測錨點之下，不影響 L1／Primary 的首屏餘裕。
+    if vm.context.delta is not None:
+        _md(delta_below_html(vm.context.delta))
     render_cards(vm)
     onebrain = next((s for s in vm.context.sections if s.section_id == ONEBRAIN_SECTION_ID and s.level == "L1"), None)
     if onebrain is not None:
