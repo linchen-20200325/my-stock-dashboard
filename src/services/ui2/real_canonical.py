@@ -42,7 +42,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 - `failed=True`／讀取例外 → 紅；`ok=False` → 灰 Missing；`ohlc_ok=False` → 灰 `⬜ 無法判定`＋原因**類別**人話句（⛔ 原因碼）。
 - 合格：照畫；`is_stale` True／None 的字樣與 TWII 卡**同一套**（Stale 照畫，資料是真歷史但舊）；不足 20 根 →
   照實少畫＋「僅 N 根（不足 20）」（⛔ 補棒／補 0／內插）。
-期間切換（2026-11-26；#1199 留言 7186846291／7186895108 客戶 R16 具名授權）：📊 圖外原生 radio 可選 20／60／120 日（預設 20；
+期間切換（2026-11-26；#1199 留言 7186846291／7186895108 客戶 R16 具名授權）：📊 圖外原生 radio 可選 20／60 日（預設 20；R20 #1199 7191058929 取代前版，120 日另案；
 ⛔ 252／縮放／捲動／降採樣）。所選窗＝`RealFeedSnapshot.kbar_days`：驗窗上限、`target_n`、「僅 M 根（不足 N）」都用**同一個**
 已驗證的所選窗；預設 20 時與切換功能之前逐值相同。非法值（bool／252／非 int／未核准值）一律 `ValueError`（程式錯誤，fail closed）。
 """
@@ -178,10 +178,10 @@ class RegimeFact:
 #: 📊 主圖預設可見根數（DEC-156 B：手機預設最近 20 根已驗證完整日 K）。feed 的 `TWII_KBAR_DAYS` 必須等於此值
 #: （feed 不得自本檔 import 新名稱〔G2F 精確白名單〕，故兩處各一份，由 tests/test_ui2_twii_kbar.py 釘相等）。
 KBAR_VISIBLE_BARS = 20
-#: 📊 主圖可選期間（客戶 R16 具名授權 #1199 留言 7186895108：20／60／120 日；預設＝第一個＝`KBAR_VISIBLE_BARS`）。
+#: 📊 主圖可選期間（客戶 R20 具名授權 #1199 留言 7191058929（取代 7186895108 的選項集）：全裝置 20／60 日；120 另案；預設＝第一個＝`KBAR_VISIBLE_BARS`）。
 #: ⛔ 252／縮放／捲動／降採樣皆未核准。feed 的 `TWII_KBAR_DAY_OPTIONS` 與 view 的 `KBAR_DAY_OPTIONS` 各留一份
 #: （feed／view 不得自本檔取新名稱，G2F 精確白名單／UI 只吃 VM），由 tests/test_ui2_twii_kbar.py 釘相等。
-KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60, 120)
+KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60)
 
 
 def kbar_days_ok(days: Any) -> bool:

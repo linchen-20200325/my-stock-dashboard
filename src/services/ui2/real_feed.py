@@ -19,7 +19,7 @@
 
 每次 rerun 由殼呼叫**一次** `read_real_snapshot()`，四頁共用同一份（位階三處同一次呼叫結果）。
 期間切換（2026-11-26；#1199 留言 7186846291／7186895108 客戶 R16 具名授權）：`read_real_snapshot(days=)`／`_read_twii_kbar(days)` 讀「所選期間」
-（只 20／60／120 日；預設 20＝無參呼叫與切換功能之前逐值相同；卡片那次仍恆 `TWII_CARD_DAYS=1`；仍是白名單內同一個
+（只 20／60 日〔R20 #1199 7191058929 取代前版：120 另案〕；預設 20＝無參呼叫與切換功能之前逐值相同；卡片那次仍恆 `TWII_CARD_DAYS=1`；仍是白名單內同一個
 `get_twii_trend_view` 與 `twii_kbar_fact_of`，**不新增名稱**）。非法值 → `ValueError`，且在**任何**快取讀取之前（fail closed）。
 例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名，僅存 snapshot 內部欄位；訊息全文只 print 進 log；P1 QA 起畫面一律不放型別名）→
 由 `real_canonical` 映射成紅色 Unavailable；各事實互相隔離（一個壞不拖垮另一個；日 K 與卡片亦然）。
@@ -36,9 +36,9 @@ TWII_CARD_DAYS = 1
 #: 📊 主圖日 K 讀取根數（Issue #1099 PR-2；DEC-156 B：手機預設最近 20 根）。卡片那次讀取（`TWII_CARD_DAYS`）不動；
 #: 本值必須等於 `real_canonical.KBAR_VISIBLE_BARS`（測試釘相等；G2F 白名單只為本功能加 `twii_kbar_fact_of` 一個名稱）。
 TWII_KBAR_DAYS = 20
-#: 📊 主圖可選期間（客戶 R16 具名授權：20／60／120 日；⛔ 252）。與 `real_canonical.KBAR_DAY_OPTIONS`、view 的 `KBAR_DAY_OPTIONS`
+#: 📊 主圖可選期間（客戶 R20 具名授權 #1199 7191058929：全裝置 20／60 日；⛔ 120 另案、⛔ 252）。與 `real_canonical.KBAR_DAY_OPTIONS`、view 的 `KBAR_DAY_OPTIONS`
 #: 各留一份（本檔不得自 canonical 取新名稱，G2F 精確白名單），由測試釘相等；預設＝第一個＝`TWII_KBAR_DAYS`。
-TWII_KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60, 120)
+TWII_KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60)
 
 
 def _require_kbar_days(days: object) -> int:

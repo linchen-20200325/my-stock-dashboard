@@ -158,14 +158,15 @@ THRESHOLDS: list[dict[str, str]] = [
      "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"},
     {"id": "kbar_primary_chart",
      "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖"
-             "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60／120，"
-             "預設 20；未選中／量不到＝20；252 等未核准值一律紅）、svg 圖高約 220px"
+             "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60，"
+             "預設 20；未選中／量不到＝20；120／252 等未核准值一律紅）、svg 圖高約 220px"
              "（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、"
              "不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。"
-             "期間 radio（列標籤『期間』、選項恰『20 日／60 日／120 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。"
+             "期間 radio（列標籤『期間』、選項恰『20 日／60 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。"
              "排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
      "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；"
-               "2026-11-26 期間切換：#1199 留言 7186846291／7186895108（客戶 R16 具名授權：20／60／120 日，預設 20；252／縮放／捲動／降採樣未核准）"},
+               "2026-11-26 期間切換：#1199 留言 7186846291／7191058929（客戶 R20 具名授權，取代 7186895108 的選項集：全裝置 20／60 日，預設 20；120 另案；252／縮放／捲動／降採樣未核准）。"
+               "真瀏覽器 Real 量測另實際點選 60 日（結果記於市場頁列 `kbar_period60`），驗根數 ≤60 且符合選中值、同源、無水平溢出、鍵盤方向鍵 20→60。"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
              "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
@@ -316,10 +317,10 @@ P2_REAL_NAV_MARGIN_VIEWPORT_W = 390
 #: 日 K 主圖判定常數（判定器自己的字面值，獨立於被測的 `src/ui2/components/html.py`，避免 mutation 時判定器跟著被改）。
 KBAR_LEGEND_TEXT = "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤"
 KBAR_MAX_BARS = 20                              # 預設窗（未選中／量不到 radio 時的上限；正負控保留 20）
-#: 期間切換（2026-11-26；#1199 7186846291／7186895108 客戶 R16 具名授權）：核准選項＝根數上限；⛔ 252 等其他值。
+#: 期間切換（2026-11-26；#1199 7186846291／7191058929 客戶 R20 具名授權：全裝置 20／60 日；120 另案）：核准選項＝根數上限；⛔ 120／252 等其他值。
 #: 判定器自己的字面值（獨立於被測的 `src/ui2/views/market.py`，避免 mutation 時判定器跟著被改）。
-KBAR_PERIOD_CAPS: dict[int, int] = {20: 20, 60: 60, 120: 120}
-KBAR_PICKER_LABELS = ["20 日", "60 日", "120 日"]
+KBAR_PERIOD_CAPS: dict[int, int] = {20: 20, 60: 60}
+KBAR_PICKER_LABELS = ["20 日", "60 日"]
 KBAR_PICKER_TITLE = "期間"
 KBAR_PLOT_H_RANGE = (200.0, 240.0)
 _KBAR_FORBIDDEN = ("MA", "均線", "成交量")
@@ -1178,6 +1179,92 @@ def measure_items_expanded(page, vw: int, vh: int) -> dict | None:
     return out
 
 
+_JS_KBAR_60 = r"""
+() => {
+  const R = e => e.getBoundingClientRect();
+  const dates = [...document.querySelectorAll('[data-kbar-date]')].map(e => e.getAttribute('data-kbar-date'));
+  const svg = document.querySelector('.ui2-kbar__svg');
+  const meta = document.querySelector('[data-ui2-kbar-meta]');
+  const card = document.querySelector('[data-card-id="twii"]');
+  const rects = [...document.querySelectorAll('[data-kbar-dir] rect')].map(e => R(e));
+  const cx = rects.map(x => (x.left + x.right) / 2);
+  const gaps = cx.slice(1).map((c, i) => c - cx[i]);
+  const bodyW = rects.map(x => x.width);
+  const bodyGap = rects.slice(1).map((x, i) => x.left - rects[i].right);
+  const de = document.documentElement;
+  return {bars: dates.length, first_date: dates[0] || null, last_date: dates[dates.length - 1] || null,
+    aria: svg ? svg.getAttribute('aria-label') : null, meta: meta ? meta.innerText.trim() : null,
+    card_text: card ? card.innerText.replace(/\s+/g, ' ').trim() : null,
+    slot_px: gaps.length ? gaps.reduce((a, b) => a + b) / gaps.length : null,
+    body_w_px: bodyW.length ? Math.min(...bodyW) : null, body_gap_px_min: bodyGap.length ? Math.min(...bodyGap) : null,
+    svg_w: svg ? R(svg).width : null,
+    doc_scroll_w: de.scrollWidth, doc_client_w: de.clientWidth};
+}
+"""
+
+
+def measure_kbar_period_60(page, vw: int, vh: int) -> dict:
+    """📊 市場（Real）：**實際點選**「60 日」→ 量根數／日期／來源／與收盤卡同源／水平溢出／判定器結果；再驗鍵盤方向鍵 20→60；最後還原 20（⛔ 影響之後的量測）。
+    結果記進同一個市場頁量測列的 `kbar_period60`（不新增量測列：`states` 數量不變）。"""
+    sel = ".st-key-ui2_kbar_days_box [role='radiogroup'] > label"
+    lab = lambda n: page.locator(sel, has_text=re.compile(rf"^{n} 日$"))
+    cond = ("(n) => { const c = [...document.querySelectorAll('.st-key-ui2_kbar_days_box [role=radiogroup] > label')]"
+            ".find(l => l.querySelector('input').checked); const b = document.querySelectorAll('[data-kbar-dir]').length;"
+            " return !!c && c.innerText.trim() === n + ' 日' && (n === 20 ? b === 20 : b > 20); }")
+    fails: list[str] = []
+    lab(60).scroll_into_view_if_needed()
+    lab(60).click()
+    page.wait_for_function(cond, arg=60, timeout=30000)
+    page.wait_for_timeout(300)
+    m = measure_state(page, vw, vh)
+    m["scenario"], m["feed"] = "real", "real"
+    checks = evaluate(m)
+    g = page.evaluate(_JS_KBAR_60)
+    p2 = m["p2"] or {}
+    if p2.get("chart_period") != 60:
+        fails.append(f"點選 60 日後量到選中值 {p2.get('chart_period')!r}")
+    bars = g["bars"]
+    if not (20 < bars <= 60):
+        fails.append(f"點選 60 日後 K 棒 {bars} 根（應 21～60）")
+    if g["aria"] is None or f"共 {bars} 根" not in g["aria"]:
+        fails.append(f"aria-label 與根數不符：{g['aria']!r}")
+    if g["last_date"] is None or g["card_text"] is None or g["last_date"] not in g["card_text"]:
+        fails.append(f"圖末根日期 {g['last_date']!r} 不在收盤卡資料日內（非同源）")
+    if g["meta"] is None or g["last_date"] is None or g["last_date"] not in g["meta"]:
+        fails.append(f"圖下資料日／來源行 {g['meta']!r} 不含末根日期")
+    if g["doc_scroll_w"] > g["doc_client_w"] + 0.5:
+        fails.append(f"60 日水平溢出 {g['doc_scroll_w']} > {g['doc_client_w']}")
+    for k, v in checks.items():
+        fails += [f"[{k}] {x}" for x in v]
+    nav_margin = None
+    if vw <= MOBILE_MAX_W and m.get("first_block_after_l1_top") is not None and _nav_line(m) is not None:
+        nav_margin = round(_nav_line(m) - m["first_block_after_l1_top"], 1)
+    # 鍵盤：焦點在 20 日後按 ArrowRight → 60 日（原生 radiogroup）
+    lab(20).click()
+    page.wait_for_function(cond, arg=20, timeout=30000)
+    page.keyboard.press("ArrowRight")
+    keyboard_ok = True
+    try:
+        page.wait_for_function(cond, arg=60, timeout=10000)
+    except Exception:  # noqa: BLE001 — 逾時＝鍵盤切換失敗，記為判定失敗（不是量測崩潰）
+        keyboard_ok = False
+        fails.append("鍵盤 ArrowRight 沒有把 20 日切到 60 日")
+    lab(20).click()                      # 還原預設
+    page.wait_for_function(cond, arg=20, timeout=30000)
+    page.wait_for_timeout(250)
+    back = page.evaluate("document.querySelectorAll('[data-kbar-dir]').length")
+    if back != 20:
+        fails.append(f"還原 20 日後 K 棒 {back} 根")
+    rd = lambda v: round(v, 2) if isinstance(v, float) else v
+    return {"selected": 60, "chart_period": p2.get("chart_period"), "bars": bars, "first_date": g["first_date"],
+            "last_date": g["last_date"], "aria_label": g["aria"], "meta": g["meta"],
+            "slot_px": rd(g["slot_px"]), "body_w_px": rd(g["body_w_px"]), "body_gap_px_min": rd(g["body_gap_px_min"]),
+            "svg_w": rd(g["svg_w"]), "doc_scroll_w": g["doc_scroll_w"], "doc_client_w": g["doc_client_w"],
+            "nav_margin_after_risk": nav_margin, "picker": {k: round(v, 1) for k, v in (p2.get("kbar_picker") or {}).items()},
+            "picker_labels": p2.get("kbar_picker_labels"), "keyboard_arrow_right_20_to_60": keyboard_ok,
+            "restored_to_20_bars": back, "failures": fails}
+
+
 REAL_META_NOTE = ("Real-data Preview（唯讀）：目前僅部分台股資料已接入；其餘資料依各卡片狀態顯示。"
                   "本報告記錄量測當下的資料及畫面狀態，不代表即時或正式生產環境。")
 
@@ -1213,6 +1300,12 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                     results[-1]["expanded"] = exp
                     if exp is None or exp["failures"]:
                         results[-1]["failures"] = {**results[-1]["failures"], "items_expanded": ["無明細 expander"] if exp is None else exp["failures"]}
+                        results[-1]["pass"] = False
+                if pid == P4_MARKET:         # R20：真瀏覽器實際點選 60 日（量完還原 20；其後的壓力態／他頁量測不受影響）
+                    k60 = measure_kbar_period_60(page, vw, vh)
+                    results[-1]["kbar_period60"] = k60
+                    if k60["failures"]:
+                        results[-1]["failures"] = {**results[-1]["failures"], "kbar_period60": k60["failures"]}
                         results[-1]["pass"] = False
                 if pid == P4_MARKET and vw <= MOBILE_MAX_W:
                     results.append(_record_stress(page, vp_name, vw, vh, SCENARIO_REAL, feed="real"))

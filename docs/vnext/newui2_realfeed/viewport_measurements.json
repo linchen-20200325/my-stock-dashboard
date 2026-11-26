@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "0ceeb971a5aa3206171e88603b29dd44ff257dfd",
-  "source_hash": "2c16905fe93994ab541ab2ac1267c211ab076d0a79e524df250daebded6847ea",
-  "generated_at": "2026-11-26T09:11:51+00:00",
+  "git_sha": "301f3c867e065e596aa325ff42813bc732bf143a",
+  "source_hash": "c4be03b106e834d3f4b8f7851fa9e2514cea1e9706a1a1ad3480b2b9e8cc4347",
+  "generated_at": "2026-11-26T11:46:51+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "158.0.8127.36",
   "streamlit_version": "1.59.2",
@@ -136,8 +136,8 @@
    },
    {
     "id": "kbar_primary_chart",
-    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60／120，預設 20；未選中／量不到＝20；252 等未核准值一律紅）、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。期間 radio（列標籤『期間』、選項恰『20 日／60 日／120 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
-    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；2026-11-26 期間切換：#1199 留言 7186846291／7186895108（客戶 R16 具名授權：20／60／120 日，預設 20；252／縮放／捲動／降採樣未核准）"
+    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60，預設 20；未選中／量不到＝20；120／252 等未核准值一律紅）、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。期間 radio（列標籤『期間』、選項恰『20 日／60 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
+    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；2026-11-26 期間切換：#1199 留言 7186846291／7191058929（客戶 R20 具名授權，取代 7186895108 的選項集：全裝置 20／60 日，預設 20；120 另案；252／縮放／捲動／降採樣未核准）。真瀏覽器 Real 量測另實際點選 60 日（結果記於市場頁列 `kbar_period60`），驗根數 ≤60 且符合選中值、同源、無水平溢出、鍵盤方向鍵 20→60。"
    },
    {
     "id": "w11_hold_layout",
@@ -352,8 +352,7 @@
     "kbar_picker_title": "期間",
     "kbar_picker_labels": [
      "20 日",
-     "60 日",
-     "120 日"
+     "60 日"
     ],
     "kbar_picker_checked": 1,
     "chart_period": 20
@@ -384,7 +383,38 @@
     "nav_margin_after_risk": 109.8
    },
    "failures": {},
-   "pass": true
+   "pass": true,
+   "kbar_period60": {
+    "selected": 60,
+    "chart_period": 60,
+    "bars": 60,
+    "first_date": "2026-08-10",
+    "last_date": "2026-11-09",
+    "aria_label": "台股加權指數日 K，2026-08-10 至 2026-11-09 共 60 根；紅＝收盤高於開盤，綠＝收盤低於開盤，灰＝收盤等於開盤",
+    "meta": "資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "slot_px": 4.72,
+    "body_w_px": 2.61,
+    "body_gap_px_min": 2.1,
+    "svg_w": 283.22,
+    "doc_scroll_w": 390,
+    "doc_client_w": 390,
+    "nav_margin_after_risk": 109.8,
+    "picker": {
+     "top": 1069.7,
+     "bottom": 1137.7,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 68,
+     "width": 361.2
+    },
+    "picker_labels": [
+     "20 日",
+     "60 日"
+    ],
+    "keyboard_arrow_right_20_to_60": true,
+    "restored_to_20_bars": 20,
+    "failures": []
+   }
   },
   {
    "viewport_name": "mobile",
@@ -1778,8 +1808,7 @@
     "kbar_picker_title": "期間",
     "kbar_picker_labels": [
      "20 日",
-     "60 日",
-     "120 日"
+     "60 日"
     ],
     "kbar_picker_checked": 1,
     "chart_period": 20
@@ -1810,7 +1839,38 @@
     "nav_margin_after_risk": null
    },
    "failures": {},
-   "pass": true
+   "pass": true,
+   "kbar_period60": {
+    "selected": 60,
+    "chart_period": 60,
+    "bars": 60,
+    "first_date": "2026-08-10",
+    "last_date": "2026-11-09",
+    "aria_label": "台股加權指數日 K，2026-08-10 至 2026-11-09 共 60 根；紅＝收盤高於開盤，綠＝收盤低於開盤，灰＝收盤等於開盤",
+    "meta": "資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "slot_px": 20.03,
+    "body_w_px": 11.06,
+    "body_gap_px_min": 8.89,
+    "svg_w": 1202,
+    "doc_scroll_w": 1440,
+    "doc_client_w": 1440,
+    "nav_margin_after_risk": null,
+    "picker": {
+     "top": 858.2,
+     "bottom": 926.2,
+     "left": 80,
+     "right": 1360,
+     "height": 68,
+     "width": 1280
+    },
+    "picker_labels": [
+     "20 日",
+     "60 日"
+    ],
+    "keyboard_arrow_right_20_to_60": true,
+    "restored_to_20_bars": 20,
+    "failures": []
+   }
   },
   {
    "viewport_name": "desktop",
@@ -2891,7 +2951,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.7,
+     "height": 652.6,
      "left": 80,
      "right": 1360
     },
@@ -3126,8 +3186,7 @@
     "kbar_picker_title": "期間",
     "kbar_picker_labels": [
      "20 日",
-     "60 日",
-     "120 日"
+     "60 日"
     ],
     "kbar_picker_checked": 1,
     "chart_period": 20
@@ -3158,7 +3217,38 @@
     "nav_margin_after_risk": null
    },
    "failures": {},
-   "pass": true
+   "pass": true,
+   "kbar_period60": {
+    "selected": 60,
+    "chart_period": 60,
+    "bars": 60,
+    "first_date": "2026-08-10",
+    "last_date": "2026-11-09",
+    "aria_label": "台股加權指數日 K，2026-08-10 至 2026-11-09 共 60 根；紅＝收盤高於開盤，綠＝收盤低於開盤，灰＝收盤等於開盤",
+    "meta": "資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
+    "slot_px": 17.37,
+    "body_w_px": 9.59,
+    "body_gap_px_min": 7.71,
+    "svg_w": 1042,
+    "doc_scroll_w": 1280,
+    "doc_client_w": 1280,
+    "nav_margin_after_risk": null,
+    "picker": {
+     "top": 877.4,
+     "bottom": 945.4,
+     "left": 80,
+     "right": 1200,
+     "height": 68,
+     "width": 1120
+    },
+    "picker_labels": [
+     "20 日",
+     "60 日"
+    ],
+    "keyboard_arrow_right_20_to_60": true,
+    "restored_to_20_bars": 20,
+    "failures": []
+   }
   },
   {
    "viewport_name": "desktop1280",
@@ -4239,7 +4329,7 @@
     "expander_box": {
      "top": 1228.8,
      "bottom": 1881.5,
-     "height": 652.7,
+     "height": 652.6,
      "left": 80,
      "right": 1200
     },
