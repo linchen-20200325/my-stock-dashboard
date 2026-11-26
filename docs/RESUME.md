@@ -2,7 +2,7 @@
 
 > 唯一 SSOT：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199
 > 本檔不是第二 SSOT；與 #1199、有效 DEC、Contract、PROJECT_RULES 衝突時，以後者為準。不得據本檔施工、Ready、merge、部署或解除 HOLD。
-> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；最新讀到 #1199 留言 c7192593347（V1.3 制度錨點 c7192149293）；每輪重查 LIVE，過期即不可信。
+> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；最新讀到 #1199 留言 c7192864454（V1.3 制度錨點 c7192149293）；每輪重查 LIVE，過期即不可信。
 > 出處：c<數字>＝#1199 留言 ID（`https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-<數字>`）。
 
 ## 1. HOT｜最新版入口（先讀本檔；權威仍是 #1199，再取差額）
@@ -10,6 +10,7 @@
 - **V1.3 接續制度 c7192149293**（APPROVED；非產品 v1.3）：新對話只輸入「接續」，本檔為唯一首讀導航索引（≤80 行）；正式 QA／施工／合併仍完整原 LIVE Gate。**R22 增量僅限接續制度與 D 線**，不取代 R21 的 A/B/C/Work/O 派工。
 - **LATEST_HANDOFF：c7191455542**，R21 完整交接與全量 HOLD；最新增量 R22.1 c7192459223、R22.2 c7192570719（總管狀態，非新施工授權）、Work QA c7192593347（承 c7191602881）。另讀其後有效裁示。
 - **CURRENT_TARGET R2：c7182728412**；產品 v1.0／DEC-224（`UI2-ONEBRAIN-PRODUCT-V1.0-APPROVED-2026-11-23`），Real Data First；五頁：📊市場／🎯標的／💼持股／👤我的／🗂資料；確定性權威不變。
+- **目標補充 c7192864454**（總管，2026-11-26；補充 R2，不取代）：全線共同目標＝完成 UI2＋OneBrain，Real Data First，先收口無 AI 可用的真實資料儀表板；文件／CI 通過不等於產品完成；六項 HOLD 不變。
 - **CURRENT_PLAN R21：c7191389677**（A/B/C/Work/O 派工）＋ **R22 增量 c7192149293**（僅接續制度與 D 線）；三線平行、按可用功能分批交付，不是新施工授權。
 - **CURRENT_GOVERNANCE r02：c7184169826**；r01 c7178099841 未被取代部分有效，其內舊入口 TARGET 7166092247／PLAN R3 已 SUPERSEDED。
 - V1.2 HOT/WARM/COLD c7164122838；版本鏈及「接續」c7167230635：歷史保留，**與 V1.3 衝突部分 SUPERSEDED**，未衝突部分有效。V1.1／V1.3 接續制度不同於規格第十章產品 v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，HOLD）。
@@ -32,9 +33,10 @@
 
 - A｜P0/P1：c7183081296 TWII、c7184227847 個股；R14 有限規格文件 B2/B3，尚無回存；六問 #1197 comment6947565503 需指定寄件者/管道/實際發送授權，未寄；不真取數、不落盤。
 - B｜P0/P1：#1283 R20 修正已交（c7192318863，head 4a107bdd）；Work HOLD／MF1（c7192593347）：按具名 MF 修正；DEC-156 待合法交接。其後依 R21 唯讀收斂持股/我的一個合法操作候選，不擴權。
-- C｜P2：#1284 兩檔隔離原型，Work R18 HOLD／MF1／SF1（c7191602881）；R21 獨立唯讀收斂大盤單主題正式整合最小決策包，不改 schema/producer/caller/Provider、不開 PR、不真取數；無合格來源/反證則無正式結論。
+- C｜P2：#1284 兩檔隔離原型，Work HOLD／MF1／SF1（c7192593347）；大盤決策包已交 c7192861785（僅設計）：今日無合法路徑產出正式大盤結論，不建議再做大盤原型；客戶一題（推薦 A 維持 HOLD；不回覆＝A）。
 - Work｜差額 QA 已回存 c7192593347（#1283／#1281／#1284 皆 HOLD／MF1）；修後新 head 到即核新增差額及原未驗項，依原正式 Gate；#1281 僅核索引差額，勿阻塞產品。不可代施工或以 CI 代 QA。
 - D｜V1.2 唯讀瘦身，不占槽；R22（c7192149293）授權：確認單一 writer 後僅更新本檔、追加 commit、不另開 PR；寫入權衝突／有效裁示遺失／原 Gate 降級即停；分支清理獨立維護，唯一候選仍待外部依賴確認，不刪。O｜STANDBY，無具名合法空槽不啟動。
+- **下一步排序（D 依 c7192864454 最小改動排列；PROPOSED，非授權）**：①B 修 #1283 MF1→Work 差額；②Work 複驗 #1281 新 head；③A #1197 TWII 合法更新缺客戶指定寄件者／發送授權（C 包指出無合法新鮮行情則大盤證據皆被擋）；④#1284 MF1／SF1：C 依既有 MF1/SF1（c7192593347、R22.2）處理；⑤C 大盤待客戶一題；其餘依原 HOLD。
 - 文件治理｜c7190746609 歷史交接已存；#1274→B DEC writer 合法交接尚缺，不共寫、不改 #1274。
 - A/B/C 現有 Claude/High、Work GPT-6.2/High、D 現有 Sonnet/Medium、文件治理 Sonnet/High、O 待命（依 R21）；已在執行不重啟，實際執行狀態 NOT VERIFIED。
 
