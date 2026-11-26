@@ -2,16 +2,17 @@
 
 > 唯一 SSOT：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199
 > 本檔不是第二 SSOT；與 #1199、有效 DEC、Contract、PROJECT_RULES 衝突時，以後者為準。不得據本檔施工、Ready、merge、部署或解除 HOLD。
-> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；每輪重查 LIVE，過期即不可信。
+> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；最新讀到 #1199 錨點 c7192149293；每輪重查 LIVE，過期即不可信。
 > 出處：c<數字>＝#1199 留言 ID（`https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-<數字>`）。
 
 ## 1. HOT｜最新版入口（先讀 SSOT，再按需取差額）
 
+- **V1.3 接續制度 c7192149293**（APPROVED；非產品 v1.3）：新對話只輸入「接續」，本檔為唯一首讀導航索引（≤80 行）；正式 QA／施工／合併仍完整原 LIVE Gate。**R22 增量僅限接續制度與 D 線**，不取代 R21 的 A/B/C/Work/O 派工。
 - **LATEST_HANDOFF：c7191455542**，R21 完整交接與全量 HOLD；**c7191602881** 為最新 Work QA 與現況增量。另讀其後同步回執及有效裁示。
-- **CURRENT_TARGET R2：c7182728412**；產品 v1.0／DEC-224，Real Data First，五頁與確定性權威不變。
-- **CURRENT_PLAN R21：c7191389677**；三線平行、按可用功能分批交付，不是新施工授權。
-- **CURRENT_GOVERNANCE r02：c7184169826**；r01 c7178099841 未被取代部分有效。
-- V1.2 HOT/WARM/COLD c7164122838；版本鏈及「接續」c7167230635。V1.1 輕量讀取不同於規格第十章產品 v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，HOLD）。
+- **CURRENT_TARGET R2：c7182728412**；產品 v1.0／DEC-224（`UI2-ONEBRAIN-PRODUCT-V1.0-APPROVED-2026-11-23`），Real Data First；五頁：📊市場／🎯標的／💼持股／👤我的／🗂資料；確定性權威不變。
+- **CURRENT_PLAN R21：c7191389677**（A/B/C/Work/O 派工）＋ **R22 增量 c7192149293**（僅接續制度與 D 線）；三線平行、按可用功能分批交付，不是新施工授權。
+- **CURRENT_GOVERNANCE r02：c7184169826**；r01 c7178099841 未被取代部分有效，其內舊入口 TARGET 7166092247／PLAN R3 已 SUPERSEDED。
+- V1.2 HOT/WARM/COLD c7164122838；版本鏈及「接續」c7167230635：歷史保留，**與 V1.3 衝突部分 SUPERSEDED**，未衝突部分有效。V1.1／V1.3 接續制度不同於規格第十章產品 v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，HOLD）。
 - APPROVED：R20 B 修正 c7191058929（全裝置 20/60，預設20，120另案，零JS／守衛不放寬）；R16 C 兩檔 c7186895108；R14 A 有限公開規格文件唯讀及六問方向 c7185508753。具名授權未被取代部分有效。
 
 ## 2. 接續方式與原正式 Gate
@@ -33,7 +34,7 @@
 - B｜P0/P1：#1283 R20 修正；新 head 待回存。60 真瀏覽器兩版×390/1280/1440、120 負控、20 基準、四 JSON、原 CI/Slow；DEC-156 待合法交接。完成後依 R21 唯讀收斂持股/我的一個合法操作候選，不擴權。
 - C｜P2：#1284 兩檔隔離原型，Work R18 HOLD／MF1／SF1（c7191602881）；R21 獨立唯讀收斂大盤單主題正式整合最小決策包，不改 schema/producer/caller/Provider、不開 PR、不真取數；無合格來源/反證則無正式結論。
 - Work｜R18 B／C 獨立差額已回存 c7191602881；修後新 head 到即核新增差額及原未驗項，依原正式 Gate。#1281 新索引僅必要差額/provenance/CI，勿阻塞產品。不可代施工或以 CI 代 QA。
-- D｜V1.2 唯讀瘦身，先交總管，不寫 repo/SSOT、不占槽；分支清理獨立維護，唯一候選仍待外部依賴確認，不刪。O｜STANDBY，無具名合法空槽不啟動。
+- D｜V1.2 唯讀瘦身，不占槽；R22（c7192149293）授權：確認單一 writer 後僅更新本檔、追加 commit、不另開 PR；寫入權衝突／有效裁示遺失／原 Gate 降級即停；分支清理獨立維護，唯一候選仍待外部依賴確認，不刪。O｜STANDBY，無具名合法空槽不啟動。
 - 文件治理｜c7190746609 歷史交接已存；#1274→B DEC writer 合法交接尚缺，不共寫、不改 #1274。
 - A/B/C 現有 Claude/High、Work GPT-6.2/High、D 現有 Sonnet/Medium、文件治理 Sonnet/High、O 待命（依 R21）；已在執行不重啟，實際執行狀態 NOT VERIFIED。
 
@@ -44,7 +45,7 @@
 | #1282（已合併） | d1c57c4c | 工程正式 Gate 及 main CI PASS（既驗）：c7183080873、c7185239838；Cloud 非 PASS |
 | #1283 | 301f3c86 | Draft；舊 head CI 5/5、Slow step 5 success（R17）；Work HOLD／MF2／SF0：390px 的 120 根可讀性、1.56.0 方向鍵跳頁；R20 修後待驗（c7191602881） |
 | #1284 | 759600eb | Draft；舊 head CI 5/5、Slow step 5 success（R17）；Work HOLD／MF1／SF1：1.56.0 無障礙選取狀態缺失；Real degraded 隔離已實測（c7191602881） |
-| #1281（本檔） | 看同步回執 | Draft；前次精確版本及當時 CI 見 c7191475792／c7191520476；最新 head、CI 與 QA 以後續回執及 LIVE 為準 |
+| #1281（本檔） | 07d51b6f 之後追加 commit（D，R22） | Draft；精確 head／CI／QA 以 D 回報、後續回執及 LIVE 為準；前次見 c7191475792／c7191520476；舊 head CI 不延伸；原 Merge HOLD |
 | #1278 | a863b747 | Draft；K2 原型既驗差額沿用，正式 HOLD |
 | #1274 | 9f016862 | Draft；治理歷史 QA PASS，Merge HOLD |
 | #1268 | 826cc9e6 | Draft；技術 PASS/MF0（c7165198005），Merge HOLD |
