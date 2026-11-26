@@ -1,75 +1,68 @@
 # RESUME｜衍生接續索引（DERIVED INDEX ONLY，無獨立決策效力）
 
 > 唯一 SSOT：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199
-> 本檔與 #1199、有效 DEC、Contract、`PROJECT_RULES.md` 衝突時，**一律以後者為準**。本檔不是第二 SSOT，不授權任何施工、Ready、merge、部署。
-> 快照：2026-11-25（台北）；main `2fd0773e120d27f2093078dae67404eded333fc5`。**快照，過期即不可信；每輪須 LIVE Gate 重查。**
-> 出處記法：`c<數字>`＝#1199 留言 ID（網址 `…/issues/1199#issuecomment-<數字>`）；其餘為 repo 路徑。
+> 本檔不是第二 SSOT；與 #1199、有效 DEC、Contract、PROJECT_RULES 衝突時，以後者為準。不得據本檔施工、Ready、merge、部署或解除 HOLD。
+> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；每輪重查 LIVE，過期即不可信。
+> 出處：c<數字>＝#1199 留言 ID（`https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-<數字>`）。
 
-## 1. 版本
+## 1. HOT｜最新版入口（先讀 SSOT，再按需取差額）
 
-- 最新核准產品基準 **v1.0**（2026-11-23 共識；DEC-224，APPROVED PRODUCT TARGET，**非施工／merge／部署授權**）。出處：`docs/DECISIONS.md` DEC-224、`docs/vnext/UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md`。
-- **V1.1**＝僅調整「新對話如何接續讀取」的索引版本，不改產品範圍、規則或授權。本輪客戶明示接續方式已回存 c7165164441；早期派工卡逐字全文仍 NOT VERIFIED。
-- ⚠️ 與規格第十章「v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，全部 HOLD）」**不是同一件事，勿混淆**；第十章只區分產品 v1.1 HOLD。專案狀態（各線 MF／HOLD、PR Merge Gate）不屬第十章，見 #1199 最新正式交接 c7165164441 及其後有效回存（例：Work c7165198005，其中判 A MF-AC2 整合口徑 PASS）。
+- **LATEST_HANDOFF：c7191455542**，R21 完整交接（含本次同步前快照與全部具名阻塞）；另讀其後同步結果及有效裁示。
+- **CURRENT_TARGET R2：c7182728412**；產品 v1.0／DEC-224，Real Data First，五頁與確定性權威不變。
+- **CURRENT_PLAN R21：c7191389677**；三線平行、按可用功能分批交付，不是新施工授權。
+- **CURRENT_GOVERNANCE r02：c7184169826**；r01 c7178099841 未被取代部分有效。
+- V1.2 HOT/WARM/COLD c7164122838；版本鏈及「接續」c7167230635。V1.1 輕量讀取不同於規格第十章產品 v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store，HOLD）。
+- APPROVED：R20 B 修正 c7191058929（全裝置 20/60，預設20，120另案，零JS／守衛不放寬）；R16 C 兩檔 c7186895108；R14 A 有限公開規格文件唯讀及六問方向 c7185508753。具名授權未被取代部分有效。
 
-## 2. 讀取順序（本檔只是定位入口；V1.1 輕量接續與正式驗收分開）
+## 2. 接續方式與原正式 Gate
 
-**日常輕量接續（V1.1）**：
-1. 從 GitHub 即時狀態開始：#1199 最新正式交接摘要（最新客戶正式裁示、各線最新回存）與 main SHA、Open／Draft PR 的 head／base。
-2. 按需讀本檔（衍生索引）與必要差額；不因本檔省略第 1 步。
+- 日常：新對話輸入「接續」→ #1199 最新正式交接、CURRENT_TARGET/PLAN/GOVERNANCE 與其後有效裁示 → LIVE main/Open/Draft head/base → 必要差額；不重讀全部 repo/歷史/CI logs。
+- 正式 QA／施工／合併：依 D2 原讀序與完整原 LIVE Gate，核精確 head/base/candidate、必要 diff/tree、五項 CI＋Slow AppTest 實際 step、reviews/threads、有效授權及獨立 QA；同 head 已 PASS 無差額不重驗。
+- WARM：CLAUDE.md、PROCESS.md、PROJECT_RULES.md（§15、§25、D2）、docs/DECISIONS.md、docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md、docs/vnext/ONEBRAIN_ARCHITECTURE_DECISION_2026-10-31.md、docs/vnext/UI2_ONEBRAIN_FULL_PRODUCT_SPEC_V1_0_2026-11-23.md、docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md；必要五檔/最新 HANDOFF。正式效力和原讀序優先，本檔不覆蓋。
+- COLD：歷史成果、被取代版本、舊 logs 按需引用；不為更新索引重驗舊證據。
 
-**正式 QA／施工／合併：不得以本檔取代，一律回到 D2 原讀序與完整原 LIVE Gate**：
-3. GitHub：main SHA、Draft head／base、必要 diff、既有獨立 QA、五項 CI＋Slow AppTest 實際 step（Run AppTest）、reviews／threads。
-4. 高位階治理與正式契約：`CLAUDE.md`、`PROCESS.md`、`PROJECT_RULES.md`、`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。
-5. 五檔相關有效部分（`PROJECT_RULES.md` 第 15 節）→ 最新 handoff（`docs/HANDOFF.md`，只當索引）→ 必要時歷史。
-6. 有效 DEC／Contract 為準：DEC-224、DEC-225（`docs/DECISIONS.md`）；ADR-OB-001（`docs/vnext/ONEBRAIN_ARCHITECTURE_DECISION_2026-10-31.md`）；`docs/vnext/READ_FIRST_UI2_ONEBRAIN_VERSION_AND_DEC_DRAFT_2026-11-23.md`（檔首已更正：舊「DRAFT／未核准」文字勿再用來派工）。
+## 3. 三行硬約束（來源 c7110402272；正式規則優先）
 
-**效力與衝突**：`PROJECT_RULES.md` 第 25 節只定效力順位，不是接續程序，本檔不重述。本節若與 READ FIRST 第四節第 3 點、第 25 節或第 15 節讀序有衝突，**以有效正式規則為準，並提請裁示（#1199）**；本檔不改寫、不覆蓋正式規則，不新增 Gate、不降低原 Gate。
-**證據入口**：c7164122838、Work c7164471316（MF-RESUME-1）、本輪客戶明示接續方式回存 c7165164441。早期派工卡逐字全文仍 NOT VERIFIED；正式規則及原 Gate 不變。
+- 【範圍鎖定】只改具名授權檔案／差額，不跨線共編、不順手重構、不新增 Gate、不解除 HOLD。
+- 【誠實降級】missing≠0、unknown≠safe、STALE≠fresh、Real 不以 FAKE 補畫；確定性規則唯一權威；未核標 NOT VERIFIED。
+- 【退回門檻】越權、權利/PIT、安全/契約衝突、守衛放寬、證據破壞、MF/CI FAIL 或 head/base 差額令證據失效即停，依原 Gate 補證。
 
-## 3. 三行硬約束（每張派工卡固定保留；出處 c7110402272，與規格第十一章比對）
+## 4. 最新派工卡（僅 R21 衍生索引）
 
-- 【範圍鎖定】只改本卡授權檔案／指定差額；不順手重構、不跨線共編、不解鎖 HOLD、不自行新增 Gate。
-- 【誠實降級】缺值、NaN、STALE、不可比較等依有效契約顯示或標 NOT VERIFIED；不得補 0、冒充 fresh／安全／續抱，Real 不以 FAKE 補畫。
-- 【退回門檻】遇最新 DEC/Contract 衝突、授權缺失、指定 Must-Fix 未清、有效 QA FAIL／CI FAIL、head/base 改變而證據失效，停在現有 Gate，明列阻塞及最小解除證據；不得硬上 Ready/merge/deploy。
+- A｜P0/P1：c7183081296 TWII、c7184227847 個股；R14 有限規格文件 B2/B3，尚無回存；六問 #1197 comment6947565503 需指定寄件者/管道/實際發送授權，未寄；不真取數、不落盤。
+- B｜P0/P1：#1283 R20 修正；新 head 待回存。60 真瀏覽器兩版×390/1280/1440、120 負控、20 基準、四 JSON、原 CI/Slow；DEC-156 待合法交接。完成後依 R21 唯讀收斂持股/我的一個合法操作候選，不擴權。
+- C｜P2：#1284 兩檔隔離原型已交，待 Work；R21 獨立唯讀收斂大盤單主題正式整合最小決策包，不改 schema/producer/caller/Provider、不開 PR、不真取數；無合格來源/反證則無正式結論。
+- Work｜先 #1284 獨立 QA；#1283 新 head 到即核新增差額及原未驗項；原正式 Gate。#1281 新索引僅必要差額/provenance/CI，勿阻塞產品。不可代施工或以 CI 代 QA。
+- D｜V1.2 唯讀瘦身，先交總管，不寫 repo/SSOT、不占槽；分支清理獨立維護，唯一候選仍待外部依賴確認，不刪。O｜STANDBY，無具名合法空槽不啟動。
+- 文件治理｜c7190746609 歷史交接已存；#1274→B DEC writer 合法交接尚缺，不共寫、不改 #1274。
+- A/B/C 現有 Claude/High、Work GPT-6.2/High、D 現有 Sonnet/Medium、文件治理 Sonnet/High、O 待命（依 R21）；已在執行不重啟，實際執行狀態 NOT VERIFIED。
 
-（差異註記：留言原文每行為粗體標題加冒號，條文本體與 repo 規格第十一章逐字一致；若有出入以 repo 文件為準。）
+## 5. FACT｜同步前快照（精確 SHA/base 見 c7191455542；以 LIVE 為準）
 
-## 4. 四張最小派工卡（依 #1199 留言歸納，非客戶逐字派工；模型、Effort、日期依當輪卡片，本檔不寫）
-
-- **A**（歸納，非客戶逐字派工）｜治理文件與永久交接（#1274）；設計裁示統整，依 A 回存歸納（c7158239712、c7161029065）；依客戶裁示擔任指定 PR 合併 owner｜邊界：#1274 本身不含產品碼｜驗收：exact head、同 head 五項 CI＋Slow step、非作者 QA（c7131915767、c7147969987、c7157145655）
-- **B**（歸納，非客戶逐字派工）｜唯一共用 UI／Contract writer（New UI2）；C 不共編｜需線框／Copy／Contract Gate 者先出草稿、客戶拍板才施工；109.0／160 守衛與 Delta BELOW 不放寬｜驗收：390／1280／1440 真畫面、非作者 QA、五項 CI（c7131915767、c7162031909）
-- **C**（歸納，非客戶逐字派工）｜OneBrain 資料承載與 Digest v2 設計／驗收矩陣；隔離 FAKE 預覽（#1268，tests-only）、K2 原型（#1278，tests-only）｜不改共用 UI／Contract、不改正式 Digest v1；不得開正式 Provider／caller、真資料或快取寫入（客戶原文 c7131915767）；另「本輪設計規劃不取數」為 C 自身回存（c7156469742、c7162202145），非客戶原文｜驗收：合成證據、正負控、Work 獨立驗收（c7131915767、c7162202145）
-- **Work**（歸納，非客戶逐字派工）｜獨立唯讀驗收：只核新增差額、原 Merge Gate、main push CI 五項＋Slow 實際 step；不重跑已 PASS 矩陣、不施工、不合併。無法執行時由備援角色 O 承接未驗差額（條件式，非第四條施工線）｜驗收：PASS／HOLD／NOT VERIFIED 附可回查證據（c7147969987、c7148133320）
-
-## 5. 現況快照（2026-11-25；過期即不可信）
-
-- **最新接續存檔：c7165164441**（FACT／APPROVED／PROPOSED／HOLD／NOT VERIFIED；先讀此留言及其後有效裁示）。
-- APPROVED：A/B/C 並列、最多三活躍施工線、單一寫者與檔案隔離；D 唯讀不占施工槽位、O 原條件式備援；Work 功能→畫面→正式 Gate，不降低原 Gate。
-- 永久靜默：禁止過程回報及碎碎念，證據寫 GitHub；必要裁示／重大 FAIL／整批完成才回報，最多五行。
-
-| 項目 | 快照 | 出處 |
+| PR | 同步前 head | 狀態／證據入口 |
 |---|---|---|
-| main HEAD | `2fd0773e`（#1280 P-1 合併，05:40Z） | GitHub API |
-| #1274 | docs 治理收口（DEC-226／第 35 節）；head `9f016862`；Draft；四輪非作者 QA PASS；待明示 Ready／merge 授權 | c7162261882 |
-| #1278 | K2 decision_digest.v2 tests-only 原型；head `a863b747`；Draft；base 落後 | PR 頁 |
-| #1268 | OneBrain 持股 FAKE 示範 Stage2 A1 tests-only；head `826cc9e6`；Draft；base 落後 | PR 頁 |
-| #1237 | NAS 安全補丁候選；head `c406fb5f`；Draft；HOLD merge／部署 | PR 頁 |
-| 最新客戶正式裁示 | c7151544405（#1273 Cloud Gate A、#1280 P-1 A；已依序入庫） | c7151544405 |
-| 近期客戶指示 | 一鍵複製精簡派工格式 c7148182082；備援 O c7148133320；Work 備援 c7148028894；V1.2 唯讀盤點放行 c7164122838（不授權實作或刪除） | 各留言 |
-| #1281（本檔） | FACT：同步前 head `0a553ad7`、68 行，MF-RESUME-1 修正已呈現；同步後 exact head、CI／獨立 QA NOT VERIFIED；Draft，不 Ready／merge | c7164471316、c7165164441 |
-| 各線最新回存 | A c7164463719｜B c7164432247｜C c7163715572｜Work c7164471316（同步前快照 549 則；本輪存檔 c7165164441） | 各留言 |
-| 未完成（只列指標） | Digest v2 裁示包 A c7161029065＋補註 c7161067915；MF-AC2 更正 C c7162202145；B 接入狀態裁示包 c7160953590／c7162031909（待客戶回覆）；B Y 守衛採 Work 兩條測試定位、仍 HOLD（c7164432247）；#1274 待授權。Work c7162964168 判定：B 兩項設計差額 PASS、Y 守衛定稿仍 HOLD；C 歸因更正與負控 PASS、A 整合口徑仍 HOLD（A c7161029065 §2.4 仍待採用 C 更正 c7162202145）；#1274 治理 QA PASS 沿用、Merge Gate HOLD。其後 A c7164463719 回存標題為採用 C 更正（Work 尚未複驗） | 各留言 |
+| #1282（已合併） | d1c57c4c | 工程正式 Gate 及 main CI PASS（既驗）：c7183080873、c7185239838；Cloud 非 PASS |
+| #1283 | 301f3c86 | Draft；舊 head CI 5/5、Slow step 5 success（R17）；120 Visual 不過，R20 待修 |
+| #1284 | 759600eb | Draft；舊 head CI 5/5、Slow step 5 success（R17）；Work 待驗，非正式 OneBrain |
+| #1281（本檔） | 1a1058d9 | Draft；同步前舊 head 歷史技術 PASS，不延伸至同步後；新 head/CI/QA 看後續回存 |
+| #1278 | a863b747 | Draft；K2 原型既驗差額沿用，正式 HOLD |
+| #1274 | 9f016862 | Draft；治理歷史 QA PASS，Merge HOLD |
+| #1268 | 826cc9e6 | Draft；技術 PASS/MF0（c7165198005），Merge HOLD |
+| #1237 | c406fb5f | Draft；NAS merge/部署 HOLD |
 
-- PROPOSED：Work 先驗 #1281 同步後新差額，再驗 A MF-AC2 整合口徑，後驗 #1268 尚未通過的實際功能與畫面；B 等 Y 守衛裁示，C 回原授權內功能差額，D/O 暫不啟動。
-- NOT VERIFIED：上述歷史 PASS 指標未於本輪逐則重讀；完整 LIVE Gate、最新 CI 與 reviews/threads 待驗，不將歷史或作者證據冒充即時 PASS。
+- 已驗證據：R17 c7190579779、Work c7185239838、c7165198005；A MF-AC2 PASS 僅口徑閉合；#1283/#1284 作者交付 c7188933683/c7189779817 不代 Work。#1284 1.56 ARIA、browser lane 未涵蓋新檔、Real degraded/封網等待核。
+- PROPOSED：B 持股/我的操作與 C 大盤正式整合候選僅設計；不自動施工。#1107 Cloud PARTIAL，deployed SHA/真機 NOT VERIFIED。
 
-## 6. HOLD（非窮舉；來源：規格第十一章與 c7162261882；**本檔不解除任何 HOLD**）
+## 6. HOLD｜指標非窮舉；全部未解除項見 c7191455542、有效正式規則及後續裁示
 
-v1.1（Catalyst Radar／Signal Log／Canonical Evidence Store）、#1237 NAS、Cloud cutover、真持股／Sheet／OAuth、Secrets、正式 LINE、正式 Provider／caller／付費 AI、未核准來源／公式、比較 producer／歷史快照寫入、AI 快取寫入／排程、DG-PIT／LIC／SCOPE／COV、I1144-WIRING-GATE、DEC-185 三支停用 workflows。
+- #1283 修後 Visual/DEC 同步/QA、#1284 QA、#1281 新差額/provenance、#1274/#1278/#1268/#1237 原 Merge HOLD；無 Ready/merge/deploy 授權。
+- #1197 DG-LIC/PIT/六問發送；個股 LOOKUP B1–B7、DG-LIC/PIT/SCOPE/COV、#1124–1126/#1119、DEC-185 三支停用 workflow、TWII-only 發布另案。
+- #1107 Cloud、#1110 NAS/Proxy、Cloud cutover、Secrets、Sheet/OAuth/真持股/私人資料、I1144-WIRING-GATE。
+- Q1/D-A/D-J/C3/D7、S2 正式准入、S4/S5、Stage F/G、正式 producer/caller/Provider/付費 AI、schema/快取/排程/外傳；不回加已取代 K2 原型限制。
+- 產品 v1.1、正式 LINE、未核准資料/公式/風控、比較 producer/歷史快照、120另案、JS 例外、未核准分支刪除；所有其餘原 HOLD 保留。
 
-## 7. 禁止事項
+## 7. NOT VERIFIED／永久靜默
 
-- 不得把本檔當第二 SSOT，不得據以施工或宣稱 PASS。
-- 不得新增 Gate、不得跨線共編、不得自行解除 HOLD。
-- 本檔快照與 #1199 或 GitHub 即時狀態不符時，以後者為準並回報差額。
-- 未驗證的狀態一律標 NOT VERIFIED；無即時證據不得沿用本檔數字。
+- 本次非完整正式 Gate；舊 CI/QA 沿既驗證據，未重新實跑；AI 實際執行、A 規格取證、B 新修正、C/Work 新驗收、DEC 交接、Cloud/實機及外部依賴未核。
+- 最多三活躍施工線、單一 writer；D/Work 唯讀不占槽。P0/P1 優先交付，P2 平行；不因局部阻塞全面停工。
+- 所有 AI 永久靜默；正常成果依權限回存 GitHub（D 先交總管）；不發過程/heartbeat、不無差額輪詢或重驗；僅重大 FAIL/安全、必要客戶裁示/人工操作通知，首行僅 🟢/🟡/🔴、最多五行。
