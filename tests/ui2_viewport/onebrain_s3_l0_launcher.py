@@ -16,14 +16,16 @@
 * 缺項／拒用：只顯示**固定、可公開**的原因與筆數；被拒用項目的原值、文字**絕不**進入 VM／DOM／摘要／log。
 * 單純「引用」（沒有可核對來源與資料日）不冒充支持，只計入缺項。
 * 風險上限類夾具不得推出反證：直接略過，既不進支持也不進反面。
-* 大盤主題的句型（C3）與字數口徑（D7）客戶尚未裁示：本主題不寫任何句子，各列皆「⬜ 無法判定」，標題明示「預覽」。
+* 大盤主題的句型（C3）與字數口徑（D7）客戶尚未裁示：本主題不寫任何句子；四列皆為功能層級的「⬜ 尚未提供（本主題尚未開放）」，標題明示「預覽」。
+  三種缺值字樣不混用：「尚未提供」＝功能未開放；「無法判定」＝有判讀流程但沒有輸入；「資料未取得」只留給真的缺資料（本原型的列不使用）。
 
 ⛔ 零網路、零時鐘（判讀時點固定）、零 Secrets、不讀 Sheet／OAuth、不接 AI／Provider、不 import 任何決策摘要／OneBrain 模組。
 夾具為 S3 專用**合成**資料，寫在本檔內；任何夾具出錯 ⇒ 記 log（只記例外型別）並退回原本的槽，頁面與既有規則照常可操作。
 
 環境變數（皆由啟動端設定）：
   UI2_S3_L0_SEED=0         不預設落在「💼 持股／FAKE／cold」（預設會；只在該 session 尚無對應 key 時播種）
-  UI2_S3_L0_SEAL_LOG=path  在 server 進程封網（拒絕非 loopback 的連線／名稱解析並以 JSON lines 記到該檔）
+  UI2_S3_L0_SEAL_LOG=path  封網記錄檔（JSON lines）：第一行＝啟動標記 `{"kind": "sealed"}`，其後每行是一次被拒絕的非 loopback 連線。
+                           launcher `main()` 一律封網（拒絕非 loopback 的連線／名稱解析）；此變數只決定是否留記錄。
 本檔狀態（安裝哨兵、計數）放在 **shell／hold 模組**上，不是本檔全域（streamlit 每次 rerun 都重新執行本檔）。
 `install()`／`uninstall()` 供測試 fixture 以 try/finally 還原。
 """
@@ -51,10 +53,10 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, _ROOT.as_posix())
 
 from shared.ui2_contract.models import (  # noqa: E402
-    CapabilityState, FieldState, FieldVM, FreshnessInfo, JudgementState, SectionVM,
+    CapabilityState, FieldState, FieldVM, JudgementState,
 )
 from shared.ui2_contract.pages import FEED_FAKE, P4_HOLD, SCENARIO_COLD  # noqa: E402
-from shared.ui2_contract.text import TEXT_MISSING_NOT_FETCHED, TEXT_RISK_CAP_UNDETERMINABLE  # noqa: E402
+from shared.ui2_contract.text import TEXT_NOT_PROVIDED, TEXT_RISK_CAP_UNDETERMINABLE  # noqa: E402
 
 _log = logging.getLogger(__name__)
 
@@ -70,8 +72,9 @@ SEAL_ATTR = "_s3l0_seal_state"            # 掛在 socket 模組：封網狀態
 
 # ── session key（G9 紀律：一律 `ui2_` 前綴；純 UI 狀態）────────────────────────
 TOPIC_KEY = "ui2_s3l0_topic"
+LAST_TOPIC_KEY = "ui2_s3l0_topic_last"     # 最近一次有效主題（segmented_control 單選可被點掉成 None；以此還原，不讓畫面落在「無主題」）
 BOX_KEY = "ui2_s3l0_topic_box"            # 容器 key（CSS／測試錨點 `.st-key-ui2_s3l0_topic_box`；非 session_state）
-SESSION_KEYS = (TOPIC_KEY,)
+SESSION_KEYS = (TOPIC_KEY, LAST_TOPIC_KEY)
 
 TOPIC_MARKET = "大盤"
 TOPIC_INDUSTRY = "產業前瞻"
@@ -79,6 +82,7 @@ TOPIC_HOLDINGS = "持股健檢"
 TOPIC_COUNTER = "反方風險"
 TOPICS = (TOPIC_MARKET, TOPIC_INDUSTRY, TOPIC_HOLDINGS, TOPIC_COUNTER)
 DEFAULT_TOPIC = TOPIC_HOLDINGS
+NOT_OPEN_TOPICS = (TOPIC_MARKET,)             # 句型（C3）與字數口徑（D7）未裁：本主題尚未開放，不寫任何句子
 SELECTOR_LABEL = "預覽主題（示意）"
 
 LABEL_SUPPORT = "支持證據"
@@ -93,7 +97,7 @@ ORIG_SLOT_TITLE = "🤖 OneBrain 持股摘要"
 
 
 def _section_title(topic: str) -> str:
-    tail = "（預覽；句型待客戶裁示）" if topic == TOPIC_MARKET else ""
+    tail = "（預覽）" if topic == TOPIC_MARKET else ""
     return f"🤖 OneBrain 示意｜{topic}{tail}｜合成資料，非即時、非投資建議"
 
 
@@ -115,17 +119,23 @@ KIND_CITATION = "citation"                     # 只被「引用」：不是證�
 KIND_RISK_CAP = "risk_cap"                     # 風險上限類：不得推出反證，一律略過
 KIND_MISSING = "missing"
 
-#: 缺項／拒用只准顯示這些固定、可公開的原因（⛔ 夾具文字、原值）。
-REASON_NO_SOURCE = "只被引用，沒有可核對的來源與資料日"
+#: 缺項／拒用的「原因」只准來自這張**固定、可公開的常數表**（⛔ 夾具自寫文字、原值；`classify` 對表外原因 fail loud）。
+REASON_CITED_ONLY = "只被引用，沒有可核對的來源與資料日"      # 單純「引用」：不是證據
+REASON_NO_SOURCE = "沒有可核對的來源"
+REASON_NO_DATE = "沒有可辨識的資料日"
+REASON_NO_FINANCIALS = "最新一季財報尚未取得"
+REASON_NO_PEER = "同業對照尚未取得"
 REASON_STALE = "資料已過期"
 REASON_PIT = "資料日晚於判讀時點"
+PUBLIC_MISSING_REASONS = (REASON_CITED_ONLY, REASON_NO_SOURCE, REASON_NO_DATE, REASON_NO_FINANCIALS, REASON_NO_PEER)
 PUBLIC_REJECT_REASONS = (REASON_STALE, REASON_PIT)
+PUBLIC_REASONS = PUBLIC_MISSING_REASONS + PUBLIC_REJECT_REASONS
 
 
 @dataclass(frozen=True)
 class Item:
     kind: str
-    text: str                       # 合成敘述；缺項類為固定可公開缺項名稱
+    text: str                       # 合成敘述；缺項類（KIND_MISSING）必為 PUBLIC_MISSING_REASONS 內的固定原因
     source: str | None = None       # 合成來源名稱
     as_of: str | None = None        # ISO 資料日 YYYY-MM-DD
     raw: str | None = None          # 「原值」：只供夾具表達被拒用的資料；任何輸出面都不得出現
@@ -135,12 +145,10 @@ class Item:
 LEAKY_RAW_VALUES = ("7777.77", "原值哨兵甲", "原值哨兵乙")
 
 FIXTURES: dict[str, tuple[Item, ...]] = {
-    TOPIC_MARKET: (
-        Item(KIND_MISSING, "大盤判讀句型尚未裁示"),
-    ),
+    TOPIC_MARKET: (),
     TOPIC_INDUSTRY: (
         Item(KIND_SUPPORT, "合成產業甲 近三個月訂單維持穩定", "合成產業月報", "2026-11-10"),
-        Item(KIND_MISSING, "合成產業乙 缺少同業對照"),
+        Item(KIND_MISSING, REASON_NO_PEER),
     ),
     TOPIC_HOLDINGS: (
         Item(KIND_SUPPORT, "合成標的甲 最近一季營收高於去年同季", "合成財報摘要", "2026-11-05"),
@@ -150,14 +158,14 @@ FIXTURES: dict[str, tuple[Item, ...]] = {
         Item(KIND_RISK_CAP, "合成組合風險上限接近滿水位", "合成組合表", "2026-11-20"),
         Item(KIND_SUPPORT, "合成標的甲 目標值 7777.77", "合成舊報告", "2026-05-01", raw="7777.77"),
         Item(KIND_COUNTER, "合成標的甲 原值哨兵甲", "合成預告表", "2027-01-15", raw="原值哨兵甲"),
-        Item(KIND_MISSING, "合成標的乙 缺少最新一季財報"),
+        Item(KIND_MISSING, REASON_NO_FINANCIALS),
     ),
     TOPIC_COUNTER: (
         Item(KIND_COUNTER, "合成標的甲 應收帳款週轉天數拉長", "合成財報摘要", "2026-11-05"),
         Item(KIND_COUNTER, "合成標的乙 大股東近月持股下降", "合成籌碼月表", "2026-11-16"),
         Item(KIND_RISK_CAP, "合成組合風險上限接近滿水位", "合成組合表", "2026-11-20"),
         Item(KIND_COUNTER, "合成標的乙 原值哨兵乙", "合成舊報告", "2026-02-01", raw="原值哨兵乙"),
-        Item(KIND_MISSING, "合成標的乙 缺少同業比較"),
+        Item(KIND_MISSING, REASON_NO_PEER),
     ),
 }
 
@@ -183,11 +191,11 @@ def classify(items, reference: date = REFERENCE_DATE) -> Buckets:
     """把夾具分桶（純函式；決定性）。
 
     * `risk_cap`：略過（⛔ 不得推出反證，也不當支持）。
-    * `citation`：不是證據 ⇒ 缺項「只被引用…」。
-    * `support`／`counter`：缺來源或資料日無法解析 ⇒ 缺項「只被引用…」；資料日晚於判讀時點 ⇒ 拒用「晚於判讀時點」；
-      早於判讀時點超過 `MAX_AGE_DAYS` ⇒ 拒用「已過期」；其餘才進支持／反面。
-    * 缺項類夾具：原樣（固定可公開名稱）進缺項。
-    拒用只留固定原因，⛔ 保留夾具的文字或原值。
+    * `citation`：不是證據 ⇒ 缺項 `REASON_CITED_ONLY`。
+    * `support`／`counter`：缺來源 ⇒ 缺項 `REASON_NO_SOURCE`；資料日缺或無法解析 ⇒ 缺項 `REASON_NO_DATE`；
+      資料日晚於判讀時點 ⇒ 拒用 `REASON_PIT`；早於判讀時點超過 `MAX_AGE_DAYS` ⇒ 拒用 `REASON_STALE`；其餘才進支持／反面。
+    * 缺項類夾具：其 `text` 必為 `PUBLIC_MISSING_REASONS` 內的固定原因（表外 ⇒ ValueError）。
+    缺項／拒用只留固定常數表內的原因，⛔ 保留夾具的文字或原值。
     """
     support: list[Item] = []
     counter: list[Item] = []
@@ -197,16 +205,20 @@ def classify(items, reference: date = REFERENCE_DATE) -> Buckets:
         if it.kind == KIND_RISK_CAP:
             continue
         if it.kind == KIND_MISSING:
+            if it.text not in PUBLIC_MISSING_REASONS:
+                raise ValueError("缺項原因不在固定常數表內")
             missing.append(it.text)
             continue
         if it.kind == KIND_CITATION:
-            missing.append(REASON_NO_SOURCE)
+            missing.append(REASON_CITED_ONLY)
             continue
         if it.kind not in (KIND_SUPPORT, KIND_COUNTER):
             raise ValueError("未知的夾具種類")
         day = _parse_day(it.as_of)
-        if not it.source or day is None:
+        if not it.source:
             missing.append(REASON_NO_SOURCE)
+        elif day is None:
+            missing.append(REASON_NO_DATE)
         elif day > reference:
             rejected.append(REASON_PIT)
         elif (reference - day).days > MAX_AGE_DAYS:
@@ -237,15 +249,23 @@ def _undeterminable_row(label: str, what: str) -> FieldVM:
     return FieldVM(label=label, state=JudgementState.UNDETERMINABLE, status_text=_no_input(what))
 
 
+def _not_provided_row(label: str) -> FieldVM:
+    """功能層級「尚未提供」（⬜ 尚未提供＝功能未開放；⛔ 不是缺資料、不是無法判定）。"""
+    return FieldVM(label=label, state=None, capability=CapabilityState.NOT_PROVIDED,
+                   status_text=f"{TEXT_NOT_PROVIDED}（本主題尚未開放）")
+
+
 def build_fields(topic: str) -> tuple[FieldVM, ...]:
     """某主題的槽內四列（支持證據／反面證據／缺項／拒用）。未知主題 ⇒ KeyError（呼叫端錯誤，不猜）。"""
     b = classify(FIXTURES[topic])
+    if topic in NOT_OPEN_TOPICS:
+        return tuple(_not_provided_row(lab) for lab in ROW_LABELS)
     support = (_ok_row(LABEL_SUPPORT, _evidence_text(b.support)) if b.support
                else _undeterminable_row(LABEL_SUPPORT, "支持"))
     counter = (_ok_row(LABEL_COUNTER, _evidence_text(b.counter)) if b.counter
                else _undeterminable_row(LABEL_COUNTER, "反證"))
-    missing = (FieldVM(label=LABEL_MISSING, state=FieldState.MISSING, status_text=TEXT_MISSING_NOT_FETCHED,
-                       detail="缺：" + _grouped(b.missing))
+    # 缺項列＝「列出缺什麼」的陳述（原因取自固定常數表），不是資料缺漏態本身 ⇒ 不掛「資料未取得」之類狀態 chip。
+    missing = (_ok_row(LABEL_MISSING, "缺：" + _grouped(b.missing))
                if b.missing else _undeterminable_row(LABEL_MISSING, "缺項"))
     rejected = (_ok_row(LABEL_REJECTED, "未採用：" + _grouped(b.rejected) + "（不顯示原值）")
                 if b.rejected else _undeterminable_row(LABEL_REJECTED, "拒用"))
@@ -284,9 +304,12 @@ def is_installed() -> bool:
 
 
 def current_topic(session_state) -> str:
-    """目前主題；缺值或不是四主題之一 ⇒ 預設（fail-closed 到預設，不猜）。"""
-    t = session_state.get(TOPIC_KEY, DEFAULT_TOPIC)
-    return t if t in TOPICS else DEFAULT_TOPIC
+    """目前主題：選擇器的值；缺值（含被點掉的 None）或不是四主題之一 ⇒ 最近一次有效主題；仍無 ⇒ 預設（fail-closed，不猜）。"""
+    t = session_state.get(TOPIC_KEY)
+    if t in TOPICS:
+        return t
+    last = session_state.get(LAST_TOPIC_KEY)
+    return last if last in TOPICS else DEFAULT_TOPIC
 
 
 def _plan(vm):
@@ -313,17 +336,23 @@ SLOT_CSS = (
     '<style>.ui2-m-onebrain[data-ui2-l1="onebrain"]{display:block}'
     '.ui2-m-onebrain[data-ui2-l1="onebrain"] .ui2-row{display:block;padding:4px 0}'
     '.ui2-m-onebrain[data-ui2-l1="onebrain"] .ui2-row__label{opacity:.8;font-size:.85rem}'
-    '.ui2-m-onebrain[data-ui2-l1="onebrain"] .ui2-row__body{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}</style>'
+    '.ui2-m-onebrain[data-ui2-l1="onebrain"] .ui2-row__body{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}'
+    # 手機（DOM＝建議持股水位 → OneBrain）：把 OneBrain 槽視覺上提到本體最前面，讓選擇器與槽緊鄰（DOM 順序不變；槽內無可聚焦元件）。
+    # 桌機用 grid-area 排版，不受影響。
+    '@media (max-width:768px){.ui2-h-body>.ui2-h-ob{order:-1}}</style>'
 )
 
 
 def _draw_selector() -> None:
     import streamlit as st
-    st.session_state.setdefault(TOPIC_KEY, DEFAULT_TOPIC)
-    if st.session_state[TOPIC_KEY] not in TOPICS:
-        st.session_state[TOPIC_KEY] = DEFAULT_TOPIC
+    topic = current_topic(st.session_state)
+    st.session_state[TOPIC_KEY] = topic               # 建立 widget 之前寫入（不傳 default，避免與 session_state 雙重指定）
+    st.session_state[LAST_TOPIC_KEY] = topic
     with st.container(key=BOX_KEY):
-        st.radio(SELECTOR_LABEL, TOPICS, key=TOPIC_KEY, horizontal=True)
+        # 為何用 segmented_control 而不是 st.radio：Streamlit 1.56 的 radio 每個 input 的 name 都是空字串，
+        # Chromium 把整份文件所有「name 為空」的 radio 當成同一組 ⇒ 在選擇器最後一項按 → 會跳到頁面導覽（同樣是 name="" 的 radio）
+        # 並直接切換頁籤（1.59.2 無此問題）。segmented_control 是按鈕組，不與導覽 radio 共組。見測試檔的 1.56 調查註解。
+        st.segmented_control(SELECTOR_LABEL, TOPICS, selection_mode="single", key=TOPIC_KEY)
         st.markdown(SLOT_CSS, unsafe_allow_html=True)
 
 
@@ -423,6 +452,18 @@ class NetworkSealed(OSError):
     pass
 
 
+SEAL_MARKER_KIND = "sealed"                       # seal log 第一行的啟動標記（其餘行＝被拒絕的連線）
+
+
+def _append_log(st: dict, record: dict) -> None:
+    if st.get("log_path"):
+        try:
+            with open(st["log_path"], "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+
+
 def seal_network(log_path: str | None = None) -> dict:
     """拒絕非 loopback 的 `connect`／`connect_ex`／`getaddrinfo`／`create_connection` 並計數（冪等）。回傳狀態 dict。
     `log_path`：每次拒絕追加一行 JSON（供啟動端讀回）。⛔ 不影響 loopback（server 本身與瀏覽器都走 loopback）。"""
@@ -431,15 +472,11 @@ def seal_network(log_path: str | None = None) -> dict:
         return st
     st = {"denied": [], "orig": {}, "log_path": log_path}
     setattr(socket, SEAL_ATTR, st)
+    _append_log(st, {"kind": SEAL_MARKER_KIND, "pid": os.getpid()})       # 啟動標記：讓「封網真的啟動」可被驗證
 
     def deny(kind, target):
         st["denied"].append({"kind": kind, "target": str(target)[:200]})
-        if st["log_path"]:
-            try:
-                with open(st["log_path"], "a", encoding="utf-8") as fh:
-                    fh.write(json.dumps(st["denied"][-1], ensure_ascii=False) + "\n")
-            except OSError:
-                pass
+        _append_log(st, st["denied"][-1])
         raise NetworkSealed(f"network sealed: {kind}")
 
     def addr_host(address):
@@ -503,9 +540,7 @@ def seed_session() -> None:
 
 
 def main() -> None:
-    log = os.environ.get(ENV_SEAL_LOG)
-    if log:
-        seal_network(log)
+    seal_network(os.environ.get(ENV_SEAL_LOG))        # 一律封網（log 路徑可選）；⛔ 不連任何非 loopback 位址
     install()
     if _truthy_default_on(os.environ.get(ENV_SEED)):
         seed_session()

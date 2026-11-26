@@ -142,12 +142,13 @@ def test_citation_alone_never_counts_as_support():
     cite = L.Item(L.KIND_CITATION, "合成標的丙 於法說會被提及")
     b = L.classify((cite,))
     assert b.support == () and b.counter == ()
-    assert b.missing == (L.REASON_NO_SOURCE,)
-    # 帶 kind=support 但沒有來源／資料日：同樣不是支持（只能是缺項）
-    for it in (L.Item(L.KIND_SUPPORT, "x", None, "2026-11-01"), L.Item(L.KIND_SUPPORT, "x", "合成來源", None),
-               L.Item(L.KIND_SUPPORT, "x", "合成來源", "not-a-date")):
+    assert b.missing == (L.REASON_CITED_ONLY,)
+    # 帶 kind=support 但沒有來源／資料日：同樣不是支持（只能是缺項，且原因分別是固定常數）
+    for it, reason in ((L.Item(L.KIND_SUPPORT, "x", None, "2026-11-01"), L.REASON_NO_SOURCE),
+                       (L.Item(L.KIND_SUPPORT, "x", "合成來源", None), L.REASON_NO_DATE),
+                       (L.Item(L.KIND_SUPPORT, "x", "合成來源", "not-a-date"), L.REASON_NO_DATE)):
         b2 = L.classify((it,))
-        assert b2.support == () and b2.missing == (L.REASON_NO_SOURCE,)
+        assert b2.support == () and b2.missing == (reason,)
     f = {x.label: x for x in L.build_fields(L.TOPIC_HOLDINGS)}
     assert "法說會" not in (f[L.LABEL_SUPPORT].value_text or "")
 
@@ -167,12 +168,50 @@ def test_risk_cap_item_never_becomes_counter_evidence_or_support():
 
 
 def test_no_counter_input_row_is_exactly_undeterminable_with_reason():
-    for topic in (L.TOPIC_MARKET, L.TOPIC_INDUSTRY):
-        f = {x.label: x for x in L.build_fields(topic)}
-        c = f[L.LABEL_COUNTER]
-        assert c.status_text == NO_COUNTER_TEXT and c.value_text is None
-        assert c.state.value == "undeterminable"           # unknown ≠ safe；不是 OK、不是 0
+    f = {x.label: x for x in L.build_fields(L.TOPIC_INDUSTRY)}
+    c = f[L.LABEL_COUNTER]
+    assert c.status_text == NO_COUNTER_TEXT and c.value_text is None
+    assert c.state.value == "undeterminable"               # unknown ≠ safe；不是 OK、不是 0
 
+
+def split_reasons(text: str) -> list[str]:
+    """「缺：a；b（2 項）」／「未採用：a；b（不顯示原值）」→ 原因清單（去掉前綴、去掉『（N 項）』與尾註）。"""
+    body = re.sub(r"^(缺：|未採用：)", "", text)
+    body = body.replace("（不顯示原值）", "")
+    return [re.sub(r"（\d+ 項）$", "", x) for x in body.split("；") if x]
+
+
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_missing_and_rejected_rows_use_only_the_fixed_public_reason_table(topic):
+    f = {x.label: x for x in L.build_fields(topic)}
+    for lab, table in ((L.LABEL_MISSING, L.PUBLIC_MISSING_REASONS), (L.LABEL_REJECTED, L.PUBLIC_REJECT_REASONS)):
+        row = f[lab]
+        if row.value_text:
+            reasons = split_reasons(row.value_text)
+            assert reasons and all(r in table for r in reasons), (topic, lab, reasons)
+        else:
+            assert row.status_text and ("無法判定" in row.status_text or "尚未提供" in row.status_text)
+    assert len(set(L.PUBLIC_REASONS)) == len(L.PUBLIC_REASONS)
+
+
+def test_fixture_with_free_text_missing_reason_fails_loud():
+    with pytest.raises(ValueError):
+        L.classify((L.Item(L.KIND_MISSING, "合成標的乙 缺少最新一季財報"),))
+    for it in (i for items in L.FIXTURES.values() for i in items if i.kind == L.KIND_MISSING):
+        assert it.text in L.PUBLIC_MISSING_REASONS
+
+
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_missing_row_never_wears_a_data_missing_chip_and_states_are_not_mixed(topic):
+    """三種缺值字樣不混用：尚未提供＝功能未開放；無法判定＝有流程但無輸入；資料未取得只給真的缺資料（本原型的列都不用）。"""
+    from shared.ui2_contract import text as T
+    for f in L.build_fields(topic):
+        st = f.status_text or ""
+        assert not st.startswith(T.TEXT_MISSING_NOT_FETCHED), (topic, f.label)
+        if f.capability.value == "not_provided":
+            assert st.startswith(T.TEXT_NOT_PROVIDED) and f.state is None
+        elif st:
+            assert st.startswith(T.TEXT_RISK_CAP_UNDETERMINABLE) and f.state.value == "undeterminable"
 
 def test_rejected_items_expose_only_fixed_public_reasons_and_never_the_raw_value():
     b = L.classify(L.FIXTURES[L.TOPIC_HOLDINGS])
@@ -202,16 +241,24 @@ def test_unknown_fixture_kind_fails_loud():
         L.build_fields("不存在的主題")
 
 
-def test_market_topic_commits_to_no_sentence_and_says_preview():
-    assert "預覽" in L._section_title(L.TOPIC_MARKET)
+def test_market_topic_commits_to_no_sentence_and_says_preview_in_plain_words():
+    title = L._section_title(L.TOPIC_MARKET)
+    assert "預覽" in title and "裁示" not in title and "客戶" not in title        # 不把內部決策流程帶給使用者
     f = L.build_fields(L.TOPIC_MARKET)
-    assert all(x.value_text is None for x in f)               # 不寫任何大盤句子（C3／D7 未裁）
+    assert all(x.value_text is None and x.detail is None for x in f)            # 不寫任何大盤句子（C3／D7 未裁）
+    assert all(x.capability.value == "not_provided" and "本主題尚未開放" in x.status_text for x in f)
+    blob = "\n".join(_all_visible_strings(L.TOPIC_MARKET))
+    for bad in ("裁示", "句型待", "尚未裁", "客戶", "資料未取得"):
+        assert bad not in blob, bad
 
 
 def test_current_topic_falls_back_to_default_on_garbage():
     assert L.current_topic({}) == L.DEFAULT_TOPIC
     assert L.current_topic({L.TOPIC_KEY: "亂碼"}) == L.DEFAULT_TOPIC
     assert L.current_topic({L.TOPIC_KEY: L.TOPIC_COUNTER}) == L.TOPIC_COUNTER
+    # 單選可被點掉成 None：還原成最近一次有效主題（不落在「無主題」）
+    assert L.current_topic({L.TOPIC_KEY: None, L.LAST_TOPIC_KEY: L.TOPIC_INDUSTRY}) == L.TOPIC_INDUSTRY
+    assert L.current_topic({L.TOPIC_KEY: None, L.LAST_TOPIC_KEY: "亂碼"}) == L.DEFAULT_TOPIC
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -228,7 +275,7 @@ def _all_visible_strings(topic: str) -> list[str]:
 def test_visible_copy_has_no_engineering_vocab_no_action_or_direction_words(topic):
     blob = "\n".join(_all_visible_strings(topic))
     assert forbidden_hits(blob) == [], topic
-    assert L.SYNTHETIC_MARK in blob or topic == L.TOPIC_MARKET
+    assert L.SYNTHETIC_MARK in blob or topic in L.NOT_OPEN_TOPICS
     assert "非即時" in blob and "非投資建議" in blob
 
 
@@ -370,10 +417,66 @@ def test_key_prefix_guard_has_teeth():
     assert key_prefix_problems('import streamlit as st\nst.radio("x",[1],key="ui2_ok")') == []
 
 
-def test_launcher_never_writes_non_ui_state_or_touches_clock_and_files():
+#: 時鐘存取（含別名）：模組只准 `from datetime import date`（`date.fromisoformat`／建構子），其餘時間模組一律禁止；
+#: 任何名為 now／today／time／monotonic… 的屬性取用都算違規（別名 `from datetime import datetime as d; d.now()` 因 import 即違規而擋下）。
+CLOCK_MODULES = frozenset({"time", "datetime", "calendar", "zoneinfo", "pytz", "freezegun", "arrow", "pendulum", "sched"})
+CLOCK_ATTRS = frozenset({"now", "today", "utcnow", "fromtimestamp", "utcfromtimestamp", "time", "time_ns", "monotonic",
+                         "monotonic_ns", "perf_counter", "perf_counter_ns", "process_time", "localtime", "gmtime",
+                         "strftime", "sleep", "clock"})
+
+
+def clock_problems(source: str) -> list[str]:
+    bad: list[str] = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Import):
+            bad += [f"import {a.name}" for a in n.names if a.name.split(".")[0] in CLOCK_MODULES]
+        elif isinstance(n, ast.ImportFrom):
+            root = (n.module or "").split(".")[0]
+            if root in CLOCK_MODULES:
+                names = {a.name for a in n.names}
+                if not (root == "datetime" and names <= {"date"}):
+                    bad.append(f"from {n.module} import {sorted(names)}")
+        elif isinstance(n, ast.Attribute) and n.attr in CLOCK_ATTRS:
+            bad.append(f"attr .{n.attr} (line {n.lineno})")
+        elif (isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name))
+              and (n.func.attr if isinstance(n.func, ast.Attribute) else n.func.id) in ("import_module", "__import__")
+              and n.args and isinstance(n.args[0], ast.Constant) and str(n.args[0].value).split(".")[0] in CLOCK_MODULES):
+            bad.append("dynamic import of a clock module")
+    return bad
+
+
+def test_launcher_never_touches_the_clock_even_through_aliases():
+    assert clock_problems(LAUNCHER_PATH.read_text(encoding="utf-8")) == []
+
+
+def test_clock_guard_has_teeth_including_alias_bypass():
+    for bad in ("from datetime import datetime as d\nx = d.now()", "import datetime\nx = datetime.datetime.now()",
+                "from datetime import date as d\nx = d.today()", "import time\nx = time.time()",
+                "from time import monotonic as m\nx = m()", "import importlib\nimportlib.import_module('datetime')",
+                "import time as t\nt.sleep(1)", "from datetime import datetime, date"):
+        assert clock_problems(bad), bad
+    assert clock_problems("from datetime import date\nx = date.fromisoformat('2026-11-25')\ny = date(2026, 1, 1)") == []
+
+
+def test_launcher_output_is_independent_of_the_real_clock(monkeypatch):
+    """行為版：把常見的時鐘函式全換成會 raise 的版本，整條夾具→分桶→四列→摘要→規劃路徑仍須照常運作且輸出不變。"""
+    import time as _t
+    before = {t: (repr(L.build_fields(t)), L.summary_text(t)) for t in L.TOPICS}
+
+    def boom(*a, **k):
+        raise AssertionError("launcher 讀了真實時鐘")
+    for name in ("time", "monotonic", "perf_counter", "time_ns", "localtime", "gmtime", "strftime"):
+        monkeypatch.setattr(_t, name, boom)
+    after = {t: (repr(L.build_fields(t)), L.summary_text(t)) for t in L.TOPICS}
+    assert after == before
+
+
+def test_launcher_has_no_filesystem_or_secrets_access_other_than_the_seal_log():
     src = LAUNCHER_PATH.read_text(encoding="utf-8")
-    for bad in ("datetime.now", "date.today", "time.time(", "open(\"", "read_text", "write_text", "st.secrets", "environ["):
-        assert bad not in src.replace("open(st[\"log_path\"]", ""), bad
+    for bad in ("read_text", "write_text", "st.secrets", "environ["):
+        assert bad not in src, bad
+    opens = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open"]
+    assert len(opens) == 1                                       # 只有封網記錄檔一處（append）
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -420,7 +523,7 @@ def test_network_seal_has_teeth_and_allows_loopback():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 2. slow：AppTest 渲染矩陣
+# 2. AppTest 渲染矩陣（每筆 <1s；刻意不標 slow，讓 CI fast lane 就能擋住隔離／外洩／文案的退化）
 # ══════════════════════════════════════════════════════════════════════
 def _apply(at, *, feed="fake", page=P4_HOLD, scenario=SCENARIO_COLD, topic=None):
     at.session_state["ui2_feed"] = feed
@@ -446,17 +549,52 @@ def md_values(at) -> list[str]:
     return [m.value for m in at.markdown]
 
 
+def selector(at):
+    return at.button_group(key=L.TOPIC_KEY)
+
+
 def has_box(at) -> bool:
-    return any(r.key == L.TOPIC_KEY for r in at.radio)
+    return any(b.key == L.TOPIC_KEY for b in at.button_group)
+
+
+def option_labels(bg) -> tuple:
+    return tuple(o.content for o in bg.proto.options)
 
 
 def page_text(at) -> str:
-    """AppTest 裡所有使用者可見文字：markdown（去 style／標籤）＋radio 標籤與選項＋caption／text。"""
+    """AppTest 裡所有使用者可見文字：markdown（去 style／標籤）＋選擇器標籤與選項＋nav radio＋caption／text。"""
     parts = [plain(v) for v in md_values(at)]
     for r in at.radio:
         parts += [r.label, *r.options]
+    for b in at.button_group:
+        parts += [b.label, *option_labels(b)]
     parts += [c.value for c in at.caption] + [t.value for t in at.text]
     return "\n".join(parts)
+
+
+def _walk(block):
+    for c in block.children.values():
+        if hasattr(c, "children"):
+            yield from _walk(c)
+        else:
+            yield c
+
+
+def all_widget_proto_text(at) -> str:
+    """整頁**所有**元素的 proto（含 widget 的 help／label／placeholder／options／default／tooltip…任何欄位）攤成一個字串。"""
+    import json
+    from google.protobuf.json_format import MessageToDict
+    out = []
+    for el in _walk(at.main):
+        pr = getattr(el, "proto", None)
+        out.append(json.dumps(MessageToDict(pr), ensure_ascii=False) if pr is not None else repr(el))
+    return "\n".join(out)
+
+
+def session_state_text(at) -> str:
+    """整個 session_state（所有 key 與 value 的 repr）。"""
+    st = at.session_state.filtered_state
+    return "\n".join(f"{k!r}: {v!r}" for k, v in st.items())
 
 
 @pytest.fixture
@@ -465,11 +603,10 @@ def inst():
         yield
 
 
-@pytest.mark.slow
 def test_demo_page_default_topic_selector_and_single_slot(inst):
     at = run_app()
-    r = at.radio(key=L.TOPIC_KEY)
-    assert tuple(r.options) == L.TOPICS and r.value == "持股健檢" and r.label == L.SELECTOR_LABEL
+    b = selector(at)
+    assert option_labels(b) == L.TOPICS and b.value == "持股健檢" and b.label == L.SELECTOR_LABEL
     vals = md_values(at)
     assert slot_count(vals) == 1
     s = slot_html(vals)
@@ -480,52 +617,76 @@ def test_demo_page_default_topic_selector_and_single_slot(inst):
     assert st["injected"] >= 1 and st["fallbacks"] == 0
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("topic", L.TOPICS)
-def test_each_topic_renders_four_rows_once_and_never_leaks_rejected_values(inst, topic):
+def test_each_topic_renders_four_rows_once_and_never_leaks_rejected_values_anywhere(inst, topic):
     at = run_app(topic=topic)
     vals = md_values(at)
     assert slot_count(vals) == 1
     s = slot_html(vals)
-    assert [m for m in re.findall(r'class="ui2-row__label">([^<]+)<', s)] == list(L.ROW_LABELS)
+    assert re.findall(r'class="ui2-row__label">([^<]+)<', s) == list(L.ROW_LABELS)
     assert f"｜{topic}" in plain(s)
-    blob = "\n".join(vals) + page_text(at) + repr(L.build_fields(topic)) + L.summary_text(topic)
-    assert leak_hits(blob) == []
     assert forbidden_hits(plain(s) + " " + L.SELECTOR_LABEL + " ".join(L.TOPICS)) == []
+    # 所有輸出面：markdown／文字、**所有元素 proto（help／label／placeholder／options…）**、**整個 session_state**、VM／摘要
+    surfaces = {"markdown": "\n".join(vals), "text": page_text(at), "proto": all_widget_proto_text(at),
+                "session_state": session_state_text(at), "vm": repr(L.build_fields(topic)) + L.summary_text(topic)}
+    for name, blob in surfaces.items():
+        assert leak_hits(blob) == [], (topic, name)
+    assert all(k.startswith("ui2_") for k in at.session_state.filtered_state), list(at.session_state.filtered_state)
 
 
-@pytest.mark.slow
+def test_widget_proto_and_session_state_scanners_have_teeth():
+    """掃描器本身：help／label／placeholder／任意 session key 夾帶哨兵必被抓到（突變證明另見回報）。"""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_string(f'''
+import streamlit as st
+st.radio("x", ["a"], help="{L.LEAKY_RAW_VALUES[1]}")
+st.text_input("y", placeholder="{L.LEAKY_RAW_VALUES[2]}", help="{L.LEAKY_RAW_VALUES[0]}")
+st.segmented_control("z{L.LEAKY_RAW_VALUES[1]}", ["q"], key="ui2_zz")
+st.session_state["ui2_anything"] = "{L.LEAKY_RAW_VALUES[0]}"
+''').run()
+    assert not at.exception
+    blob = all_widget_proto_text(at)
+    assert all(v in blob for v in L.LEAKY_RAW_VALUES), blob[:400]
+    assert L.LEAKY_RAW_VALUES[0] in session_state_text(at)
+    assert leak_hits(blob) and leak_hits(session_state_text(at))
+
+
 def test_no_counter_row_and_missing_row_and_rejected_row_are_each_covered_in_dom(inst):
-    s_market = plain(slot_html(md_values(run_app(topic=L.TOPIC_MARKET))))
-    assert NO_COUNTER_TEXT in s_market                      # 無反證 ⇒ 無法判定（無反證輸入）
-    assert "⬜ 無法判定（無支持輸入）" in s_market and "⬜ 無法判定（無拒用輸入）" in s_market
+    s_ind = plain(slot_html(md_values(run_app(topic=L.TOPIC_INDUSTRY))))
+    assert NO_COUNTER_TEXT in s_ind                          # 無反證 ⇒ 無法判定（無反證輸入）
+    assert "⬜ 無法判定（無拒用輸入）" in s_ind
+    assert f"缺：{L.REASON_NO_PEER}" in s_ind
     s_hold = plain(slot_html(md_values(run_app(topic=L.TOPIC_HOLDINGS))))
-    assert "缺：" in s_hold and "只被引用，沒有可核對的來源與資料日" in s_hold          # 引用 ⇒ 缺項，不當支持
-    assert "未採用：資料已過期；資料日晚於判讀時點（不顯示原值）" in s_hold             # 拒用：只有固定原因
-    assert "法說會" not in s_hold.split("反面證據")[0]                               # 引用的敘述不在支持列
+    assert f"缺：{L.REASON_CITED_ONLY}；{L.REASON_NO_FINANCIALS}" in s_hold                 # 引用 ⇒ 缺項，不當支持；原因＝固定常數
+    assert f"未採用：{L.REASON_STALE}；{L.REASON_PIT}（不顯示原值）" in s_hold                  # 拒用：只有固定原因
+    assert "法說會" not in s_hold and "資料未取得" not in s_hold
     s_counter = plain(slot_html(md_values(run_app(topic=L.TOPIC_COUNTER))))
     assert "風險上限" not in s_counter                       # Risk Cap 不推反證，也不出現在槽內
     assert "⬜ 無法判定（無支持輸入）" in s_counter
+    s_market = plain(slot_html(md_values(run_app(topic=L.TOPIC_MARKET))))
+    assert s_market.count("⬜ 尚未提供（本主題尚未開放）") == 4 and "無法判定" not in s_market and "資料未取得" not in s_market
+    assert "預覽" in s_market and "裁示" not in s_market
 
 
-@pytest.mark.slow
 def test_garbage_topic_in_session_falls_back_to_default(inst):
     at = run_app(topic="亂碼")
-    assert at.radio(key=L.TOPIC_KEY).value == L.DEFAULT_TOPIC
+    assert selector(at).value == L.DEFAULT_TOPIC
     assert "｜持股健檢｜" in plain(slot_html(md_values(at)))
 
 
-@pytest.mark.slow
-def test_switching_topic_via_widget_rerenders_slot(inst):
+def test_switching_topic_rerenders_slot_and_deselect_restores_last_topic(inst):
     at = run_app()
     for topic in (L.TOPIC_COUNTER, L.TOPIC_INDUSTRY, L.TOPIC_MARKET, L.TOPIC_HOLDINGS):
-        at.radio(key=L.TOPIC_KEY).set_value(topic).run()
+        selector(at).set_value(topic).run()
         assert not at.exception
-        s = slot_html(md_values(at))
-        assert f"｜{topic}" in plain(s) and slot_count(md_values(at)) == 1
+        assert f"｜{topic}" in plain(slot_html(md_values(at))) and slot_count(md_values(at)) == 1
+    selector(at).set_value(L.TOPIC_COUNTER).run()
+    at.session_state[L.TOPIC_KEY] = None                      # 使用者在單選按鈕組上把已選項點掉
+    at.run()
+    assert not at.exception and selector(at).value == L.TOPIC_COUNTER
+    assert f"｜{L.TOPIC_COUNTER}" in plain(slot_html(md_values(at)))
 
 
-@pytest.mark.slow
 def test_whole_page_adds_no_new_forbidden_words_versus_uninstalled(inst):
     on = page_text(run_app())
     L.uninstall()
@@ -548,7 +709,6 @@ def real_snapshot_patch(monkeypatch):
     return snap
 
 
-@pytest.mark.slow
 def test_real_normal_has_no_demo_and_vm_and_markup_are_identical_to_uninstalled(real_snapshot_patch):
     from src.services.ui2.real_canonical import get_real_page_vm
     snap = real_snapshot_patch
@@ -564,9 +724,9 @@ def test_real_normal_has_no_demo_and_vm_and_markup_are_identical_to_uninstalled(
     assert injected == 0 and not has_box(on)
     t = page_text(on)
     assert "OneBrain 示意" not in t and L.SELECTOR_LABEL not in t and "支持證據" not in t and "反面證據" not in t
+    assert all_widget_proto_text(on) == all_widget_proto_text(off) and session_state_text(on) == session_state_text(off)
 
 
-@pytest.mark.slow
 def test_real_degraded_has_no_demo_and_is_identical_to_uninstalled(monkeypatch):
     def boom():
         raise RuntimeError("secret-token")
@@ -579,7 +739,6 @@ def test_real_degraded_has_no_demo_and_is_identical_to_uninstalled(monkeypatch):
     assert "secret-token" not in page_text(on)
 
 
-@pytest.mark.slow
 def test_real_on_every_page_never_gets_selector_or_demo_content(real_snapshot_patch):
     with installed():
         for pid in PAGE_IDS:
@@ -587,9 +746,9 @@ def test_real_on_every_page_never_gets_selector_or_demo_content(real_snapshot_pa
             t = page_text(at)
             assert not has_box(at), pid
             assert "OneBrain 示意" not in t and "支持證據" not in t, pid
+            assert L.TOPIC_KEY not in session_state_text(at) and L.LAST_TOPIC_KEY not in session_state_text(at)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("scenario", [s for s in SCENARIO_IDS if s != SCENARIO_COLD])
 def test_plain_fake_hold_in_non_cold_scenarios_has_no_demo_and_is_identical(scenario):
     off = run_app(scenario=scenario)
@@ -599,7 +758,6 @@ def test_plain_fake_hold_in_non_cold_scenarios_has_no_demo_and_is_identical(scen
     assert md_values(on) == md_values(off)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("page", [P4_MARKET, P4_TARGET, P4_ME, P4_DATA])
 def test_fake_cold_on_non_hold_pages_has_no_demo_and_is_identical(page):
     off = run_app(page=page)
@@ -609,13 +767,13 @@ def test_fake_cold_on_non_hold_pages_has_no_demo_and_is_identical(page):
     assert md_values(on) == md_values(off)
 
 
-@pytest.mark.slow
-def test_fixture_failure_falls_back_to_original_slot_and_page_stays_operable(monkeypatch):
+def test_fixture_failure_falls_back_to_original_slot_and_page_stays_operable(monkeypatch, caplog):
     L.uninstall()
     off = run_app()
     monkeypatch.setattr(L, "build_fields", lambda topic: (_ for _ in ()).throw(RuntimeError("secret-token 7777.77")))
     with installed():
-        at = run_app()
+        with caplog.at_level("DEBUG"):
+            at = run_app()
         assert md_values(at) == md_values(off) and not has_box(at)       # 退回原本的「尚未提供」槽、無選擇器
         st = L.get_state()
         assert st["fallbacks"] >= 1 and st["injected"] == 0
@@ -624,9 +782,17 @@ def test_fixture_failure_falls_back_to_original_slot_and_page_stays_operable(mon
         at.radio(key="ui2_page").set_value(P4_MARKET).run()
         assert not at.exception
         assert at.radio(key="ui2_page").value == P4_MARKET
+    # log：必須有 fail-closed 的記錄（非空洞），且只含例外「型別名」，不含例外訊息、夾具原值，也沒有 exc_info／traceback
+    mine = [r for r in caplog.records if r.name == L.__name__]
+    assert mine and any("RuntimeError" in r.getMessage() for r in mine)
+    for r in caplog.records:
+        text = r.getMessage() + " " + str(r.args) + " " + (r.exc_text or "")
+        assert "secret-token" not in text and "7777.77" not in text, text
+        if r.name == L.__name__:
+            assert r.exc_info is None
+    assert "secret-token" not in caplog.text and "7777.77" not in caplog.text
 
 
-@pytest.mark.slow
 def test_ai_is_not_involved_and_demo_works_with_no_ai_configuration(inst, monkeypatch):
     for k in list(os.environ):
         if any(t in k.upper() for t in ("GEMINI", "OPENAI", "ANTHROPIC", "API_KEY", "LLM")):
@@ -636,9 +802,47 @@ def test_ai_is_not_involved_and_demo_works_with_no_ai_configuration(inst, monkey
     assert import_problems(LAUNCHER_PATH.read_text(encoding="utf-8"), allowed=frozenset({"socket"})) == []
 
 
+def test_launcher_main_really_seals_the_network_and_logs_a_start_marker(tmp_path, monkeypatch):
+    """走真入口（`main()`，AppTest 以 `__main__` 執行 launcher 檔）：必須①封網確實啟動（socket 被換）②seal log 存在且第一行＝啟動標記
+    ③頁面落在 💼 FAKE cold 並有選擇器④封網下零拒絕。拿掉 main 的 `seal_network` 呼叫 ⇒ 本測試必紅（空洞通過已堵）。"""
+    import json
+    from streamlit.testing.v1 import AppTest
+    log = tmp_path / "seal.jsonl"
+    monkeypatch.setenv(L.ENV_SEAL_LOG, str(log))
+    L.unseal_network()
+    L.uninstall()
+    try:
+        assert getattr(socket, L.SEAL_ATTR, None) is None
+        at = AppTest.from_file(str(LAUNCHER_PATH), default_timeout=90)
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert getattr(socket, L.SEAL_ATTR, None) is not None, "main() 沒有啟用封網"
+        lines = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines() if x.strip()]
+        assert lines and lines[0]["kind"] == L.SEAL_MARKER_KIND and lines[0]["pid"] == os.getpid()
+        assert lines[1:] == []                                   # 只有啟動標記，沒有被拒絕的連線
+        assert has_box(at) and selector(at).value == L.DEFAULT_TOPIC
+        with pytest.raises(OSError, match="network sealed"):     # 此時對外連線真的會被拒（`__main__` 版的例外類別與 L 不同，故比對訊息）
+            socket.create_connection(("93.184.216.34", 80), timeout=1)
+        denied = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()][1:]
+        assert [d["kind"] for d in denied] == ["create_connection"]
+    finally:
+        L.unseal_network()
+        L.uninstall()
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 3. ui2_browser：真瀏覽器（390×844／1280×900）
 # ══════════════════════════════════════════════════════════════════════
+# ── Streamlit 1.56 鍵盤調查（成因＋緩解；本檔 `test_known_limitation_*` 以可觀察斷言記錄）────────────────────────
+# 現象（QA-2）：選擇器若用 `st.radio`，在 1.56.0 於最後一項按 → 或第一項按 ←，焦點會跳進上方頁面導覽並直接切換頁籤；1.59.2 正常。
+# 成因（DOM 實測）：1.56（BaseWeb）渲染的每個 `<input type=radio>` 的 `name` 都是空字串，且無 `<form>`／`fieldset` 分組。
+#   Chromium 把整份文件所有「name 為空」的 radio 視為同一個方向鍵群組 ⇒ 頁面導覽 radio（同為 name=""）與選擇器 radio 同組，
+#   選擇器最後一項再往後＝回繞到文件中第一個 name="" 的 radio＝導覽第一項（📊），選取即切頁。1.59.2（react-aria）每組各自 role=radiogroup。
+#   導覽是既有檔（src/ui2）⇒ 不能在範圍內改它的分組。
+# 緩解（只改 launcher）：選擇器改用原生 `st.segmented_control`（按鈕組，不是 radio ⇒ 不與導覽共組）。兩版實測：
+#   1.56＝四顆按鈕各一個 Tab 停點，方向鍵不作用，Space／Enter 選取；1.59.2＝roving，Tab 進出一個停點，方向鍵在群組內移動且停在邊界，Space／Enter 選取。
+#   兩版皆不會因邊界方向鍵切走頁籤。代價（已知限制，如實記錄）：1.56 的 segmented_control 沒有 ARIA 選取狀態（AX tree 無 checked／selected），
+#   選取只靠視覺樣式（`stBaseButton-segmented_controlActive`）＋槽標題的文字（「｜持股健檢｜」）；1.59.2 有 role=radio＋aria-checked。
 from tests.ui2_browser import launch_or_fail, require_browser  # noqa: E402
 from tests.ui2_viewport import measure_viewport as MV  # noqa: E402
 
@@ -646,11 +850,16 @@ BOX = ".st-key-ui2_s3l0_topic_box"
 VIEWPORTS = {"mobile390": MOBILE, "desktop1280": DESKTOP}
 
 
-def _start_server(env_extra: dict) -> tuple[subprocess.Popen, str]:
+def streamlit_minor() -> tuple:
+    import streamlit
+    return tuple(int(x) for x in streamlit.__version__.split(".")[:2])
+
+
+def start_streamlit(script: Path, env_extra: dict | None = None) -> tuple[subprocess.Popen, str]:
     port = MV._free_port()
-    env = {**os.environ, **env_extra}
+    env = {**os.environ, **(env_extra or {})}
     proc = subprocess.Popen(
-        [sys.executable, "-m", "streamlit", "run", str(LAUNCHER_PATH), "--server.headless", "true",
+        [sys.executable, "-m", "streamlit", "run", str(script), "--server.headless", "true",
          "--server.port", str(port), "--browser.gatherUsageStats", "false"],
         cwd=str(ROOT), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     url = f"http://127.0.0.1:{port}"
@@ -662,6 +871,27 @@ def _start_server(env_extra: dict) -> tuple[subprocess.Popen, str]:
             time.sleep(0.5)
     proc.kill()
     raise RuntimeError("streamlit server 未在 40 秒內就緒")
+
+
+class Server:
+    def __init__(self, env_extra: dict, log: Path):
+        self.log = log
+        self.proc, self.url = start_streamlit(LAUNCHER_PATH, {L.ENV_SEAL_LOG: str(log), **env_extra})
+
+    def seal_lines(self) -> list[dict]:
+        import json
+        if not self.log.exists():
+            return []
+        return [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+
+def assert_server_sealed(srv: Server) -> None:
+    """封網**確實啟動**：log 必須存在、第一行是啟動標記且 pid＝該 server 進程；其後沒有任何被拒絕的連線。
+    （舊版把「log 不存在」當通過＝空洞：launcher 根本沒封網也會綠。）"""
+    lines = srv.seal_lines()
+    assert lines, f"seal log 不存在或為空：封網沒有啟動（{srv.log}）"
+    assert lines[0]["kind"] == L.SEAL_MARKER_KIND and lines[0]["pid"] == srv.proc.pid, lines[0]
+    assert lines[1:] == [], lines[1:]
 
 
 @pytest.fixture(scope="module")
@@ -679,23 +909,23 @@ def browser(pw):
 
 
 @pytest.fixture(scope="module")
-def seal_log(tmp_path_factory):
-    return tmp_path_factory.mktemp("s3l0") / "seal.jsonl"
+def demo(tmp_path_factory):
+    srv = Server({}, tmp_path_factory.mktemp("s3l0") / "seal.jsonl")
+    yield srv
+    srv.proc.kill()
 
 
 @pytest.fixture(scope="module")
-def demo_url(seal_log):
-    proc, u = _start_server({L.ENV_SEAL_LOG: str(seal_log)})
-    yield u
-    proc.kill()
+def real(tmp_path_factory):
+    srv = Server({L.ENV_SEED: "0"}, tmp_path_factory.mktemp("s3l0real") / "seal.jsonl")
+    yield srv
+    srv.proc.kill()
 
 
-@pytest.fixture(scope="module")
-def real_url(tmp_path_factory):
-    log = tmp_path_factory.mktemp("s3l0real") / "seal.jsonl"
-    proc, u = _start_server({L.ENV_SEED: "0", L.ENV_SEAL_LOG: str(log)})
-    yield u, log
-    proc.kill()
+_SELECTED_JS = """(box) => { const bs = [...document.querySelectorAll(box + ' button')];
+  const on = bs.filter(b => b.getAttribute('aria-checked') === 'true' || b.getAttribute('data-selected') === 'true'
+                            || (b.getAttribute('data-testid') || '').endsWith('Active'));
+  return on.map(b => b.innerText.trim()); }"""
 
 
 class Page:
@@ -713,43 +943,79 @@ class Page:
     def close(self):
         self.ctx.close()
 
-    def checked_topic(self) -> str:
-        return self.pg.evaluate("""(b) => { const i = document.querySelector(b + ' input[type=radio]:checked');
-          if (!i) return null; const l = i.closest('label'); return l ? l.innerText.trim() : null; }""", BOX)
+    def selected(self) -> list[str]:
+        return self.pg.evaluate(_SELECTED_JS, BOX)
 
-    def slot_title(self) -> str:
+    def slot_title(self) -> str | None:
         return self.pg.evaluate("""() => { const e = document.querySelector('[data-ui2-l1="onebrain"] .ui2-section-title');
           return e ? e.innerText : null; }""")
 
     def wait_topic(self, topic: str):
         self.pg.wait_for_function(
-            "([b, t]) => { const i = document.querySelector(b + ' input[type=radio]:checked'); const l = i && i.closest('label');"
+            "([b, t]) => { const bs = [...document.querySelectorAll(b + ' button')]; const on = bs.filter(x => x.getAttribute('aria-checked') === 'true'"
+            " || x.getAttribute('data-selected') === 'true' || (x.getAttribute('data-testid') || '').endsWith('Active'));"
             " const e = document.querySelector('[data-ui2-l1=\"onebrain\"] .ui2-section-title');"
-            " return !!l && l.innerText.trim() === t && !!e && e.innerText.indexOf('｜' + t) >= 0; }",
+            " return on.length === 1 && on[0].innerText.trim() === t && !!e && e.innerText.indexOf('｜' + t) >= 0; }",
             arg=[BOX, topic], timeout=20000)
         self.pg.wait_for_timeout(250)
 
-    def ax_radios(self):
+    def active_desc(self) -> dict:
+        return self.pg.evaluate("""(box) => { const a = document.activeElement;
+          return {tag: a.tagName, text: (a.innerText || '').trim(), where: a.closest(box) ? 'topic' : (a.closest('.st-key-ui2_nav') ? 'nav' : 'other'),
+                  page: document.querySelector('.ui2-pagetitle').dataset.ui2Page,
+                  navChecked: (() => { const i = document.querySelector('.st-key-ui2_nav input[type=radio]:checked'); const l = i && i.closest('label'); return l ? l.innerText.trim() : null; })()}; }""", BOX)
+
+    def page_id(self) -> str:
+        return self.pg.evaluate("() => document.querySelector('.ui2-pagetitle').dataset.ui2Page")
+
+    def ax_selected_topics(self):
+        """AX tree 裡「已選取」的主題（role=radio 且 checked）；沒有暴露選取狀態 ⇒ 空清單。"""
         cdp = self.ctx.new_cdp_session(self.pg)
         nodes = cdp.send("Accessibility.getFullAXTree")["nodes"]
         cdp.detach()
-        out = []
+        out, seen = [], []
         for n in nodes:
             if (n.get("role") or {}).get("value") != "radio" or n.get("ignored"):
                 continue
             name = (n.get("name") or {}).get("value", "")
             if name in L.TOPICS:
+                seen.append(name)
                 props = {p["name"]: (p.get("value") or {}).get("value") for p in n.get("properties", [])}
-                out.append((name, props.get("checked")))
-        return out
+                if props.get("checked") in (True, "true"):
+                    out.append(name)
+        return seen, out
 
-    def focus_checked(self):
-        self.pg.focus(BOX + " input[type=radio]:checked")
+    def focus_start(self):
+        self.pg.evaluate("() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); }")
+
+    def tab_into_box(self, limit=40):
+        for _ in range(limit):
+            self.pg.keyboard.press("Tab")
+            if self.active_desc()["where"] == "topic":
+                return
+        raise AssertionError("Tab 走不到四主題選擇器")
+
+    def focus_topic(self, topic: str):
+        """純鍵盤走到指定主題的按鈕：先 Tab 進群組，再依版本用 Tab（1.56：每顆各一停點，只能往後）或方向鍵（1.59：群組內 roving，
+        進入點可能是上次離開的那一顆，故依目前位置決定左右）移動。"""
+        self.focus_start()
+        self.tab_into_box()
+        roving = streamlit_minor() >= (1, 59)
+        want = L.TOPICS.index(topic)
+        for _ in range(8):
+            cur = self.active_desc()["text"]
+            if cur == topic:
+                return
+            if roving:
+                self.pg.keyboard.press("ArrowRight" if L.TOPICS.index(cur) < want else "ArrowLeft")
+            else:
+                self.pg.keyboard.press("Tab")
+        raise AssertionError(f"鍵盤走不到 {topic}")
 
 
 @pytest.fixture(params=list(VIEWPORTS), ids=list(VIEWPORTS))
-def ui(request, browser, demo_url):
-    p = Page(browser, demo_url, VIEWPORTS[request.param])
+def ui(request, browser, demo):
+    p = Page(browser, demo.url, VIEWPORTS[request.param])
     yield p
     p.close()
 
@@ -769,47 +1035,104 @@ def test_streamlit_version_matches_expectation():
 @pytest.mark.slow
 @pytest.mark.ui2_browser
 def test_default_topic_and_one_slot_and_four_labels(ui):
-    assert ui.checked_topic() == "持股健檢"
+    assert ui.selected() == ["持股健檢"]
     assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1
     assert ui.pg.locator(BOX).count() == 1
-    labels = ui.pg.locator(BOX + " [role=radiogroup] > label").all_inner_texts()
-    assert [x.strip() for x in labels] == list(L.TOPICS)
+    labels = [x.strip() for x in ui.pg.locator(BOX + " button").all_inner_texts()]
+    assert labels == list(L.TOPICS)
     assert ui.slot_title().count("｜持股健檢｜") == 1
 
 
 @pytest.mark.slow
 @pytest.mark.ui2_browser
-def test_keyboard_reaches_and_selects_all_four_topics_with_visible_state(ui):
-    ui.pg.evaluate("() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); }")
-    # Tab 可進入（不在鍵盤陷阱外：最多 40 次 Tab 內必能停在選擇器的 radio 上）
-    reached = False
-    for _ in range(40):
+def test_selector_is_adjacent_to_the_slot_and_both_are_on_the_first_screen(ui):
+    """QA-2：選擇器緊貼在 OneBrain 槽正上方（中間不夾「建議持股水位」等其他區塊），且選擇器與槽標題在首屏同時可見（不需捲動）。"""
+    g = ui.pg.evaluate("""(box) => { const b = document.querySelector(box).getBoundingClientRect();
+      const t = document.querySelector('[data-ui2-l1="onebrain"] .ui2-section-title').getBoundingClientRect();
+      const between = [...document.querySelectorAll('[data-ui2-l1]')].filter(e => e.dataset.ui2L1 !== 'onebrain')
+        .filter(e => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= b.bottom - 1 && r.top < t.top; })
+        .map(e => e.dataset.ui2L1);
+      return {boxTop: b.top, boxBottom: b.bottom, titleTop: t.top, titleBottom: t.bottom, vh: innerHeight, scrollY, between}; }""", BOX)
+    assert g["scrollY"] == 0 and g["between"] == [], g
+    assert g["boxBottom"] <= g["titleTop"] and g["titleTop"] - g["boxBottom"] <= 80, g          # 相鄰（只隔一個元素間距）
+    assert g["titleBottom"] < g["vh"] and g["boxTop"] >= 0, g                                    # 同屏可見（未捲動）
+    ui.pg.locator(BOX + " button", has_text="反方風險").click()
+    ui.wait_topic("反方風險")
+    g2 = ui.pg.evaluate("""() => { const t = document.querySelector('[data-ui2-l1="onebrain"] .ui2-section-title').getBoundingClientRect();
+      return {titleBottom: t.bottom, vh: innerHeight, scrollY}; }""")
+    assert g2["scrollY"] == 0 and g2["titleBottom"] < g2["vh"], g2          # 切換後變化仍在首屏內
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_keyboard_only_selects_every_topic_and_selection_is_visible(ui, topic):
+    ui.focus_topic(topic)
+    assert ui.active_desc()["where"] == "topic" and ui.active_desc()["page"] == "p4_hold"
+    ui.pg.keyboard.press("Space")
+    ui.wait_topic(topic)
+    assert ui.selected() == [topic]                                      # 視覺選取（DOM 狀態）恰一個
+    assert ui.slot_title().count(f"｜{topic}") == 1                      # 文字可辨識（不只靠顏色）
+    seen, checked = ui.ax_selected_topics()
+    if streamlit_minor() >= (1, 59):
+        assert sorted(seen) == sorted(L.TOPICS) and checked == [topic], (seen, checked)   # AX tree 恰一個 checked
+    else:
+        # 已知限制（1.56.0）：segmented_control 沒有 ARIA 選取狀態 ⇒ AX tree 沒有任何 radio／checked。
+        # 若 Streamlit 升版修好，本斷言會變紅，提醒回頭更新這段調查註解。
+        assert seen == [] and checked == []
+    assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1 and ui.errs == []
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_keyboard_edges_never_leave_the_selector_or_switch_the_page(ui):
+    """QA-2 Should-Fix-1：最後一項按 →、第一項按 ←、Shift+Tab 離開群組，都不得切走頁籤（頁面 id 與導覽選取不變）。"""
+    base = ui.active_desc()
+    assert base["page"] == "p4_hold" and base["navChecked"] == "💼 持股"
+    ui.focus_topic(L.TOPICS[-1])
+    for _ in range(3):
+        ui.pg.keyboard.press("ArrowRight")
+        ui.pg.wait_for_timeout(700)
+    d = ui.active_desc()
+    assert d["page"] == "p4_hold" and d["navChecked"] == "💼 持股" and d["where"] in ("topic", "other"), d
+    ui.focus_topic(L.TOPICS[0])
+    for _ in range(3):
+        ui.pg.keyboard.press("ArrowLeft")
+        ui.pg.wait_for_timeout(700)
+    d = ui.active_desc()
+    assert d["page"] == "p4_hold" and d["navChecked"] == "💼 持股" and d["where"] in ("topic", "other"), d
+    ui.pg.keyboard.press("Shift+Tab")
+    d = ui.active_desc()
+    assert d["page"] == "p4_hold" and d["navChecked"] == "💼 持股", d
+    assert ui.selected() == ["持股健檢"]                                  # 方向鍵／Shift+Tab 沒有悄悄改選主題
+    assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1 and ui.errs == []
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_tab_order_nav_then_selector_then_leaves_without_trap(ui):
+    ui.focus_start()
+    seq = []
+    for _ in range(12):
         ui.pg.keyboard.press("Tab")
-        if ui.pg.evaluate("(b) => !!(document.activeElement && document.activeElement.closest(b))", BOX):
-            reached = True
-            break
-    assert reached, "Tab 走不到四主題選擇器"
-    order = ["持股健檢", "反方風險", "持股健檢", "產業前瞻", "大盤"]
-    assert ui.checked_topic() == order[0]
-    for want in order[1:]:
-        key = "ArrowRight" if want in ("反方風險",) else "ArrowLeft"
-        ui.pg.keyboard.press(key)
-        ui.wait_topic(want)
-        assert ui.checked_topic() == want
-        assert ui.slot_title().count(f"｜{want}") == 1                       # 文字可辨識（不只靠顏色）
-        ax = ui.ax_radios()
-        assert sorted(n for n, _ in ax) == sorted(L.TOPICS), ax
-        assert [n for n, c in ax if c in (True, "true")] == [want], ax       # AX tree 恰一個 checked＝所選主題
-        ui.focus_checked()                                                   # rerun 後焦點可能回 body：重新聚焦再按
-    assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1
-    assert ui.errs == []
+        d = ui.active_desc()
+        seq.append((d["where"], d["text"][:12]))
+        assert d["page"] == "p4_hold"
+    where = [w for w, _ in seq]
+    first_nav, first_topic = where.index("nav"), where.index("topic")
+    assert first_nav < first_topic, seq                                  # 導覽在前、選擇器在後
+    topic_stops = [t for w, t in seq[:first_topic + 4] if w == "topic"]
+    assert topic_stops and topic_stops == list(L.TOPICS)[:len(topic_stops)], seq   # 群組內依 DOM 順序（1.56：四顆；1.59：roving 一個）
+    after_group = where[first_topic:]
+    leave = next((i for i, w in enumerate(after_group) if w == "other"), None)       # 第一次走出選擇器（Tab 不被困）
+    assert leave is not None and "topic" in after_group[:leave], f"Tab 被困在選擇器內：{seq}"
 
 
 @pytest.mark.slow
 @pytest.mark.ui2_browser
 @pytest.mark.parametrize("topic", L.TOPICS)
 def test_each_topic_no_occlusion_no_horizontal_overflow_single_slot_no_raw_leak(ui, topic):
-    ui.pg.locator(BOX + " [role=radiogroup] > label", has_text=topic).click()
+    ui.pg.locator(BOX + " button", has_text=topic).click()
     ui.wait_topic(topic)
     assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1
     ov = ui.pg.evaluate("""(box) => { const de = document.documentElement; const w = innerWidth; const bad = [];
@@ -819,7 +1142,7 @@ def test_each_topic_no_occlusion_no_horizontal_overflow_single_slot_no_raw_leak(
     assert ov["sw"] <= ov["cw"] + 1 and ov["bad"] == [], ov
     occl = ui.pg.evaluate("""(box) => { const out = [];
       const targets = [...document.querySelectorAll('[data-ui2-l1="onebrain"] .ui2-section-title, [data-ui2-l1="onebrain"] .ui2-row'),
-                       ...document.querySelectorAll(box + ' [role=radiogroup] > label')];
+                       ...document.querySelectorAll(box + ' button')];
       for (const t of targets) { t.scrollIntoView({block: 'center'}); const r = t.getBoundingClientRect();
         const h = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 12));
         if (!h || !(t.contains(h) || h.contains(t))) out.push((t.className || t.tagName) + ' <- ' + (h ? (h.className || h.tagName) : 'null')); }
@@ -831,16 +1154,39 @@ def test_each_topic_no_occlusion_no_horizontal_overflow_single_slot_no_raw_leak(
     shot_dir = os.environ.get("UI2_S3L0_SHOT_DIR")
     if shot_dir:
         Path(shot_dir).mkdir(parents=True, exist_ok=True)
-        ui.pg.locator('[data-ui2-l1="onebrain"]').scroll_into_view_if_needed()
+        ui.pg.evaluate("() => window.scrollTo(0, 0)")
         ui.pg.screenshot(path=str(Path(shot_dir) / f"s3l0_{ui.pg.viewport_size['width']}_{topic}.png"))
+
+
+_ATTRS_JS = """() => { const out = []; for (const e of document.querySelectorAll('*')) for (const a of e.attributes) out.push(a.name + '=' + a.value);
+  return out.join('\\n'); }"""
 
 
 @pytest.mark.slow
 @pytest.mark.ui2_browser
-def test_real_default_entry_has_no_demo_selector_or_content(browser, real_url):
-    url, _log = real_url
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_no_raw_value_in_any_element_attribute_title_aria_data_or_tooltip(ui, topic):
+    """所有元素的**全部屬性**（title／aria-*／data-*／placeholder／alt…）與所有 widget 的 help tooltip 都不得含拒用原值；
+    選擇器沒有 help／tooltip（掃描對象明確列舉，不靠多一個 Tab 停點之類的巧合）。"""
+    ui.pg.locator(BOX + " button", has_text=topic).click()
+    ui.wait_topic(topic)
+    attrs = ui.pg.evaluate(_ATTRS_JS)
+    assert attrs and leak_hits(attrs) == []
+    assert ui.pg.locator(BOX + ' [data-testid="stTooltipIcon"], ' + BOX + " [aria-describedby]").count() == 0
+    tips = ui.pg.locator('[data-testid="stTooltipIcon"], [data-testid="stTooltipHoverTarget"]')
+    texts = []
+    for i in range(tips.count()):
+        tips.nth(i).hover()
+        ui.pg.wait_for_timeout(250)
+        texts.append(ui.pg.evaluate("() => [...document.querySelectorAll('[data-testid=\"stTooltipContent\"], [role=tooltip]')].map(e => e.innerText).join('|')"))
+    assert leak_hits("\n".join(texts)) == []
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_real_default_entry_has_no_demo_selector_or_content(browser, real):
     for vp in VIEWPORTS.values():
-        p = Page(browser, url, vp, wait_box=False)
+        p = Page(browser, real.url, vp, wait_box=False)
         try:
             for label in ("📊 市場", "💼 持股"):
                 loc = p.pg.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=label)
@@ -857,11 +1203,52 @@ def test_real_default_entry_has_no_demo_selector_or_content(browser, real_url):
 
 @pytest.mark.slow
 @pytest.mark.ui2_browser
-def test_servers_made_zero_non_loopback_connections(browser, demo_url, real_url, seal_log):
-    p = Page(browser, demo_url, MOBILE)
+def test_servers_really_sealed_and_made_zero_non_loopback_connections(browser, demo, real):
+    p = Page(browser, demo.url, MOBILE)
     for topic in L.TOPICS:
-        p.pg.locator(BOX + " [role=radiogroup] > label", has_text=topic).click()
+        p.pg.locator(BOX + " button", has_text=topic).click()
         p.wait_topic(topic)
     p.close()
-    for log in (seal_log, real_url[1]):
-        assert (not Path(log).exists()) or Path(log).read_text(encoding="utf-8").strip() == "", Path(log).read_text()
+    q = Page(browser, real.url, MOBILE, wait_box=False)
+    q.close()
+    assert_server_sealed(demo)
+    assert_server_sealed(real)
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+def test_known_limitation_streamlit_1_56_radios_share_one_unnamed_group(browser, tmp_path):
+    """成因證據（見本節檔頭調查）：兩個獨立 `st.radio`（模擬頁面導覽＋選擇器）。
+    1.56.0：所有 radio input 的 name 皆為空字串，第二組最後一項按 → 會回繞並選到第一組第一項（跨組跳動）。
+    1.59.2：分組正確，不跳動。其他版本不下斷言（調查只針對 floor 與目前 resolver 版本）。"""
+    app = tmp_path / "two_radios.py"
+    app.write_text('import streamlit as st\nst.radio("nav", ["n1", "n2"], key="ui2_nav_x", horizontal=True)\n'
+                   'st.radio("topic", ["t1", "t2"], key="ui2_topic_x", horizontal=True)\n', encoding="utf-8")
+    proc, url = start_streamlit(app)
+    try:
+        ctx = browser.new_context(viewport=DESKTOP)
+        pg = ctx.new_page()
+        pg.goto(url)
+        pg.wait_for_selector(".st-key-ui2_topic_x input[type=radio]", state="attached", timeout=40000)
+        pg.wait_for_timeout(600)
+        names = pg.evaluate("() => [...document.querySelectorAll('input[type=radio]')].map(i => i.name)")
+        for box in (".st-key-ui2_nav_x", ".st-key-ui2_topic_x"):                # 各組以方向鍵選到第 2 項（1.56／1.59 都支援；label 點擊在 1.59 無效）
+            pg.focus(box + " input[type=radio]:checked")
+            pg.keyboard.press("ArrowRight")
+            pg.wait_for_timeout(800)
+        pg.focus(".st-key-ui2_topic_x input[type=radio]:checked")               # 此時選擇器在最後一項；導覽在第 2 項（值 "1"）
+        pg.keyboard.press("ArrowRight")                                        # 最後一項再按 →
+        pg.wait_for_timeout(1000)
+        nav_checked = pg.evaluate("() => { const i = document.querySelector('.st-key-ui2_nav_x input[type=radio]:checked'); return i ? i.value : null; }")
+        ctx.close()
+    finally:
+        proc.kill()
+    minor = streamlit_minor()
+    if minor == (1, 56):
+        assert set(names) == {""}, names                       # 成因：name 全為空
+        assert nav_checked == "0", nav_checked                  # 跨組跳動：回繞到導覽第一項並選取（導覽原本選第 2 項＝"1"）
+    elif minor == (1, 59):
+        assert all(names), names
+        assert nav_checked == "1", nav_checked                  # 不跳動：導覽仍停在第 2 項
+
+
