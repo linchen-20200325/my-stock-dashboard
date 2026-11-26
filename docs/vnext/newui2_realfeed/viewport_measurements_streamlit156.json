@@ -2,11 +2,11 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "2fd0773e120d27f2093078dae67404eded333fc5",
-  "source_hash": "2a62b4e197829d7d9d798e83bff5995531a7253f4a5a31dae2de00442b6f3c1a",
-  "generated_at": "2026-11-25T16:32:15+00:00",
+  "git_sha": "0ceeb971a5aa3206171e88603b29dd44ff257dfd",
+  "source_hash": "2c16905fe93994ab541ab2ac1267c211ab076d0a79e524df250daebded6847ea",
+  "generated_at": "2026-11-26T09:11:50+00:00",
   "playwright_version": "1.64.1",
-  "chromium_version": "157.0.8103.78",
+  "chromium_version": "158.0.8127.36",
   "streamlit_version": "1.56.0",
   "viewports": {
    "mobile": [
@@ -136,8 +136,8 @@
    },
    {
     "id": "kbar_primary_chart",
-    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
-    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"
+    "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60／120，預設 20；未選中／量不到＝20；252 等未核准值一律紅）、svg 圖高約 220px（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。期間 radio（列標籤『期間』、選項恰『20 日／60 日／120 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
+    "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；2026-11-26 期間切換：#1199 留言 7186846291／7186895108（客戶 R16 具名授權：20／60／120 日，預設 20；252／縮放／捲動／降採樣未核准）"
    },
    {
     "id": "w11_hold_layout",
@@ -306,8 +306,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1667.7,
-     "bottom": 1744.5,
+     "top": 1751.7,
+     "bottom": 1828.5,
      "left": 14.4,
      "right": 375.6,
      "height": 76.8,
@@ -315,8 +315,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 1130.4,
-     "bottom": 1647.7,
+     "top": 1214.4,
+     "bottom": 1731.7,
      "left": 14.4,
      "right": 375.6,
      "height": 517.3,
@@ -340,7 +340,23 @@
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
     "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": {
+     "top": 1069.7,
+     "bottom": 1137.7,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 68,
+     "width": 361.2
+    },
+    "kbar_picker_title": "期間",
+    "kbar_picker_labels": [
+     "20 日",
+     "60 日",
+     "120 日"
+    ],
+    "kbar_picker_checked": 1,
+    "chart_period": 20
    },
    "h1": null,
    "batch3": {
@@ -467,7 +483,7 @@
     "risk_bottom": 718.1,
     "scroll_end_bottom": 763.8,
     "scroll_end_gap_to_nav": 27.2,
-    "risk_bottom_at_scroll_end": -838.9
+    "risk_bottom_at_scroll_end": -922.9
    },
    "failures": {},
    "pass": true
@@ -631,7 +647,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -812,7 +833,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -1000,7 +1026,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": {
     "vw": 390,
@@ -1276,7 +1307,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -1476,7 +1512,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -1691,8 +1732,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1110.0,
-     "bottom": 1151.5,
+     "top": 1194.0,
+     "bottom": 1235.5,
      "left": 80,
      "right": 1360,
      "height": 41.6,
@@ -1700,8 +1741,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 918.9,
-     "bottom": 1102.0,
+     "top": 1002.9,
+     "bottom": 1186.0,
      "left": 80,
      "right": 1360,
      "height": 183.1,
@@ -1725,7 +1766,23 @@
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
     "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": {
+     "top": 858.2,
+     "bottom": 926.2,
+     "left": 80,
+     "right": 1360,
+     "height": 68,
+     "width": 1280
+    },
+    "kbar_picker_title": "期間",
+    "kbar_picker_labels": [
+     "20 日",
+     "60 日",
+     "120 日"
+    ],
+    "kbar_picker_checked": 1,
+    "chart_period": 20
    },
    "h1": null,
    "batch3": {
@@ -1914,7 +1971,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -2095,7 +2157,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -2283,7 +2350,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": {
     "vw": 1440,
@@ -2583,7 +2655,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -2783,7 +2860,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -2998,8 +3080,8 @@
    "expanders": [],
    "p2": {
     "onebrain": {
-     "top": 1129.1,
-     "bottom": 1170.7,
+     "top": 1213.1,
+     "bottom": 1254.7,
      "left": 80,
      "right": 1200,
      "height": 41.6,
@@ -3007,8 +3089,8 @@
     },
     "slot": null,
     "grid": {
-     "top": 938.1,
-     "bottom": 1121.1,
+     "top": 1022.1,
+     "bottom": 1205.1,
      "left": 80,
      "right": 1200,
      "height": 183.1,
@@ -3032,7 +3114,23 @@
     "chart_svg_h": 220,
     "chart_legend": "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤",
     "chart_text": "🇹🇼 台股趨勢 加權指數日 K｜單位：指數點｜顏色只比較當日開盤與收盤，不是相對前一日漲跌 ⚠ 過期 17 天 50,500 47,155 43,810 40,465 37,120 2026-10-08 2026-11-09 紅｜收盤＞開盤 綠｜收盤＜開盤 灰｜收盤＝開盤 資料日 2026-11-09｜本地加權指數歷史快取（來源 Yahoo）｜缺值不補",
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": {
+     "top": 877.4,
+     "bottom": 945.4,
+     "left": 80,
+     "right": 1200,
+     "height": 68,
+     "width": 1120
+    },
+    "kbar_picker_title": "期間",
+    "kbar_picker_labels": [
+     "20 日",
+     "60 日",
+     "120 日"
+    ],
+    "kbar_picker_checked": 1,
+    "chart_period": 20
    },
    "h1": null,
    "batch3": {
@@ -3221,7 +3319,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -3402,7 +3505,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -3590,7 +3698,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": {
     "vw": 1280,
@@ -3890,7 +4003,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {
@@ -4090,7 +4208,12 @@
     "chart_svg_h": null,
     "chart_legend": null,
     "chart_text": null,
-    "chart_danger": 0
+    "chart_danger": 0,
+    "kbar_picker": null,
+    "kbar_picker_title": null,
+    "kbar_picker_labels": [],
+    "kbar_picker_checked": 0,
+    "chart_period": null
    },
    "h1": null,
    "batch3": {

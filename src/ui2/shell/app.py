@@ -18,7 +18,7 @@ import streamlit as st
 
 from shared.ui2_contract.pages import (
     ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, FEED_FAKE, FEED_IDS, FEED_REAL,
-    P4_DATA, P4_TARGET, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
+    P4_DATA, P4_MARKET, P4_TARGET, PAGE_IDS, PAGE_LABELS, SCENARIO_IDS,
 )
 from src.services.ui2.preview_feed import DEFAULT_SCENARIO, get_preview_page_vm
 from src.services.ui2.real_canonical import RealFeedSnapshot, get_real_page_vm
@@ -27,6 +27,7 @@ from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_FEED_DEGRADED_TEX
 from src.ui2.components.html import degraded_notice_html, real_mobile_note_html, top_status_row_html
 from src.ui2.shell.css import CSS
 from src.ui2.views import VIEWS
+from src.ui2.views.market import KBAR_DAYS_DEFAULT, KBAR_DAY_OPTIONS
 from src.ui2.views.target import render_with_lookup
 
 KEY_PAGE = "ui2_page"
@@ -34,6 +35,7 @@ KEY_SCENARIO = "ui2_scenario"
 KEY_NAV = "ui2_nav"          # container key（CSS 錨點 `.st-key-ui2_nav`；非 session_state）
 KEY_ACCOUNT = "ui2_account"            # 👤 我的頁 FAKE 帳戶狀態（Preview 控制；純 UI 狀態）
 KEY_TARGET_MODE = "ui2_target_mode"    # 🎯 標的頁模式（widget 在 views/target.py；須與該檔常數相同）
+KEY_KBAR_DAYS = "ui2_kbar_days"        # 📊 日 K 期間（widget 在 views/market.py；須與該檔常數相同；純 UI 狀態）
 KEY_FEED = "ui2_feed"                  # 資料來源（FAKE／Real-data Preview；Preview 控制；純 UI 狀態）
 KEY_DEV_SURFACE = "ui2_dev_surface"    # 開發面 container key（CSS／測試錨點 `.st-key-ui2_dev_surface`；非 session_state）
 DEV_FLAG_PARAM = "ui2_dev"             # 開發面旗標（query parameter）
@@ -80,6 +82,19 @@ def lookup_flag_on(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in ("1", "true")
 
 
+def _selected_kbar_days(page: str) -> int:
+    """📊 日 K 所選期間。**只有市場頁**用 radio 的值；其他頁一律預設窗（原路徑）。
+    session 值不在核准選項（非 int／bool／252／被竄改）→ 收斂回預設並寫回（fail closed，⛔ 讀更寬的窗）。
+    不寫預設值（widget 自己預設 20；Real 模式不產生 session 寫入）。"""
+    if page != P4_MARKET:
+        return KBAR_DAYS_DEFAULT
+    days = st.session_state.get(KEY_KBAR_DAYS, KBAR_DAYS_DEFAULT)
+    if isinstance(days, int) and not isinstance(days, bool) and days in KBAR_DAY_OPTIONS:
+        return days
+    st.session_state[KEY_KBAR_DAYS] = KBAR_DAYS_DEFAULT
+    return KBAR_DAYS_DEFAULT
+
+
 def run(diag_check=None, lookup_input: bool = False) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     dev = dev_surface_enabled()
@@ -96,11 +111,13 @@ def run(diag_check=None, lookup_input: bool = False) -> None:
     degraded = False     # Real 讀取整體失敗（#1204）；僅此當次 render
     if real:
         # 每 rerun 只讀一次；只建目前頁的 VM（四頁共用同一個 snapshot 函式與轉換，位階三處同一次呼叫結果）。
+        days = _selected_kbar_days(st.session_state[KEY_PAGE])
         try:
-            snap = read_real_snapshot()
+            # 預設窗維持**無參**呼叫（與期間切換之前逐字相同；既有注入點／入口包裝 `lambda: snap` 不受影響）；非預設才帶 `days`。
+            snap = read_real_snapshot() if days == KBAR_DAYS_DEFAULT else read_real_snapshot(days=days)
         except Exception:   # noqa: BLE001 — 僅此邊界、僅 Exception（#1204 G1）；⛔ 不留例外原文／traceback（固定分類 "Exception"）
             degraded = True
-            snap = RealFeedSnapshot.of(None, "Exception", None, "Exception", kbar_error="Exception")
+            snap = RealFeedSnapshot.of(None, "Exception", None, "Exception", kbar_error="Exception", kbar_days=days)
         vm = get_real_page_vm(st.session_state[KEY_PAGE], snap,
                               mode=st.session_state.get(KEY_TARGET_MODE))
     else:

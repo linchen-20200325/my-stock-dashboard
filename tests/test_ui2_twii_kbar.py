@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as _dt
 import re
 from html import unescape
 
@@ -37,11 +38,13 @@ from tests.test_ui2_p1_human_text import _snapshots, hits_in, vm_visible_text
 from tests.ui2_viewport import measure_viewport as MV
 
 LEGEND = "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤"
+PICKER_MARK = "<!--kbar-period-picker-->"
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────
 def _dates(n: int) -> tuple[str, ...]:
-    return tuple(f"2026-10-{d:02d}" for d in range(1, n + 1))
+    """n 個嚴格升序的 ISO 日期（自 2026-10-01 起每日一個；n ≤ 31 與舊版逐字相同，n > 31 才跨月——60／120 根測試用）。"""
+    return tuple((_dt.date(2026, 10, 1) + _dt.timedelta(days=i)).isoformat() for i in range(n))
 
 
 def _bars(n: int):
@@ -87,8 +90,9 @@ def _regime_dict():
             "risk_cap_disclosure": None}
 
 
-def _feed(monkeypatch, *, card=None, kbar=None, card_exc=None, kbar_exc=None, calls=None) -> RealFeedSnapshot:
-    """經**真 feed** 跑：只把 canonical service 換成注入版本（支援 `with_ohlc` 關鍵字）。"""
+def _feed(monkeypatch, *, card=None, kbar=None, card_exc=None, kbar_exc=None, calls=None, days=None) -> RealFeedSnapshot:
+    """經**真 feed** 跑：只把 canonical service 換成注入版本（支援 `with_ohlc` 關鍵字）。
+    `days=None`＝既有無參呼叫（預設路徑，必須與期間切換之前逐值相同）；給值＝經核准的所選期間。"""
     calls = calls if calls is not None else []
     kbar = kbar if kbar is not None else _kbar_view()
     card = card if card is not None else _matching_card(kbar)
@@ -105,7 +109,7 @@ def _feed(monkeypatch, *, card=None, kbar=None, card_exc=None, kbar_exc=None, ca
 
     monkeypatch.setattr(TWS, "get_twii_trend_view", fake_twii)
     monkeypatch.setattr(allocation_service, "get_macro_regime", lambda **kw: _regime_dict())
-    return RF.read_real_snapshot()
+    return RF.read_real_snapshot() if days is None else RF.read_real_snapshot(days=days)
 
 
 def _chart(snap) -> KbarChartVM:
@@ -118,10 +122,18 @@ def _card_field(snap) -> FieldVM:
     return get_real_page_vm(P4_MARKET, snap).context.cards[0].field
 
 
-def _render(vm, monkeypatch) -> list[str]:
+def _render(vm, monkeypatch, events: list[str] | None = None) -> list[str]:
+    """渲染 market 頁並收集 `_md` 區塊。期間 radio（原生 st widget，不經 `_md`）在這裡換成記號：
+    預設不記錄（既有逐塊斷言不受影響）；給 `events` 時，`_md` 區塊與 radio 位置依實際呼叫順序一起記進去。"""
     out: list[str] = []
-    monkeypatch.setattr(market, "_md", out.append)
-    monkeypatch.setattr(_page, "_md", out.append)
+
+    def md(x):
+        out.append(x)
+        if events is not None:
+            events.append(x)
+    monkeypatch.setattr(market, "_md", md)
+    monkeypatch.setattr(_page, "_md", md)
+    monkeypatch.setattr(market, "_kbar_period_picker", lambda: events.append(PICKER_MARK) if events is not None else None)
     market.render(vm)
     return out
 
@@ -541,7 +553,10 @@ def _p2(**chart) -> dict:
     p2 = {"onebrain": {"top": 1010.0, "bottom": 1060.0}, "slot": None, "grid": {"top": 900.0, "bottom": 1000.0},
           "slot_graphics": 0, "slot_text": None, "spec_text": None, "slot_danger": 0,
           "chart": {"top": 630.0, "bottom": 890.0}, "chart_state": "ok", "chart_bars": 20, "chart_graphics": 2,
-          "chart_svg_h": 220.0, "chart_legend": LEGEND, "chart_text": "🇹🇼 台股趨勢 " + LEGEND, "chart_danger": 0}
+          "chart_svg_h": 220.0, "chart_legend": LEGEND, "chart_text": "🇹🇼 台股趨勢 " + LEGEND, "chart_danger": 0,
+          # 期間 radio（圖之後、指標卡之前；預設選中 20）
+          "kbar_picker": {"top": 892.0, "bottom": 898.0}, "kbar_picker_title": "期間",
+          "kbar_picker_labels": ["20 日", "60 日", "120 日"], "kbar_picker_checked": 1, "chart_period": 20}
     p2.update(chart)
     return p2
 
@@ -575,6 +590,40 @@ def test_viewport_kbar_check_passes_good_and_registered():
 ])
 def test_viewport_kbar_check_has_teeth(mut):
     assert _eval(_p2(**mut))["kbar_primary_chart"] != [], mut
+
+
+@pytest.mark.parametrize("period,bars", [(20, 20), (20, 1), (60, 60), (60, 20), (120, 120), (120, 61), (None, 20)])
+def test_viewport_kbar_check_accepts_each_approved_period_up_to_its_own_cap(period, bars):
+    assert _eval(_p2(chart_period=period, chart_bars=bars))["kbar_primary_chart"] == []
+
+
+@pytest.mark.parametrize("mut", [
+    dict(chart_period=20, chart_bars=21),                            # 預設窗正負控：仍 20 為上限
+    dict(chart_period=None, chart_bars=21),                          # 量不到選中值＝當預設 20（fail closed）
+    dict(chart_period=60, chart_bars=61), dict(chart_period=120, chart_bars=121),
+    dict(chart_period=20, chart_bars=60), dict(chart_period=60, chart_bars=120),   # 不得拿較寬的窗當上限
+    dict(chart_period=252, chart_bars=100), dict(chart_period=252, chart_bars=20),  # 未核准期間
+    dict(chart_period=True, chart_bars=1), dict(chart_period=0, chart_bars=1), dict(chart_period="60", chart_bars=60),
+    dict(kbar_picker=None),                                          # Real 日 K 圖卻沒有 radio
+    dict(kbar_picker_labels=["20 日", "60 日", "120 日", "252 日"]), dict(kbar_picker_labels=["20 日", "60 日"]),
+    dict(kbar_picker_labels=["20", "60", "120"]),
+    dict(kbar_picker_title="區間"), dict(kbar_picker_title=None),
+    dict(kbar_picker_checked=0), dict(kbar_picker_checked=2),
+    dict(kbar_picker={"top": 600.0, "bottom": 620.0}),               # radio 跑到圖之前
+    dict(kbar_picker={"top": 895.0, "bottom": 1100.0}),              # radio 壓到指標卡
+])
+def test_viewport_kbar_picker_and_period_checks_have_teeth(mut):
+    assert _eval(_p2(**mut))["kbar_primary_chart"] != [], mut
+
+
+def test_viewport_picker_must_not_exist_without_a_chart():
+    """FAKE／誠實空槽（沒有日 K 圖）卻有期間 radio → 紅；沒有 radio 的 FAKE 空槽照舊過。"""
+    slot = dict(chart=None, chart_state=None, chart_bars=0, chart_graphics=0, chart_svg_h=None, chart_legend=None,
+                chart_text=None, slot={"top": 630.0, "bottom": 700.0}, slot_text="🇹🇼 台股趨勢 ⬜ 尚未提供",
+                spec_text="SPEC｜最新收盤參考｜來源｜資料日 2026-10-20｜缺值不補", grid={"top": 900.0, "bottom": 1000.0})
+    no_picker = dict(slot, kbar_picker=None, kbar_picker_title=None, kbar_picker_labels=[], kbar_picker_checked=0, chart_period=None)
+    assert _eval(_p2(**no_picker))["kbar_primary_chart"] == []
+    assert _eval(_p2(**slot))["kbar_primary_chart"] != []        # _p2 預設帶 radio → 紅
 
 
 def test_viewport_order_check_still_applies_to_the_chart():
@@ -638,3 +687,419 @@ def test_g2f_still_rejects_open_attribute_in_the_feed():
     from tests import test_ui2_guards as G
     clean = (G.FEED_FILES[0]).read_text(encoding="utf-8")
     assert G.check_feed_boundary("o = v.open\n" + clean)
+
+
+# ══════════════════════════════════════════════════════════════════ §9 期間切換（20／60／120 日）
+# 授權：#1199 留言 7186846291（施工包）＋7186895108（客戶 R16 具名授權）。選項只有 20／60／120；預設 20；
+# 252／縮放／捲動／降採樣仍未核准。以下全是離線測試（注入 service／真 git 追蹤 parquet；不連網）。
+import hashlib as _hashlib
+
+DAY_OPTIONS = (20, 60, 120)
+APPROVED_LABELS = ["20 日", "60 日", "120 日"]
+KEY_DAYS = "ui2_kbar_days"
+#: 期間切換之前（main 0ceeb97）的預設路徑基準：以同一組注入 fixture 量到的 sha256（逐位元組）。
+_BASE_HTML_SHA = {
+    "ok20": "d11a7772673c5820e27190d5a08fd6c4a13dbeebc10bf74194e1d914d0309605",
+    "partial7": "9326f732d1fc0970698c908a606828fc18d13a3bdbcf2b85d09062aee986f411",
+    "stale": "e3a269b4e9e6266392c6ceef9a032bcde8ef0b477feee347fb5f1400d71a61ba",
+}
+_BASE_VM_SHA = {
+    "p4_market": "9fd1b135597c7f2cc7b5e4ae499992a911bfdf50eebb93f846a258204f5b9986",
+    "p4_target": "047664aad9a6d2ca314f2b0e5ffc10bd775ca4272a02ddae2f465b0519ea198f",
+    "p4_hold": "187b6de4c3102974fdab82ddedc3ed4d1b3230fd0cf811f43a47c29449789e78",
+    "p4_me": "f906e7446ee8eb6cfafcda09ffa79b527f44c2b0ad82d08ffe4407de94ee75cb",
+    "p4_data": "a2adcd28c1dbbd4d9d445d673f602424b0d2047b1123ebc1c9295ae0f413f7d5",
+}
+#: 不得被接受的「期間」（含 bool、未核准的 252、非 int 型別、邊界值）。選擇：**fail closed＝明示錯誤（ValueError），
+#: 且在觸及快取讀取（`get_twii_trend_view`）之前**；殼（shell）則把殘留的非法 session 值收斂回預設 20。
+_BAD_DAYS = [True, False, 252, 0, -20, 19, 21, 59, 61, 119, 121, 20.0, 60.0, "20", "60 日", None, (20,), [20], 2**40]
+
+
+def _sha(text: str) -> str:
+    return _hashlib.sha256(text.encode()).hexdigest()
+
+
+def test_option_table_and_keys_are_pinned_across_feed_canonical_view_and_shell():
+    from src.ui2.shell import app as shell
+    assert RF.TWII_KBAR_DAY_OPTIONS == RC.KBAR_DAY_OPTIONS == market.KBAR_DAY_OPTIONS == DAY_OPTIONS
+    assert RF.TWII_KBAR_DAYS == RC.KBAR_VISIBLE_BARS == market.KBAR_DAYS_DEFAULT == DAY_OPTIONS[0] == 20
+    assert market.KEY_KBAR_DAYS == shell.KEY_KBAR_DAYS == KEY_DAYS
+    assert market.KEY_KBAR_DAYS_BOX == "ui2_kbar_days_box"
+    assert market.KBAR_DAYS_LABEL == "期間"
+    assert [market.kbar_days_label(n) for n in DAY_OPTIONS] == APPROVED_LABELS
+    assert not {252, 5, 10, 30, 90}.intersection(DAY_OPTIONS)
+
+
+def test_default_path_is_byte_identical_to_the_pre_change_baseline(monkeypatch):
+    """預設（20）時圖的 HTML 與 5 頁 VM 與期間切換之前逐位元組同基準；明示傳 20 與不傳完全相同。"""
+    for name, kw in {"ok20": {}, "partial7": {"kbar": _kbar_view(7)},
+                     "stale": {"kbar": _kbar_view(is_stale=True, age_days=4, stale_reason="x")}}.items():
+        a = _feed(monkeypatch, **kw)
+        b = _feed(monkeypatch, days=20, **kw)
+        assert a == b and a.kbar_days == 20
+        html = H.kbar_chart_html(get_real_page_vm(P4_MARKET, a).context.kbar)
+        assert _sha(html) == _BASE_HTML_SHA[name], name
+        assert html == H.kbar_chart_html(get_real_page_vm(P4_MARKET, b).context.kbar)
+    snap = _feed(monkeypatch)
+    assert {p: _sha(repr(get_real_page_vm(p, snap))) for p in PAGE_IDS} == _BASE_VM_SHA
+
+
+@pytest.mark.parametrize("days", [60, 120])
+def test_selected_window_card_stays_one_day_and_kbar_reads_the_selected_days_once(monkeypatch, days):
+    calls: list = []
+    kv = _kbar_view(days)
+    snap = _feed(monkeypatch, kbar=kv, calls=calls, days=days)
+    assert calls == [(1, {}), (days, {"with_ohlc": True})]                    # 卡片仍 1 日；日 K 只一次、所選窗
+    assert snap.kbar_days == days and snap.kbar is not None and len(snap.kbar.xs) == days
+    chart = _chart(snap)
+    assert chart.field.state is FieldState.OK and len(chart.candles) == days
+    assert chart.target_n == days and chart.notes == ()
+    assert [c.date for c in chart.candles] == list(kv.xs)
+    assert [(c.open, c.high, c.low, c.close) for c in chart.candles] == list(zip(kv.open, kv.high, kv.low, kv.close))
+    assert chart.field.value_text == _card_field(snap).value_text == f"{kv.close[-1]:,.2f}"      # 與收盤卡同源同值
+    assert RC.kbar_same_source_problem(snap.kbar, snap.twii) == ""
+    html = H.kbar_chart_html(chart)
+    assert len(re.findall(r"data-kbar-dir=", html)) == days
+    assert f"共 {days} 根" in html                                                       # aria-label
+    assert kv.xs[0] in _visible(html) and kv.xs[-1] in _visible(html)               # 起訖日期
+
+
+@pytest.mark.parametrize("days", [60, 120])
+def test_selected_window_html_has_no_controls_volume_ma_or_fake(monkeypatch, days):
+    html = H.kbar_chart_html(_chart(_feed(monkeypatch, kbar=_kbar_view(days), days=days)))
+    low = html.lower()
+    for tag in ("<button", "<input", "<select", "<a ", "onclick", "<script", "<canvas", "<img"):
+        assert tag not in low, tag
+    vis = _visible(html)
+    for w in ("MA", "均線", "成交量", "volume", "量能", "買", "賣", "訊號", "FAKE", "示意"):
+        assert w not in vis, w
+    assert hits_in(vis) == []
+    assert re.findall(r'<svg class="ui2-kbar__svg" width="100%" height="(\d+)"', html) == ["220"]   # 圖高不變（不縮放）
+
+
+@pytest.mark.parametrize("days,n", [(60, 45), (60, 1), (120, 100), (120, 59)])
+def test_fewer_bars_than_the_selected_window_are_drawn_as_is_with_the_honest_note(monkeypatch, days, n):
+    chart = _chart(_feed(monkeypatch, kbar=_kbar_view(n), days=days))
+    assert len(chart.candles) == n and chart.target_n == days                  # ⛔ 補棒
+    assert chart.notes == (f"僅 {n} 根（不足 {days}）",)
+    assert f"僅 {n} 根（不足 {days}）" in _visible(H.kbar_chart_html(chart))
+
+
+def test_selected_window_is_the_upper_bound_of_the_bar_count(monkeypatch):
+    """所選窗＝根數上限：60 窗收到 61 根、20 窗收到 60 根（反過來也不行）都是契約違反（紅），卡片照常。"""
+    good = _kbar_view(20)
+    for days, view in ((60, _kbar_view(61)), (20, _kbar_view(60)), (120, _kbar_view(121))):
+        snap = _feed(monkeypatch, kbar=view, card=_matching_card(good), days=days)
+        assert snap.kbar is None and snap.kbar_error == RC.CONTRACT_ERROR, days
+        assert _chart(snap).field.state is FieldState.UNAVAILABLE
+        assert _card_field(snap).state is FieldState.OK
+    with pytest.raises(RC.RealFeedContractError):
+        RC.twii_kbar_fact_of(_kbar_view(61), days=60)
+    with pytest.raises(RC.RealFeedContractError):
+        RC.twii_kbar_fact_of(_kbar_view(21))                                       # 預設窗：行為不變
+    RC.twii_kbar_fact_of(_kbar_view(60), days=60)
+    RC.twii_kbar_fact_of(_kbar_view(21), days=60)                                  # 21 ≤ 60：合法（只是不足 60）
+
+
+@pytest.mark.parametrize("days", [60, 120])
+@pytest.mark.parametrize("name", [n for n in _VIOLATIONS if n != "too_many_bars"])
+def test_every_contract_violation_is_still_red_at_the_selected_window(monkeypatch, days, name):
+    """同一組契約違反（長度／日期／OHLC／as_of…）在 60／120 窗同樣把日 K 變紅、卡片照常。"""
+    base = _kbar_view(days)
+    spec = _VIOLATIONS[name]
+    if name in ("is_stale_not_bool", "bad_upstream_state"):
+        view = dataclasses.replace(base, **{"is_stale": 1} if name == "is_stale_not_bool" else {"upstream_state": "WHATEVER"})
+    else:
+        spec = {k: v for k, v in spec.items()}
+        # 長度類違反以所選窗的根數重建；其餘照原值（欄位位置 < 20 在 60／120 窗內同樣存在）
+        if name == "zero_bars_but_ok":
+            view = _kbar_view(days, **spec)
+        else:
+            view = _kbar_view(days, **{k: (v if not isinstance(v, tuple) or len(v) != 20 else v + base.__dict__[k][20:])
+                                       for k, v in spec.items()})
+    snap = _feed(monkeypatch, kbar=view, card=_matching_card(base), days=days)
+    assert snap.kbar is None and snap.kbar_error, (days, name)
+    chart = _chart(snap)
+    assert chart.field.state is FieldState.UNAVAILABLE and not chart.candles
+    assert _card_field(snap).state is FieldState.OK
+
+
+@pytest.mark.parametrize("days", [60, 120])
+def test_selected_window_stale_unknown_not_ok_and_degraded_matrix(monkeypatch, days):
+    stale = _chart(_feed(monkeypatch, kbar=_kbar_view(days, is_stale=True, age_days=4, stale_reason="x"), days=days))
+    assert stale.field.state is FieldState.STALE and stale.field.status_text == "⚠ 過期 4 天" and len(stale.candles) == days
+    unk = _chart(_feed(monkeypatch, kbar=_kbar_view(days, is_stale=None, age_days=None), days=days))
+    assert unk.field.state is FieldState.STALE and unk.field.status_text == T.TEXT_STALE_UNKNOWN
+    bad = _kbar_view(days, ohlc_ok=False, ohlc_error=OC.INCOMPLETE_BAR, open=(), high=(), low=(), n_ohlc=0)
+    g = _chart(_feed(monkeypatch, kbar=bad, days=days))
+    assert g.field.state is JudgementState.UNDETERMINABLE and not g.candles and g.target_n == days
+    r = _chart(_feed(monkeypatch, kbar_exc=RuntimeError("boom"), days=days))
+    assert r.field.state is FieldState.UNAVAILABLE and not r.candles and r.target_n == days
+    c = _chart(_feed(monkeypatch, card_exc=OSError("x"), kbar=_kbar_view(days), days=days))
+    assert c.field.state is JudgementState.UNDETERMINABLE and not c.candles
+    mm = _kbar_view(days)
+    m = _chart(_feed(monkeypatch, kbar=mm, card=dataclasses.replace(_matching_card(mm), as_of="2026-01-01"), days=days))
+    assert m.field.state is FieldState.UNAVAILABLE and m.field.detail == RC.KBAR_MISMATCH_TEXT and not m.candles
+
+
+@pytest.mark.parametrize("bad", _BAD_DAYS, ids=repr)
+def test_illegal_days_fail_closed_before_any_cache_read(monkeypatch, bad):
+    """非法期間（含 bool、252、非 int、未核准值）→ `ValueError`，且 `get_twii_trend_view`／位階讀取一次都沒被呼叫。"""
+    calls: list = []
+    regime_calls: list = []
+    monkeypatch.setattr(TWS, "get_twii_trend_view", lambda n, **kw: calls.append((n, kw)))
+    monkeypatch.setattr(allocation_service, "get_macro_regime", lambda **kw: regime_calls.append(kw))
+    with pytest.raises(ValueError):
+        RF.read_real_snapshot(days=bad)
+    with pytest.raises(ValueError):
+        RF._read_twii_kbar(bad)
+    assert calls == [] and regime_calls == []
+    with pytest.raises(ValueError):
+        RealFeedSnapshot.of(None, "E", None, "E", kbar_error="E", kbar_days=bad)
+    with pytest.raises(ValueError):
+        RC.twii_kbar_fact_of(_kbar_view(), days=bad)
+    with pytest.raises(ValueError):
+        RC.validate_twii_kbar_fact(RC.twii_kbar_fact_of(_kbar_view()), days=bad)
+
+
+def test_illegal_days_guard_has_teeth(monkeypatch):
+    """突變：拔掉 feed 的期間守衛 → 非法值會一路觸及 service 讀取（上面的『讀取前』斷言因此會轉紅）。"""
+    calls: list = []
+    monkeypatch.setattr(TWS, "get_twii_trend_view", lambda n, **kw: (calls.append((n, kw)), _kbar_view())[1])
+    monkeypatch.setattr(allocation_service, "get_macro_regime", lambda **kw: _regime_dict())
+    monkeypatch.setattr(RF, "_require_kbar_days", lambda d: d)
+    RF._read_twii_kbar(252)
+    assert calls and calls[0][0] == 252                                    # 守衛被拔掉＝252 真的被讀（測試會抓到）
+
+
+def test_default_call_never_passes_through_the_selection_guard_differently(monkeypatch):
+    """既有無參呼叫＝預設路徑：`read_real_snapshot()`、`_read_twii_kbar()` 簽名相容。"""
+    import inspect
+    assert inspect.signature(RF.read_real_snapshot).parameters["days"].default == 20
+    assert inspect.signature(RF._read_twii_kbar).parameters["days"].default == 20
+
+
+# ── view：radio 的位置與只在 Real 日 K 出現 ─────────────────────────────────
+def test_picker_sits_after_the_chart_and_before_delta_only_when_the_vm_has_a_kbar(monkeypatch):
+    vm = get_real_page_vm(P4_MARKET, _feed(monkeypatch))
+    ev: list[str] = []
+    _render(vm, monkeypatch, ev)
+    i_l1 = next(i for i, c in enumerate(ev) if 'class="ui2-m-l1"' in c)
+    assert 'data-ui2-l1="primary_chart"' in ev[i_l1 + 1]                    # 圖（含圖例、附註、資料日）
+    assert ev[i_l1 + 2] == PICKER_MARK                                          # 圖之後
+    assert 'data-ui2-delta="1"' in ev[i_l1 + 3]                                # 今日變化之前
+    assert 'class="ui2-grid"' in ev[i_l1 + 4] and 'data-ui2-l1="onebrain"' in ev[i_l1 + 5]   # DEC-157 頁序不變
+    assert ev.count(PICKER_MARK) == 1
+    # 沒有日 K 事實（FAKE 軸／無 kbar 的 snapshot）→ 誠實空槽，沒有 radio
+    for slot_vm in (get_real_page_vm(P4_MARKET, _snapshots()["loaded"]), get_preview_page_vm(P4_MARKET, "loaded")):
+        assert slot_vm.context.kbar is None
+        ev2: list[str] = []
+        _render(slot_vm, monkeypatch, ev2)
+        assert PICKER_MARK not in ev2 and any('data-ui2-l1="primary_slot"' in c for c in ev2)
+
+
+@pytest.mark.parametrize("kw", [dict(kbar_exc=RuntimeError("x")), dict(card_exc=OSError("x")),
+                                dict(kbar=_kbar_view(ohlc_ok=False, ohlc_error=OC.INCOMPLETE_BAR, open=(), high=(), low=(), n_ohlc=0)),
+                                dict(kbar=_kbar_view(is_stale=True, age_days=3, stale_reason="x"))],
+                         ids=["red", "card_failed_grey", "ohlc_not_ok_grey", "stale"])
+def test_picker_stays_available_when_the_window_is_in_an_error_or_grey_state(monkeypatch, kw):
+    ev: list[str] = []
+    _render(get_real_page_vm(P4_MARKET, _feed(monkeypatch, **kw)), monkeypatch, ev)
+    assert ev.count(PICKER_MARK) == 1
+
+
+@pytest.mark.parametrize("p", [p for p in PAGE_IDS if p != P4_MARKET])
+def test_other_pages_never_get_a_picker(monkeypatch, p):
+    import inspect
+    from src.ui2.views import VIEWS
+    snap = _feed(monkeypatch)
+    for vm in (get_real_page_vm(p, snap), get_preview_page_vm(p, "loaded")):
+        assert vm.context.kbar is None
+    assert "_kbar_period_picker" not in inspect.getsource(VIEWS[p])
+
+
+# ── 真殼＋AppTest：radio、重跑讀取次數、FAKE／其他頁無 radio ─────────────────
+def _real_at(**kw):
+    from tests.test_ui2_real_feed import _at
+    return _at(seed_fake=False, **kw)
+
+
+def _bars_in(at) -> int:
+    from tests.test_ui2_real_feed import _blob
+    return len(re.findall(r"data-kbar-dir=", _blob(at)))
+
+
+def _picker(at):
+    return at.radio(key=KEY_DAYS)
+
+
+def test_real_market_shows_the_picker_with_the_approved_labels_and_default_20(monkeypatch):
+    at = _real_at()
+    assert not at.exception
+    r = _picker(at)
+    assert r.label == "期間" and list(r.options) == APPROVED_LABELS
+    assert r.index == 0 and r.value == 20 and r.value == market.KBAR_DAYS_DEFAULT
+    assert _bars_in(at) == 20
+    assert [x.key for x in at.radio] == ["ui2_page", KEY_DAYS]              # 導覽之後、只多這一組
+
+
+def test_picker_dom_order_is_chart_then_picker_then_delta_then_cards(monkeypatch):
+    at = _real_at()
+    kinds: list[str] = []
+    for el in at.main:
+        if el.type == "markdown":
+            v = el.value
+            kinds.append("chart" if 'data-ui2-l1="primary_chart"' in v else
+                         "delta" if 'data-ui2-delta="1"' in v else
+                         "grid" if 'class="ui2-grid"' in v else
+                         "onebrain" if 'data-ui2-l1="onebrain"' in v else "")
+        elif el.type == "radio" and getattr(el, "key", None) == KEY_DAYS:
+            kinds.append("picker")
+    order = [k for k in kinds if k]
+    assert order[:5] == ["chart", "picker", "delta", "grid", "onebrain"], order
+
+
+@pytest.mark.parametrize("days", [60, 120])
+def test_selecting_a_window_redraws_that_many_bars_with_one_snapshot_per_rerun(monkeypatch, days):
+    calls: list = []
+    orig = TWS.get_twii_trend_view
+
+    def counted(n, **kw):
+        calls.append((n, kw))
+        return orig(n, **kw)
+    monkeypatch.setattr(TWS, "get_twii_trend_view", counted)
+    at = _real_at()
+    assert calls == [(1, {}), (20, {"with_ohlc": True})]                    # 首跑：卡片 1 次＋日 K 1 次（預設 20）
+    calls.clear()
+    _picker(at).set_value(days).run(timeout=60)
+    assert not at.exception
+    assert calls == [(1, {}), (days, {"with_ohlc": True})]                  # 切換那次 rerun：仍恰各讀一次
+    from tests.test_ui2_real_feed import _blob
+    blob = _blob(at)
+    assert _bars_in(at) == days and f"共 {days} 根" in blob
+    snap_direct = TWS.get_twii_trend_view(days, with_ohlc=True)
+    assert [d for d in re.findall(r'data-kbar-date="([\d-]+)"', blob)] == list(snap_direct.xs)
+    calls.clear()
+    _picker(at).set_value(20).run(timeout=60)                               # 可切回
+    assert _bars_in(at) == 20 and calls == [(1, {}), (20, {"with_ohlc": True})]
+
+
+def test_card_and_chart_stay_same_source_after_switching(monkeypatch):
+    from tests.test_ui2_real_feed import _blob
+    at = _real_at()
+    _picker(at).set_value(120).run(timeout=60)
+    blob = _blob(at)
+    card_val = re.search(r'data-card-id="twii".*?ui2-card__value[^>]*>([\d,\.]+)<', blob, re.S)
+    kbar_val = re.search(r'data-ui2-l1="primary_chart".*?ui2-(?:field|kbar)__value[^>]*>([\d,\.]+)<', blob, re.S)
+    direct = TWS.get_twii_trend_view(120, with_ohlc=True)
+    assert f"{direct.close[-1]:,.2f}" in blob
+    if card_val and kbar_val:
+        assert card_val.group(1) == kbar_val.group(1)
+
+
+def test_fake_axis_and_other_pages_have_no_picker(monkeypatch):
+    from tests.test_ui2_real_feed import _at
+    at = _at()                                                          # FAKE（預設播種為 fake）
+    assert not at.exception and [x.key for x in at.radio] == ["ui2_page"]
+    assert 'data-ui2-l1="primary_chart"' not in "\n".join(m.value for m in at.markdown)
+    at = _real_at()
+    for p in PAGE_IDS:
+        at.radio(key="ui2_page").set_value(p).run(timeout=60)
+        keys = [x.key for x in at.radio]
+        assert (KEY_DAYS in keys) == (p == P4_MARKET), (p, keys)
+    # Real → 回 FAKE（開發面）：radio 消失
+    at = _real_at(dev=True)
+    at.selectbox(key="ui2_feed").set_value("fake").run(timeout=60)
+    assert KEY_DAYS not in [x.key for x in at.radio]
+
+
+def test_other_pages_read_the_default_window_even_if_a_non_default_was_selected(monkeypatch):
+    calls: list = []
+    orig = TWS.get_twii_trend_view
+    monkeypatch.setattr(TWS, "get_twii_trend_view", lambda n, **kw: (calls.append((n, kw)), orig(n, **kw))[1])
+    at = _real_at()
+    _picker(at).set_value(120).run(timeout=60)
+    calls.clear()
+    at.radio(key="ui2_page").set_value("p4_data").run(timeout=60)
+    assert not at.exception and calls == [(1, {}), (20, {"with_ohlc": True})]    # 其他頁走原路徑（預設窗）
+
+
+def test_illegal_session_value_is_reset_to_the_default_and_nothing_wider_is_read(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from tests.test_ui2_real_feed import APP_UI2
+    for bad in (252, True, "60", 20.0, None):
+        calls: list = []
+        orig = TWS.get_twii_trend_view
+        monkeypatch.setattr(TWS, "get_twii_trend_view", lambda n, _o=orig, **kw: (calls.append((n, kw)), _o(n, **kw))[1])
+        a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+        a.session_state[KEY_DAYS] = bad
+        a.run(timeout=60)
+        assert not a.exception, bad
+        assert calls == [(1, {}), (20, {"with_ohlc": True})], (bad, calls)
+        assert _bars_in(a) == 20 and a.session_state[KEY_DAYS] == 20
+        monkeypatch.setattr(TWS, "get_twii_trend_view", orig)
+
+
+def test_picker_survives_a_red_chart_and_still_switches(monkeypatch):
+    """整窗錯誤（日 K 讀取失敗）→ 圖是紅色 Unavailable，radio 仍在、仍可切、切到的窗被傳進讀取。"""
+    calls: list = []
+    orig = TWS.get_twii_trend_view
+
+    def flaky(n, **kw):
+        calls.append((n, kw))
+        if kw.get("with_ohlc"):
+            raise RuntimeError("boom")
+        return orig(n, **kw)
+    monkeypatch.setattr(TWS, "get_twii_trend_view", flaky)
+    at = _real_at()
+    assert not at.exception and KEY_DAYS in [x.key for x in at.radio]
+    calls.clear()
+    _picker(at).set_value(60).run(timeout=60)
+    assert not at.exception and calls == [(1, {}), (60, {"with_ohlc": True})]
+    from tests.test_ui2_real_feed import _blob
+    assert 'data-state="unavailable"' in _blob(at) and _bars_in(at) == 0
+
+
+def test_shell_whole_read_failure_keeps_the_picker_and_the_selected_window(monkeypatch):
+    from src.ui2.shell import app as shell
+
+    def boom(*a, **k):
+        raise RuntimeError("secret-token")
+    monkeypatch.setattr(shell, "read_real_snapshot", boom)
+    at = _real_at()
+    assert not at.exception and KEY_DAYS in [x.key for x in at.radio]
+    _picker(at).set_value(120).run(timeout=60)
+    assert not at.exception
+    from tests.test_ui2_real_feed import _blob
+    assert "secret-token" not in _blob(at)
+
+
+def test_shell_passes_no_argument_for_the_default_window_and_days_for_the_others(monkeypatch):
+    """預設窗維持**無參**呼叫（既有注入點 `lambda: snap` 的測試／入口包裝不受影響）；非預設才帶 `days`。"""
+    from src.ui2.shell import app as shell
+    seen: list = []
+    orig = shell.read_real_snapshot
+
+    def spy(*a, **k):
+        seen.append((a, k))
+        return orig(*a, **k)
+    monkeypatch.setattr(shell, "read_real_snapshot", spy)
+    at = _real_at()
+    assert seen == [((), {})]
+    seen.clear()
+    _picker(at).set_value(60).run(timeout=60)
+    assert seen == [((), {"days": 60})]
+    seen.clear()
+    _picker(at).set_value(20).run(timeout=60)
+    assert seen == [((), {})]
+
+
+def test_g9_and_g2f_guards_stay_green_and_the_allowlist_is_untouched():
+    from tests import test_ui2_guards as G
+    for path in (G.ROOT / "src/ui2/views/market.py", G.ROOT / "src/ui2/shell/app.py"):
+        assert G.check_not_a_producer(path.read_text(encoding="utf-8")) == [], path.name
+        assert G.check_independence(path.read_text(encoding="utf-8")) == []
+        assert G.check_l5_service_reads(path.read_text(encoding="utf-8"), path.relative_to(G.ROOT).as_posix()) == []
+    feed = G.FEED_FILES[0].read_text(encoding="utf-8")
+    assert G.check_feed_boundary(feed) == []
+    assert G.G2F_IMPORT_ALLOWLIST["src.services.ui2.real_canonical"] == _G2F_RC_BEFORE | {"twii_kbar_fact_of"}

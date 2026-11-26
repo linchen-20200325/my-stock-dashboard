@@ -158,11 +158,14 @@ THRESHOLDS: list[dict[str, str]] = [
      "source": "總管裁示 R1 施工 Gate（#1199 comment 7100852561／7101402062 §3；暫採 ≥109.0px，非正式 DEC，非全面 UX PASS）：Real 390 導覽餘裕回歸守衛；既有 p2_nav_margin_160 規則與適用範圍一字不變"},
     {"id": "kbar_primary_chart",
      "rule": "（Issue #1099 PR-2）📊 市場：Primary 位置恰一個區塊——誠實空槽（FAKE／無日 K 事實；照 p2 判定）或日 K 主圖"
-             "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～20 根、svg 圖高約 220px"
+             "（Real-data Preview），⛔ 兩者並存。日 K 主圖有 K 棒（OK／Stale）時：K 棒 1～N 根（N＝圖外「期間」radio 目前選中的核准選項 20／60／120，"
+             "預設 20；未選中／量不到＝20；252 等未核准值一律紅）、svg 圖高約 220px"
              "（量測 200～240）、文字圖例逐字『紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤』、不得含『MA』／『均線』／『成交量』、"
              "不得有紅色 danger chip；無 K 棒（灰／紅態）時 0 個 svg／K 棒，紅色 danger chip 只准出現在 unavailable 態。"
+             "期間 radio（列標籤『期間』、選項恰『20 日／60 日／120 日』、恰一個選中）：有日 K 圖時必須在圖之後、指標卡之前；沒有日 K 圖（FAKE／空槽）時不得出現。"
              "排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
-     "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）"},
+     "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；"
+               "2026-11-26 期間切換：#1199 留言 7186846291／7186895108（客戶 R16 具名授權：20／60／120 日，預設 20；252／縮放／捲動／降採樣未核准）"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
              "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
@@ -312,7 +315,12 @@ P2_REAL_NAV_MARGIN_VIEWPORT_W = 390
 
 #: 日 K 主圖判定常數（判定器自己的字面值，獨立於被測的 `src/ui2/components/html.py`，避免 mutation 時判定器跟著被改）。
 KBAR_LEGEND_TEXT = "紅｜收盤＞開盤　綠｜收盤＜開盤　灰｜收盤＝開盤"
-KBAR_MAX_BARS = 20
+KBAR_MAX_BARS = 20                              # 預設窗（未選中／量不到 radio 時的上限；正負控保留 20）
+#: 期間切換（2026-11-26；#1199 7186846291／7186895108 客戶 R16 具名授權）：核准選項＝根數上限；⛔ 252 等其他值。
+#: 判定器自己的字面值（獨立於被測的 `src/ui2/views/market.py`，避免 mutation 時判定器跟著被改）。
+KBAR_PERIOD_CAPS: dict[int, int] = {20: 20, 60: 60, 120: 120}
+KBAR_PICKER_LABELS = ["20 日", "60 日", "120 日"]
+KBAR_PICKER_TITLE = "期間"
 KBAR_PLOT_H_RANGE = (200.0, 240.0)
 _KBAR_FORBIDDEN = ("MA", "均線", "成交量")
 
@@ -323,16 +331,41 @@ def _evaluate_kbar(p2: dict, out: dict[str, list[str]]) -> None:
     chart = p2.get("chart")
     if chart and p2.get("slot"):
         out[k].append("誠實空槽與日 K 主圖同時出現（Primary 位置只能有一個）")
+    picker = p2.get("kbar_picker")
     if not chart:
+        if picker:
+            out[k].append("沒有日 K 主圖（FAKE／空槽）卻出現期間 radio（只准 Real 日 K 才有）")
         return
+    if not picker:
+        out[k].append("有日 K 主圖卻缺『期間』radio")
+    else:
+        if p2.get("kbar_picker_labels") != KBAR_PICKER_LABELS:
+            out[k].append(f"期間 radio 選項 {p2.get('kbar_picker_labels')!r} ≠ 核准 {KBAR_PICKER_LABELS!r}")
+        if p2.get("kbar_picker_title") != KBAR_PICKER_TITLE:
+            out[k].append(f"期間 radio 列標籤 {p2.get('kbar_picker_title')!r} ≠ {KBAR_PICKER_TITLE!r}")
+        if p2.get("kbar_picker_checked") != 1:
+            out[k].append(f"期間 radio 選中數 {p2.get('kbar_picker_checked')!r}（應恰 1）")
+        if picker["top"] < chart["bottom"] - 0.5:
+            out[k].append(f"期間 radio top {picker['top']:.0f} 早於日 K 圖底緣 {chart['bottom']:.0f}（應在圖之後）")
+        grid = p2.get("grid")
+        if grid and picker["bottom"] > grid["top"] + 0.5:
+            out[k].append(f"期間 radio 底緣 {picker['bottom']:.0f} 晚於指標卡頂緣 {grid['top']:.0f}（應在今日變化／指標卡之前）")
+    period = p2.get("chart_period")
+    if period is None:
+        cap = KBAR_MAX_BARS
+    elif isinstance(period, int) and not isinstance(period, bool) and period in KBAR_PERIOD_CAPS:
+        cap = KBAR_PERIOD_CAPS[period]
+    else:
+        cap = KBAR_MAX_BARS
+        out[k].append(f"期間 radio 選中值 {period!r} 不是核准選項 {sorted(KBAR_PERIOD_CAPS)}")
     state, bars = p2.get("chart_state"), int(p2.get("chart_bars") or 0)
     text = p2.get("chart_text") or ""
     for w in _KBAR_FORBIDDEN:
         if w in text:
             out[k].append(f"日 K 主圖出現未核准字樣 {w!r}")
     if state in ("ok", "stale"):
-        if not (1 <= bars <= KBAR_MAX_BARS):
-            out[k].append(f"K 棒 {bars} 根（應 1～{KBAR_MAX_BARS}）")
+        if not (1 <= bars <= cap):
+            out[k].append(f"K 棒 {bars} 根（期間 {period or KBAR_MAX_BARS} 日，應 1～{cap}）")
         h = p2.get("chart_svg_h")
         if h is None or not (KBAR_PLOT_H_RANGE[0] <= h <= KBAR_PLOT_H_RANGE[1]):
             out[k].append(f"日 K 圖高 {h}（應約 220，量測 {KBAR_PLOT_H_RANGE[0]:.0f}～{KBAR_PLOT_H_RANGE[1]:.0f}）")
@@ -758,6 +791,9 @@ _JS = r"""
   const chartSvg = chartEl ? chartEl.querySelector('.ui2-kbar__svg') : null;
   const chartLeg = chartEl ? chartEl.querySelector('[data-ui2-kbar-legend]') : null;
   const gridEl = document.querySelector('.ui2-grid');
+  const pickerEl = document.querySelector('.st-key-ui2_kbar_days_box');
+  const pickerLabels = pickerEl ? [...pickerEl.querySelectorAll('[role="radiogroup"] > label')] : [];
+  const pickerChecked = pickerLabels.find(l => l.querySelector('input').checked) || null;
   const p2 = {onebrain: obEl ? R(obEl) : null, slot: slotEl ? R(slotEl) : null, grid: gridEl ? R(gridEl) : null,
     slot_graphics: slotEl ? slotEl.querySelectorAll('svg,polyline,canvas,img,[data-testid="stVegaLiteChart"]').length : 0,
     slot_text: slotEl ? slotEl.innerText.replace(/\s+/g,' ').trim() : null,
@@ -769,7 +805,12 @@ _JS = r"""
     chart_svg_h: chartSvg ? R(chartSvg).height : null,
     chart_legend: chartLeg ? chartLeg.textContent.trim() : null,
     chart_text: chartEl ? chartEl.innerText.replace(/\s+/g,' ').trim() : null,
-    chart_danger: chartEl ? chartEl.querySelectorAll('.ui2-chip--danger').length : 0};
+    chart_danger: chartEl ? chartEl.querySelectorAll('.ui2-chip--danger').length : 0,
+    kbar_picker: pickerEl ? R(pickerEl) : null,
+    kbar_picker_title: pickerEl && pickerEl.querySelector('[data-testid="stWidgetLabel"]') ? pickerEl.querySelector('[data-testid="stWidgetLabel"]').innerText.replace(/\s+/g,' ').trim() : null,
+    kbar_picker_labels: pickerLabels.map(l => l.innerText.replace(/\s+/g,' ').trim()),
+    kbar_picker_checked: pickerLabels.filter(l => l.querySelector('input').checked).length,
+    chart_period: pickerChecked ? (parseInt(pickerChecked.innerText.replace(/\s+/g,' ').trim(), 10) || null) : null};
   // DEC-141：💼 W-11 批 1 座標與內容（僅 p4_hold 有）
   const hq = s => document.querySelector(s);
   const hStat = hq('[data-ui2-l1="hold_status"]'), hPrim = hq('[data-ui2-l1="hold_primary_slot"]'),
