@@ -42,6 +42,7 @@ import socket
 import sys
 import threading
 from dataclasses import dataclass
+from html import escape
 from datetime import date
 from pathlib import Path
 
@@ -91,6 +92,7 @@ LABEL_MISSING = "缺項"
 LABEL_REJECTED = "拒用"
 ROW_LABELS = (LABEL_SUPPORT, LABEL_COUNTER, LABEL_MISSING, LABEL_REJECTED)
 
+STATUS_PREFIX = "目前主題："
 SYNTHETIC_MARK = "示意／合成"
 SECTION_ID = "onebrain"
 ORIG_SLOT_TITLE = "🤖 OneBrain 持股摘要"
@@ -99,6 +101,10 @@ ORIG_SLOT_TITLE = "🤖 OneBrain 持股摘要"
 def _section_title(topic: str) -> str:
     tail = "（預覽）" if topic == TOPIC_MARKET else ""
     return f"🤖 OneBrain 示意｜{topic}{tail}｜合成資料，非即時、非投資建議"
+
+
+def status_text(topic: str) -> str:
+    return f"{STATUS_PREFIX}{topic}"
 
 
 def _no_input(what: str) -> str:
@@ -339,7 +345,8 @@ SLOT_CSS = (
     '.ui2-m-onebrain[data-ui2-l1="onebrain"] .ui2-row__body{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}'
     # 手機（DOM＝建議持股水位 → OneBrain）：把 OneBrain 槽視覺上提到本體最前面，讓選擇器與槽緊鄰（DOM 順序不變；槽內無可聚焦元件）。
     # 桌機用 grid-area 排版，不受影響。
-    '@media (max-width:768px){.ui2-h-body>.ui2-h-ob{order:-1}}</style>'
+    '@media (max-width:768px){.ui2-h-body>.ui2-h-ob{order:-1}}'
+    '[data-ui2-s3l0-status]{font-size:.85rem;opacity:.85;margin:0}</style>'
 )
 
 
@@ -353,7 +360,11 @@ def _draw_selector() -> None:
         # Chromium 把整份文件所有「name 為空」的 radio 當成同一組 ⇒ 在選擇器最後一項按 → 會跳到頁面導覽（同樣是 name="" 的 radio）
         # 並直接切換頁籤（1.59.2 無此問題）。segmented_control 是按鈕組，不與導覽 radio 共組。見測試檔的 1.56 調查註解。
         st.segmented_control(SELECTOR_LABEL, TOPICS, selection_mode="single", key=TOPIC_KEY)
-        st.markdown(SLOT_CSS, unsafe_allow_html=True)
+        # 補償（不是真正的 ARIA 選取狀態）：Streamlit 1.56 的 segmented_control 是一組沒有 role／aria-checked／aria-pressed 的 <button>，
+        # 輔助科技讀不到目前選了哪個（1.59.2 有 role=radio＋checked）。這裡以一行**文字**（`role="status"` 的 live region；純 HTML、零 JS）
+        # 傳達目前主題，兩版的 AX tree 都讀得到；控制項本身在 1.56 仍沒有 aria 選取（已知限制，測試明確記錄）。
+        st.markdown(SLOT_CSS + f'<div role="status" data-ui2-s3l0-status="1">{escape(status_text(topic))}</div>',
+                    unsafe_allow_html=True)
 
 
 def _make_hold_wrapper(orig_hold):
@@ -423,9 +434,8 @@ def uninstall() -> None:
         delattr(shell, ORIG_VIEWS_ATTR)
         hold._md = getattr(hold, ORIG_MD_ATTR)
         delattr(hold, ORIG_MD_ATTR)
-    for attr in (STATE_ATTR,):
-        if hasattr(shell, attr):
-            delattr(shell, attr)
+    if hasattr(shell, STATE_ATTR):
+        delattr(shell, STATE_ATTR)
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -265,7 +265,7 @@ def test_current_topic_falls_back_to_default_on_garbage():
 # 1b. fast：文案（工程詞彙／買賣動作／方向字）
 # ══════════════════════════════════════════════════════════════════════
 def _all_visible_strings(topic: str) -> list[str]:
-    out = [L._section_title(topic), L.SELECTOR_LABEL, *L.TOPICS, *L.ROW_LABELS]
+    out = [L._section_title(topic), L.SELECTOR_LABEL, L.status_text(topic), *L.TOPICS, *L.ROW_LABELS]
     for f in L.build_fields(topic):
         out += [x for x in (f.label, f.value_text, f.status_text, f.detail) if x]
     return out
@@ -292,6 +292,7 @@ BANNED_IMPORT_SUBSTRINGS = (
     "decision_digest", "onebrain", "ai_fetcher", "app_ai_service", "ai_qa_service", "ai_structured_summary",
     "requests", "httpx", "aiohttp", "urllib", "http.client", "openai", "anthropic", "google.generativeai",
     "google.genai", "vertexai", "langchain", "litellm", "src.services", "src.data", "src.compute", "proxy_helper",
+    "subprocess", "ctypes", "ftplib", "smtplib", "ssl", "telnetlib", "xmlrpc", "webbrowser", "multiprocessing",
 )
 #: 本檔對被測 launcher 的唯一合法 import（模組名含 onebrain 但它是 tests-only 入口，不是決策／OneBrain 模組）。
 SELF_ALLOWED_MODULES = frozenset({
@@ -300,6 +301,7 @@ SELF_ALLOWED_MODULES = frozenset({
     "tests.test_decision_digest_invariants_guard", "tests.test_decision_digest_invariants_guard.ALLOWED_CALLERS",
     "src.services.ui2.real_feed", "src.services.ui2.real_feed.read_real_snapshot",
     "src.services.ui2.real_canonical", "src.services.ui2.real_canonical.get_real_page_vm",
+    "subprocess",                              # 只用於啟動本機 streamlit server 子行程（browser lane）
     "urllib.request",                          # 只用於輪詢本機 127.0.0.1 的 streamlit health（封網下 loopback 不受影響）
     "urllib.request.urlopen",
 })
@@ -443,6 +445,82 @@ def clock_problems(source: str) -> list[str]:
               and n.args and isinstance(n.args[0], ast.Constant) and str(n.args[0].value).split(".")[0] in CLOCK_MODULES):
             bad.append("dynamic import of a clock module")
     return bad
+
+
+#: 動態程式碼／動態 import 守衛（SF1）。launcher 唯一需要動態 import 的是 shell／hold 兩個 UI2 模組（為了不改 src 而換掉它們的屬性）：
+#: 只准 `importlib.import_module(<模組層字串常數 Name>)`，且該常數的值必須在下列極小白名單內；其餘一切動態手段一律違規。
+ALLOWED_DYNAMIC_MODULES = frozenset({"src.ui2.shell.app", "src.ui2.views.hold"})
+DYNAMIC_BANNED_NAMES = frozenset({"__import__", "exec", "eval", "compile", "globals", "locals", "vars", "breakpoint", "__builtins__"})
+#: `getattr(x, <常數>)` 的屬性名若落在時鐘／網路／動態載入集合 ⇒ 違規（常數表達的是「要取什麼」，必須可審查）。
+RISKY_ATTR_NAMES = CLOCK_ATTRS | frozenset({"connect", "connect_ex", "create_connection", "getaddrinfo", "urlopen", "system", "popen",
+                                            "import_module", "__import__", "modules", "run", "Popen", "check_output"})
+
+
+def dynamic_code_problems(source: str) -> list[str]:
+    tree = ast.parse(source)
+    consts = _const_strs(tree)
+    bad: list[str] = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Name) and n.id in DYNAMIC_BANNED_NAMES:
+            bad.append(f"name {n.id} (line {n.lineno})")
+        elif isinstance(n, ast.Attribute):
+            if n.attr in DYNAMIC_BANNED_NAMES or n.attr in ("__builtins__", "__dict__", "__globals__", "__subclasses__"):
+                bad.append(f"attr .{n.attr} (line {n.lineno})")
+            if n.attr == "modules" and isinstance(n.value, ast.Name) and n.value.id == "sys":
+                bad.append(f"sys.modules (line {n.lineno})")
+        elif isinstance(n, ast.Call):
+            fn = n.func.attr if isinstance(n.func, ast.Attribute) else (n.func.id if isinstance(n.func, ast.Name) else None)
+            if fn == "import_module":
+                a0 = n.args[0] if n.args else None
+                ok = (isinstance(n.func, ast.Attribute) and isinstance(a0, ast.Name)       # 只准 `importlib.import_module(<常數>)`；裸呼叫（別名）一律違規
+                      and consts.get(a0.id) in ALLOWED_DYNAMIC_MODULES)
+                if not ok:
+                    bad.append(f"import_module with non-whitelisted target (line {n.lineno})")
+            elif fn in ("getattr", "setattr", "delattr", "hasattr") and isinstance(n.func, ast.Name):
+                a1 = n.args[1] if len(n.args) > 1 else None
+                val = (a1.value if isinstance(a1, ast.Constant) and isinstance(a1.value, str)
+                       else consts.get(a1.id) if isinstance(a1, ast.Name) else None)
+                if val is None:
+                    bad.append(f"{fn} with non-constant attribute name (line {n.lineno})")
+                elif val in RISKY_ATTR_NAMES:
+                    bad.append(f"{fn} of risky attribute {val!r} (line {n.lineno})")
+        elif isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "importlib":
+            bad.append("from importlib import … (只准 `import importlib` 後以屬性呼叫)")
+    return bad
+
+
+def test_launcher_has_no_unreviewable_dynamic_code_or_dynamic_imports():
+    assert dynamic_code_problems(LAUNCHER_PATH.read_text(encoding="utf-8")) == []
+    # 白名單極小且與 launcher 實際使用一致（不多不少）
+    assert {L.SHELL_MODULE, L.HOLD_MODULE} == ALLOWED_DYNAMIC_MODULES
+
+
+_EVIL_DYNAMIC = (
+    "import importlib\nimportlib.import_module('date' + 'time')",
+    "import importlib\nx = 'time'\nimportlib.import_module(x)",
+    "import importlib\nSHELL_MODULE = 'time'\nimportlib.import_module(SHELL_MODULE)",
+    "from importlib import import_module as im\nim('os')",
+    "__import__('os')",
+    "import builtins\nbuiltins.__import__('os')",
+    "exec('import time')",
+    "eval('1+1')",
+    "compile('1', 'x', 'eval')",
+    "g = globals()['time']",
+    "import sys\nsys.modules['time']",
+    "n = 'no' + 'w'\ngetattr(obj, n)",
+    "getattr(obj, 'now')",
+    "getattr(getattr(m, 'datetime'), 'now')",
+    "getattr(sock, 'connect')",
+    "vars(m)",
+)
+
+
+def test_dynamic_code_guard_has_teeth_for_every_bypass():
+    for bad in _EVIL_DYNAMIC:
+        assert dynamic_code_problems(bad), bad
+    ok = ("import importlib\nSHELL_MODULE = 'src.ui2.shell.app'\nimportlib.import_module(SHELL_MODULE)\n"
+          "STATE = '_s3l0_state'\ngetattr(obj, STATE, None)\ngetattr(obj, 'after_first', None)")
+    assert dynamic_code_problems(ok) == []
 
 
 def test_launcher_never_touches_the_clock_even_through_aliases():
@@ -632,6 +710,39 @@ def test_each_topic_renders_four_rows_once_and_never_leaks_rejected_values_anywh
     for name, blob in surfaces.items():
         assert leak_hits(blob) == [], (topic, name)
     assert all(k.startswith("ui2_") for k in at.session_state.filtered_state), list(at.session_state.filtered_state)
+
+
+STATUS_RX = re.compile(r'<div role="status" data-ui2-s3l0-status="1">([^<]*)</div>')
+
+
+def status_texts(at) -> list[str]:
+    return [_html.unescape(t) for v in md_values(at) for t in STATUS_RX.findall(v)]
+
+
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_status_text_names_the_current_topic_and_is_clean(inst, topic):
+    """MF1 補償：1.56 的選擇器控件沒有 aria 選取，改以一行文字（live region）傳達目前主題；恰一條、與選取同步、文字乾淨。"""
+    at = run_app(topic=topic)
+    assert status_texts(at) == [f"目前主題：{topic}"]
+    blob = status_texts(at)[0] + " " + all_widget_proto_text(at) + session_state_text(at)
+    assert forbidden_hits(status_texts(at)[0]) == [] and leak_hits(blob) == []
+
+
+def test_status_text_follows_every_switch_and_each_deselect(inst):
+    at = run_app()
+    for topic in (L.TOPIC_COUNTER, L.TOPIC_INDUSTRY, L.TOPIC_MARKET, L.TOPIC_HOLDINGS):
+        selector(at).set_value(topic).run()
+        assert status_texts(at) == [f"目前主題：{topic}"], topic
+    at.session_state[L.TOPIC_KEY] = None                       # 點掉 ⇒ 還原最近一次有效主題，狀態文字也不落成「無主題」
+    at.run()
+    assert status_texts(at) == [f"目前主題：{L.TOPIC_HOLDINGS}"]
+
+
+def test_status_text_absent_wherever_the_selector_is_absent(real_snapshot_patch):
+    with installed():
+        for kw in ({"feed": "real"}, {"scenario": "loaded"}, {"page": P4_MARKET}):
+            at = run_app(**kw)
+            assert status_texts(at) == [] and not any("data-ui2-s3l0-status" in v for v in md_values(at)), kw
 
 
 def test_widget_proto_and_session_state_scanners_have_teeth():
@@ -828,6 +939,46 @@ def test_launcher_main_really_seals_the_network_and_logs_a_start_marker(tmp_path
     finally:
         L.unseal_network()
         L.uninstall()
+
+
+def test_main_seals_the_network_even_without_the_seal_log_env_var(monkeypatch):
+    """封網不依賴環境變數：未設 `UI2_S3_L0_SEAL_LOG` 時 `main()` 仍必須封網（只是不留記錄）。"""
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.delenv(L.ENV_SEAL_LOG, raising=False)
+    L.unseal_network()
+    L.uninstall()
+    try:
+        assert getattr(socket, L.SEAL_ATTR, None) is None
+        at = AppTest.from_file(str(LAUNCHER_PATH), default_timeout=90)
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        st = getattr(socket, L.SEAL_ATTR, None)
+        assert st is not None and st["log_path"] is None, "沒有 env 時 main() 沒有封網"
+        with pytest.raises(OSError, match="network sealed"):
+            socket.create_connection(("93.184.216.34", 80), timeout=1)
+        assert has_box(at)
+    finally:
+        L.unseal_network()
+        L.uninstall()
+
+
+def test_selector_draw_failure_logs_only_the_exception_type_and_keeps_the_page_up(monkeypatch, caplog):
+    """選擇器畫不出來：不得拖垮頁面（槽仍在）；log 只記例外型別名，不含例外訊息／夾具原值，也沒有 traceback。"""
+    def boom():
+        raise RuntimeError("secret-token 7777.77 原值哨兵甲")
+    monkeypatch.setattr(L, "_draw_selector", boom)
+    with installed():
+        with caplog.at_level("DEBUG"):
+            at = run_app()
+        vals = md_values(at)
+        assert slot_count(vals) == 1 and not has_box(at)                 # 槽照常（已規劃的 VM），只是沒有選擇器
+    mine = [r for r in caplog.records if r.name == L.__name__ and "selector failed" in r.getMessage()]
+    assert mine and all("RuntimeError" in r.getMessage() and r.exc_info is None for r in mine)
+    for r in caplog.records:
+        text = r.getMessage() + " " + str(r.args) + " " + (r.exc_text or "")
+        assert "secret-token" not in text and "7777.77" not in text and "原值哨兵" not in text, text
+    assert "secret-token" not in caplog.text and "7777.77" not in caplog.text
+    assert "secret-token" not in page_text(at)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1083,6 +1234,33 @@ def test_keyboard_only_selects_every_topic_and_selection_is_visible(ui, topic):
     assert ui.pg.locator('[data-ui2-l1="onebrain"]').count() == 1 and ui.errs == []
 
 
+def ax_static_texts(page: Page) -> list[str]:
+    cdp = page.ctx.new_cdp_session(page.pg)
+    nodes = cdp.send("Accessibility.getFullAXTree")["nodes"]
+    cdp.detach()
+    return [(n.get("name") or {}).get("value", "") for n in nodes
+            if not n.get("ignored") and (n.get("role") or {}).get("value") == "StaticText"]
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_ax_tree_exposes_the_current_topic_in_both_streamlit_versions(ui, topic):
+    """MF1：輔助科技要能得知目前主題。補償（不是真正的 ARIA 選取）：以文字傳達——AX tree 恰有一條「目前主題：X」。
+    1.59.2 另有 role=radio＋checked＝所選主題；1.56.0 的控件本身仍無 aria 選取（已知限制，見 test_keyboard_only… 的斷言）。"""
+    ui.pg.locator(BOX + " button", has_text=topic).click()
+    ui.wait_topic(topic)
+    texts = [t for t in ax_static_texts(ui) if t.startswith(L.STATUS_PREFIX)]
+    assert texts == [L.status_text(topic)], texts
+    assert ui.pg.locator('[role="status"][data-ui2-s3l0-status]').count() == 1
+    seen, checked = ui.ax_selected_topics()
+    if streamlit_minor() >= (1, 59):
+        assert checked == [topic], (seen, checked)
+    else:
+        assert checked == []                                              # 1.56：控件本身仍無 aria 選取（補償只是文字）
+    assert forbidden_hits(texts[0]) == [] and leak_hits("\n".join(ax_static_texts(ui))) == []
+
+
 @pytest.mark.slow
 @pytest.mark.ui2_browser
 def test_keyboard_edges_never_leave_the_selector_or_switch_the_page(ui):
@@ -1142,7 +1320,7 @@ def test_each_topic_no_occlusion_no_horizontal_overflow_single_slot_no_raw_leak(
     assert ov["sw"] <= ov["cw"] + 1 and ov["bad"] == [], ov
     occl = ui.pg.evaluate("""(box) => { const out = [];
       const targets = [...document.querySelectorAll('[data-ui2-l1="onebrain"] .ui2-section-title, [data-ui2-l1="onebrain"] .ui2-row'),
-                       ...document.querySelectorAll(box + ' button')];
+                       ...document.querySelectorAll(box + ' button, ' + box + ' [data-ui2-s3l0-status]')];
       for (const t of targets) { t.scrollIntoView({block: 'center'}); const r = t.getBoundingClientRect();
         const h = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 12));
         if (!h || !(t.contains(h) || h.contains(t))) out.push((t.className || t.tagName) + ' <- ' + (h ? (h.className || h.tagName) : 'null')); }
