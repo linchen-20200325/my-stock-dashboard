@@ -21,7 +21,7 @@ import pytest
 
 from shared.decision_digest_terms import MISSING_GLYPH, RISK_CAP_HIDDEN_WORDING, SECTION_LABELS
 from shared.ui2_contract.models import CapabilityState, PageVM
-from shared.ui2_contract.pages import ACCOUNT_IDS, P4_MARKET, P4_ME, PAGE_IDS, SCENARIO_IDS
+from shared.ui2_contract.pages import ACCOUNT_IDS, P4_DATA, P4_HOLD, P4_MARKET, P4_ME, P4_TARGET, PAGE_IDS, SCENARIO_IDS
 from src.services.decision_digest_summary import build_rule_summary
 from src.services.ui2 import scenarios as SC
 from src.services.ui2.preview_feed import get_preview_page_vm
@@ -130,21 +130,37 @@ def test_real_digest_is_the_original_empty_slot():
         assert NOTICE not in repr(vm) and "台股趨勢：尚未定義" not in repr(vm)
 
 
-def test_real_fingerprints_and_non_digest_fake_fingerprints_equal_committed_baseline():
-    """Real 五頁（含 👤 digest／registry）指紋與 base 逐值相同；FAKE 除 p4_me 的 digest 區塊外亦同。"""
-    base = json.loads(BASELINE.read_text(encoding="utf-8"))
-    # 📊 頁尾「接入狀態」（B 線；#1199 comment 7167315139）：Real 📊 在顯示條件成立的組合多一個 L1 區塊（baseline 之後的**加性**變更）。
-    # 本等式是逐值相等（不是子集合），所以只准**剪掉那一個**區塊再比對，且「哪些 snapshot 該有」以字面釘死
-    # （其餘 section／欄位／卡片／首屏／context rows 仍逐值相等；該區塊本身的形狀由 📊 接入狀態的形狀鎖測試檔鎖定）。
+_DRAWN = {"loaded", "unloaded", "unevaluated", "stale", "stale_unknown", "missing"}
+
+
+def _real_vm_problems(page, name, vm, base_fp) -> list[str]:
+    """Real VM 對 committed baseline 的逐值相等檢查。📊 頁尾「接入狀態」（B 線；#1199 comment 7167315139、7178832023）是 baseline 之後的
+    **加性**區塊，所以：先對**原始 sections 序列**（`vm.context.sections`；fingerprint 以 id 為 key 會吞掉重複）核該 id 的出現數
+    （應畫的 📊 組合恰 1、其餘頁／組合恰 0）與位置（必須在尾端），再只剪那唯一一項，其餘逐值相等。"""
     from tests.test_ui2_market_wired_status import SEC_ID as _WIRED_SEC
-    drawn = {"loaded", "unloaded", "unevaluated", "stale", "stale_unknown", "missing"}
+    bad = []
+    ids = [x.section_id for x in vm.context.sections]
+    want = 1 if (page == P4_MARKET and name in _DRAWN) else 0
+    if ids.count(_WIRED_SEC) != want:
+        bad.append(f"出現數 {ids.count(_WIRED_SEC)} ≠ {want}")
+    if want and ids[-1] != _WIRED_SEC:
+        bad.append("不在 sections 尾端")
+    cur = fingerprint(vm)
+    extra = cur["sections"].pop(_WIRED_SEC, None)
+    if extra is not None and len(extra["fields"]) != 2:
+        bad.append("欄數 ≠ 2")
+    if cur != base_fp:
+        bad.append("其餘內容與 baseline 不逐值相等")
+    return bad
+
+
+def test_real_fingerprints_and_non_digest_fake_fingerprints_equal_committed_baseline():
+    """Real 五頁（含 👤 digest／registry）指紋與 base 逐值相同（📊 頁尾區塊的出現數／位置先核再剪，見 `_real_vm_problems`）；
+    FAKE 除 p4_me 的 digest 區塊外亦同（FAKE 不得有該區塊，等式本身即擋）。"""
+    base = json.loads(BASELINE.read_text(encoding="utf-8"))
     for name, snap in _snapshots().items():
         for page in PAGE_IDS:
-            cur = fingerprint(get_real_page_vm(page, snap))
-            extra = cur["sections"].pop(_WIRED_SEC, None)
-            assert (extra is not None) == (page == P4_MARKET and name in drawn), (page, name)
-            assert extra is None or len(extra["fields"]) == 2, (page, name)
-            assert cur == base[f"real/{page}/{name}"], (page, name)
+            assert _real_vm_problems(page, name, get_real_page_vm(page, snap), base[f"real/{page}/{name}"]) == [], (page, name)
     for page in PAGE_IDS:
         for sc in SCENARIO_IDS:
             for acct in (ACCOUNT_IDS if page == P4_ME else (None,)):
@@ -154,6 +170,47 @@ def test_real_fingerprints_and_non_digest_fake_fingerprints_equal_committed_base
                     cur["sections"].pop("digest")
                     old["sections"].pop("digest")
                 assert cur == old, (page, sc, acct)
+
+
+def _inject(vm, fn):
+    import dataclasses
+    return dataclasses.replace(vm, context=dataclasses.replace(vm.context, sections=tuple(fn(list(vm.context.sections)))))
+
+
+def test_wired_section_injection_reverse_cases_turn_red():
+    """反向注入（先證明會紅）：重複、非尾端、他頁、FAKE 📊 插入；另保留『不注入＝綠』與原等式對內容被改的效力。"""
+    from tests.test_ui2_market_wired_status import SEC_ID as _W
+    base = json.loads(BASELINE.read_text(encoding="utf-8"))
+    snaps = _snapshots()
+    mk = get_real_page_vm(P4_MARKET, snaps["loaded"])
+    bfp = base["real/p4_market/loaded"]
+    sec = next(x for x in mk.context.sections if x.section_id == _W)
+    assert _real_vm_problems(P4_MARKET, "loaded", mk, bfp) == []
+    assert _real_vm_problems(P4_MARKET, "loaded", _inject(mk, lambda l: [*l, sec]), bfp)            # 同 ID 重複
+    assert _real_vm_problems(P4_MARKET, "loaded", _inject(mk, lambda l: [sec, *[x for x in l if x is not sec]]), bfp)  # 非尾端
+    for page in (P4_TARGET, P4_ME, P4_HOLD, P4_DATA):                                              # Real 他頁插入
+        vm = get_real_page_vm(page, snaps["loaded"])
+        assert _real_vm_problems(page, "loaded", vm, base[f"real/{page}/loaded"]) == []
+        assert _real_vm_problems(page, "loaded", _inject(vm, lambda l: [*l, sec]), base[f"real/{page}/loaded"]), page
+    # 不該畫的📊組合（unavailable）被插入
+    un = get_real_page_vm(P4_MARKET, snaps["unavailable"])
+    assert _real_vm_problems(P4_MARKET, "unavailable", un, base["real/p4_market/unavailable"]) == []
+    assert _real_vm_problems(P4_MARKET, "unavailable", _inject(un, lambda l: [*l, sec]), base["real/p4_market/unavailable"])
+    # 其餘內容被改（原「逐值相等」的效力）：把第一個非新區塊 section 的第一欄 detail 改字
+    import dataclasses
+    def tamper(l):
+        i = next(k for k, x in enumerate(l) if x.section_id != _W)
+        f = dataclasses.replace(l[i].fields[0], detail="x")
+        l[i] = dataclasses.replace(l[i], fields=(f, *l[i].fields[1:]))
+        return l
+    assert _real_vm_problems(P4_MARKET, "loaded", _inject(mk, tamper), bfp)
+    # 該畫卻沒畫
+    assert _real_vm_problems(P4_MARKET, "loaded", _inject(mk, lambda l: [x for x in l if x is not sec]), bfp)
+    # FAKE 📊 插入：FAKE 等式（cur == old）必紅
+    fk = get_preview_page_vm(P4_MARKET, "loaded")
+    old = base["fake/p4_market/loaded/None"]
+    assert fingerprint(fk) == old
+    assert fingerprint(_inject(fk, lambda l: [*l, sec])) != old
 
 
 def test_no_new_expander_and_gates_unchanged():
