@@ -166,7 +166,11 @@ THRESHOLDS: list[dict[str, str]] = [
              "排序沿用 p2（Primary → 指標卡 → OneBrain；Issue #1108 方向 B）；水平捲動沿用 no_horizontal_scroll。",
      "source": "客戶 2026-11-09 裁示 DEC-156 A／B（K 色、手機預設最近 20 根、圖高約 220px）；Issue #1099 核准施工範圍（客戶授權轉述）；CLAUDE.md §1.A 第 4 點（灰紅分離）；"
                "2026-11-26 期間切換：#1199 留言 7186846291／7191058929（客戶 R20 具名授權，取代 7186895108 的選項集：全裝置 20／60 日，預設 20；120 另案；252／縮放／捲動／降採樣未核准）。"
-               "真瀏覽器 Real 量測另實際點選 60 日（結果記於市場頁列 `kbar_period60`），驗根數 ≤60 且符合選中值、同源、無水平溢出、鍵盤方向鍵 20→60。"},
+               "真瀏覽器 Real 量測另實際點選 60 日（結果記於市場頁列 `kbar_period60`），驗根數 ≤60 且符合選中值、同源、無水平溢出、鍵盤方向鍵 20→60。"
+               "方向鍵不離頁（MF1；客戶採方案 B，#1199 7192913294／7193549716／AUTH-B-r01）：依量測時實際載入的 Streamlit 版本分流——≥1.59 且 <1.60：聚焦期間 radio 後 "
+               "ArrowLeft／Right／Up／Down 在 20、60 上皆不離開市場頁、焦點仍在期間 radiogroup、導覽選中項不變、值只在 20↔60 環繞，否則該列失敗；"
+               "1.56.x（及未驗證的 1.57／1.58）：不判失敗，但必須如實記錄 `arrow_leak`（已知平台限制：1.56.0 radio input name 為空字串，Chromium 將空 name radio 視為同一隱含群組），缺記錄即失敗；"
+               "其他版本（<1.56 或 ≥1.60）：判失敗（宣告範圍外）。"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
              "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
@@ -379,6 +383,82 @@ def _evaluate_kbar(p2: dict, out: dict[str, list[str]]) -> None:
             out[k].append(f"{state} 態不得有圖形（K 棒 {bars}、圖形 {p2.get('chart_graphics')}）")
         if state != "unavailable" and p2.get("chart_danger", 0):
             out[k].append(f"{state} 態出現紅色 danger chip（紅只給系統真錯誤）")
+
+
+#: 方向鍵不離頁（MF1；客戶方案 B）判定常數（判定器自己的字面值）。
+ARROW_KEYS = ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown")
+ARROW_STARTS = (20, 60)
+ARROW_LEAK_CAUSE = ("Streamlit 1.56.x 的 radio `<input>` `name` 為空字串；Chromium 將同一 DOM 樹內空 name 的 radio 視為同一個隱含群組、"
+                    "依 DOM 順序環繞（頂部導覽 5 個 → 期間 2 個），方向鍵因此穿到導覽。1.59 起 name 為各群組唯一值，無此現象。")
+
+
+def _version_tuple(version) -> tuple[int, int] | None:
+    m = re.match(r"^(\d+)\.(\d+)(?:\.|$)", str(version or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def arrow_policy(version) -> str:
+    """方向鍵不離頁的驗收分流（以量測時**實際載入**的 `streamlit.__version__` 判，⛔ 旗標字串）：
+    `required`＝1.59.x（必過）；`known_limitation`＝1.56.x（已知平台限制：不判失敗但必須如實記錄；1.57／1.58 未驗證，同樣只記錄）；
+    `unsupported`＝其餘（<1.56、≥1.60、無法解析；宣告範圍外 → 判失敗）。"""
+    t = _version_tuple(version)
+    if t is None or t < (1, 56) or t >= (1, 60):
+        return "unsupported"
+    return "required" if t >= (1, 59) else "known_limitation"
+
+
+def arrow_case_leaked(c: dict) -> bool:
+    """單一方向鍵案例是否「離開」：頁面不是市場、導覽選中項改變、期間 radio 不在、或焦點不在期間 radiogroup。"""
+    return not (c.get("market_after") is True and c.get("nav_after") == c.get("nav_before")
+                and c.get("picker_present") is True and c.get("focus_in_picker") is True)
+
+
+def evaluate_arrow_keys(ak: dict | None) -> list[str]:
+    """方向鍵不離頁判定（純；輸入＝`measure_arrow_keys` 的記錄）。回傳失敗訊息（空＝通過）。"""
+    if not isinstance(ak, dict):
+        return ["缺方向鍵量測記錄 `arrow_keys`（不得靜默略過）"]
+    ver = ak.get("streamlit_version")
+    pol = arrow_policy(ver)
+    if pol == "unsupported":
+        return [f"Streamlit {ver!r} 不在宣告範圍內（≥1.56.0,<1.60.0）：方向鍵不離頁無法判定（未支援版本）"]
+    cases = ak.get("cases")
+    fails: list[str] = []
+    want = [(s0, k0) for s0 in ARROW_STARTS for k0 in ARROW_KEYS]
+    if not isinstance(cases, list) or [(c.get("start"), c.get("key")) for c in cases if isinstance(c, dict)] != want:
+        return [f"方向鍵案例必須恰為 20／60 × {list(ARROW_KEYS)}（共 {len(want)} 個）：{cases!r}"[:300]]
+    if pol == "required":
+        for c in cases:
+            tag = f"{c['start']} 日 + {c['key']}"
+            if c.get("market_after") is not True:
+                fails.append(f"{tag}：離開市場頁（導覽→{c.get('nav_after')!r}）")
+            if c.get("nav_after") != c.get("nav_before"):
+                fails.append(f"{tag}：導覽選中項改變 {c.get('nav_before')!r}→{c.get('nav_after')!r}")
+            if c.get("picker_present") is not True:
+                fails.append(f"{tag}：期間 radio 消失")
+            if c.get("focus_in_picker") is not True:
+                fails.append(f"{tag}：焦點離開期間 radiogroup")
+            expected = 60 if c["start"] == 20 else 20
+            if c.get("picker_after") != expected:
+                fails.append(f"{tag}：期間值 {c.get('picker_after')!r}（應只在 20↔60 環繞，預期 {expected}）")
+        return fails
+    # known_limitation（1.56.x；1.57／1.58 未驗證）：不以洩漏判失敗，但必須如實記錄且記錄與實測一致
+    leak = ak.get("arrow_leak")
+    if not isinstance(leak, dict):
+        return ["Streamlit 1.56.x：缺 `arrow_leak`（已知平台限制必須如實記錄，不得靜默略過）"]
+    for k in ("observed", "left_from_20", "right_from_60", "input_names", "cause"):
+        if k not in leak:
+            fails.append(f"`arrow_leak` 缺欄位 {k!r}")
+    if fails:
+        return fails
+    if not isinstance(leak["observed"], bool) or leak["observed"] != any(arrow_case_leaked(c) for c in cases):
+        fails.append(f"`arrow_leak.observed`={leak['observed']!r} 與實測案例不符（洩漏案例 {sum(arrow_case_leaked(c) for c in cases)} 個）")
+    names = leak["input_names"]
+    if not (isinstance(names, dict) and isinstance(names.get("nav"), list) and isinstance(names.get("picker"), list)
+            and names["nav"] and names["picker"]):
+        fails.append("`arrow_leak.input_names` 必須含導覽與期間 radio 的實測 name 清單")
+    if not (isinstance(leak["cause"], str) and leak["cause"].strip()):
+        fails.append("`arrow_leak.cause` 不得為空")
+    return fails
 
 
 def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
@@ -1203,7 +1283,73 @@ _JS_KBAR_60 = r"""
 """
 
 
-def measure_kbar_period_60(page, vw: int, vh: int) -> dict:
+_JS_ARROW = r"""
+() => {
+  const nav = [...document.querySelectorAll('.st-key-ui2_nav [role=radiogroup] > label')].find(l => l.querySelector('input').checked);
+  const box = document.querySelector('.st-key-ui2_kbar_days_box');
+  const pk = box ? [...box.querySelectorAll('[role=radiogroup] > label')].find(l => l.querySelector('input').checked) : null;
+  const ae = document.activeElement;
+  return {nav: nav ? nav.innerText.replace(/\s+/g, ' ').trim() : null, has_chart: !!document.querySelector('[data-ui2-l1="primary_chart"]'),
+    picker_present: !!box, picker_checked: pk ? pk.innerText.trim() : null,
+    focus_in_picker: !!(ae && ae.closest && ae.closest('.st-key-ui2_kbar_days_box [role=radiogroup]')),
+    focus_in_nav: !!(ae && ae.closest && ae.closest('.st-key-ui2_nav')),
+    active_label: ae && ae.closest && ae.closest('label') ? ae.closest('label').innerText.replace(/\s+/g, ' ').trim() : null};
+}
+"""
+_JS_RADIO_NAMES = r"""
+() => ({nav: [...document.querySelectorAll('.st-key-ui2_nav input[type=radio]')].map(i => i.name),
+        picker: [...document.querySelectorAll('.st-key-ui2_kbar_days_box input[type=radio]')].map(i => i.name)})
+"""
+
+
+def measure_arrow_keys(page, streamlit_version: str, lab, cond) -> dict:
+    """聚焦期間 radio 的 20／60 後各按 ArrowLeft／Right／Up／Down（共 8 案例）→ 記錄頁面／導覽選中項／焦點／期間值。
+    每案例之後若離開市場頁就點導覽回市場，且還原到 20（⛔ 影響之後的量測）。實際判定見 `evaluate_arrow_keys`（依 `arrow_policy` 分流）。
+    1.56.x（已知平台限制）另產出 `arrow_leak` 記錄——如實量測、不改變頁面結論。"""
+    from shared.ui2_contract.pages import P4_MARKET, PAGE_LABELS
+    cases = []
+    for start in ARROW_STARTS:
+        other = 60 if start == 20 else 20
+        for key in ARROW_KEYS:
+            lab(other).click()
+            page.wait_for_function(cond, arg=other, timeout=30000)
+            lab(start).click()
+            page.wait_for_function(cond, arg=start, timeout=30000)
+            page.wait_for_timeout(300)
+            before = page.evaluate(_JS_ARROW)
+            page.keyboard.press(key)
+            page.wait_for_timeout(1200)
+            after = page.evaluate(_JS_ARROW)
+            m = re.match(r"^(\d+) 日$", after["picker_checked"] or "")
+            cases.append({"start": start, "key": key, "nav_before": before["nav"], "nav_after": after["nav"],
+                          "market_after": bool(after["has_chart"]) and after["nav"] == PAGE_LABELS[P4_MARKET],
+                          "picker_present": after["picker_present"], "focus_in_picker": after["focus_in_picker"],
+                          "focus_in_nav": after["focus_in_nav"], "active_label": after["active_label"],
+                          "picker_after": int(m.group(1)) if m else None})
+            if not (after["nav"] == PAGE_LABELS[P4_MARKET] and after["has_chart"] and after["picker_present"]):
+                page.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=PAGE_LABELS[P4_MARKET]).click()
+                page.wait_for_selector('[data-ui2-l1="primary_chart"]', timeout=30000)
+                page.wait_for_timeout(500)
+    # 收尾：回到預設 20
+    lab(60).click()
+    page.wait_for_function(cond, arg=60, timeout=30000)
+    lab(20).click()
+    page.wait_for_function(cond, arg=20, timeout=30000)
+    page.wait_for_timeout(250)
+    ak: dict = {"streamlit_version": streamlit_version, "policy": arrow_policy(streamlit_version), "cases": cases}
+    if ak["policy"] == "known_limitation":
+        names = page.evaluate(_JS_RADIO_NAMES)
+        pick = lambda s0, k0: next(c for c in cases if c["start"] == s0 and c["key"] == k0)
+        desc = lambda c: (f"導覽→{c['nav_after']}" if c["nav_after"] != c["nav_before"] else
+                          ("焦點→導覽" if c["focus_in_nav"] else ("留在期間 radio" if c["focus_in_picker"] else "焦點離開期間 radio")))
+        ak["arrow_leak"] = {"observed": any(arrow_case_leaked(c) for c in cases),
+                            "left_from_20": desc(pick(20, "ArrowLeft")), "right_from_60": desc(pick(60, "ArrowRight")),
+                            "up_from_20": desc(pick(20, "ArrowUp")), "down_from_60": desc(pick(60, "ArrowDown")),
+                            "input_names": names, "cause": ARROW_LEAK_CAUSE}
+    return ak
+
+
+def measure_kbar_period_60(page, vw: int, vh: int, streamlit_version: str) -> dict:
     """📊 市場（Real）：**實際點選**「60 日」→ 量根數／日期／來源／與收盤卡同源／水平溢出／判定器結果；再驗鍵盤方向鍵 20→60；最後還原 20（⛔ 影響之後的量測）。
     結果記進同一個市場頁量測列的 `kbar_period60`（不新增量測列：`states` 數量不變）。"""
     sel = ".st-key-ui2_kbar_days_box [role='radiogroup'] > label"
@@ -1252,6 +1398,8 @@ def measure_kbar_period_60(page, vw: int, vh: int) -> dict:
     lab(20).click()                      # 還原預設
     page.wait_for_function(cond, arg=20, timeout=30000)
     page.wait_for_timeout(250)
+    ak = measure_arrow_keys(page, streamlit_version, lab, cond)      # MF1：方向鍵不離頁（依版本分流；量完還原 20）
+    fails += [f"[arrow_keys] {x}" for x in evaluate_arrow_keys(ak)]
     back = page.evaluate("document.querySelectorAll('[data-kbar-dir]').length")
     if back != 20:
         fails.append(f"還原 20 日後 K 棒 {back} 根")
@@ -1261,7 +1409,7 @@ def measure_kbar_period_60(page, vw: int, vh: int) -> dict:
             "slot_px": rd(g["slot_px"]), "body_w_px": rd(g["body_w_px"]), "body_gap_px_min": rd(g["body_gap_px_min"]),
             "svg_w": rd(g["svg_w"]), "doc_scroll_w": g["doc_scroll_w"], "doc_client_w": g["doc_client_w"],
             "nav_margin_after_risk": nav_margin, "picker": {k: round(v, 1) for k, v in (p2.get("kbar_picker") or {}).items()},
-            "picker_labels": p2.get("kbar_picker_labels"), "keyboard_arrow_right_20_to_60": keyboard_ok,
+            "picker_labels": p2.get("kbar_picker_labels"), "keyboard_arrow_right_20_to_60": keyboard_ok, "arrow_keys": ak,
             "restored_to_20_bars": back, "failures": fails}
 
 
@@ -1279,6 +1427,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
     )
     from src.ui2.shell.app import _FEED_LABELS
 
+    streamlit_version = streamlit_version or _streamlit_version(server_python)    # 量測前先取實際載入的版本（方向鍵分流用）
     results: list[dict] = []
     with sync_playwright() as p:
         browser = launch_chromium(p)
@@ -1302,7 +1451,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                         results[-1]["failures"] = {**results[-1]["failures"], "items_expanded": ["無明細 expander"] if exp is None else exp["failures"]}
                         results[-1]["pass"] = False
                 if pid == P4_MARKET:         # R20：真瀏覽器實際點選 60 日（量完還原 20；其後的壓力態／他頁量測不受影響）
-                    k60 = measure_kbar_period_60(page, vw, vh)
+                    k60 = measure_kbar_period_60(page, vw, vh, streamlit_version)
                     results[-1]["kbar_period60"] = k60
                     if k60["failures"]:
                         results[-1]["failures"] = {**results[-1]["failures"], "kbar_period60": k60["failures"]}

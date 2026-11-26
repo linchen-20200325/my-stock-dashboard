@@ -633,13 +633,150 @@ def test_real_measurement_actually_clicks_60_and_records_it_in_the_market_row():
     失敗會讓該列 pass=False；判定常數只有 20／60。（真瀏覽器執行見 ui2 browser lane；這裡釘結構。）"""
     import inspect
     run_src = inspect.getsource(MV._run_real)
-    assert "measure_kbar_period_60(page, vw, vh)" in run_src and 'results[-1]["kbar_period60"]' in run_src
-    i = run_src.index("measure_kbar_period_60(page, vw, vh)")
+    assert "measure_kbar_period_60(page, vw, vh, streamlit_version)" in run_src and 'results[-1]["kbar_period60"]' in run_src
+    i = run_src.index("measure_kbar_period_60(page, vw, vh, streamlit_version)")
     assert 'results[-1]["pass"] = False' in run_src[i:run_src.index("_record_stress", i)]
     fn_src = inspect.getsource(MV.measure_kbar_period_60)
     for need in ("lab(60).click()", "ArrowRight", "lab(20).click()", "20 < bars <= 60", "doc_scroll_w"):
         assert need in fn_src, need
     assert MV.KBAR_PERIOD_CAPS == {20: 20, 60: 60} and MV.KBAR_PICKER_LABELS == ["20 日", "60 日"] and 120 not in MV.KBAR_PERIOD_CAPS
+
+
+# ── MF1：方向鍵不離頁（客戶方案 B：#1199 7192913294／7193549716／AUTH-B-r01；1.56.x 認列已知平台限制）────────────────
+def _arrow_cases(*, leak: bool = False, **over) -> list[dict]:
+    """20／60 × 四個方向鍵的合成量測案例。`leak=True`＝模擬 1.56.0 的洩漏（頁面→資料、焦點離開、期間 radio 消失）。"""
+    out = []
+    for start in MV.ARROW_STARTS:
+        for key in MV.ARROW_KEYS:
+            c = {"start": start, "key": key, "nav_before": "📊 市場", "nav_after": "📊 市場", "market_after": True,
+                 "picker_present": True, "focus_in_picker": True, "focus_in_nav": False, "active_label": "期間",
+                 "picker_after": 60 if start == 20 else 20}
+            if leak:
+                c.update(nav_after="🗂 資料", market_after=False, picker_present=False, focus_in_picker=False,
+                         focus_in_nav=True, active_label="🗂 資料", picker_after=None)
+            out.append(c)
+    out[0].update(over)
+    return out
+
+
+_NAMES_156 = {"nav": ["", "", "", "", ""], "picker": ["", ""]}
+
+
+def _ak(version: str, cases: list[dict], leak: dict | None = None) -> dict:
+    ak = {"streamlit_version": version, "policy": MV.arrow_policy(version), "cases": cases}
+    if leak is not None:
+        ak["arrow_leak"] = leak
+    return ak
+
+
+def _leak_rec(cases: list[dict], **over) -> dict:
+    rec = {"observed": any(MV.arrow_case_leaked(c) for c in cases), "left_from_20": "導覽→🗂 資料", "right_from_60": "焦點→導覽",
+           "up_from_20": "導覽→🗂 資料", "down_from_60": "焦點→導覽", "input_names": _NAMES_156, "cause": MV.ARROW_LEAK_CAUSE}
+    rec.update(over)
+    return rec
+
+
+@pytest.mark.parametrize("version,policy", [
+    ("1.59.2", "required"), ("1.59.0", "required"), ("1.59", "required"),
+    ("1.56.0", "known_limitation"), ("1.56.9", "known_limitation"), ("1.57.0", "known_limitation"), ("1.58.1", "known_limitation"),
+    ("1.55.9", "unsupported"), ("1.60.0", "unsupported"), ("1.60.1", "unsupported"), ("2.0.0", "unsupported"),
+    ("1.5", "unsupported"), ("", "unsupported"), (None, "unsupported"), ("garbage", "unsupported"), ("v1.59.2", "unsupported"),
+])
+def test_arrow_policy_is_split_by_the_actually_loaded_streamlit_version(version, policy):
+    assert MV.arrow_policy(version) == policy
+
+
+def test_arrow_required_policy_passes_the_good_record():
+    assert MV.evaluate_arrow_keys(_ak("1.59.2", _arrow_cases())) == []
+
+
+@pytest.mark.parametrize("over", [
+    dict(nav_after="🗂 資料", market_after=False),                      # 離開市場頁
+    dict(market_after=False),
+    dict(nav_after="🎯 標的"),                                           # 導覽選中項改變（即使 market_after 仍 True）
+    dict(picker_present=False),                                        # 期間 radio 消失
+    dict(focus_in_picker=False, focus_in_nav=True),                    # 焦點離開期間 radiogroup（1.56 的 ArrowRight-from-60 型態）
+    dict(picker_after=None), dict(picker_after=120), dict(picker_after=252),      # 值不在 20↔60 環繞
+    dict(picker_after=20),                                             # 從 20 按鍵後沒動（預期環繞到 60）
+])
+def test_arrow_required_policy_goes_red_on_any_leak_or_wrong_value_a(over):
+    """(a) ≥1.59：模擬離頁／焦點離開／導覽選中項改變／值錯 → 必紅。"""
+    assert MV.evaluate_arrow_keys(_ak("1.59.2", _arrow_cases(**over))) != [], over
+    assert MV.evaluate_arrow_keys(_ak("1.59.0", _arrow_cases(**over))) != [], over
+
+
+def test_arrow_required_policy_all_leaking_is_red_and_cannot_be_excused_by_a_leak_record():
+    cases = _arrow_cases(leak=True)
+    assert MV.evaluate_arrow_keys(_ak("1.59.2", cases)) != []
+    assert MV.evaluate_arrow_keys(_ak("1.59.2", cases, _leak_rec(cases))) != []      # 1.59 不得靠附上 arrow_leak 過關
+
+
+@pytest.mark.parametrize("bad_cases", [
+    None, [], "x", _arrow_cases()[:-1], _arrow_cases() + _arrow_cases()[:1], list(reversed(_arrow_cases())),
+])
+def test_arrow_record_must_contain_exactly_the_eight_cases(bad_cases):
+    for v in ("1.59.2", "1.56.0"):
+        assert MV.evaluate_arrow_keys({"streamlit_version": v, "cases": bad_cases, "arrow_leak": _leak_rec(_arrow_cases(leak=True))}) != []
+
+
+def test_arrow_missing_record_is_red_never_silently_skipped():
+    for v in ("1.59.2", "1.56.0"):
+        assert MV.evaluate_arrow_keys(None) != [] and MV.evaluate_arrow_keys({}) != []
+
+
+def test_arrow_known_limitation_leak_is_recorded_and_does_not_fail_b():
+    """(b) 1.56：模擬洩漏 → 不紅；known_limitation 欄位必存在且 observed=True。"""
+    cases = _arrow_cases(leak=True)
+    leak = _leak_rec(cases)
+    assert leak["observed"] is True
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, leak)) == []
+    assert MV.evaluate_arrow_keys(_ak("1.57.0", cases, leak)) == []        # 1.57／1.58 未驗證：只記錄
+
+
+def test_arrow_known_limitation_honestly_records_no_leak_when_there_is_none():
+    cases = _arrow_cases()
+    leak = _leak_rec(cases)
+    assert leak["observed"] is False
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, leak)) == []
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, _leak_rec(cases, observed=True))) != []       # 沒洩漏卻宣稱洩漏＝假記錄
+
+
+def test_arrow_known_limitation_without_the_record_is_red_c():
+    """(c) 1.56 缺 known_limitation 欄位 → 必紅（防止靜默略過）；欄位不全／與實測不符亦紅。"""
+    cases = _arrow_cases(leak=True)
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", cases)) != []
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, None)) != []
+    assert MV.evaluate_arrow_keys({"streamlit_version": "1.56.0", "cases": cases, "arrow_leak": "洩漏"}) != []
+    for k in ("observed", "left_from_20", "right_from_60", "input_names", "cause"):
+        rec = _leak_rec(cases)
+        del rec[k]
+        assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, rec)) != [], k
+    for over in (dict(observed=False), dict(observed="yes"), dict(input_names={}), dict(input_names={"nav": [], "picker": []}),
+                 dict(input_names={"nav": [""], "picker": []}), dict(cause=""), dict(cause=None)):
+        assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, _leak_rec(cases, **over))) != [], over
+
+
+@pytest.mark.parametrize("version", ["1.55.0", "1.60.0", "1.61.2", "2.0.0", "", None])
+def test_arrow_unsupported_versions_are_red_d(version):
+    """(d) 未支援版本（<1.56、≥1.60、無法解析）→ 紅，即使案例完美、附有 leak 記錄。"""
+    good = _arrow_cases()
+    assert MV.evaluate_arrow_keys({"streamlit_version": version, "cases": good}) != []
+    assert MV.evaluate_arrow_keys({"streamlit_version": version, "cases": good, "arrow_leak": _leak_rec(good)}) != []
+
+
+def test_arrow_measurement_is_wired_into_the_real_market_row_and_uses_the_loaded_version():
+    import inspect
+    k60 = inspect.getsource(MV.measure_kbar_period_60)
+    assert "measure_arrow_keys(page, streamlit_version, lab, cond)" in k60 and "evaluate_arrow_keys(ak)" in k60
+    assert '"arrow_keys": ak' in k60                                        # 記錄進 JSON
+    run_src = inspect.getsource(MV._run_real)
+    assert run_src.index("_streamlit_version(server_python)") < run_src.index("for vp_name, (vw, vh) in VIEWPORTS.items()")
+    fn = inspect.getsource(MV.measure_arrow_keys)
+    for key in MV.ARROW_KEYS:
+        assert key in inspect.getsource(MV) and MV.ARROW_KEYS.count(key) == 1
+    assert "arrow_policy(streamlit_version)" in fn and '"arrow_leak"' in fn and "input_names" in fn
+    assert 'if ak["policy"] == "known_limitation":' in fn and 'ak["arrow_leak"] = {' in fn      # 1.56 一定產出記錄（拔掉＝缺記錄＝紅）
+    assert MV.ARROW_STARTS == (20, 60) and MV.ARROW_KEYS == ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown")
 
 
 def test_viewport_order_check_still_applies_to_the_chart():
