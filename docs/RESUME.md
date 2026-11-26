@@ -2,7 +2,7 @@
 
 > 唯一 SSOT：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199
 > 本檔不是第二 SSOT；與 #1199、有效 DEC、Contract、PROJECT_RULES 衝突時，以後者為準。不得據本檔施工、Ready、merge、部署或解除 HOLD。
-> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；最新讀到 #1199 留言 c7193469452（V1.3 制度錨點 c7192149293）；每輪重查 LIVE，過期即不可信。
+> 快照：2026-11-26（台北），main `0ceeb971a5aa3206171e88603b29dd44ff257dfd`；最新讀到 #1199 留言 c7193858068（V1.3 制度錨點 c7192149293）；每輪重查 LIVE，過期即不可信。
 > 出處：c<數字>＝#1199 留言 ID（`https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-<數字>`）。
 
 ## 1. HOT｜最新版入口（先讀本檔；權威仍是 #1199，再取差額）
@@ -33,10 +33,11 @@
 
 - A｜P0/P1：c7183081296 TWII、c7184227847 個股；R14 規格取證已回存 c7192970171（TWSE swagger 逐字約 77%；TPEX 沙箱 DNS 失敗未讀，非網站拒絕；B1／B7／DG-LIC／DG-PIT 未解除）；六問 #1197 comment6947565503 需指定寄件者/管道/實際發送授權，未寄；不真取數、不落盤。
 - B｜P0/P1：#1283 R20 修正已交（c7192318863，head 4a107bdd）；Work HOLD／MF1（c7192593347）；B 根因包 c7192913294＝Streamlit 1.56.0 原生限制、R20 範圍內無法修，c7193469452 僅授權提最小替代方案與所需擴權／影響／驗收證據，不授權越界施工、不放寬 MF1，待裁示；DEC-156 待合法交接。其後依 R21 唯讀收斂持股/我的一個合法操作候選，不擴權。
-- C｜P2：#1284 兩檔隔離原型，Work HOLD／MF1／SF1（c7192593347）；大盤決策包已交 c7192861785（僅設計）：今日無合法路徑產出正式大盤結論，不建議再做大盤原型；客戶一題（推薦 A 維持 HOLD；不回覆＝A）。
-- Work｜差額 QA 已回存 c7192593347（#1283／#1281／#1284 皆 HOLD／MF1）；#1281 複驗目標更新為 f2a81be8（c7193469452；先確認 LIVE head）；修後新 head 到即核新增差額及原未驗項，依原正式 Gate；#1281 僅核索引差額，勿阻塞產品。不可代施工或以 CI 代 QA。
+- C｜P2：#1284 兩檔隔離原型，Work HOLD／MF1／SF1（c7192593347）；C 已依 MF1／SF1 修正推新 head 99e18bc9（僅兩檔；Work 差額核對 NV）；大盤決策包已交 c7192861785（僅設計）：今日無合法路徑產出正式大盤結論，不建議再做大盤原型；客戶一題（推薦 A 維持 HOLD；不回覆＝A）。
+- Work｜差額 QA 已回存 c7192593347（#1283／#1281／#1284 皆 HOLD／MF1）；#1281 f2a81be8 差額 QA PASS MF0／SF0＋CI 皆過為 Work 跨對話回報（c7193858068），D 未獨立核實＝NV，勿重驗已 PASS 差額；Work 優先核 #1284 新差額（先確認 exact head）；修後新 head 到即核新增差額及原未驗項，依原正式 Gate；#1281 僅核索引差額，勿阻塞產品。不可代施工或以 CI 代 QA。
 - D｜V1.2 唯讀瘦身，不占槽；R22（c7192149293）授權：確認單一 writer 後僅更新本檔、追加 commit、不另開 PR；寫入權衝突／有效裁示遺失／原 Gate 降級即停；分支清理獨立維護，唯一候選仍待外部依賴確認，不刪。O｜STANDBY，無具名合法空槽不啟動。
-- **下一步排序（D 依 c7192864454／c7193469452 最小改動排列；PROPOSED，非授權）**：①#1283 MF1：B 提最小替代方案，待裁示後再依具名差額修／驗；②Work 複驗 #1281 f2a81be8；③A #1197 TWII 合法更新缺客戶指定寄件者／發送授權（C 包指出無合法新鮮行情則大盤證據皆被擋）；④#1284 MF1／SF1：C 依既有 MF1/SF1（c7192593347、R22.2）處理；⑤C 大盤待客戶一題；其餘依原 HOLD。
+- **下一步排序（D 依 c7192864454／c7193469452 最小改動排列；PROPOSED，非授權）**：①#1283 MF1：B 提最小替代方案，待裁示後再依具名差額修／驗；②Work 核 #1284 新差額（c7193858068；#1281 差額 PASS 為 Work 回報、NV）；③A #1197 TWII 合法更新缺客戶指定寄件者／發送授權（C 包指出無合法新鮮行情則大盤證據皆被擋）；④#1284 MF1／SF1：C 依既有 MF1/SF1（c7192593347、R22.2）處理；⑤C 大盤待客戶一題；其餘依原 HOLD。
+- **CONFLICT／HOLD**：c7193858068 稱「#1282 尚未合併」，但 main 0ceeb971＝#1282 squash（merged_at 2026-11-26T06:12Z）；以 GitHub 為準，待總管更正，D 不自行裁決。
 - 文件治理｜c7190746609 歷史交接已存；#1274→B DEC writer 合法交接尚缺，不共寫、不改 #1274。
 - A/B/C 現有 Claude/High、Work GPT-6.2/High、D 現有 Sonnet/Medium、文件治理 Sonnet/High、O 待命（依 R21）；已在執行不重啟，實際執行狀態 NOT VERIFIED。
 
@@ -46,8 +47,8 @@
 |---|---|---|
 | #1282（已合併） | d1c57c4c | 工程正式 Gate 及 main CI PASS（既驗）：c7183080873、c7185239838；Cloud 非 PASS |
 | #1283 | 4a107bdd | Draft；Work HOLD／MF1／SF0（c7192593347）：20／60 實測、120 負控、四 JSON 通過；1.56.0「20 日」按左鍵跳資料頁待修；exact CI 5/5、Slow step 5 success；Cloud／真機 NOT VERIFIED |
-| #1284 | 759600eb | Draft；舊 head CI 5/5、Slow step 5 success（R17）；Work HOLD／MF1／SF1：1.56.0 無障礙選取狀態缺失；Real degraded 隔離已實測（c7191602881） |
-| #1281（本檔） | f2a81be8 為本次同步前基準；新 head 以 LIVE 為準 | Draft；Work HOLD／MF1（c7192593347）：首讀順序已據以統一，待 Work 差額複驗；精確 head／CI 以 LIVE 為準；舊 head CI 不延伸；原 Merge HOLD |
+| #1284 | 99e18bc9（舊 759600eb） | Draft；新 head 為 C 依 Work MF1／SF1 修正，CI／Work 差額 NV；舊 head 舊 head 既驗：CI 5/5、Slow step 5 success（R17）、Real degraded 隔離已實測（c7191602881）；Work HOLD／MF1／SF1：1.56.0 無障礙選取狀態缺失（c7192593347） |
+| #1281（本檔） | f2a81be8 為本次同步前基準；新 head 以 LIVE 為準 | Draft；Work HOLD／MF1（c7192593347）：首讀順序已據以統一；Work 跨對話回報 f2a81be8 差額 PASS MF0／SF0（c7193858068，NV），e51f99b3 之後差額以 LIVE 為準；精確 head／CI 以 LIVE 為準；舊 head CI 不延伸；原 Merge HOLD |
 | #1278 | a863b747 | Draft；K2 原型既驗差額沿用，正式 HOLD |
 | #1274 | 9f016862 | Draft；治理歷史 QA PASS，Merge HOLD |
 | #1268 | 826cc9e6 | Draft；技術 PASS/MF0（c7165198005），Merge HOLD |
