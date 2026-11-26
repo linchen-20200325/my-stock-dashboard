@@ -293,6 +293,7 @@ BANNED_IMPORT_SUBSTRINGS = (
     "requests", "httpx", "aiohttp", "urllib", "http.client", "openai", "anthropic", "google.generativeai",
     "google.genai", "vertexai", "langchain", "litellm", "src.services", "src.data", "src.compute", "proxy_helper",
     "subprocess", "ctypes", "ftplib", "smtplib", "ssl", "telnetlib", "xmlrpc", "webbrowser", "multiprocessing",
+    "_socket", "pty", "posix", "popen2", "commands",          # 繞過封網的低階入口（`socket` 本身被 launcher 用來封網，故精確放行）
 )
 #: 本檔對被測 launcher 的唯一合法 import（模組名含 onebrain 但它是 tests-only 入口，不是決策／OneBrain 模組）。
 SELF_ALLOWED_MODULES = frozenset({
@@ -304,6 +305,7 @@ SELF_ALLOWED_MODULES = frozenset({
     "subprocess",                              # 只用於啟動本機 streamlit server 子行程（browser lane）
     "urllib.request",                          # 只用於輪詢本機 127.0.0.1 的 streamlit health（封網下 loopback 不受影響）
     "urllib.request.urlopen",
+    "urllib.parse", "urllib.parse.urlsplit",    # 純字串解析（判斷請求是否同源 loopback），不連網
 })
 
 
@@ -337,7 +339,8 @@ def test_launcher_and_test_import_no_digest_onebrain_ai_or_network_modules():
 
 
 def test_import_guard_has_teeth():
-    for bad in ("import shared.decision_digest_rules", "from src.services import decision_digest_summary",
+    for bad in ("import _socket\n_socket.socket().connect(('93.184.216.34', 80))", "import pty", "import posix\nposix.system('x')",
+                "from _socket import socket", "import shared.decision_digest_rules", "from src.services import decision_digest_summary",
                 "from src.services.onebrain_shadow import run_shadow", "import requests",
                 "import importlib\nimportlib.import_module('shared.onebrain_provider')",
                 "from src.data.core import data_loader"):
@@ -447,6 +450,51 @@ def clock_problems(source: str) -> list[str]:
     return bad
 
 
+#: 外部資源／腳本守衛（S1；與 tests/test_ui2_drawer_js_guard.py 的 SCAN_PATTERNS 同型，另加外連偵測）。掃對象＝launcher 原始碼，
+#: 以及它在頁面上實際組出的 HTML／CSS 字串（AppTest 的 markdown 值，見 `test_rendered_html_adds_no_external_resource…`）。
+#: 只准 127.0.0.1／localhost／[::1] 的 http(s)／ws(s)；其餘任何 http(s) URL、`url(`／`@import`／`src=`／`href=` 指向外部者一律違規。
+_LOOPBACK_URL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+_URL_RX = re.compile(r"(?i)\b(?:https?|wss?|ftp)://([^/\s\"'<>)\\]+)")
+_RES_PATTERNS = {
+    "<script": r"(?i)<script",
+    "on*= attr": r"(?i)\bon[a-z]{3,}\s*=\s*[\"'\\]",
+    "javascript:": r"(?i)javascript:",
+    "<iframe": r"(?i)<iframe|srcdoc",
+    "@import": r"(?i)@import",
+    "css url(external)": r"(?i)url\(\s*[\"']?\s*(?:https?:)?//",
+    "src/href=external": r"(?i)\b(?:src|href|srcset|action|poster|data|formaction)\s*=\s*[\"']?\s*(?:https?:)?//",
+}
+
+
+def external_resource_problems(text: str) -> list[str]:
+    bad = [k for k, p in _RES_PATTERNS.items() if re.search(p, text)]
+    for m in _URL_RX.finditer(text):
+        host = m.group(1).split("@")[-1]
+        if not any(host == h or host.startswith(h + ":") for h in _LOOPBACK_URL_HOSTS):
+            bad.append(f"external url host {host}")
+    return bad
+
+
+_EVIL_RESOURCES = (
+    '<img src="http://93.184.216.34/x.png" onerror="alert(1)">', "<img src='//evil.example/x'>", "<script>fetch('http://93.184.216.34')</script>",
+    "<style>.a{background:url(http://93.184.216.34/a.png)}</style>", "<style>.a{background:url('//evil.example/a')}</style>",
+    "<style>@import 'x.css';</style>", '<a href="javascript:void(0)">x</a>', '<div onclick="x()">', '<iframe src="x"></iframe>',
+    'X = "https://evil.example/path"', "ws://93.184.216.34/sock",
+)
+
+
+def test_launcher_source_has_no_script_inline_handler_or_external_resource():
+    assert external_resource_problems(LAUNCHER_PATH.read_text(encoding="utf-8")) == []
+
+
+def test_external_resource_guard_has_teeth_and_allows_loopback():
+    for bad in _EVIL_RESOURCES:
+        assert external_resource_problems(bad), bad
+    for ok in ("http://127.0.0.1:8501/_stcore/health", "ws://localhost:8501/_stcore/stream", "<style>.a{color:red}</style>",
+               '<div role="status" data-ui2-s3l0-status="1">目前主題：持股健檢</div>'):
+        assert external_resource_problems(ok) == [], ok
+
+
 #: 動態程式碼／動態 import 守衛（SF1）。launcher 唯一需要動態 import 的是 shell／hold 兩個 UI2 模組（為了不改 src 而換掉它們的屬性）：
 #: 只准 `importlib.import_module(<模組層字串常數 Name>)`，且該常數的值必須在下列極小白名單內；其餘一切動態手段一律違規。
 ALLOWED_DYNAMIC_MODULES = frozenset({"src.ui2.shell.app", "src.ui2.views.hold"})
@@ -456,6 +504,15 @@ RISKY_ATTR_NAMES = CLOCK_ATTRS | frozenset({"connect", "connect_ex", "create_con
                                             "import_module", "__import__", "modules", "run", "Popen", "check_output"})
 
 
+#: 程序／低階系統呼叫入口（`os.system('curl …')` 之類）：任何屬性取用都算違規。
+PROCESS_ATTRS = frozenset({"system", "popen", "fork", "forkpty", "startfile", "posix_spawn", "posix_spawnp",
+                           "execl", "execle", "execlp", "execlpe", "execv", "execve", "execvp", "execvpe",
+                           "spawnl", "spawnle", "spawnlp", "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe"})
+
+
+# ⚠ AST 守衛非窮舉：operator.attrgetter／type().__getattribute__／importlib.util／pkgutil.resolve_name／runpy／別名 sys／
+# 把常數改成變數／os.environ 切換等繞法 AST 抓不全，本檔不宣稱窮盡；時鐘／網路類的繞法由行為測試（時鐘函式換成會 raise 的版本）
+# 與封網（`seal_network`，含 AppTest／server 兩條路徑的驗證）兜底。
 def dynamic_code_problems(source: str) -> list[str]:
     tree = ast.parse(source)
     consts = _const_strs(tree)
@@ -464,6 +521,8 @@ def dynamic_code_problems(source: str) -> list[str]:
         if isinstance(n, ast.Name) and n.id in DYNAMIC_BANNED_NAMES:
             bad.append(f"name {n.id} (line {n.lineno})")
         elif isinstance(n, ast.Attribute):
+            if n.attr in PROCESS_ATTRS:
+                bad.append(f"process/system call .{n.attr} (line {n.lineno})")
             if n.attr in DYNAMIC_BANNED_NAMES or n.attr in ("__builtins__", "__dict__", "__globals__", "__subclasses__"):
                 bad.append(f"attr .{n.attr} (line {n.lineno})")
             if n.attr == "modules" and isinstance(n.value, ast.Name) and n.value.id == "sys":
@@ -512,6 +571,8 @@ _EVIL_DYNAMIC = (
     "getattr(getattr(m, 'datetime'), 'now')",
     "getattr(sock, 'connect')",
     "vars(m)",
+    "import os\nos.system('curl http://93.184.216.34')", "import os\nos.popen('curl x')", "import os\nos.execv('/bin/sh', [])",
+    "import os\nos.spawnl(0, 'x')", "import os\nos.posix_spawn('x', [], {})", "import os\nos.fork()",
 )
 
 
@@ -743,6 +804,17 @@ def test_status_text_absent_wherever_the_selector_is_absent(real_snapshot_patch)
         for kw in ({"feed": "real"}, {"scenario": "loaded"}, {"page": P4_MARKET}):
             at = run_app(**kw)
             assert status_texts(at) == [] and not any("data-ui2-s3l0-status" in v for v in md_values(at)), kw
+
+
+@pytest.mark.parametrize("topic", L.TOPICS)
+def test_rendered_html_adds_no_external_resource_or_script_versus_uninstalled(inst, topic):
+    """launcher 在頁面上實際組出的 HTML／CSS（含狀態列、SLOT_CSS）不得多出任何腳本／行內事件／外部資源（與未安裝版差集）。"""
+    on = "\n".join(md_values(run_app(topic=topic)))
+    L.uninstall()
+    off = "\n".join(md_values(run_app(topic=topic)))
+    L.install()
+    new_problems = set(external_resource_problems(on)) - set(external_resource_problems(off))
+    assert new_problems == set(), new_problems
 
 
 def test_widget_proto_and_session_state_scanners_have_teeth():
@@ -1079,12 +1151,41 @@ _SELECTED_JS = """(box) => { const bs = [...document.querySelectorAll(box + ' bu
   return on.map(b => b.innerText.trim()); }"""
 
 
+def _allowed_origin(url: str, origin: str) -> bool:
+    """同源 loopback（server 自身 host:port；含 ws://同源）或無網路的內嵌 scheme（data:／blob:／about:）。"""
+    from urllib.parse import urlsplit
+    u, o = urlsplit(url), urlsplit(origin)
+    if u.scheme in ("data", "blob", "about"):
+        return True
+    return u.hostname == o.hostname and (u.port or {"http": 80, "ws": 80, "https": 443, "wss": 443}.get(u.scheme)) == o.port \
+        and u.scheme in ("http", "https", "ws", "wss")
+
+
 class Page:
     def __init__(self, browser, url, vp, wait_box=True):
         self.ctx = browser.new_context(viewport=vp)
         self.pg = self.ctx.new_page()
         self.errs: list[str] = []
+        self.requests: list[str] = []          # 所有請求（含被擋的）；`external` 為其中非同源 loopback 者
+        self.external: list[str] = []
+        self.origin = url
         self.pg.on("pageerror", lambda e: self.errs.append(str(e)))
+
+        def _route(route):                      # 外連一律中止並記錄（⛔ 不放行）；同源 loopback 照常放行
+            u = route.request.url
+            self.requests.append(u)
+            if _allowed_origin(u, self.origin):
+                route.continue_()
+            else:
+                self.external.append(u)
+                route.abort()
+        self.ctx.route("**/*", _route)
+        # 雙保險：request 事件（含 route 以外的 ws／子資源）＋ WebSocket 目的地
+        self.pg.on("request", lambda r: None if _allowed_origin(r.url, self.origin) or r.url in self.external
+                   else self.external.append(r.url))
+        self.pg.on("websocket", lambda w: None if _allowed_origin(w.url, self.origin) else self.external.append(w.url))
+        self.ws: list[str] = []
+        self.pg.on("websocket", lambda w: self.ws.append(w.url))
         self.pg.goto(url)
         self.pg.wait_for_selector(".ui2-pagetitle", timeout=40000)
         if wait_box:
@@ -1093,6 +1194,11 @@ class Page:
 
     def close(self):
         self.ctx.close()
+
+    def assert_no_external_requests(self):
+        """零外連：除同源 loopback（含 ws）外沒有任何請求；且不是空洞（確實攔到同源請求、也看到 websocket）。"""
+        assert self.requests and any("_stcore" in u or u.rstrip("/") == self.origin.rstrip("/") for u in self.requests), self.requests[:5]
+        assert self.external == [], self.external
 
     def selected(self) -> list[str]:
         return self.pg.evaluate(_SELECTED_JS, BOX)
@@ -1168,7 +1274,10 @@ class Page:
 def ui(request, browser, demo):
     p = Page(browser, demo.url, VIEWPORTS[request.param])
     yield p
-    p.close()
+    try:
+        p.assert_no_external_requests()          # 每個 browser 測試結束時都核一次：零外連
+    finally:
+        p.close()
 
 
 @pytest.mark.slow
@@ -1259,6 +1368,34 @@ def test_ax_tree_exposes_the_current_topic_in_both_streamlit_versions(ui, topic)
     else:
         assert checked == []                                              # 1.56：控件本身仍無 aria 選取（補償只是文字）
     assert forbidden_hits(texts[0]) == [] and leak_hits("\n".join(ax_static_texts(ui))) == []
+
+
+@pytest.mark.slow
+@pytest.mark.ui2_browser
+@pytest.mark.parametrize("vp", list(VIEWPORTS))
+def test_no_external_requests_or_websockets_across_all_topics_and_switching(browser, demo, vp):
+    """S1：以 `context.route('**/*')`＋request／websocket 事件攔截並記錄所有請求；除同源 loopback 外零外連。
+    涵蓋載入、四主題各切換一次、再切回預設；且確實看到同源 websocket（非空洞）。"""
+    p = Page(browser, demo.url, VIEWPORTS[vp])
+    try:
+        for topic in (*L.TOPICS, L.DEFAULT_TOPIC):
+            p.pg.locator(BOX + " button", has_text=topic).click()
+            p.wait_topic(topic)
+        p.pg.wait_for_timeout(500)
+        p.assert_no_external_requests()
+        assert p.ws and all(_allowed_origin(w, demo.url) for w in p.ws), p.ws
+        assert all(_allowed_origin(u, demo.url) for u in p.requests), [u for u in p.requests if not _allowed_origin(u, demo.url)]
+    finally:
+        p.close()
+
+
+def test_allowed_origin_helper_has_teeth():
+    o = "http://127.0.0.1:8501"
+    assert _allowed_origin("http://127.0.0.1:8501/_stcore/health", o) and _allowed_origin("ws://127.0.0.1:8501/_stcore/stream", o)
+    assert _allowed_origin("data:image/png;base64,AAAA", o)
+    for bad in ("http://93.184.216.34/x.png", "http://127.0.0.1:9999/x", "http://localhost:8501/x", "https://fonts.googleapis.com/css",
+                "ws://93.184.216.34/s", "http://127.0.0.1/x"):
+        assert not _allowed_origin(bad, o), bad
 
 
 @pytest.mark.slow
@@ -1375,6 +1512,7 @@ def test_real_default_entry_has_no_demo_selector_or_content(browser, real):
                 txt = p.pg.evaluate("() => document.body.innerText")
                 assert "OneBrain 示意" not in txt and "預覽主題" not in txt and "反面證據" not in txt
             assert p.pg.locator('[data-ui2-l1="onebrain"]').count() <= 1
+            p.assert_no_external_requests()
         finally:
             p.close()
 
