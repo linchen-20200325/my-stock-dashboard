@@ -169,8 +169,8 @@ THRESHOLDS: list[dict[str, str]] = [
                "真瀏覽器 Real 量測另實際點選 60 日（結果記於市場頁列 `kbar_period60`），驗根數 ≤60 且符合選中值、同源、無水平溢出、鍵盤方向鍵 20→60。"
                "方向鍵不離頁（MF1；客戶採方案 B，#1199 7192913294／7193549716／AUTH-B-r01）：依量測時實際載入的 Streamlit 版本分流——≥1.59 且 <1.60：聚焦期間 radio 後 "
                "ArrowLeft／Right／Up／Down 在 20、60 上皆不離開市場頁、焦點仍在期間 radiogroup、導覽選中項不變、值只在 20↔60 環繞，否則該列失敗；"
-               "1.56.x（及未驗證的 1.57／1.58）：不判失敗，但必須如實記錄 `arrow_leak`（已知平台限制：1.56.0 radio input name 為空字串，Chromium 將空 name radio 視為同一隱含群組），缺記錄即失敗；"
-               "其他版本（<1.56 或 ≥1.60）：判失敗（宣告範圍外）。"},
+               "僅 1.56.0 精確：不判失敗，但必須如實記錄 `arrow_leak`（已知平台限制：1.56.0 radio input name 為空字串，Chromium 將空 name radio 視為同一隱含群組），缺記錄即失敗；"
+               "其餘一律判失敗＝未獲核准／未量測（<1.56、1.56.1 以上的 1.56.x、1.57.x、1.58.x、≥1.60、無法解析；R23.8 #1199 7206382160 取代先前對 1.57／1.58 的放寬）。"},
     {"id": "w11_hold_layout",
      "rule": "（DEC-141 W-11 批 1）💼 持股：組合狀態行三段齊全且『資料日』段顯示 `⬜ 資料日未提供`、不被截斷；"
              "DOM／座標順序：桌機＝OneBrain → 〔Primary｜建議持股水位（市場端）〕同列並排 → 持股表；手機＝建議持股水位 → OneBrain → Primary → 持股表；"
@@ -388,23 +388,29 @@ def _evaluate_kbar(p2: dict, out: dict[str, list[str]]) -> None:
 #: 方向鍵不離頁（MF1；客戶方案 B）判定常數（判定器自己的字面值）。
 ARROW_KEYS = ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown")
 ARROW_STARTS = (20, 60)
-ARROW_LEAK_CAUSE = ("Streamlit 1.56.x 的 radio `<input>` `name` 為空字串；Chromium 將同一 DOM 樹內空 name 的 radio 視為同一個隱含群組、"
+ARROW_LEAK_CAUSE = ("Streamlit 1.56.0 的 radio `<input>` `name` 為空字串；Chromium 將同一 DOM 樹內空 name 的 radio 視為同一個隱含群組、"
                     "依 DOM 順序環繞（頂部導覽 5 個 → 期間 2 個），方向鍵因此穿到導覽。1.59 起 name 為各群組唯一值，無此現象。")
 
 
-def _version_tuple(version) -> tuple[int, int] | None:
-    m = re.match(r"^(\d+)\.(\d+)(?:\.|$)", str(version or ""))
-    return (int(m.group(1)), int(m.group(2))) if m else None
+def _version_triple(version) -> tuple[int, int, int] | None:
+    """嚴格解析 `major.minor.patch`（純數字三段；⛔ `1.59`、`1.59.2.dev0`、`v1.59.2` 等一律 None＝無法解析）。"""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", str(version) if isinstance(version, str) else "")
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
 def arrow_policy(version) -> str:
-    """方向鍵不離頁的驗收分流（以量測時**實際載入**的 `streamlit.__version__` 判，⛔ 旗標字串）：
-    `required`＝1.59.x（必過）；`known_limitation`＝1.56.x（已知平台限制：不判失敗但必須如實記錄；1.57／1.58 未驗證，同樣只記錄）；
-    `unsupported`＝其餘（<1.56、≥1.60、無法解析；宣告範圍外 → 判失敗）。"""
-    t = _version_tuple(version)
-    if t is None or t < (1, 56) or t >= (1, 60):
+    """方向鍵不離頁的驗收分流（以量測時**實際載入**的 `streamlit.__version__` 判，⛔ 旗標字串）——**最嚴解讀**（R23.4 7205711405／R23.8 7206382160）：
+    `known_limitation`＝**僅 1.56.0 精確**（已知平台限制：不判失敗但必須如實記錄 `arrow_leak`）；
+    `required`＝≥1.59.0 且 <1.60（必過；CI 只跑 1.59.2，1.59.0／1.59.1 依授權文字同列 required，未另行放寬或加嚴）；
+    `unsupported`＝其餘一律（<1.56、1.56.1 以上的 1.56.x、1.57.x、1.58.x、≥1.60、無法解析、None）：未獲核准／未量測 → 判失敗，⛔ 放寬。"""
+    t = _version_triple(version)
+    if t is None:
         return "unsupported"
-    return "required" if t >= (1, 59) else "known_limitation"
+    if t == (1, 56, 0):
+        return "known_limitation"
+    if (1, 59, 0) <= t < (1, 60, 0):
+        return "required"
+    return "unsupported"
 
 
 def arrow_case_leaked(c: dict) -> bool:
@@ -420,7 +426,7 @@ def evaluate_arrow_keys(ak: dict | None) -> list[str]:
     ver = ak.get("streamlit_version")
     pol = arrow_policy(ver)
     if pol == "unsupported":
-        return [f"Streamlit {ver!r} 不在宣告範圍內（≥1.56.0,<1.60.0）：方向鍵不離頁無法判定（未支援版本）"]
+        return [f"Streamlit {ver!r}：此版本未獲核准／未量測（僅 1.56.0 認列為已知限制、≥1.59.0 且 <1.60 必過）；方向鍵不離頁無法判定，判失敗（未支援版本）"]
     cases = ak.get("cases")
     fails: list[str] = []
     want = [(s0, k0) for s0 in ARROW_STARTS for k0 in ARROW_KEYS]
@@ -441,10 +447,10 @@ def evaluate_arrow_keys(ak: dict | None) -> list[str]:
             if c.get("picker_after") != expected:
                 fails.append(f"{tag}：期間值 {c.get('picker_after')!r}（應只在 20↔60 環繞，預期 {expected}）")
         return fails
-    # known_limitation（1.56.x；1.57／1.58 未驗證）：不以洩漏判失敗，但必須如實記錄且記錄與實測一致
+    # known_limitation（僅 1.56.0 精確）：不以洩漏判失敗，但必須如實記錄且記錄與實測一致
     leak = ak.get("arrow_leak")
     if not isinstance(leak, dict):
-        return ["Streamlit 1.56.x：缺 `arrow_leak`（已知平台限制必須如實記錄，不得靜默略過）"]
+        return ["Streamlit 1.56.0：缺 `arrow_leak`（已知平台限制必須如實記錄，不得靜默略過）"]
     for k in ("observed", "left_from_20", "right_from_60", "input_names", "cause"):
         if k not in leak:
             fails.append(f"`arrow_leak` 缺欄位 {k!r}")
@@ -1305,7 +1311,7 @@ _JS_RADIO_NAMES = r"""
 def measure_arrow_keys(page, streamlit_version: str, lab, cond) -> dict:
     """聚焦期間 radio 的 20／60 後各按 ArrowLeft／Right／Up／Down（共 8 案例）→ 記錄頁面／導覽選中項／焦點／期間值。
     每案例之後若離開市場頁就點導覽回市場，且還原到 20（⛔ 影響之後的量測）。實際判定見 `evaluate_arrow_keys`（依 `arrow_policy` 分流）。
-    1.56.x（已知平台限制）另產出 `arrow_leak` 記錄——如實量測、不改變頁面結論。"""
+    1.56.0（已知平台限制）另產出 `arrow_leak` 記錄——如實量測、不改變頁面結論。"""
     from shared.ui2_contract.pages import P4_MARKET, PAGE_LABELS
     cases = []
     for start in ARROW_STARTS:

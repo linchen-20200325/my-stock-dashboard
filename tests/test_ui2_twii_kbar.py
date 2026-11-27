@@ -642,7 +642,7 @@ def test_real_measurement_actually_clicks_60_and_records_it_in_the_market_row():
     assert MV.KBAR_PERIOD_CAPS == {20: 20, 60: 60} and MV.KBAR_PICKER_LABELS == ["20 日", "60 日"] and 120 not in MV.KBAR_PERIOD_CAPS
 
 
-# ── MF1：方向鍵不離頁（客戶方案 B：#1199 7192913294／7193549716／AUTH-B-r01；1.56.x 認列已知平台限制）────────────────
+# ── MF1：方向鍵不離頁（客戶方案 B：#1199 7192913294／7193549716／AUTH-B-r01；僅 1.56.0 認列已知平台限制；R23.8 最嚴解讀）────────────────
 def _arrow_cases(*, leak: bool = False, **over) -> list[dict]:
     """20／60 × 四個方向鍵的合成量測案例。`leak=True`＝模擬 1.56.0 的洩漏（頁面→資料、焦點離開、期間 radio 消失）。"""
     out = []
@@ -677,10 +677,14 @@ def _leak_rec(cases: list[dict], **over) -> dict:
 
 
 @pytest.mark.parametrize("version,policy", [
-    ("1.59.2", "required"), ("1.59.0", "required"), ("1.59", "required"),
-    ("1.56.0", "known_limitation"), ("1.56.9", "known_limitation"), ("1.57.0", "known_limitation"), ("1.58.1", "known_limitation"),
-    ("1.55.9", "unsupported"), ("1.60.0", "unsupported"), ("1.60.1", "unsupported"), ("2.0.0", "unsupported"),
-    ("1.5", "unsupported"), ("", "unsupported"), (None, "unsupported"), ("garbage", "unsupported"), ("v1.59.2", "unsupported"),
+    ("1.59.2", "required"), ("1.59.0", "required"), ("1.59.1", "required"),
+    ("1.56.0", "known_limitation"),                                              # 僅 1.56.0 精確
+    # R23.8 最嚴：其餘一律 unsupported（未核准／未量測）
+    ("1.55.0", "unsupported"), ("1.55.9", "unsupported"), ("1.56.1", "unsupported"), ("1.56.2", "unsupported"), ("1.56.9", "unsupported"),
+    ("1.57.0", "unsupported"), ("1.57.3", "unsupported"), ("1.58.0", "unsupported"), ("1.58.1", "unsupported"),
+    ("1.60.0", "unsupported"), ("1.60.1", "unsupported"), ("2.0.0", "unsupported"),
+    ("1.59", "unsupported"), ("1.56", "unsupported"), ("1.5", "unsupported"), ("1.59.2.dev0", "unsupported"), ("1.56.0rc1", "unsupported"),
+    ("", "unsupported"), (None, "unsupported"), ("garbage", "unsupported"), ("v1.59.2", "unsupported"), (1.59, "unsupported"),
 ])
 def test_arrow_policy_is_split_by_the_actually_loaded_streamlit_version(version, policy):
     assert MV.arrow_policy(version) == policy
@@ -730,7 +734,8 @@ def test_arrow_known_limitation_leak_is_recorded_and_does_not_fail_b():
     leak = _leak_rec(cases)
     assert leak["observed"] is True
     assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, leak)) == []
-    assert MV.evaluate_arrow_keys(_ak("1.57.0", cases, leak)) == []        # 1.57／1.58 未驗證：只記錄
+    for v in ("1.56.1", "1.56.2", "1.57.0", "1.58.1"):                       # R23.8：1.56.0 以外一律不放寬（即使附完整記錄也紅）
+        assert MV.evaluate_arrow_keys(_ak(v, cases, leak)) != [], v
 
 
 def test_arrow_known_limitation_honestly_records_no_leak_when_there_is_none():
@@ -756,12 +761,41 @@ def test_arrow_known_limitation_without_the_record_is_red_c():
         assert MV.evaluate_arrow_keys(_ak("1.56.0", cases, _leak_rec(cases, **over))) != [], over
 
 
-@pytest.mark.parametrize("version", ["1.55.0", "1.60.0", "1.61.2", "2.0.0", "", None])
-def test_arrow_unsupported_versions_are_red_d(version):
-    """(d) 未支援版本（<1.56、≥1.60、無法解析）→ 紅，即使案例完美、附有 leak 記錄。"""
-    good = _arrow_cases()
-    assert MV.evaluate_arrow_keys({"streamlit_version": version, "cases": good}) != []
-    assert MV.evaluate_arrow_keys({"streamlit_version": version, "cases": good, "arrow_leak": _leak_rec(good)}) != []
+_UNAPPROVED_VERSIONS = ["1.55.0", "1.56.1", "1.56.2", "1.57.0", "1.58.1", "1.60.0", "1.61.2", "2.0.0", "garbage", "", None]
+
+
+@pytest.mark.parametrize("version", _UNAPPROVED_VERSIONS, ids=repr)
+def test_arrow_unapproved_versions_are_red_d(version):
+    """(d) 未核准版本負控表（R23.8；僅 1.56.0 為已知限制、≥1.59.0 且 <1.60 為必過）：<1.56、1.56.1 以上、1.57.x、1.58.x、≥1.60、無法解析、None
+    一律 `arrow_policy`＝unsupported 並被判失敗，即使案例完美、附有 leak 記錄；失敗訊息明講「未獲核准／未量測」（不是靜默略過）。"""
+    assert MV.arrow_policy(version) == "unsupported"
+    good, leaky = _arrow_cases(), _arrow_cases(leak=True)
+    for cases, leak in ((good, None), (good, _leak_rec(good)), (leaky, _leak_rec(leaky)), (leaky, None)):
+        rec = {"streamlit_version": version, "cases": cases}
+        if leak is not None:
+            rec["arrow_leak"] = leak
+        fails = MV.evaluate_arrow_keys(rec)
+        assert fails and "未獲核准／未量測" in fails[0], (version, fails)
+
+
+@pytest.mark.parametrize("version", _UNAPPROVED_VERSIONS, ids=repr)
+def test_arrow_unapproved_version_makes_the_market_row_fail_when_judged_d2(version):
+    """量測列層級：`measure_kbar_period_60` 的失敗清單來自 `evaluate_arrow_keys`（不允許放寬），未核准版本 → failures 非空 → 該列 pass=False。"""
+    fails = [f"[arrow_keys] {x}" for x in MV.evaluate_arrow_keys({"streamlit_version": version, "cases": _arrow_cases(),
+                                                                  "arrow_leak": _leak_rec(_arrow_cases())})]
+    assert fails and any("未獲核准／未量測" in f for f in fails)
+
+
+def test_arrow_only_exact_1_56_0_is_a_known_limitation_and_1_59_x_is_strict():
+    leaky = _arrow_cases(leak=True)
+    assert MV.arrow_policy("1.56.0") == "known_limitation"
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", leaky)) != []                                    # 缺記錄＝紅
+    assert MV.evaluate_arrow_keys(_ak("1.56.0", leaky, _leak_rec(leaky))) == []                 # 如實記錄＝不判失敗
+    for v in ("1.59.0", "1.59.1", "1.59.2"):
+        assert MV.arrow_policy(v) == "required"
+        assert MV.evaluate_arrow_keys(_ak(v, _arrow_cases())) == []
+        assert MV.evaluate_arrow_keys(_ak(v, leaky)) != []                                       # 離頁＝紅
+        assert MV.evaluate_arrow_keys(_ak(v, leaky, _leak_rec(leaky))) != []                     # 附記錄也不能過關
 
 
 def test_arrow_measurement_is_wired_into_the_real_market_row_and_uses_the_loaded_version():
