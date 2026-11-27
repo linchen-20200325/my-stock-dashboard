@@ -11325,6 +11325,8 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 > **地位：客戶工作流程／輸出格式裁示的治理登記；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 僅治理／工作流程，**不改任何投資規則**，不授權任何產品碼、部署、Secrets 變更，也不解除任何 HOLD、不新增 Gate、不降低任何安全揭露／裁示／獨立 QA 標準。本條隨 PR #1274 提出；**#1274 合併前不得稱已入 main**（#1274 維持 Draft；合併須總管既有正式 Merge Gate 裁示與非作者 QA）。
 > 2026-11-25 補登（ID 取下一個未用號；撰寫時 `git grep -n "DEC-226"` 於 origin/main `2fd0773e120d27f2093078dae67404eded333fc5` 與所有 open PR 〔#1278、#1268、#1237、#1274〕均 0 命中，DEC-225 為上一號）。
 
+> **現行校正（2026-11-27；有意識的政策變更，不是漏刪；依據 #1199 comment 7194334618／7195062584、CURRENT_PLAN R23.13；歷史原文保留）**：下文「O＝Work 專用條件式備援」之表述（含標題、7148133320／7148028894 之 fence 與轉述）為 2026-11-25 時點之歷史快照；凡與本段衝突者以本段為準，被取代之句於下文以 ~~刪除線~~ 保留並緊接「**現行（2026-11-27）**」。現行事實僅三項：(1) 客戶 2026-11-26 裁示（#1199 comment 7194334618）：因 Work 額度用罄，後續 Work 非作者獨立 QA、LIVE Verification、既有正式 Gate 與新增差額複驗改由專案 AI O 承接，Work 暫停；(2) 總管 CURRENT_PLAN 增量覆蓋裁示（#1199 comment 7195062584；CURRENT 正文 R23.13／R23.14）：O 正式接管 Work，Work 停派；(3) 客戶永久授權 r04（#1199 comment 7209828557、7209833546）：總管對「已授權產品範圍、正式 Gate PASS／MF0、LIVE exact head／base／main／CI／reviews 未失效、無適用 HOLD／安全衝突」之 Ready／merge 可具名自主裁決；不得擴權至 deploy、未授權施工、其他線自行合併、繞 Gate、解除其他 HOLD。O 的驗收標準與原 Work 相同（不得降低）；O 仍不得驗自己曾施工的差額，無資格即 HOLD。本校正依 #1199 R23.14（comment 7210385469）具名授權之單一 writer 為之；僅校正衝突句、歷史保留，不新增規則／Gate／角色／DEC 編號／文件，不改任何其他既有 DEC。
+
 - **決策者**：客戶（經總管於 #1199 回存轉錄；留言以 repo 帳號發表，**客戶親撰成分僅以留言內引號標示之原句為準**，其餘為總管整理）。**日期**：2026-11-25。｜**適用**：客戶指示自 2026-11-25 起適用；repo 條文入 main 前標文件同步待完成（7148182082 明文：「未完成入 main 前標文件同步待完成」）。
 - **治理 writer**：依 `PROJECT_RULES.md` 第 31.2 節／DEC-147 由 Claude Code 唯一治理 writer 寫入（7148182082 明文派工）；先 LIVE Gate、確認同檔無在製衝突（撰寫時 open PR #1278、#1268、#1237 均未動 `PROJECT_RULES.md`／`docs/DECISIONS.md`／`docs/HANDOFF.md`／`docs/BACKLOG.md`／`docs/PROJECT_STATE.md`，`gh api pulls/<n>/files` 實查）。
 
@@ -11345,6 +11347,7 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 
 - **生效範圍＝僅「總管提示語展示」**：依留言「此僅改總管提示語展示，不減少任何安全揭露、裁示或 QA 標準」。複製內容仍須完整、可獨立開工（Repo、SSOT、READ FIRST、LIVE Gate、任務範圍、授權、驗收、禁止事項、交接）；與 `PROJECT_RULES.md` 第 32.6 節（新對話提示語須完整）及第 22.4 節同向、不取代。模型與 Effort 仍依 Minimum Sufficient Effort（第 17 節），**不固定 High**。
 - **不重複 PR／不直接推 main／原 Gate 不變**：留言明文要求。
+- **現行（2026-11-27）**：上列留言逐字之對象清單「A/B/C/Work/O」為 2026-11-25 時點原文（fence 不改）；自 2026-11-27 起 Work 停派（見上方現行校正），提示語不再對 Work 提供；展示格式與「複製內容須完整可獨立開工」等其餘規則不變。（有意識的政策變更，不是漏刪；依據 #1199 comment 7194334618／7195062584、CURRENT_PLAN R23.13。）
 
 #### 二、專案 AI O：Work 專用條件式備援獨立 QA（來源 7148133320；承 7148028894）
 
@@ -11366,8 +11369,8 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 ```
 
 - **7148028894 要點（撰寫組轉述，非逐字；以該留言原文為準）**：(1) Work 無法執行且尚有未驗差額時，將該項**唯讀 QA** 交**未參與該差額撰寫、修正或共同施工**的專案 AI；(2) 當時指派例：A 的 #1275／#1273 新差額由 C 優先（作者衝突則 B）；B 的 #1279／後續 UI 差額由 C 或 A（依實際非作者資格及工作量）；C 的 #1268／後續 OneBrain 差額由 A 優先（作者衝突則其他合格非作者）；B／C 共用 UI 差額若兩線均參與，交未參與的 A——**此為該時點的指派範例，不是永久名單**；(3) **每個差額僅一位驗收 owner**，先核實既有 WIP、交接點、非作者資格，避免 Work 恢復後重跑；原要求需多組獨立 QA 者仍保留；(4) 無合格非作者、必要工具或證據時標 NOT VERIFIED／HOLD 於原 Gate，**不得作者自驗冒充獨立 PASS**；(5) 已完成的 Work 證據沿用；QA 為唯讀接棒，不新增施工分支、不共編、不取代原作者任務；(6) Work 恢復先讀 closure ledger，只接未驗差額，不重派同 head；(7) 不得因備援改變合併 owner、順序、部署權限或任何 HOLD。
-- **角色定位（要點）**：O 為 Work 的**第一順位備援驗收角色**，**不是第四條施工線**（最多三條活躍工程線不變）；平時待命，僅在 Work 額度不足、工具不可用或確定無法執行且有未驗差額時，由總管**具名派工**；**不代表 Work 現已耗盡**。O 僅接未驗差額、原 Merge Gate 與 main push CI 查證；驗收標準與 Work 完全相同（exact-head diff、五項 CI、Slow AppTest 實際 step、reviews／threads、DEC／Contract／ADR、必要真瀏覽器、正負控、MF／SF、PASS／HOLD／NOT VERIFIED 及可回查證據）；O **不施工、不共編、不 Ready／merge／deploy、不改 Secrets、正式投資規則或解除 HOLD**；僅可依派工 append-only 回存驗收證據至 #1199。建議 Model Claude Sonnet 5.5／Mode 唯讀獨立 QA（靜默自主巡航）／Effort High——**為留言所列建議，仍依 Minimum Sufficient Effort**。
-- **未建立事實**：7148133320 載明「未直接建立或啟動其他 AI 對話，未派發實際 QA，未修改 PR、repo 檔案或部署，亦不解除 #1279 最新 Cloud Gate #7148128389」；本條同樣**不建立任何 AI 對話、不派發 QA**。O 是否已被實際啟用／派工，**本條不證明**（NOT VERIFIED）。
+- **角色定位（要點）**：~~O 為 Work 的**第一順位備援驗收角色**，**不是第四條施工線**（最多三條活躍工程線不變）；平時待命，僅在 Work 額度不足、工具不可用或確定無法執行且有未驗差額時，由總管**具名派工**；**不代表 Work 現已耗盡**。~~ **現行（2026-11-27）**：O 已由客戶裁示正式接管 Work 的非作者獨立 QA、LIVE Verification、正式 Gate 與新增差額複驗（7194334618；7195062584／R23.13）；Work 暫停、停派。（有意識的政策變更，不是漏刪；依據 #1199 comment 7194334618／7195062584、CURRENT_PLAN R23.13。）O 僅接未驗差額、原 Merge Gate 與 main push CI 查證；驗收標準與 Work 完全相同（exact-head diff、五項 CI、Slow AppTest 實際 step、reviews／threads、DEC／Contract／ADR、必要真瀏覽器、正負控、MF／SF、PASS／HOLD／NOT VERIFIED 及可回查證據）；O **不施工、不共編、不 Ready／merge／deploy、不改 Secrets、正式投資規則或解除 HOLD**；僅可依派工 append-only 回存驗收證據至 #1199。建議 Model Claude Sonnet 5.5／Mode 唯讀獨立 QA（靜默自主巡航）／Effort High——**為留言所列建議，仍依 Minimum Sufficient Effort**。
+- **未建立事實**：7148133320 載明「未直接建立或啟動其他 AI 對話，未派發實際 QA，未修改 PR、repo 檔案或部署，亦不解除 #1279 最新 Cloud Gate #7148128389」；本條同樣**不建立任何 AI 對話、不派發 QA**。~~O 是否已被實際啟用／派工，**本條不證明**（NOT VERIFIED）。~~ **現行（2026-11-27）**：O 接管 Work 為客戶 2026-11-26 裁示與總管 CURRENT_PLAN 覆蓋裁示（7194334618／7195062584）所定，非本條所建立；本條仍不建立任何 AI 對話、不派發 QA，亦不證明任何個別差額已被驗收（以 #1199 各回存證據為準）。
 
 #### 三、Hard Output Gate：已有條文，本條只索引、不新增
 
@@ -11381,4 +11384,4 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 - **與其他 DEC 的關係**：落實 DEC-147（治理 writer＝Claude Code；`PROJECT_RULES.md` 第 31.2 節）；與 DEC-104／DEC-118（Hard Output Gate）、DEC-177（預防性交接）、DEC-178（`PROJECT_RULES.md` 第 34 節專業 Agent 路由：O **不是** `.claude/agents/` 的新 Agent 定義，也不新增任何 agent 檔）、DEC-224／DEC-225（本輪 UI2 產品目標與判定二分）並存；不取代、不放寬 `CLAUDE.md` §-2（獨立 QA、不得作者自驗）。
 - **HOLD 不變**：v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows、AI 快取寫入／排程、DG-LIC／PIT／COV／SCOPE、I1144-WIRING-GATE 等皆維持原狀；其餘既有 HOLD 不變，括號不構成窮舉。
 
-⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一治理 writer 依 #1199 三則留言原文與 main 現況撰寫，**未經第二組獨立複驗**；「Hard Output Gate 本輪指示」內容為派工卡轉述（逐字 NOT FOUND）；兩則留言全文雖逐字保存，但留言以 repo 帳號發表、客戶親撰成分僅限引號內原句。**本條不是 QA PASS，不宣稱任何功能已接線、已上線，亦不宣稱 O 已被啟用。**
+⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一治理 writer 依 #1199 三則留言原文與 main 現況撰寫，**未經第二組獨立複驗**；「Hard Output Gate 本輪指示」內容為派工卡轉述（逐字 NOT FOUND）；兩則留言全文雖逐字保存，但留言以 repo 帳號發表、客戶親撰成分僅限引號內原句。**本條不是 QA PASS，不宣稱任何功能已接線、已上線，~~亦不宣稱 O 已被啟用~~。** **現行（2026-11-27）**：O 接管 Work 係客戶／總管裁示（見上方現行校正），非本條宣稱；上述 2026-11-27 校正同樣由單一 writer 撰寫、未經第二組獨立複驗。
