@@ -34,6 +34,7 @@ import os
 import pathlib
 import re
 import stat
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -41,6 +42,15 @@ import types
 
 import pytest
 import requests
+
+try:                      # 跨行程檔案鎖（見 `_cross_process_lock`）；兩者皆無 → 明確失敗，不靜默略過
+    import fcntl
+except ImportError:       # pragma: no cover（Windows）
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 _PAGE_SRC = ROOT / "src" / "ui" / "pages" / "api_diagnostic.py"
@@ -226,6 +236,64 @@ def _assert_own_real_dir(path) -> None:
     assert stat.S_ISDIR(st_.st_mode), f"fixture 目錄不是真目錄（可能是符號連結）：{path}"
     if hasattr(os, "getuid"):
         assert st_.st_uid == os.getuid(), f"fixture 目錄不是本人擁有：{path}"
+
+
+_LOCK_HELD = False
+
+
+@contextlib.contextmanager
+def _cross_process_lock():
+    """跨行程互斥（固定 fixture 根目錄下的 `.lock`）。為何需要：固定目錄＋同內容腳本 → 多個 pytest 行程會對**同一路徑**
+    同時 `write_text`（Streamlit 先截斷再寫），另一行程 `run()` 讀到空檔 → 假紅（fail-closed，但本 PR 的目的就是消除 flake）。
+    臨界區＝「AppTest 腳本寫入 → run → 讀取結果」。本檔以 autouse fixture 在**每個測試**外層取一次（單一入口，
+    同行程不得重入——重入直接 AssertionError，避免 flock 自我死鎖）；例外／結束一律釋放。
+    無 fcntl 且無 msvcrt → RuntimeError（不靜默略過）。"""
+    global _LOCK_HELD
+    assert not _LOCK_HELD, "D6 fixture 鎖不可重入（同行程內只有 autouse fixture 這一個入口）"
+    if fcntl is None and msvcrt is None:
+        raise RuntimeError("D6 fixture：此平台沒有 fcntl／msvcrt，無法建立跨行程鎖——拒絕在無互斥下執行")
+    with open(_fixture_root() / ".lock", "a+b") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        else:                                                   # pragma: no cover（Windows）
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)      # 逾時會丟 OSError → 失敗而非略過
+        _LOCK_HELD = True
+        try:
+            yield
+        finally:
+            _LOCK_HELD = False
+            if fcntl is not None:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            else:                                               # pragma: no cover
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+#: 這些測試自己啟動子行程、由子行程取鎖，所以外層 fixture 不取（否則死鎖）
+_NO_FIXTURE_LOCK_TESTS = frozenset({"test_cross_process_same_dir_same_script_is_race_free_under_the_lock",
+                                      "test_lock_is_released_after_the_context_even_on_exception"})
+
+
+@pytest.fixture(autouse=True)
+def _d6_fixture_lock(request):
+    if request.node.name in _NO_FIXTURE_LOCK_TESTS:
+        yield
+        return
+    with _cross_process_lock():
+        yield
+
+
+def _race_worker(use_lock: bool, iterations: int) -> int:
+    """子行程入口：反覆對「同一目錄、同一腳本」做 寫入→run→讀取（＝併發臨界區）。
+    use_lock=False 只給暫存複本的『拿掉鎖』突變實驗用（正式測試恆為 True）。"""
+    script = "import streamlit as st\nst.markdown('d6-race-ok')\nst.button('b', key='api_diag_run')\n"
+    race_dir = str(_fixture_root() / "race")
+    for i in range(iterations):
+        with (_cross_process_lock() if use_lock else contextlib.nullcontext()):
+            text = _probe_screen(script, race_dir)
+        assert "d6-race-ok" in text and "api_diag_run" in text, ("讀到空檔／被截斷的腳本", i, text[:80])
+    return 0
 
 
 def _candidate_dirs():
@@ -1120,6 +1188,61 @@ def test_probe_has_no_way_to_carry_secrets_or_environment():
     src = inspect.getsource(_probe_screen)
     assert re.findall(r"secrets\[(.*?)\]", src) == ['"UNRELATED_FLAG"']
     assert ".setenv(" not in src and "_ALL_SET" not in src and "LONG" not in src
+
+
+_RACE_CHILD = (
+    "import importlib.util, sys\n"
+    "spec = importlib.util.spec_from_file_location('d6_race_mod', sys.argv[1])\n"
+    "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+    "sys.exit(m._race_worker(sys.argv[2] == '1', int(sys.argv[3])))\n"
+)
+
+
+def _run_race(use_lock: bool, procs: int = 4, iterations: int = 40) -> list[tuple[int, str]]:
+    ps = [subprocess.Popen([sys.executable, "-c", _RACE_CHILD, str(pathlib.Path(__file__).resolve()),
+                            "1" if use_lock else "0", str(iterations)],
+                           cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) for _ in range(procs)]
+    return [(p.wait(timeout=600), (p.stdout.read() if p.stdout else "")[-400:]) for p in ps]
+
+
+def test_cross_process_same_dir_same_script_is_race_free_under_the_lock():
+    """SF-1 回歸：≥4 個行程同時對「同一目錄、同一腳本」反覆 寫入→run→讀取，在檔案鎖下必須全數通過。
+    （拿掉鎖的突變只能在暫存複本中以 `_run_race(False)` 重現偶發紅；本檔不斷言隨機的紅，以免自己變成 flake。）"""
+    results = _run_race(True)
+    assert all(code == 0 for code, _ in results), results
+
+
+def test_lock_is_really_held_during_a_test_and_refuses_reentry():
+    """本測試在 autouse fixture 的鎖內：另一個檔案描述符取同一把鎖必須被擋；同行程重入被拒、外層鎖不受影響。"""
+    with pytest.raises(AssertionError, match="不可重入"):
+        with _cross_process_lock():
+            pass                                                   # pragma: no cover
+    assert _LOCK_HELD is True, "重入被拒後，外層的鎖仍須維持持有"
+    if fcntl is not None:
+        with open(_fixture_root() / ".lock", "a+b") as other:
+            with pytest.raises(OSError):                           # BlockingIOError：鎖確實被持有
+                fcntl.flock(other.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_lock_is_released_after_the_context_even_on_exception():
+    """釋放保證：在子行程裡讓臨界區丟例外後，另一個行程立刻能取到鎖（子行程結束時 flock 與 _LOCK_HELD 皆已釋放）。"""
+    code = (
+        "import importlib.util, sys\n"
+        "spec = importlib.util.spec_from_file_location('d6_rel_mod', sys.argv[1])\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "try:\n"
+        "    with m._cross_process_lock():\n"
+        "        raise ValueError('boom')\n"
+        "except ValueError:\n"
+        "    pass\n"
+        "assert m._LOCK_HELD is False\n"
+        "with m._cross_process_lock():\n"      # 同行程例外後可再取（沒有卡死）
+        "    assert m._LOCK_HELD is True\n"
+    )
+    # 此測試在 fixture 鎖內 → 子行程會等；先在子行程啟動前不能持鎖，故把本測試列為免外層鎖
+    r = subprocess.run([sys.executable, "-c", code, str(pathlib.Path(__file__).resolve())],
+                       cwd=str(ROOT), capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr[-400:]
 
 
 # ── (a) 碰撞回歸：選擇器拒絕碰撞候選並換下一個；全掃描在碰撞目錄下確實報紅 ─────────────────
