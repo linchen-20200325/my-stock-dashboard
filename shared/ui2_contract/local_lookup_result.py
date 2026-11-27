@@ -5,7 +5,7 @@
 
 ═══ 介面 ═══
 `build_local_lookup_result(quote, *, open_, high, low, close, volume, as_of, ma20, ma240, bias20_pct, vol_ratio5,
-                          support, resistance, support_resistance_bars=None, source_user_declared=True)`
+                          support, resistance, support_resistance_bars=None, source_user_declared)`   # source_user_declared 必填、無預設
 
 - `quote`：呼叫端以 `quote_view.build_quote_view` 建好的 `QuoteView`（六態、symbol、資料日、抓取時間、來源、過期旗標
   都**只從這裡取**，不另開第二套文案、不另判狀態）。
@@ -15,7 +15,7 @@
 - 缺值規則（§1 Fail Loud / missing ≠ 0）：None／bool／非數值／NaN／inf／超出顯示範圍 → 一律
   `TEXT_MISSING`（「⬜ 資料未備」）且 `is_missing=True`；**真 0（例如量 0 的跌停鎖死日）照實顯示「0」**，與缺值可區分。
   不補 0、不補值、不從別欄推。
-- 矛盾輸入 fail loud（`ValueError`）：`as_of` 與 `quote` 的資料日不同；`close` 與 `quote` 的收盤不同；
+- 矛盾輸入 fail loud（`ValueError`；支撐＞壓力亦同）：`as_of` 與 `quote` 的資料日不同；`close` 與 `quote` 的收盤不同；
   已有效的 high < low，或 open／close 落在 [low, high] 之外。這類是呼叫端接錯資料，不是「缺值」。
 
 ═══ 欄位 → 來源欄位對映（以讀到的程式為準；未驗的明寫）═══
@@ -32,6 +32,12 @@
 | 乖離20 | bias20_pct | `StockResearchFacts.bias20_pct`（**單位 %**，不是比率；21 根以上才有） |
 | 量比5 | vol_ratio5 | `StockResearchFacts.volume_ratio5`（**倍數**＝今日量／前 5 日均量，來源 2 位小數；6 根以上才有） |
 | 支撐／壓力 | support／resistance／support_resistance_bars | `StockResearchFacts.support_20d／resistance_20d／support_resistance_bars`（C 已提供；實際涵蓋根數可 <20，標籤照實寫根數，不謊稱「20 日」） |
+
+═══ 接線批待辦（本批未接線，下一批必做）═══
+(a) `src/ui2/components/html.py::LOCAL_LOOKUP_RESULT_CSS` 必須併入 `src/ui2/shell/css.py` 的 CSS（單一注入點），
+    **不可**直接丟 `st.markdown`。
+(b) 「🤖 研究解釋：尚未啟用 ⬜」「日K非即時」「價格為原始未調整價（未還原除權息）」「使用者自述，未經系統驗證」
+    是本檔**硬編碼字樣**，接線時須過 Copy Gate／三軸字樣守衛。
 
 ⚠️ 未驗：本檔以 `build_stock_research_facts` 與 `OhlcvRow` 原始碼為準，**尚未**與真實 FinMind 回應做端對端核對（本批無接線）。
 """
@@ -58,9 +64,8 @@ SOURCE_SEP = "｜"
 # ── 顯示範圍（具名、可調；單位錯誤防線，同 quote_view 的 CLOSE_DISPLAY_*）────────
 PRICE_DISPLAY_MIN = CLOSE_DISPLAY_MIN
 PRICE_DISPLAY_MAX = CLOSE_DISPLAY_MAX
-VOLUME_DISPLAY_MAX = 1e15            # 原值上限；再大視為單位錯誤→缺值
-BIAS_DISPLAY_ABS_MAX = 1000.0        # 乖離（%）絕對值上限；20 日乖離 ±1000% 以上視為單位錯誤→缺值
-VOL_RATIO_DISPLAY_MAX = 1_000_000.0  # 量比（倍）上限
+# ⛔ 量／乖離／量比**不設**自訂顯示上限（客戶未核可；上限會把減資後真實的大乖離誤寫成「資料未備」，違反 §1）。
+#    只擋 None／bool／非數值／NaN／inf（與量、量比的負值）。價格顯示範圍沿用 quote_view 已核准者。
 
 #: 區塊鍵（固定順序）
 OHLCV_KEYS = ("open", "high", "low", "close", "volume")
@@ -118,19 +123,19 @@ def _price(x: object) -> float | None:
 
 def _volume(x: object) -> float | None:
     v = _num(x)
-    if v is None or v < 0 or v > VOLUME_DISPLAY_MAX:
+    if v is None or v < 0:
         return None
-    return v
+    return abs(v)                # abs：-0.0 → 0.0，避免顯示「-0」
 
 
 def _bias(x: object) -> float | None:
     v = _num(x)
-    return None if v is None or abs(v) > BIAS_DISPLAY_ABS_MAX else v
+    return v
 
 
 def _ratio(x: object) -> float | None:
     v = _num(x)
-    return None if v is None or v < 0 or v > VOL_RATIO_DISPLAY_MAX else v
+    return None if v is None or v < 0 else abs(v)    # abs：-0.0 → 0.0
 
 
 def _fmt_price(v: float) -> str:
@@ -177,12 +182,15 @@ def build_local_lookup_result(
         quote: QuoteView, *, open_: object, high: object, low: object, close: object, volume: object,
         as_of: str | None, ma20: object, ma240: object, bias20_pct: object, vol_ratio5: object,
         support: object, resistance: object, support_resistance_bars: object = None,
-        source_user_declared: bool = True) -> LocalLookupResultVM:
-    """建結果區 VM（見模組 docstring）。`quote` 非 `QuoteView`／`source_user_declared` 非 bool → TypeError。"""
+        source_user_declared: bool) -> LocalLookupResultVM:
+    """建結果區 VM（見模組 docstring）。`quote` 非 `QuoteView`／`source_user_declared` 非 bool／未傳 → TypeError；
+    `as_of` 非 str 且非 None → TypeError（須為 ISO 字串）。"""
     if not isinstance(quote, QuoteView):
         raise TypeError("quote 必須是 QuoteView（由 build_quote_view 產生）")
     if not isinstance(source_user_declared, bool):
         raise TypeError(f"source_user_declared 必須是 bool，收到 {source_user_declared!r}")
+    if as_of is not None and not isinstance(as_of, str):
+        raise TypeError("as_of 須為 ISO 字串（YYYY-MM-DD）或 None，不接受 date／datetime 物件")
     state = quote.state
     base = dict(state=state, chip_text=quote.chip_text, tone=quote.tone, symbol=quote.symbol,
                 notice_text=quote.notice_text, research_text=TEXT_RESEARCH_DISABLED)
@@ -196,6 +204,9 @@ def build_local_lookup_result(
     if c is not None and not math.isclose(c, fact.close, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError(f"close_mismatch: 傳入 {c!r} 與報價收盤 {fact.close!r} 不同")
     _check_ohlc_consistent(o, h, l, fact.close)
+    sup, res = _price(support), _price(resistance)
+    if sup is not None and res is not None and sup > res:
+        raise ValueError("support_resistance_inverted: 支撐不可高於壓力（參數是否對調？）")
     ohlcv = (
         _cell("open", _OHLCV_LABELS["open"], o, _fmt_price),
         _cell("high", _OHLCV_LABELS["high"], h, _fmt_price),
@@ -209,8 +220,8 @@ def build_local_lookup_result(
         _cell("ma240", "MA240", _price(ma240), _fmt_price),
         _cell("bias20", "乖離20", _bias(bias20_pct), _fmt_bias),
         _cell("vol_ratio5", "量比5", _ratio(vol_ratio5), _fmt_ratio),
-        _cell("support", f"支撐{sr}", _price(support), _fmt_price),
-        _cell("resistance", f"壓力{sr}", _price(resistance), _fmt_price),
+        _cell("support", f"支撐{sr}", sup, _fmt_price),
+        _cell("resistance", f"壓力{sr}", res, _fmt_price),
     )
     source_text = quote.source_text or ""
     if source_user_declared:

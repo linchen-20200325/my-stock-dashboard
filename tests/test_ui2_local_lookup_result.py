@@ -29,7 +29,7 @@ QGOOD = dict(loaded=True, fetch_error=None, close=188.55, trade_date="2026-11-20
              fetched_at="2026-11-21T09:30:00+08:00", source="合成來源", is_stale=False)
 IGOOD = dict(open_=187.0, high=190.0, low=186.0, close=188.55, volume=1234567.0, as_of="2026-11-20",
              ma20=180.1, ma240=170.5, bias20_pct=4.7, vol_ratio5=1.23, support=179.0, resistance=195.0,
-             support_resistance_bars=20)
+             support_resistance_bars=20, source_user_declared=True)
 
 
 def q(sym="0050", **kw):
@@ -140,15 +140,94 @@ def test_bad_price_inputs_become_missing_not_zero(bad):
         assert c.is_missing and c.value_text == LL.TEXT_MISSING, (k, bad)
 
 
-@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, True, False, "5", None, -0.5, 10**400, 1e16])
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, True, False, "5", None, -0.5, 10**400])
 def test_bad_volume_and_ratio_become_missing(bad):
     v = vm(volume=bad, vol_ratio5=bad)
     assert cell(v, "volume").is_missing and cell(v, "vol_ratio5").is_missing
 
 
-@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, True, "1", None, 1000.01, -1000.01, 10**400])
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, True, "1", None, 10**400])
 def test_bad_bias_becomes_missing(bad):
     assert cell(vm(bias20_pct=bad), "bias20").is_missing
+
+
+def test_large_real_values_are_not_hidden_as_missing():
+    """SF-1：不設自訂顯示上限。減資後乖離 >1000% 是已算出的真值，必須照實顯示。"""
+    v = vm(bias20_pct=1036.0, volume=5e17, vol_ratio5=2_000_000.0)
+    assert cell(v, "bias20").value_text == "+1036.00%" and not cell(v, "bias20").is_missing
+    assert not cell(v, "volume").is_missing and cell(v, "volume").value_text == "500,000,000,000,000,000"
+    assert cell(v, "vol_ratio5").value_text == "2,000,000.00 倍" and not cell(v, "vol_ratio5").is_missing
+    assert cell(vm(bias20_pct=-1500.5), "bias20").value_text == "-1500.50%"
+
+
+def test_no_custom_display_caps_defined():
+    for name in ("VOLUME_DISPLAY_MAX", "BIAS_DISPLAY_ABS_MAX", "VOL_RATIO_DISPLAY_MAX"):
+        assert not hasattr(LL, name), name
+
+
+def test_negative_zero_never_displayed():
+    for kw in (dict(volume=-0.0), dict(vol_ratio5=-0.0), dict(bias20_pct=-0.0), dict(bias20_pct=-0.004)):
+        v = vm(**kw)
+        assert not re.search(r"(?<![\d.])-0(?:\.0+)?(?!\d)", " ".join(c.value_text for c in (*v.ohlcv, *v.indicators)))
+    assert cell(vm(volume=-0.0), "volume").value_text == "0"
+    assert cell(vm(vol_ratio5=-0.0), "vol_ratio5").value_text == "0.00 倍"
+    assert cell(vm(bias20_pct=-0.0), "bias20").value_text == "0.00%"
+
+
+def test_source_user_declared_is_required_keyword():
+    args = {k: v for k, v in IGOOD.items() if k != "source_user_declared"}
+    with pytest.raises(TypeError):
+        build(q(), **args)
+    with pytest.raises(TypeError):
+        build(q(loaded=False), **args)                       # 非資料態也必填
+    assert build(q(), **args, source_user_declared=False).has_data
+
+
+def test_support_above_resistance_raises():
+    with pytest.raises(ValueError, match="support_resistance_inverted"):
+        vm(support=195.0, resistance=179.0)
+    assert vm(support=190.0, resistance=190.0).has_data                  # 相等合法（窗口內單一價位）
+    assert vm(support=None, resistance=1.0).has_data and vm(support=500.0, resistance=None).has_data
+    assert vm(support=math.nan, resistance=1.0).has_data                 # 缺值不觸發
+
+
+def test_low_high_contradiction_caught_via_quote_close_even_if_close_param_missing():
+    # close 參數為 None，仍用 quote.fact.close(188.55) 檢查：high=188.0 < 收盤 → 矛盾
+    with pytest.raises(ValueError, match="ohlc_inconsistent"):
+        vm(close=None, high=188.0, low=186.0)
+    with pytest.raises(ValueError, match="ohlc_inconsistent"):
+        vm(close=None, low=190.0, high=191.0)
+
+
+def test_as_of_none_uses_quote_trade_date_for_text():
+    v = vm(as_of=None)
+    assert v.as_of_text == "資料日 2026-11-20"
+    v2 = vm(q(trade_date="2026-11-18"), as_of=None, close=None)
+    assert v2.as_of_text == "資料日 2026-11-18"
+
+
+def test_as_of_date_object_reports_type_not_mismatch():
+    import datetime
+    for bad in (datetime.date(2026, 11, 20), datetime.datetime(2026, 11, 20), 20261120):
+        with pytest.raises(TypeError, match="ISO 字串") as ei:
+            vm(as_of=bad)
+        assert "as_of_mismatch" not in str(ei.value)
+    with pytest.raises(TypeError, match="ISO 字串"):
+        vm(q(loaded=False), as_of=datetime.date(2026, 11, 20))
+
+
+def test_html_cell_key_is_escaped():
+    forged = dataclasses.replace(vm(), ohlcv=(LL.LocalLookupCell('k"><script>x</script>', "l", "v", False),), indicators=())
+    h = H.local_lookup_result_html(forged)
+    assert "<script>" not in h and "&lt;script&gt;" in h and 'k"><' not in h
+
+
+def test_css_numbers_never_wrap_inside_value():
+    css = H.LOCAL_LOOKUP_RESULT_CSS
+    m = re.search(r"\.ui2-ll__v\{([^}]*)\}", css)
+    assert m and "white-space:nowrap" in m.group(1) and "overflow-wrap:anywhere" not in m.group(1)
+    mm = re.search(r"\.ui2-ll__cell--missing \.ui2-ll__v\{([^}]*)\}", css)
+    assert mm and "white-space:normal" in mm.group(1)
 
 
 def test_numpy_scalars():
