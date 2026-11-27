@@ -16,6 +16,8 @@
 · `requests.get` 以替身取代（記錄每次呼叫 → 同時證明「請求語意一字未動」）。
 · 側欄：從 `app.py` 以 AST **取出現行的那一段原始碼**（不是貼一份副本）放進真的 AppTest 執行。
 · 突變：把舊行為（遮罩預覽／回應本文／例外原文）重新注入頁面原始碼 → 本檔的洩漏偵測必須轉紅。
+· R23.21：Streamlit 元件 proto 的 `id`（`$$ID-<32 位隨機 md5 hex>-<key>`）只在「名為 id 的 string 欄位」
+  正規化其雜湊段，避免與假金鑰的純 hex 片段偶發碰撞；其餘欄位／stdout／stderr／log 一律原樣全量掃描（見第 7 節）。
 """
 from __future__ import annotations
 
@@ -105,14 +107,72 @@ def _walk(node):
             yield ch
 
 
-def screen_text(at) -> str:
-    """AppTest 畫面（主區 + 側欄）所有元素：proto 全文 + table／dataframe 的實際內容。"""
+# ── Streamlit widget id（結構化元件 metadata）的欄位層正規化 ─────────────────────────
+# 為何需要：Button 等元件 proto 帶 `id: "$$ID-<32 位 hex md5>-<user key>"`。這 32 位 hex 是 Streamlit 依
+# element_type／user_key／active_script_hash 算出的 md5；active_script_hash 取自 AppTest 腳本路徑，而該路徑
+# 位於「每個 pytest 行程隨機」的 TemporaryDirectory → 每個行程 ID 不同，約 0.04～0.6% 機率剛好含 `LONG` 的
+# 純十六進位 4 字元片段（0123…cdef、789a…）→ 偵測器把「元件 ID 的雜湊」誤判成洩漏、整批測試隨機紅。
+# 修法的邊界（不得放寬掃描）：
+#   · 只在「proto 的名為 `id` 的 string 欄位」上動手（遞迴走訪巢狀／repeated／map 的 message），
+#     且只有值「完全符合 `$$ID-<32 位小寫 hex>-` 開頭」才替換 **那 32 位 hex 雜湊段**；
+#   · `$$ID-` 前綴與 `-<user key>` 後綴原樣保留 → key 文字（可能被灌入秘密）仍被全量掃描；
+#   · 其他欄位（label／body／help／table／alert／button label…）逐字保留；不符形狀的 `id` 也逐字保留；
+#   · 不對整段 `str(proto)`／整個被掃描文字做 regex／replace，也不碰 stdout／stderr／log。
+_WIDGET_ID_HASH_RE = re.compile(r"\$\$ID-([0-9a-f]{32})-")      # 用 .match：必須在字串開頭
+_WIDGET_ID_HASH_PLACEHOLDER = "<WIDGET-ID-HASH>"                  # 固定佔位（本檔另有測試證明它不含任何禁止字串）
+
+
+def _normalize_widget_id_value(value: str) -> str:
+    m = _WIDGET_ID_HASH_RE.match(value)
+    if m is None:
+        return value                                              # 不符 widget id 形狀 → 原樣（全量掃描）
+    return value[:m.start(1)] + _WIDGET_ID_HASH_PLACEHOLDER + value[m.end(1):]
+
+
+def _is_repeated(fd) -> bool:
+    return bool(fd.is_repeated) if hasattr(type(fd), "is_repeated") else fd.label == fd.LABEL_REPEATED
+
+
+def _normalize_in_place(msg, value_fn) -> None:
+    for fd, val in msg.ListFields():
+        if fd.type == fd.TYPE_MESSAGE:
+            mt = fd.message_type
+            if mt.GetOptions().map_entry:                         # map<k, v>：只有 v 是 message 才有東西可走
+                if mt.fields_by_name["value"].type == mt.fields_by_name["value"].TYPE_MESSAGE:
+                    for child in val.values():
+                        _normalize_in_place(child, value_fn)
+            elif _is_repeated(fd):
+                for child in val:
+                    _normalize_in_place(child, value_fn)
+            else:
+                _normalize_in_place(val, value_fn)
+        elif fd.name == "id" and fd.type == fd.TYPE_STRING:
+            if _is_repeated(fd):
+                for i, item in enumerate(val):
+                    val[i] = value_fn(item)
+            else:
+                setattr(msg, fd.name, value_fn(val))
+
+
+def _normalize_widget_ids(proto, value_fn=_normalize_widget_id_value):
+    """回傳 proto 的**複本**，其中名為 `id` 的 string 欄位內的 widget-id 雜湊段已換成固定佔位。
+    原物件不動。非 protobuf Message → 原樣回傳（fail-closed：照舊被全量掃描）。
+    `value_fn` 只為「過度遮蔽」突變測試而留的接縫（正式路徑一律用預設）。"""
+    if not (hasattr(proto, "ListFields") and hasattr(proto, "CopyFrom")):
+        return proto
+    clone = type(proto)()
+    clone.CopyFrom(proto)
+    _normalize_in_place(clone, value_fn)
+    return clone
+
+
+def _screen_text_with(at, proto_text) -> str:
     parts: list[str] = []
     for root in (at.main, at.sidebar):
         for el in _walk(root):
             proto = getattr(el, "proto", None)
             if proto is not None:
-                parts.append(str(proto))
+                parts.append(proto_text(proto))
             val = getattr(el, "value", None)
             if hasattr(val, "to_json"):          # table／dataframe
                 parts.append(val.to_json(force_ascii=False))
@@ -121,6 +181,22 @@ def screen_text(at) -> str:
     # 例外元素（頁面崩潰時畫面上的 traceback）也算畫面
     parts += [str(e.value) for e in at.exception]
     return "\n".join(parts)
+
+
+def screen_text(at) -> str:
+    """AppTest 畫面（主區 + 側欄）所有元素：proto 全文（僅 widget id 的 32 位 hex 雜湊段被正規化）
+    + table／dataframe 的實際內容。"""
+    return _screen_text_with(at, lambda proto: str(_normalize_widget_ids(proto)))
+
+
+def legacy_screen_text(at) -> str:
+    """舊掃描行為（逐字 `str(proto)`，不正規化）——只供碰撞回歸／突變對照，證明碰撞是真的。"""
+    return _screen_text_with(at, str)
+
+
+def _compose_blob(at, out: str, err: str, log: str) -> str:
+    """被掃描的全部來源：畫面 + stdout + stderr + logging（後三者**一律原樣**，不經任何正規化）。"""
+    return "\n".join([screen_text(at), out, err, log])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -200,7 +276,7 @@ def _run_page(monkeypatch, capsys, caplog, *, secrets=None, env=None, click=Fals
         at.button(key="api_diag_run").click().run()
     assert not at.exception, [str(e.value)[:200] for e in at.exception]
     out = capsys.readouterr()
-    blob = "\n".join([screen_text(at), out.out, out.err, caplog.text])
+    blob = _compose_blob(at, out.out, out.err, caplog.text)
     return at, blob
 
 
@@ -844,3 +920,355 @@ def test_premise_still_holds_stderr_leak_vector_is_real_and_page_contains_it(mon
     AD._get_proxy_config_quiet()
     assert sys.stderr is before
     assert PATH_USER not in capsys.readouterr().err
+
+
+# ══════════════════════════════════════════════════════════════════
+# 7. R23.21：Streamlit widget id 的隨機 md5 雜湊與「純 hex 4 字元片段」碰撞（偶發紅燈）的根治與守門
+#    根因與設計見上方 `_normalize_widget_ids` 的註解。本節證明：
+#      (a) 碰撞是真的（舊掃描紅）且新掃描綠；(b) 真洩漏仍攔截；(c) 「長得像 widget id 的使用者可見文字」仍攔截；
+#      (d) id 欄位的後綴夾帶秘密／不符形狀的 id 仍攔截；(e) stdout／stderr／log 完全不受正規化影響；
+#      (f) 過度遮蔽的各種突變一律被上述守門抓到。
+# ══════════════════════════════════════════════════════════════════
+from types import SimpleNamespace
+
+#: 32 位小寫 hex、含 `789a`（LONG 的純十六進位片段之一）——模擬「隨機 md5 剛好碰撞」
+_COLL = "5e7789a3c41b0d9f2a6e8b17c3d405f9"
+#: 32 位小寫 hex、不含 LONG 的任何純十六進位片段（對照組：這種 ID 本來就不會誤判）
+_SAFE_HASH = "e1f2a3b4c5d6e7f8e1f2a3b4c5d6e7f8"
+_HEX_FRAGS_OF_LONG = sorted(f for f in _frags(LONG) if re.fullmatch(r"[0-9a-f]{4}", f))
+
+
+def _widget_id(hash_: str, key: str = "api_diag_run") -> str:
+    return f"$$ID-{hash_}-{key}"
+
+
+def _button(id_: str, label: str = "btn", help_: str = ""):
+    from streamlit.proto.Button_pb2 import Button
+    return Button(id=id_, label=label, help=help_)
+
+
+def _markdown(body: str):
+    from streamlit.proto.Markdown_pb2 import Markdown
+    return Markdown(body=body)
+
+
+def _fake_at(*protos):
+    """走『真的 screen_text』的最小畫面替身：main 底下一排只帶 proto 的元素。"""
+    node = SimpleNamespace(children={i: SimpleNamespace(proto=p, value=None) for i, p in enumerate(protos)})
+    return SimpleNamespace(main=node, sidebar=SimpleNamespace(children={}), exception=[])
+
+
+def _run_snippet(code: str):
+    """跑一小段真的 Streamlit 腳本（內含該元素的真 proto）→ AppTest。"""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_string(code, default_timeout=60).run()
+    assert not at.exception, [str(e.value)[:200] for e in at.exception]
+    return at
+
+
+def test_fixture_constants_are_what_the_regressions_assume():
+    assert len(_COLL) == 32 and re.fullmatch(r"[0-9a-f]{32}", _COLL) and "789a" in _COLL
+    assert len(_SAFE_HASH) == 32 and re.fullmatch(r"[0-9a-f]{32}", _SAFE_HASH)
+    assert not any(f in _SAFE_HASH for f in _HEX_FRAGS_OF_LONG)
+    assert len(_HEX_FRAGS_OF_LONG) == 13, _HEX_FRAGS_OF_LONG           # 0123…cdef（含 789a）
+    assert "789a" in _HEX_FRAGS_OF_LONG
+    # 佔位本身不得含任何不得出現的字串、也不是 hex 片段（否則正規化可能自己製造／吃掉洩漏）
+    assert leaks_in(_WIDGET_ID_HASH_PLACEHOLDER) == []
+    assert not re.search(r"[0-9a-f]{4}", _WIDGET_ID_HASH_PLACEHOLDER)
+
+
+# ── (a) 碰撞回歸 ───────────────────────────────────────────────────
+@pytest.mark.parametrize("frag", _HEX_FRAGS_OF_LONG)
+def test_a_colliding_widget_id_hash_was_a_false_positive_and_is_now_clean(frag):
+    hash_ = (frag + _SAFE_HASH)[:32]
+    assert len(hash_) == 32
+    at = _fake_at(_button(_widget_id(hash_)))
+    # (1) 舊掃描：真的判洩漏（碰撞是真的）
+    assert any(f"LONG:{frag!r}" in h for h in leaks_in(legacy_screen_text(at))), "前提變了：舊掃描不再被碰撞"
+    # (2) 新掃描：通過，且 `$$ID-` 前綴與 `-<key>` 後綴仍在
+    txt = screen_text(at)
+    assert leaks_in(txt) == [], leaks_in(txt)
+    assert f'id: "$$ID-{_WIDGET_ID_HASH_PLACEHOLDER}-api_diag_run"' in txt
+    assert hash_ not in txt
+
+
+def test_a_real_page_with_a_forced_colliding_id_in_the_real_element_tree(monkeypatch, capsys, caplog):
+    """真的頁面、真的元素樹；把真 Button 的 id 就地換成含 `789a` 的 ID（等價於 TMP_DIR 隨機撞到），
+    不依賴 Streamlit 的 id 演算法細節。"""
+    _clean_env(monkeypatch)
+    _stub_proxy(monkeypatch, None)
+    at, _ = _run_page(monkeypatch, capsys, caplog, secrets={"UNRELATED_FLAG": "1"})
+    real_id = at.button(key="api_diag_run").proto.id
+    assert re.fullmatch(r"\$\$ID-[0-9a-f]{32}-api_diag_run", real_id), real_id
+
+    def _clone_tree(root):                       # 真元素的 proto 複本（Button.value 以 id 回查 session，故不就地改）
+        kids = {}
+        for i, el in enumerate(_walk(root)):
+            proto = getattr(el, "proto", None)
+            if proto is not None and hasattr(proto, "CopyFrom"):
+                c = type(proto)()
+                c.CopyFrom(proto)
+                if getattr(c, "id", None) == real_id:
+                    c.id = _widget_id(_COLL)     # 等價於 TMP_DIR 隨機撞到
+                proto = c
+            kids[i] = SimpleNamespace(proto=proto, value=getattr(el, "value", None))
+        return SimpleNamespace(children=kids)
+
+    forced = SimpleNamespace(main=_clone_tree(at.main), sidebar=_clone_tree(at.sidebar), exception=[])
+    assert _widget_id(_COLL) in legacy_screen_text(forced), "強制碰撞沒有進到畫面文字"
+    assert any("789a" in h for h in leaks_in(legacy_screen_text(forced))), "前提變了：舊掃描不再被碰撞"
+    assert leaks_in(screen_text(forced)) == [], leaks_in(screen_text(forced))
+    assert leaks_in(_compose_blob(forced, "", "", "")) == []
+
+
+def test_normalizer_touches_only_id_fields_and_leaves_no_widget_id_hash_behind(monkeypatch, capsys, caplog):
+    """真頁面（點過按鈕）：正規化後文字中不再有 `$$ID-<32hex>-` 殘留；
+    且原 proto 與複本的差異**只**出現在名為 `id` 的欄位（其餘欄位逐字相同、原物件不被改）。"""
+    _clean_env(monkeypatch)
+    _stub_proxy(monkeypatch, {"http": PROXY_URL, "https": PROXY_URL})
+    _install_requests(monkeypatch, _plan)
+    at, _ = _run_page(monkeypatch, capsys, caplog, secrets=dict(_ALL_SET), click=True)
+
+    def _leaves(msg, path=()):
+        out = {}
+        for fd, val in msg.ListFields():
+            items = list(enumerate(val)) if _is_repeated(fd) else [(None, val)]
+            for idx, v in items:
+                p = path + (fd.name,) + (() if idx is None else (idx,))
+                if fd.type == fd.TYPE_MESSAGE:
+                    out.update(_leaves(v, p))
+                else:
+                    out[p] = v
+        return out
+
+    n_id_changed = n_elements = 0
+    for root in (at.main, at.sidebar):
+        for el in _walk(root):
+            proto = getattr(el, "proto", None)
+            if proto is None or not hasattr(proto, "ListFields"):
+                continue
+            n_elements += 1
+            before = _leaves(proto)
+            snapshot = proto.SerializeToString()
+            clone = _normalize_widget_ids(proto)
+            assert proto.SerializeToString() == snapshot, "原 proto 不得被改"
+            after = _leaves(clone)
+            assert before.keys() == after.keys()
+            for p in before:
+                if before[p] != after[p]:
+                    n_id_changed += 1
+                    assert p[-1] == "id" and _WIDGET_ID_HASH_RE.match(before[p]), p
+                    assert after[p] == _normalize_widget_id_value(before[p])
+            assert not re.search(r"\$\$ID-[0-9a-f]{32}-", str(clone)), str(clone)
+    assert n_elements > 5 and n_id_changed >= 1, (n_elements, n_id_changed)
+
+
+def test_normalizer_recurses_into_nested_and_repeated_messages_and_map_values():
+    from streamlit.proto.Element_pb2 import Element
+    from streamlit.proto.WidgetStates_pb2 import WidgetState, WidgetStates
+    nested = Element(button=_button(_widget_id(_COLL, "nested")))
+    rep = WidgetStates(widgets=[WidgetState(id=_widget_id(_COLL, "k1")),
+                                WidgetState(id=_widget_id(_SAFE_HASH, LONG)),       # 後綴夾帶秘密
+                                WidgetState(id=LONG)])                              # 不符形狀
+    for msg in (nested, rep):
+        txt = str(_normalize_widget_ids(msg))
+        assert not re.search(r"\$\$ID-[0-9a-f]{32}-", txt), txt
+    assert _COLL not in str(_normalize_widget_ids(nested)) and _COLL not in str(_normalize_widget_ids(rep))
+    assert "789a" not in str(_normalize_widget_ids(nested))
+    norm_rep = _normalize_widget_ids(rep)
+    assert [w.id for w in norm_rep.widgets] == [
+        _widget_id(_WIDGET_ID_HASH_PLACEHOLDER, "k1"),
+        _widget_id(_WIDGET_ID_HASH_PLACEHOLDER, LONG),       # 後綴夾帶的秘密原樣保留
+        LONG,                                                  # 不符形狀 → 完全不動
+    ]
+    assert str(rep).count(_COLL) == 1 and str(nested).count(_COLL) == 1, "原物件不被改"
+    # map<k, message> 路徑至少要能走完（real proto 中沒有 map 值帶 id；這裡只證明遞迴不崩）。
+    # MixedData 只存在於較新的 Streamlit；舊版沒有就只少了這一小段（上面的巢狀／repeated 斷言照跑）。
+    try:
+        from streamlit.proto.BidiComponent_pb2 import MixedData
+    except ImportError:
+        MixedData = None
+    if MixedData is not None:
+        md = MixedData()
+        md.arrow_blobs["a"].data = b"x"
+        assert _normalize_widget_ids(md).SerializeToString() == md.SerializeToString()
+
+
+def test_normalizer_failclosed_on_non_protobuf_objects():
+    sentinel = object()
+    assert _normalize_widget_ids(sentinel) is sentinel
+
+
+# ── (b)(c) 真洩漏／疑似 ID 格式的使用者可見文字：每種元素都要攔截 ─────────────────
+_ELEMENT_KINDS = {
+    "markdown": "st.markdown(P)",
+    "caption": "st.caption(P)",
+    "text": "st.text(P)",
+    "code": "st.code(P)",
+    "table": "st.table(pd.DataFrame({'c': [P]}))",
+    "dataframe": "st.dataframe(pd.DataFrame({'c': [P]}))",
+    "error": "st.error(P)",
+    "warning": "st.warning(P)",
+    "success": "st.success(P)",
+    "metric_label": "st.metric(P, '1')",
+    "button_label": "st.button(P, key='d6_lbl')",
+    "button_help": "st.button('b', key='d6_hlp', help=P)",
+    "sidebar_markdown": "st.sidebar.markdown(P)",
+}
+_PAYLOADS = {
+    "long_secret": (LONG, f"LONG:{LONG!r}"),
+    "hex_fragment": ("789a", "LONG:'789a'"),
+    "id_lookalike_user_text": (_widget_id(_COLL, "x"), "LONG:'789a'"),
+    "id_lookalike_prefix_text": (f"請看 {_widget_id(_COLL, 'x')} 這串", "LONG:'789a'"),
+}
+
+
+def _kind_script(kind: str, payload: str) -> str:
+    return f"import streamlit as st\nimport pandas as pd\nP = {payload!r}\n{_ELEMENT_KINDS[kind]}\n"
+
+
+@pytest.mark.parametrize("payload_name", list(_PAYLOADS))
+@pytest.mark.parametrize("kind", list(_ELEMENT_KINDS))
+def test_bc_secret_or_id_lookalike_text_in_any_element_is_still_caught(kind, payload_name):
+    payload, expected_hit = _PAYLOADS[payload_name]
+    txt = screen_text(_run_snippet(_kind_script(kind, payload)))
+    assert expected_hit in leaks_in(txt), (kind, payload_name)
+
+
+@pytest.mark.parametrize("kind", list(_ELEMENT_KINDS))
+def test_bc_control_benign_text_in_the_same_elements_is_clean(kind):
+    """對照組：同樣的元素、不含秘密／ID 形狀的內容 → 乾淨（上一條的紅不是偵測器過敏；元件自己的 id 已被正規化）。"""
+    txt = screen_text(_run_snippet(_kind_script(kind, "benign text")))
+    assert leaks_in(txt) == [], leaks_in(txt)
+
+
+# ── (d) id 欄位本身被夾帶秘密／不符 widget id 形狀 ─────────────────────────────────
+_ID_CASES = {
+    # name: (proto, 必須出現的 hit)
+    "id_suffix_has_long_secret": (_button(_widget_id(_COLL, LONG)), f"LONG:{LONG!r}"),
+    "id_suffix_has_long_secret_safe_hash": (_button(_widget_id(_SAFE_HASH, LONG)), f"LONG:{LONG!r}"),
+    "id_suffix_has_fragment": (_button(_widget_id(_SAFE_HASH, "k_ZQ-d")), "LONG:'ZQ-d'"),
+    "id_suffix_has_hex_fragment": (_button(_widget_id(_SAFE_HASH, "k_789a")), "LONG:'789a'"),
+    "id_is_whole_secret": (_button(LONG), f"LONG:{LONG!r}"),
+    "id_is_secret_fragment": (_button("cdef"), "LONG:'cdef'"),
+    "id_hash_31_hex": (_button(f"$$ID-{_COLL[:31]}-k"), "LONG:'789a'"),
+    "id_hash_33_hex": (_button(f"$$ID-{_COLL}f-k"), "LONG:'789a'"),
+    "id_no_trailing_dash": (_button(f"$$ID-{_COLL}"), "LONG:'789a'"),
+    "id_leading_space": (_button(" " + _widget_id(_COLL, "k")), "LONG:'789a'"),
+    "id_prefix_text_before": (_button("x" + _widget_id(_COLL, "k")), "LONG:'789a'"),
+    "id_lowercase_prefix": (_button(f"$$id-{_COLL}-k"), "LONG:'789a'"),
+    # 非 `id` 欄位裡的 widget id 形狀文字：一律不正規化
+    "lookalike_in_button_label": (_button(_widget_id(_SAFE_HASH), label=_widget_id(_COLL, "x")), "LONG:'789a'"),
+    "lookalike_in_button_help": (_button(_widget_id(_SAFE_HASH), help_=_widget_id(_COLL, "x")), "LONG:'789a'"),
+    "lookalike_in_markdown_body": (_markdown(_widget_id(_COLL, "x")), "LONG:'789a'"),
+}
+
+
+def _assert_case_detected(name: str, proto_text) -> None:
+    proto, expected = _ID_CASES[name]
+    hits = leaks_in(_screen_text_with(_fake_at(proto), proto_text))
+    assert expected in hits, (name, hits)
+
+
+def _real_proto_text(p) -> str:
+    return str(_normalize_widget_ids(p))
+
+
+@pytest.mark.parametrize("name", list(_ID_CASES))
+def test_cd_id_field_smuggling_and_non_widget_id_shapes_are_still_caught(name):
+    _assert_case_detected(name, _real_proto_text)
+
+
+def test_cd_well_formed_widget_ids_alone_are_clean_with_any_key_text():
+    for key in ("api_diag_run", "None", "k-with-dashes_1", ""):
+        txt = screen_text(_fake_at(_button(_widget_id(_COLL, key)), _button(_widget_id(_SAFE_HASH, key))))
+        assert leaks_in(txt) == [], (key, leaks_in(txt))
+
+
+# ── (e) stdout／stderr／log：維持原掃描、不受正規化影響 ─────────────────────────────
+_CHANNEL_PRE = {
+    "stdout": "print({msg!r})",
+    "stderr": "print({msg!r}, file=sys.stderr)",
+    "log": "import logging\nlogging.getLogger('d6chan').warning({msg!r})",
+}
+
+
+@pytest.mark.parametrize("msg,expected", [
+    ("d6-chan 789a", "LONG:'789a'"),
+    (_widget_id(_COLL, "x"), "LONG:'789a'"),                 # ID 形狀的輸出也不得被正規化吃掉
+    (f"d6-chan {LONG}", f"LONG:{LONG!r}"),
+])
+@pytest.mark.parametrize("channel", list(_CHANNEL_PRE))
+def test_e_hex_fragments_in_stdout_stderr_log_are_still_caught(monkeypatch, capsys, caplog, channel, msg, expected):
+    _clean_env(monkeypatch)
+    _stub_proxy(monkeypatch, None)
+    pre = _CHANNEL_PRE[channel].replace("{msg!r}", repr(msg))     # 不用 str.format：_DRIVER 本身用 format，pre 內不得有大括號
+    at, blob = _run_page(monkeypatch, capsys, caplog, secrets={"UNRELATED_FLAG": "1"}, pre=pre)
+    assert leaks_in(screen_text(at)) == [], "畫面本身是乾淨的——紅色只能來自該輸出管道"
+    assert expected in leaks_in(blob), (channel, msg)
+
+
+def test_e_control_without_injection_the_same_run_is_clean(monkeypatch, capsys, caplog):
+    _clean_env(monkeypatch)
+    _stub_proxy(monkeypatch, None)
+    _, blob = _run_page(monkeypatch, capsys, caplog, secrets={"UNRELATED_FLAG": "1"}, pre="print('d6-chan ok')")
+    assert leaks_in(blob) == []
+
+
+# ── (f) 「過度遮蔽」突變：必須被 (c)(d) 的守門抓到 ────────────────────────────────
+def _mut_mask_whole_id_field(p):
+    return str(_normalize_widget_ids(p, value_fn=lambda v: "<MASKED>"))
+
+
+def _mut_mask_any_32hex_in_id_field(p):                       # 不檢查 widget id 形狀
+    return str(_normalize_widget_ids(p, value_fn=lambda v: re.sub(r"[0-9a-f]{32}", _WIDGET_ID_HASH_PLACEHOLDER, v)))
+
+
+def _mut_global_regex_on_whole_text(p):                       # 對整段 str(proto) 做全域遮蔽
+    return re.sub(r"\$\$ID-[0-9a-f]{32}", "$$ID-" + _WIDGET_ID_HASH_PLACEHOLDER, str(p))
+
+
+def _mut_drop_all_hex_fragments_globally(p):                  # 對整段文字吃掉所有 4 位 hex 片段
+    return re.sub(r"[0-9a-f]{4}", "", str(p))
+
+
+#: 突變 → 它**必須**讓哪些 case 轉為「沒偵測到」（＝守門轉紅）
+_MUTANT_MUST_TURN_RED = {
+    _mut_mask_whole_id_field: {"id_suffix_has_long_secret", "id_suffix_has_long_secret_safe_hash",
+                               "id_suffix_has_fragment", "id_suffix_has_hex_fragment", "id_is_whole_secret",
+                               "id_is_secret_fragment", "id_hash_31_hex", "id_hash_33_hex", "id_no_trailing_dash",
+                               "id_leading_space", "id_prefix_text_before", "id_lowercase_prefix"},
+    _mut_mask_any_32hex_in_id_field: {"id_no_trailing_dash", "id_hash_33_hex", "id_leading_space",
+                                      "id_prefix_text_before", "id_lowercase_prefix"},
+    _mut_global_regex_on_whole_text: {"id_no_trailing_dash", "id_hash_33_hex", "id_leading_space",
+                                      "id_prefix_text_before",
+                                      "lookalike_in_button_label", "lookalike_in_button_help",
+                                      "lookalike_in_markdown_body"},
+    _mut_drop_all_hex_fragments_globally: {"id_suffix_has_hex_fragment", "id_hash_31_hex", "id_hash_33_hex",
+                                           "id_no_trailing_dash", "id_leading_space", "id_prefix_text_before",
+                                           "id_lowercase_prefix", "lookalike_in_button_label",
+                                           "lookalike_in_button_help", "lookalike_in_markdown_body",
+                                           "id_is_secret_fragment"},
+}
+
+
+@pytest.mark.parametrize("mutant", list(_MUTANT_MUST_TURN_RED), ids=lambda f: f.__name__)
+def test_f_over_masking_mutants_turn_the_cd_guards_red(mutant):
+    red = set()
+    for name in _ID_CASES:
+        try:
+            _assert_case_detected(name, mutant)
+        except AssertionError:
+            red.add(name)
+    assert _MUTANT_MUST_TURN_RED[mutant] <= red, sorted(_MUTANT_MUST_TURN_RED[mutant] - red)
+
+
+def test_f_the_real_normalizer_turns_none_of_the_cd_guards_red():
+    for name in _ID_CASES:
+        _assert_case_detected(name, _real_proto_text)
+
+
+def test_f_without_any_normalization_the_collision_is_a_false_positive_legacy_mutant():
+    """突變＝把正規化整個拿掉（舊行為）：碰撞 case 必須被舊掃描判洩漏（＝誤判）→ 證明 (a) 的回歸有鑑別力。"""
+    at = _fake_at(_button(_widget_id(_COLL)))
+    assert leaks_in(legacy_screen_text(at)) and leaks_in(screen_text(at)) == []
