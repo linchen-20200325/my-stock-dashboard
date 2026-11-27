@@ -1609,3 +1609,11 @@
 - **#1247**（A，C3 gspread tests-only）：Draft、未合併、落後 main（head `e40faf7f`）；如實記為未合併。C1／C2／#1237 NAS 維持 HOLD。
 - **#1199 結案 comment**：#1248／#1250＝B 7057937922；#1249＝C 7057201818、GPT 接收 7057317293；#1251 引用 GPT 總管 7058201887，**C 結案留言 NOT VERIFIED**（查無）。
 - **NOT VERIFIED**：Cloud 實際部署畫面；非作者 QA 尚未對本段進行。
+
+## 2026-11-25 New UI2／OneBrain 現況更新（DEC-224／225 已入 main；只追加；非 QA PASS；單組撰寫；隨 PR #1274 提出，合併前不得稱已入 main）
+- **已生效於 main**：DEC-224（UI2 × OneBrain 產品目標 v1.0＋五項安全修正；#1276 `98d01686`；僅產品目標，非施工／合併／部署 Gate）；DEC-225（正式判定二分 FORMAL／UNDETERMINABLE；#1275 `b2221236`；Level 0～2 僅呈現／投影層，不新增 Enum／DataStatus／信心分數；新文案仍須另過 Copy／Contract Gate）。
+- **已入 main 的 UI2 功能**（main `2fd0773e`，皆 push CI 五項＋Slow step success，見 #1199 回存 7149294747／7150179168／7152187882／7154447230）：#1279 📊／💼 今日變化 Delta Strip（BELOW；恆「不可比較」）；#1273 台股明細「新鮮度未判定」逐字沿用 `TEXT_STALE_UNKNOWN`；#1280 P-1 🎯 context 行／💼 今日需處理補畫既有 detail（`snapshot_html` 不納入）。
+- **Preview 被動更新**：僅限客戶已授權之 PR（#1279 Cloud Gate A＝7148847917；#1273／#1280＝7151544405）；不授權主動 deploy／Reboot／production 切換；**Streamlit Cloud 實際追蹤分支／是否被動更新／runtime 畫面＝NOT VERIFIED**（branch protection API 403；手機實機未測）。
+- **仍 HOLD**：v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows。OneBrain 仍 `NOT READY`；#1268（FAKE 隔離）、#1278（tests-only 原型）、#1237 仍 Draft。
+- **治理（待入 main）**：DEC-226／`PROJECT_RULES.md` 第 35 節（派工提示語精簡一鍵複製格式、專案 AI O 備援獨立 QA、Hard Output Gate 索引）；僅工作流程。
+- 本段為知識摘要，**不是規範或裁示來源**；以 `docs/DECISIONS.md`、`docs/HANDOFF.md` 與 GitHub live 為準。
