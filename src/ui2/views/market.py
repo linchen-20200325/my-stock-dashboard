@@ -15,6 +15,11 @@ P2 實作形態（線框 F-5 (ii)）：OneBrain 取 VM 既有 L1 section 原樣�
 資料日）之後、「今日變化」之前，加一組**圖外**原生 `st.radio`（horizontal，列標籤「期間」，選項「20 日／60 日」，預設 20；R20 客戶取代前版：120 日另案）。
 本檔只畫 widget、不讀資料；所選值由殼（`shell/app.py`）讀 session 後傳給 feed（`read_real_snapshot(days=)`）。
 FAKE（VM 無日 K 事實＝誠實空槽）與其他頁不渲染本 widget。⛔ 252／縮放／捲動／降採樣；⛔ 圖 SVG／HTML 內任何控制項。
+
+N1 導航按鈕（2026-11-27；#1199 留言 7213913793／R23.27／R23.28 客戶核准，線框＝B-NEXT-r01 7212932356）：Real 正常態且頁尾「接入狀態」區塊已畫出時，
+在該區塊**之下**附加一顆原生 `st.button`（標籤沿用既有「🗂 資料」，零新文案），點擊 → `on_click` 把 `ui2_page` 設為資料頁（callback 在 rerun 前執行，
+對 radio 的 widget key 合法）。⚠️ 價值有限：頂部導覽列本來就固定置頂，這顆只省一步。不改既有導覽、無新 I/O／JS／依賴；
+FAKE、降級、接入狀態未畫出（unavailable／上游 FETCH_FAILED）時不渲染（判斷＝VM 內是否有該標題的 L1 區塊，與 canonical 的顯示條件同源，⛔ 自己重算）。
 """
 from __future__ import annotations
 
@@ -23,6 +28,8 @@ from html import escape
 import streamlit as st
 
 from shared.ui2_contract.models import PageVM
+from shared.ui2_contract.pages import P4_DATA, PAGE_LABELS
+from src.services.ui2.data_page import FRESHNESS_ROW_LABELS
 from src.ui2.components.html import delta_below_html, kbar_chart_html, market_l1_html, primary_slot_html
 from src.ui2.views._page import _md, render_cards, render_sections, render_title, section_l1_html
 
@@ -37,6 +44,13 @@ KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60)
 KBAR_DAYS_DEFAULT = KBAR_DAY_OPTIONS[0]
 KBAR_DAYS_LABEL = "期間"
 
+#: N1 導航按鈕（純 UI 狀態；`ui2_` 前綴＋模組頂層字串常數，G9）。
+KEY_GO_DATA = "ui2_market_go_data"
+#: 殼（`shell/app.py`）導覽 radio 的 widget key；callback 只准寫這一個 session key（測試釘與殼的常數相等）。
+KEY_PAGE = "ui2_page"
+GO_DATA_LABEL = PAGE_LABELS[P4_DATA]                     # 既有導覽頁名「🗂 資料」（零新文案）
+STATUS_BLOCK_TITLE = FRESHNESS_ROW_LABELS[1]             # 既有「接入狀態」（canonical 區塊標題）；⛔ 在本檔寫區塊 id
+
 
 def kbar_days_label(days: int) -> str:
     """選項標籤（只有核准字串「20 日」「60 日」）。"""
@@ -47,6 +61,17 @@ def _kbar_period_picker() -> None:
     """圖外原生 radio（horizontal；原生 radiogroup／checked＝選中態語意、方向鍵切換、Tab 進出）。value＝int 天數。"""
     with st.container(key=KEY_KBAR_DAYS_BOX):
         st.radio(KBAR_DAYS_LABEL, KBAR_DAY_OPTIONS, key=KEY_KBAR_DAYS, horizontal=True, format_func=kbar_days_label)
+
+
+def _go_data_page() -> None:
+    """按鈕 `on_click`：切到資料頁（只寫導覽 radio 的 key；⛔ 其他 session 寫入）。"""
+    st.session_state[KEY_PAGE] = P4_DATA
+
+
+def _status_block_drawn(vm: PageVM) -> bool:
+    """「接入狀態」區塊是否已在 VM 內（Real 正常態才有；FAKE／降級／unavailable／上游 FETCH_FAILED 結構上沒有）。"""
+    return (not vm.is_fake) and any(
+        s.level == "L1" and s.title == STATUS_BLOCK_TITLE for s in vm.context.sections)
 
 
 def render(vm: PageVM) -> None:
@@ -68,3 +93,5 @@ def render(vm: PageVM) -> None:
     if onebrain is not None:
         _md(f'<div class="ui2-m-onebrain" data-ui2-l1="onebrain">{section_l1_html(onebrain)}</div>')
     render_sections(vm, skip={ONEBRAIN_SECTION_ID} if onebrain is not None else frozenset())
+    if _status_block_drawn(vm):       # N1：接入狀態區塊之下（它在 sections 尾端），單顆、左對齊（預設寬度）
+        st.button(GO_DATA_LABEL, key=KEY_GO_DATA, on_click=_go_data_page)

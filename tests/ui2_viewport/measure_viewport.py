@@ -467,6 +467,44 @@ def evaluate_arrow_keys(ak: dict | None) -> list[str]:
     return fails
 
 
+def evaluate_nav_button(nb: dict | None, *, expected_label: str) -> list[str]:
+    """📊 市場頁「接入狀態」之下「🗂 資料」導航按鈕（N1；#1199 R23.26／R23.27／R23.28）的判定（純；輸入＝`measure_nav_button` 的記錄）。回傳失敗訊息（空＝通過）。
+    接入狀態**未畫出**：按鈕必須不存在（count＝0）。**已畫出**：恰 1 顆、標籤＝既有「🗂 資料」、可見、位置在接入狀態區塊最後一列之下、
+    不超出視窗左右緣、頁面無水平捲動、點擊與鍵盤（Tab 到達＋Enter）都實際切到資料頁。
+    ⛔ 不新增尺寸門檻（Streamlit 原生按鈕高度只記錄不判定）。"""
+    if not isinstance(nb, dict):
+        return ["缺導航按鈕量測記錄 `nav_button`（不得靜默略過）"]
+    drawn, n = nb.get("wired_title_present"), nb.get("count")
+    if drawn is not True:
+        return [] if n == 0 else [f"接入狀態未畫出卻量到 {n!r} 顆按鈕（應為 0）"]
+    fails: list[str] = []
+    if n != 1:
+        return [f"接入狀態已畫出，按鈕應恰 1 顆，量到 {n!r}"]
+    if nb.get("label") != expected_label:
+        fails.append(f"按鈕標籤 {nb.get('label')!r}≠既有頁名 {expected_label!r}")
+    box = nb.get("box")
+    if nb.get("visible") is not True or not isinstance(box, dict) or not (box.get("width", 0) > 0 and box.get("height", 0) > 0):
+        fails.append("按鈕不可見（寬或高為 0）")
+    elif isinstance(nb.get("last_wired_row_bottom"), (int, float)):
+        if box["top"] < nb["last_wired_row_bottom"] - 0.5:
+            fails.append(f"按鈕頂緣 {box['top']} 在接入狀態最後一列底緣 {nb['last_wired_row_bottom']} 之上（應在其下方）")
+        vw = nb.get("viewport_w")
+        if box["left"] < -0.5 or (isinstance(vw, (int, float)) and box["right"] > vw + 0.5):
+            fails.append(f"按鈕超出視窗左右緣（left={box['left']}, right={box['right']}, 視窗寬={vw}）")
+    else:
+        fails.append("缺 `last_wired_row_bottom`（無法判斷位置）")
+    sw, cw = nb.get("doc_scroll_w"), nb.get("doc_client_w")
+    if not (isinstance(sw, (int, float)) and isinstance(cw, (int, float))) or sw > cw + 0.5:
+        fails.append(f"頁面水平溢出 {sw!r} > {cw!r}")
+    if nb.get("tab_reaches_button") is not True:
+        fails.append("鍵盤 Tab 沒有到達按鈕")
+    if nb.get("keyboard_switches") is not True:
+        fails.append("鍵盤 Enter 沒有切到資料頁")
+    if nb.get("click_switches") is not True:
+        fails.append("點擊沒有切到資料頁")
+    return fails
+
+
 def _evaluate_p2(m: dict, out: dict[str, list[str]]) -> None:
     """P2：OneBrain／Primary 空槽順序與誠實性、手機導覽餘裕 ≥160px。僅 📊 市場頁；缺 `p2` 鍵的舊 dict／其他頁略過；
     真瀏覽器 market 量測缺 `p2` 鍵＝判紅。"""
@@ -1419,6 +1457,108 @@ def measure_kbar_period_60(page, vw: int, vh: int, streamlit_version: str) -> di
             "restored_to_20_bars": back, "failures": fails}
 
 
+_NAV_BTN_SEL = ".st-key-ui2_market_go_data button"
+_JS_NAV_BTN = r"""
+() => {
+  const btn = document.querySelector('.st-key-ui2_market_go_data button');
+  const title = [...document.querySelectorAll('.ui2-section-title')].find(e => e.innerText.replace(/\s+/g, ' ').trim() === '接入狀態');
+  const out = {wired_title_present: !!title, count: document.querySelectorAll('.st-key-ui2_market_go_data button').length,
+               viewport_w: window.innerWidth, doc_scroll_w: document.documentElement.scrollWidth, doc_client_w: document.documentElement.clientWidth};
+  const main = document.querySelector('[data-testid="stMain"]');
+  if (main) { out.main_scroll_w = main.scrollWidth; out.main_client_w = main.clientWidth; }
+  if (title) {
+    let bottom = title.getBoundingClientRect().bottom;
+    document.querySelectorAll('.ui2-row').forEach(r => {
+      if (title.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) bottom = Math.max(bottom, r.getBoundingClientRect().bottom);
+    });
+    out.last_wired_row_bottom = bottom;
+  }
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    out.label = btn.innerText.replace(/\s+/g, ' ').trim();
+    out.box = {top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height};
+    out.visible = r.width > 0 && r.height > 0 && getComputedStyle(btn).visibility !== 'hidden';
+  }
+  return out;
+}
+"""
+#: 鍵盤測試：把焦點放在「按鈕之前最後一個可 Tab 的元素」（radio 群組只算已選的那顆），再由真正的 Tab 鍵移到按鈕。
+_JS_FOCUS_BEFORE_NAV_BTN = r"""
+() => {
+  const btn = document.querySelector('.st-key-ui2_market_go_data button');
+  if (!btn) return false;
+  const vis = e => { const r = e.getBoundingClientRect(); return (r.width > 0 && r.height > 0) || e.type === 'radio'; };
+  const all = [...document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(e => vis(e) && !(e.type === 'radio' && !e.checked && e.closest('[role=radiogroup]') && e.closest('[role=radiogroup]').querySelector('input:checked')));
+  const i = all.indexOf(btn);
+  if (i <= 0) return false;
+  all[i - 1].focus();
+  return true;
+}
+"""
+_JS_ACTIVE_IS_NAV_BTN = "() => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('.st-key-ui2_market_go_data'))"
+
+
+def measure_nav_button(page, vw: int, vh: int) -> dict:
+    """📊 市場（Real）：量「接入狀態」之下的「🗂 資料」按鈕（N1）。有按鈕時另做兩次**真實互動**：
+    ① 鍵盤——把焦點放到按鈕前一個可 Tab 元素 → 按 Tab → 確認焦點在按鈕 → 按 Enter → 等資料頁出現；② 滑鼠點擊——點按鈕 → 等資料頁出現。
+    每次切頁後點導覽回市場頁。結果（含判定的失敗訊息）由呼叫端寫進市場頁量測列的 `nav_button`；判定見 `evaluate_nav_button`。"""
+    from shared.ui2_contract.pages import P4_DATA, P4_MARKET, PAGE_LABELS
+    page.evaluate("(() => { const m = document.querySelector('[data-testid=\"stMain\"]'); if (m) m.scrollTo({top: 0, behavior: 'instant'}); })()")
+    page.wait_for_timeout(150)
+    nb = page.evaluate(_JS_NAV_BTN)
+    nb["streamlit_page_label"] = PAGE_LABELS[P4_DATA]
+    data_anchor = f'[data-ui2-page="{P4_DATA}"]'
+    market_anchor = f'[data-ui2-page="{P4_MARKET}"]'
+
+    def back_to_market() -> None:
+        click_nav(page, PAGE_LABELS[P4_MARKET])
+        page.wait_for_selector(market_anchor, timeout=30000)
+        page.wait_for_timeout(300)
+
+    if nb["count"] == 1:
+        loc = page.locator(_NAV_BTN_SEL)
+        loc.scroll_into_view_if_needed()
+        page.wait_for_timeout(150)
+        nb["box_in_view"] = page.evaluate(_JS_NAV_BTN)["box"]            # 捲入視野後的位置（桌機／手機皆量）
+        # ① 鍵盤
+        nb["tab_reaches_button"] = False
+        nb["keyboard_switches"] = False
+        if page.evaluate(_JS_FOCUS_BEFORE_NAV_BTN):
+            page.keyboard.press("Tab")
+            nb["tab_reaches_button"] = bool(page.evaluate(_JS_ACTIVE_IS_NAV_BTN))
+            if nb["tab_reaches_button"]:
+                page.keyboard.press("Enter")
+                try:
+                    page.wait_for_selector(data_anchor, timeout=15000)
+                    nb["keyboard_switches"] = True
+                except Exception:  # noqa: BLE001 — 逾時＝沒有切頁，記為判定失敗（不是量測崩潰）
+                    pass
+        if nb["keyboard_switches"]:
+            back_to_market()
+        # ② 滑鼠點擊
+        page.locator(_NAV_BTN_SEL).scroll_into_view_if_needed()
+        page.locator(_NAV_BTN_SEL).click()
+        nb["click_switches"] = False
+        try:
+            page.wait_for_selector(data_anchor, timeout=15000)
+            nb["click_switches"] = True
+        except Exception:  # noqa: BLE001
+            pass
+        page.wait_for_timeout(300)
+        nb["data_page_no_button"] = page.locator(_NAV_BTN_SEL).count() == 0
+        nb["data_page_doc_scroll_w"] = page.evaluate("document.documentElement.scrollWidth")
+        nb["data_page_doc_client_w"] = page.evaluate("document.documentElement.clientWidth")
+        back_to_market()
+    nb["failures"] = evaluate_nav_button(nb, expected_label=PAGE_LABELS[P4_DATA])
+    if nb.get("count") == 1 and nb.get("data_page_no_button") is False:
+        nb["failures"].append("資料頁出現了該按鈕")
+    if nb.get("count") == 1 and isinstance(nb.get("data_page_doc_scroll_w"), (int, float)) \
+            and nb["data_page_doc_scroll_w"] > nb["data_page_doc_client_w"] + 0.5:
+        nb["failures"].append(f"切到資料頁後水平溢出 {nb['data_page_doc_scroll_w']} > {nb['data_page_doc_client_w']}")
+    return nb
+
+
 REAL_META_NOTE = ("Real-data Preview（唯讀）：目前僅部分台股資料已接入；其餘資料依各卡片狀態顯示。"
                   "本報告記錄量測當下的資料及畫面狀態，不代表即時或正式生產環境。")
 
@@ -1461,6 +1601,12 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                     results[-1]["kbar_period60"] = k60
                     if k60["failures"]:
                         results[-1]["failures"] = {**results[-1]["failures"], "kbar_period60": k60["failures"]}
+                        results[-1]["pass"] = False
+                if pid == P4_MARKET:         # N1：「接入狀態」之下的「🗂 資料」按鈕（有則實測位置／鍵盤／點擊切頁；無則須為 0 顆；量完回到市場頁）。須在壓力態改 DOM 之前量
+                    nbm = measure_nav_button(page, vw, vh)
+                    results[-1]["nav_button"] = nbm
+                    if nbm["failures"]:
+                        results[-1]["failures"] = {**results[-1]["failures"], "nav_button": nbm["failures"]}
                         results[-1]["pass"] = False
                 if pid == P4_MARKET and vw <= MOBILE_MAX_W:
                     results.append(_record_stress(page, vp_name, vw, vh, SCENARIO_REAL, feed="real"))
