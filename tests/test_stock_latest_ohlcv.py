@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import logging
+import math
 import socket
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -19,7 +20,7 @@ from src.data.stock import stock_latest_ohlcv as mod
 from src.data.stock.stock_latest_ohlcv import (
     ALL_STATES, DATASET_STOCK_PRICE, SOURCE_FINMIND_STOCK_PRICE,
     STATE_FETCH_FAILED, STATE_INVALID_DATA, STATE_INVALID_SYMBOL, STATE_NO_DATA, STATE_OK,
-    OhlcvRow, StockLatestOhlcv, fetch_stock_latest_ohlcv,
+    OhlcvRow, StockLatestOhlcv, fetch_stock_latest_ohlcv, to_bars_frame,
 )
 
 MODULE_PATH = Path(mod.__file__)
@@ -326,6 +327,218 @@ class TestInvalidData:
         r = _run(monkeypatch, _Fake(_df(_row(c="SECRET-LOOKING-VALUE"))), token=SECRET)
         assert r.state == STATE_INVALID_DATA
         assert "SECRET-LOOKING-VALUE" not in repr(r)
+
+
+# ───────────────────────── 非正價格（O SF-1：整批拒絕，與 C 契約一致）─────────────────────────
+
+_NOT_POSITIVE = {"open": mod.REASON_OPEN_NOT_POSITIVE, "high": mod.REASON_HIGH_NOT_POSITIVE,
+                 "low": mod.REASON_LOW_NOT_POSITIVE, "close": mod.REASON_CLOSE_NOT_POSITIVE}
+_FM_COL = {"open": "open", "high": "max", "low": "min", "close": "close"}
+
+
+class TestNonPositivePrice:
+    def test_reason_code_set_is_locked(self):
+        assert (mod.REASON_OPEN_NOT_POSITIVE, mod.REASON_HIGH_NOT_POSITIVE,
+                mod.REASON_LOW_NOT_POSITIVE, mod.REASON_CLOSE_NOT_POSITIVE, mod.REASON_PRICE_NEGATIVE) == (
+            "open_not_positive", "high_not_positive", "low_not_positive", "close_not_positive",
+            "price_negative")
+
+    @pytest.mark.parametrize("field", ["open", "high", "low", "close"])
+    @pytest.mark.parametrize("bad", [0, 0.0, -1.5])
+    def test_single_row_any_price_le_zero_rejects_whole_batch(self, monkeypatch, field, bad):
+        row = _row()
+        row[_FM_COL[field]] = bad
+        r = _run(monkeypatch, _Fake(_df(row)))
+        _assert_invalid(r, _NOT_POSITIVE[field])
+        if bad < 0 and field != "close":
+            assert mod.REASON_PRICE_NEGATIVE in r.reasons
+        if bad == 0:
+            assert mod.REASON_PRICE_NEGATIVE not in r.reasons
+
+    @pytest.mark.parametrize("field", ["open", "high", "low", "close"])
+    @pytest.mark.parametrize("bad", [0, -1.5])
+    @pytest.mark.parametrize("pos", [0, 1])      # 0＝歷史舊列、1＝中間列（最新列正常）
+    def test_multi_rows_bad_historical_row_not_dropped(self, monkeypatch, field, bad, pos):
+        rows = _good_rows()
+        rows[pos][_FM_COL[field]] = bad
+        r = _run(monkeypatch, _Fake(_df(*rows)))
+        _assert_invalid(r, _NOT_POSITIVE[field])            # 整批 invalid、rows=()：舊列不被悄悄丟掉
+        assert r.n_rows == 0
+
+    def test_zero_open_high_low_with_positive_close_is_invalid_not_dropped(self, monkeypatch):
+        # FinMind 無成交日可能給 open／max／min＝0、close＝前收（INFERENCE，NV）：本層整批拒絕，不補值。
+        rows = _good_rows()
+        rows[2].update(open=0, max=0, min=0)
+        r = _run(monkeypatch, _Fake(_df(*rows)))
+        _assert_invalid(r, mod.REASON_OPEN_NOT_POSITIVE, mod.REASON_HIGH_NOT_POSITIVE, mod.REASON_LOW_NOT_POSITIVE)
+
+    @pytest.mark.parametrize("tiny", [0.01, 1e-6, 1e-300])
+    def test_tiny_positive_prices_still_ok(self, monkeypatch, tiny):
+        r = _run(monkeypatch, _Fake(_df(_row(o=tiny, h=tiny * 2, lo=tiny / 2, c=tiny))))
+        assert r.state == STATE_OK and r.latest.close == tiny
+
+    def test_zero_volume_unchanged_still_ok(self, monkeypatch):
+        r = _run(monkeypatch, _Fake(_df(_row(v=0))))
+        assert r.state == STATE_OK and r.latest.volume_shares == 0.0
+
+    def test_all_zero_no_trade_day_still_invalid(self, monkeypatch):
+        r = _run(monkeypatch, _Fake(_df(_row(o=0, h=0, lo=0, c=0, v=0))))
+        _assert_invalid(r, *_NOT_POSITIVE.values())
+
+    def test_zero_price_does_not_become_nan_or_zero_row(self, monkeypatch):
+        r = _run(monkeypatch, _Fake(_df(*_good_rows()[:2], _row("2026-11-26", o=0))))
+        assert r.state == STATE_INVALID_DATA and r.rows == ()
+        with pytest.raises(ValueError):
+            to_bars_frame(r)
+
+
+# ───────────────────────── 橋接：to_bars_frame（餵 C build_stock_research_facts）─────────────────────────
+
+C_REQUIRED_COLUMNS = {"open", "high", "low", "close", "volume"}     # C #1290 REQUIRED_COLUMNS
+
+
+def _c_contract_selfcheck(df: pd.DataFrame, as_of: date) -> None:
+    """C #1290 `_validate_bars` 的最小等價斷言（本測試不 import C；C 真函式串通見回報的 scratch 暫疊）。"""
+    assert isinstance(df, pd.DataFrame) and not df.empty
+    assert df.columns.is_unique and set(df.columns) == C_REQUIRED_COLUMNS
+    assert all(c == c.lower() for c in df.columns)
+    assert not isinstance(df.index, pd.MultiIndex)
+    assert not pd.api.types.is_numeric_dtype(df.index.dtype)             # C 拒絕純數字索引
+    assert all(type(x) is date for x in df.index)                         # date 物件、非 datetime、非字串
+    assert df.index.is_unique and df.index.is_monotonic_increasing
+    dti = pd.DatetimeIndex(pd.to_datetime(df.index))                      # C 的 _extract_dates 做法
+    assert not dti.hasnans and dti.tz is None
+    assert dti[-1].date() == as_of
+    for c in C_REQUIRED_COLUMNS:
+        assert pd.api.types.is_float_dtype(df[c].dtype) or pd.api.types.is_integer_dtype(df[c].dtype)
+        assert not df[c].isna().any() and all(math.isfinite(v) for v in df[c].tolist())
+    for c in ("open", "high", "low", "close"):
+        assert (df[c] > 0).all()
+    assert (df["high"] >= df["low"]).all() and (df["volume"] >= 0).all()
+
+
+def _ok(monkeypatch, *rows):
+    return _run(monkeypatch, _Fake(_df(*(rows or _good_rows()))))
+
+
+class TestToBarsFrame:
+    def test_columns_index_and_values_bit_identical(self, monkeypatch):
+        r = _ok(monkeypatch)
+        df = to_bars_frame(r)
+        assert list(df.columns) == ["open", "high", "low", "close", "volume"]
+        assert set(df.columns) == C_REQUIRED_COLUMNS
+        assert df.index.name == "date" and len(df) == r.n_rows == 3
+        assert all(type(x) is date for x in df.index)
+        assert list(df.index) == [x.date for x in r.rows]
+        assert df.index.is_monotonic_increasing and df.index.is_unique
+        for i, x in enumerate(r.rows):
+            assert df["open"].iloc[i] == x.open and df["high"].iloc[i] == x.high
+            assert df["low"].iloc[i] == x.low and df["close"].iloc[i] == x.close
+            assert df["volume"].iloc[i] == x.volume_shares
+        assert df.index[-1] == r.as_of == date(2026, 11, 26)
+        _c_contract_selfcheck(df, r.as_of)
+
+    def test_volume_not_scaled_and_not_int_cast(self, monkeypatch):
+        r = _ok(monkeypatch, _row("2026-11-25", v=12_345_678), _row("2026-11-26", v=1500))
+        df = to_bars_frame(r)
+        assert df["volume"].tolist() == [12_345_678.0, 1500.0]            # 不 /1000
+        assert pd.api.types.is_float_dtype(df["volume"].dtype)
+        assert all(type(v) is float for v in df["volume"].tolist())
+
+    def test_fractional_volume_not_truncated(self, monkeypatch):
+        df = to_bars_frame(_ok(monkeypatch, _row(v=1234.5)))
+        assert df["volume"].iloc[0] == 1234.5
+
+    def test_raw_unadjusted_prices_untouched(self, monkeypatch):
+        df = to_bars_frame(_ok(monkeypatch, _row(o=100.25, h=105.5, lo=99.75, c=104.125)))
+        assert df.iloc[0].tolist() == [100.25, 105.5, 99.75, 104.125, 12_345_000.0]
+
+    def test_single_row_and_zero_volume(self, monkeypatch):
+        r = _ok(monkeypatch, _row(v=0))
+        df = to_bars_frame(r)
+        assert len(df) == 1 and df["volume"].iloc[0] == 0.0 and df.index[-1] == r.as_of
+        _c_contract_selfcheck(df, r.as_of)
+
+    def test_many_rows_leading_zero_symbol_frame(self, monkeypatch):
+        base = date(2026, 1, 1)
+        rows = [_row((base + timedelta(days=i)).isoformat(), 100 + i, 102 + i, 99 + i, 101 + i, 1000 + i)
+                for i in range(300)]
+        r = _ok(monkeypatch, *rows)
+        assert r.symbol == "0050"
+        df = to_bars_frame(r)
+        assert len(df) == 300
+        _c_contract_selfcheck(df, r.as_of)
+
+    def test_does_not_mutate_input_result(self, monkeypatch):
+        r = _ok(monkeypatch)
+        snap = (r.rows, r.latest, r.as_of, r.n_rows, r.state, r.fetched_at)
+        df = to_bars_frame(r)
+        df.iloc[0, 0] = -999.0                      # 改輸出不得回灌輸入
+        df.loc[date(2026, 11, 24), "volume"] = 1.0
+        assert (r.rows, r.latest, r.as_of, r.n_rows, r.state, r.fetched_at) == snap
+        assert r.rows[0].open == 98.0 and r.rows[0].volume_shares == 1000.0
+        assert to_bars_frame(r).iloc[0, 0] == 98.0   # 再轉一次仍是原值（無共享狀態）
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            r.rows = ()  # type: ignore[misc]
+
+    def test_no_network_and_no_refetch(self, monkeypatch):
+        r = _ok(monkeypatch)
+
+        def _no_fetch(*a, **k):
+            raise AssertionError("to_bars_frame must not fetch")
+        monkeypatch.setattr(mod, "finmind_get", _no_fetch)
+        to_bars_frame(r)                             # autouse 封網仍有效，且不會再呼叫 finmind_get
+
+    @pytest.mark.parametrize("make", [
+        lambda mp: _run(mp, _Fake(pd.DataFrame())),                                   # NO_DATA
+        lambda mp: _run(mp, _Fake(fail_msg="HTTP=429"), token=SECRET),                # FETCH_FAILED
+        lambda mp: _run(mp, _Fake(_df(_row())), stock_id="bad"),                      # INVALID_SYMBOL
+        lambda mp: _run(mp, _Fake(_df(_row(c=None))), token=SECRET),                  # INVALID_DATA
+        lambda mp: _run(mp, _Fake(_df(_row(o=0)))),                                   # INVALID_DATA（零價）
+    ], ids=["no_data", "fetch_failed", "invalid_symbol", "invalid_data", "invalid_data_zero_price"])
+    def test_non_ok_states_raise_fixed_message(self, monkeypatch, make):
+        r = make(monkeypatch)
+        assert r.state != STATE_OK
+        with pytest.raises(ValueError) as ei:
+            to_bars_frame(r)
+        assert str(ei.value) == mod.BARS_NOT_OK_MESSAGE
+        assert SECRET not in str(ei.value) and SECRET not in repr(ei.value)
+        assert "429" not in str(ei.value)
+
+    def test_each_state_constant_covered(self, monkeypatch):
+        base = _ok(monkeypatch)
+        for st in ALL_STATES:
+            if st == STATE_OK:
+                continue
+            with pytest.raises(ValueError):
+                to_bars_frame(dataclasses.replace(base, state=st))     # 即使 rows 仍在也不放行
+
+    def test_unknown_state_string_raises(self, monkeypatch):
+        base = _ok(monkeypatch)
+        for st in ("weird", "", "OK", " ok", None):
+            with pytest.raises(ValueError) as ei:
+                to_bars_frame(dataclasses.replace(base, state=st))
+            assert str(ei.value) == mod.BARS_NOT_OK_MESSAGE
+
+    def test_ok_state_but_empty_rows_raises(self, monkeypatch):
+        base = _ok(monkeypatch)
+        with pytest.raises(ValueError):
+            to_bars_frame(dataclasses.replace(base, rows=(), latest=None, as_of=None, n_rows=0))
+
+    def test_as_of_mismatch_with_last_row_raises(self, monkeypatch):
+        base = _ok(monkeypatch)
+        with pytest.raises(ValueError):
+            to_bars_frame(dataclasses.replace(base, as_of=date(2026, 11, 25)))
+
+    @pytest.mark.parametrize("bad", [None, "ok", {"state": "ok"}, 123])
+    def test_non_result_input_raises(self, bad):
+        with pytest.raises(ValueError):
+            to_bars_frame(bad)  # type: ignore[arg-type]
+
+    def test_never_returns_empty_frame(self, monkeypatch):
+        for r in (_run(monkeypatch, _Fake(pd.DataFrame())), _run(monkeypatch, _Fake(fail_msg="x"))):
+            with pytest.raises(ValueError):
+                to_bars_frame(r)
 
 
 # ───────────────────────── 呼叫端錯誤 ─────────────────────────

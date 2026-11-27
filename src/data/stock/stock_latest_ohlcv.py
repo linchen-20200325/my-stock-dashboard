@@ -50,10 +50,23 @@ L1 Data。只依賴 `src.data.core.finmind_client.finmind_get`（公開 L1，pla
 3. 數值欄（open／high／low／close／volume_shares）：None／NaN／空字串→`<欄>_missing`；
    ±inf（含 float 溢位）→`<欄>_not_finite`；其他非數值（含 bool、無法解析的字串）→`<欄>_not_numeric`。
    **缺值絕不變成 0。**
-4. 價量關係：close>0；open／high／low 不得為負；high≥low；low≤open≤high；low≤close≤high；volume≥0。
+4. 價量關係：open／high／low／close 皆須 >0（任一 ≤0 → `<欄>_not_positive`，整批 INVALID_DATA、
+   `rows=()`，**不丟列、不補 0、不放寬全序列嚴格驗證**）；high≥low；low≤open≤high；low≤close≤high；volume≥0
+   （`volume==0` 合法，不變）。與下游 `build_stock_research_facts`（拒絕任何 ≤0 價格）的契約一致，
+   避免「本層 OK、下游 raise」。
+   原因碼集合：`open_not_positive`／`high_not_positive`／`low_not_positive`／`close_not_positive`
+   （後者為既有碼）；既有 `price_negative` 保留為「open／high／low **嚴格為負**」的附加訊號碼
+   （負價同時帶 `<欄>_not_positive` 與 `price_negative`；零價只帶 `<欄>_not_positive`）。集合由測試鎖定。
 
 ⚠️ 事實提醒（INFERENCE，NV）：FinMind 在「無成交」的日子可能給 open／max／min＝0 而 close 為前收；
 依上列不變量該列會被判 INVALID_DATA（本模組選擇不放行、不修補）。是否需要特例處理，待以真實回應核實後另案。
+
+橋接（`to_bars_frame`）
+======================
+把 OK 結果轉成可直接餵 L2 `build_stock_research_facts` 的 DataFrame：小寫欄 open／high／low／close／volume、
+index 為 `datetime.date` 物件（名稱 `date`、嚴格遞增）、價格原始未調整、volume **原樣不換算**（＝`volume_shares`）、
+`df.index[-1] == result.as_of`。**不輸出字串日期**（ISO 轉換是畫面橋接的責任）。`state != OK` 一律
+`ValueError`（固定訊息，不含 token／例外原文），不回空表。純函式：不連網、不快取、不改輸入。
 
 安全
 ====
@@ -124,7 +137,11 @@ REASON_DATE_UNPARSEABLE = "date_unparseable"
 REASON_DATE_DUPLICATE = "date_duplicate"
 REASON_DATE_NOT_ASCENDING = "date_not_ascending"
 REASON_DATE_IN_FUTURE = "date_in_future"
+REASON_OPEN_NOT_POSITIVE = "open_not_positive"
+REASON_HIGH_NOT_POSITIVE = "high_not_positive"
+REASON_LOW_NOT_POSITIVE = "low_not_positive"
 REASON_CLOSE_NOT_POSITIVE = "close_not_positive"
+#: open／high／low 嚴格為負的附加訊號碼（負價同時也會帶對應的 `<欄>_not_positive`）。
 REASON_PRICE_NEGATIVE = "price_negative"
 REASON_HIGH_BELOW_LOW = "high_below_low"
 REASON_OPEN_OUTSIDE_RANGE = "open_outside_low_high"
@@ -140,6 +157,13 @@ _NUM_FIELDS = (
     ("low", "min"),
     ("close", "close"),
     ("volume_shares", "Trading_Volume"),
+)
+#: 價格欄（輸出欄名）→ 非正價格原因碼。四欄任一 ≤0 → 整批 INVALID_DATA。
+_PRICE_NOT_POSITIVE_REASONS = (
+    ("open", REASON_OPEN_NOT_POSITIVE),
+    ("high", REASON_HIGH_NOT_POSITIVE),
+    ("low", REASON_LOW_NOT_POSITIVE),
+    ("close", REASON_CLOSE_NOT_POSITIVE),
 )
 _REQUIRED_FM_COLS = (_COL_DATE,) + tuple(fm for _, fm in _NUM_FIELDS)
 
@@ -303,8 +327,9 @@ def _validate(df: pd.DataFrame, symbol: str, today: date) -> tuple[tuple[OhlcvRo
             vals[out] = num
 
         o, h, lo, c, v = (vals["open"], vals["high"], vals["low"], vals["close"], vals["volume_shares"])
-        if c is not None and c <= 0:
-            _add(REASON_CLOSE_NOT_POSITIVE)
+        for fld, code in _PRICE_NOT_POSITIVE_REASONS:
+            if vals[fld] is not None and vals[fld] <= 0:   # type: ignore[operator]
+                _add(code)
         if any(x is not None and x < 0 for x in (o, h, lo)):
             _add(REASON_PRICE_NEGATIVE)
         if h is not None and lo is not None and h < lo:
@@ -404,3 +429,42 @@ def fetch_stock_latest_ohlcv(
         state=STATE_OK, symbol=symbol, rows=rows, latest=latest, as_of=latest.date,
         fetched_at=fetched_at, source=SOURCE_FINMIND_STOCK_PRICE, authenticated=authenticated,
         error_code=None, reasons=(), n_rows=len(rows))
+
+
+
+# ── 橋接：StockLatestOhlcv → L2 輸入 DataFrame ────────────────────────────
+
+#: 橋接輸出欄名（小寫；與 `build_stock_research_facts` 的 REQUIRED_COLUMNS 一致）。
+BARS_COLUMNS = ("open", "high", "low", "close", "volume")
+#: 橋接輸出 index 名稱。
+BARS_INDEX_NAME = "date"
+#: 非 OK／結構不一致時的固定訊息（不含 token、例外原文、輸入內容）。
+BARS_NOT_OK_MESSAGE = "stock latest OHLCV result is not usable as bars (state != ok)"
+
+
+def to_bars_frame(result: StockLatestOhlcv) -> pd.DataFrame:
+    """把 OK 的 `StockLatestOhlcv` 轉成 L2 `build_stock_research_facts` 可直接吃的 DataFrame。
+
+    輸出：欄 `open／high／low／close／volume`（小寫、float64；volume＝`volume_shares` 原樣、**不換算**）、
+    index＝`datetime.date` 物件（名稱 `date`、嚴格遞增且唯一）；價格為原始未調整價；
+    `df.index[-1] == result.as_of`。不輸出字串日期；不改輸入；不連網。
+
+    Raises:
+        ValueError: `result` 不是 `StockLatestOhlcv`、`state != OK`（含 NO_DATA／FETCH_FAILED／INVALID_*／
+            未知狀態）、`rows` 為空，或 `as_of` 與末列日期不一致。訊息固定（`BARS_NOT_OK_MESSAGE`），
+            **不回空表**讓下游誤用。
+    """
+    if (not isinstance(result, StockLatestOhlcv) or result.state != STATE_OK
+            or not result.rows or result.as_of != result.rows[-1].date):
+        raise ValueError(BARS_NOT_OK_MESSAGE)
+    return pd.DataFrame(
+        {
+            "open": [r.open for r in result.rows],
+            "high": [r.high for r in result.rows],
+            "low": [r.low for r in result.rows],
+            "close": [r.close for r in result.rows],
+            "volume": [r.volume_shares for r in result.rows],
+        },
+        index=pd.Index([r.date for r in result.rows], name=BARS_INDEX_NAME, dtype=object),
+        columns=list(BARS_COLUMNS),
+    )
