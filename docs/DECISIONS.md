@@ -11385,3 +11385,43 @@ A1 已核准的五項（**P1 不實作行情顯示，僅註明供 P2 使用**）
 - **HOLD 不變**：v1.1、#1237 NAS、Cloud、真持股、Sheet／OAuth、Secrets、正式 LINE、付費 AI／production Provider／caller、未核准來源／公式、歷史快照寫入／比較 producer、DEC-185 三支停用 workflows、AI 快取寫入／排程、DG-LIC／PIT／COV／SCOPE、I1144-WIRING-GATE 等皆維持原狀；其餘既有 HOLD 不變，括號不構成窮舉。
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一治理 writer 依 #1199 三則留言原文與 main 現況撰寫，**未經第二組獨立複驗**；「Hard Output Gate 本輪指示」內容為派工卡轉述（逐字 NOT FOUND）；兩則留言全文雖逐字保存，但留言以 repo 帳號發表、客戶親撰成分僅限引號內原句。**本條不是 QA PASS，不宣稱任何功能已接線、已上線，~~亦不宣稱 O 已被啟用~~。** **現行（2026-11-27）**：O 接管 Work 係客戶／總管裁示（見上方現行校正），非本條宣稱；上述 2026-11-27 校正同樣由單一 writer 撰寫、未經第二組獨立複驗。
+
+### DEC-227｜持股／我的 Auth Decision Gate「唯讀持股母體」方案方向核准（R23.4 Q1＝A；總管依使用者授權裁決；#1199 comment 7205711405；只追加；docs-only；非 QA PASS）
+
+> **地位：方案方向與前置落盤授權的治理登記；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 不新增 Gate、不授權任何產品碼、部署、Secrets 變更。
+
+- **來源錨點**：#1199 comment 7205711405（CURRENT_PLAN R23.4）：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7205711405 ；R23.7（comment 7205902648）指定本條與 DEC-228 由 G 為單一 writer、採方案 A：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7205902648
+- **決策者**：總管，依使用者授權總管裁決小事項（R23.4 載使用者本輪指示「這些小事情 你決定就好」）。非客戶親撰裁示。
+- **裁示（轉述）**：先前 Q1 選 A，核准啟動「持股／我的」Auth Decision Gate 之唯讀持股母體方案。限既有核准 V1.0 範圍；不得接真持股或私人資料；不得新開外部 I/O；不可將缺值當零。
+- **授權邊界**：此為方案方向及前置落盤授權，**不等同所有實作檔案或資料權限已核准**；具名實作範圍須另經既有 Gate 通過後才施工（R23.4／R23.7）。
+- **只追加；docs-only；非 QA PASS**：本條不宣稱任何功能已接線或上線。
+- **HOLD 不變**：六項 HOLD、DG-LIC／DG-PIT／DG-COV／DG-SCOPE、I1144-WIRING-GATE 不因本條解除。
+- ⚠️ 本條由單一治理 writer（DEC-147：治理 writer＝Claude Code）依 #1199 留言原文撰寫，未經第二組獨立複驗；待 O 非作者 QA。
+
+### DEC-228｜#1283 Streamlit 1.56.0 方向鍵穿頁認列為已知平台限制（R23.4 Q2＝B；總管依使用者授權裁決；#1199 comment 7205711405；只追加；docs-only；非 QA PASS）
+
+> **地位：已知限制如實認列的治理登記；NOT A CONSTRUCTION / MERGE / DEPLOY GATE。** 已知限制不是修復。
+
+- **來源錨點**：#1199 comment 7205711405（CURRENT_PLAN R23.4）：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7205711405 ；R23.7（comment 7205902648）：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7205902648
+- **決策者**：總管，依使用者授權總管裁決小事項（同 DEC-227）。非客戶親撰裁示。
+- **裁示（轉述）**：先前 Q2 選 B，核准 #1283 在 Streamlit 1.56.0 的方向鍵穿頁如實認列為已知平台限制。量測器依版本分流：1.59.2 嚴格判不離頁；1.56.0 如實記錄限制及實際失敗。**不得冒稱修復，不得冒稱雙版 UX 全 PASS**。
+- **保留項**：雙版本 CI、floor、安全守衛、矩陣、其他 R20 驗收與原 Gate 全部保留；僅限 R20 原授權檔案範圍，不擴權。R23.7 另載 1.57／1.58 不放寬。
+- **只追加；docs-only；非 QA PASS**。
+- **HOLD 不變**：六項 HOLD、DG-LIC／DG-PIT／DG-COV／DG-SCOPE、I1144-WIRING-GATE 不因本條解除。
+- ⚠️ 本條由單一治理 writer（DEC-147：治理 writer＝Claude Code）依 #1199 留言原文撰寫，未經第二組獨立複驗；待 O 非作者 QA。
+
+#### DEC-156 後續紀錄（append-only；R20）
+
+> 接續 DEC-156，原文一字未改。**不新增 DEC 編號。**
+
+- **來源錨點**：#1199 comment 7191058929（DISPATCH-2026-11-26-R20）：https://github.com/linchen-20200325/my-stock-dashboard/issues/1199#issuecomment-7191058929
+- **決策者**：客戶（以下 blockquote 為該留言所載客戶原話，逐字）。
+- **客戶原話（逐字，APPROVED）**：
+
+> 同意取代 R18 Visual 方向，採 B 修正包 #7190796719 方案 A：全裝置20／60日、預設20、120日另案。具名核准 R19 所列最小修正施工範圍及驗收，依原正式 Gate 執行，不新增 JS、不放寬守衛、不解除其他 HOLD，永久存檔。
+
+- **結果（轉述）**：全裝置僅 20／60 日、預設 20，120 日另案（R20 稱「另案」非施工授權）；取代 R18 的手機 20／60、桌機 20／60／120 方向；R16 其餘具名授權、原正式 Gate 及其他 HOLD 不變；依 R19 所列最小修正範圍及驗收施工，不新增 JS、不放寬守衛。
+- **#1283 狀態（2026-11-27 經 GitHub API 核對）**：#1283 `merged=true`，merge commit `343bd38b2333c6745dc497c3816c4195522ab70d`（#1199 CURRENT 與 R23.15 同載）。R20 撰寫當時（head 301f3c8…）#1283 尚為 Draft，其後已合併；本條不改寫 R20 當時狀態。合併後 main CI 與 Cloud 部署各依原 Gate，本條不宣稱。
+- **只追加；docs-only；非 QA PASS**。
+- **HOLD 不變**：六項 HOLD、DG-LIC／DG-PIT／DG-COV／DG-SCOPE、I1144-WIRING-GATE 不因本條解除。
+- ⚠️ 本條由單一治理 writer（DEC-147：治理 writer＝Claude Code）依 #1199 留言原文撰寫，未經第二組獨立複驗；待 O 非作者 QA。
