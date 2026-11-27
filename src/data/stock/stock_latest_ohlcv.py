@@ -64,8 +64,8 @@ L1 Data。只依賴 `src.data.core.finmind_client.finmind_get`（公開 L1，pla
 橋接（`to_bars_frame`）
 ======================
 把 OK 結果轉成可直接餵 L2 `build_stock_research_facts` 的 DataFrame：小寫欄 open／high／low／close／volume、
-index 為 `datetime.date` 物件（名稱 `date`、嚴格遞增）、價格原始未調整、volume **原樣不換算**（＝`volume_shares`）、
-`df.index[-1] == result.as_of`。**不輸出字串日期**（ISO 轉換是畫面橋接的責任）。`state != OK` 一律
+index 為 `pd.DatetimeIndex`（名稱 `date`、tz-naive、午夜、嚴格遞增；r03／P c7216937148 核准輸出）、價格原始未調整、volume **原樣不換算**（＝`volume_shares`）、
+`df.index[-1].date() == result.as_of`。**不輸出字串日期**（ISO 轉換是畫面橋接的責任）。`state != OK` 一律
 `ValueError`（固定訊息，不含 token／例外原文），不回空表。純函式：不連網、不快取、不改輸入。
 
 安全
@@ -446,8 +446,8 @@ def to_bars_frame(result: StockLatestOhlcv) -> pd.DataFrame:
     """把 OK 的 `StockLatestOhlcv` 轉成 L2 `build_stock_research_facts` 可直接吃的 DataFrame。
 
     輸出：欄 `open／high／low／close／volume`（小寫、float64；volume＝`volume_shares` 原樣、**不換算**）、
-    index＝`datetime.date` 物件（名稱 `date`、嚴格遞增且唯一）；價格為原始未調整價；
-    `df.index[-1] == result.as_of`。不輸出字串日期；不改輸入；不連網。
+    index＝`pd.DatetimeIndex`（名稱 `date`、tz-naive、午夜、嚴格遞增且唯一；r03／P c7216937148 核准輸出）；價格為原始未調整價；
+    `df.index[-1].date() == result.as_of`（`Timestamp.date()`）。不輸出字串日期；不改輸入；不連網。
 
     Raises:
         ValueError: `result` 不是 `StockLatestOhlcv`、`state != OK`（含 NO_DATA／FETCH_FAILED／INVALID_*／
@@ -465,6 +465,6 @@ def to_bars_frame(result: StockLatestOhlcv) -> pd.DataFrame:
             "close": [r.close for r in result.rows],
             "volume": [r.volume_shares for r in result.rows],
         },
-        index=pd.Index([r.date for r in result.rows], name=BARS_INDEX_NAME, dtype=object),
+        index=pd.DatetimeIndex(pd.to_datetime([r.date for r in result.rows]), name=BARS_INDEX_NAME),
         columns=list(BARS_COLUMNS),
     )

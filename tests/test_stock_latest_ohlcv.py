@@ -404,11 +404,12 @@ def _c_contract_selfcheck(df: pd.DataFrame, as_of: date) -> None:
     assert all(c == c.lower() for c in df.columns)
     assert not isinstance(df.index, pd.MultiIndex)
     assert not pd.api.types.is_numeric_dtype(df.index.dtype)             # C 拒絕純數字索引
-    assert all(type(x) is date for x in df.index)                         # date 物件、非 datetime、非字串
+    assert isinstance(df.index, pd.DatetimeIndex) and df.index.name == "date"   # r03／P c7216937148：DatetimeIndex(name='date')
+    assert df.index.tz is None and (df.index == df.index.normalize()).all()      # tz-naive、午夜
     assert df.index.is_unique and df.index.is_monotonic_increasing
     dti = pd.DatetimeIndex(pd.to_datetime(df.index))                      # C 的 _extract_dates 做法
     assert not dti.hasnans and dti.tz is None
-    assert dti[-1].date() == as_of
+    assert dti[-1].date() == as_of and df.index[-1].date() == as_of
     for c in C_REQUIRED_COLUMNS:
         assert pd.api.types.is_float_dtype(df[c].dtype) or pd.api.types.is_integer_dtype(df[c].dtype)
         assert not df[c].isna().any() and all(math.isfinite(v) for v in df[c].tolist())
@@ -428,15 +429,26 @@ class TestToBarsFrame:
         assert list(df.columns) == ["open", "high", "low", "close", "volume"]
         assert set(df.columns) == C_REQUIRED_COLUMNS
         assert df.index.name == "date" and len(df) == r.n_rows == 3
-        assert all(type(x) is date for x in df.index)
-        assert list(df.index) == [x.date for x in r.rows]
+        assert isinstance(df.index, pd.DatetimeIndex) and df.index.tz is None
+        assert [t.date() for t in df.index] == [x.date for x in r.rows]
+        assert all(type(t) is pd.Timestamp for t in df.index)
         assert df.index.is_monotonic_increasing and df.index.is_unique
         for i, x in enumerate(r.rows):
             assert df["open"].iloc[i] == x.open and df["high"].iloc[i] == x.high
             assert df["low"].iloc[i] == x.low and df["close"].iloc[i] == x.close
             assert df["volume"].iloc[i] == x.volume_shares
-        assert df.index[-1] == r.as_of == date(2026, 11, 26)
+        assert df.index[-1].date() == r.as_of == date(2026, 11, 26)
         _c_contract_selfcheck(df, r.as_of)
+
+    def test_index_is_datetimeindex_named_date_not_object_and_last_matches_as_of(self, monkeypatch):
+        """R23.41：核准輸出是 `pd.DatetimeIndex(name='date')`（不是 object 的 date 物件 Index）；末列 `Timestamp.date()` 與 as_of 一致。"""
+        r = _ok(monkeypatch)
+        df = to_bars_frame(r)
+        assert type(df.index) is pd.DatetimeIndex and df.index.name == "date"
+        assert df.index.dtype != object and pd.api.types.is_datetime64_any_dtype(df.index.dtype)
+        assert df.index.tz is None and df.index[-1].date() == r.as_of
+        assert [t.date() for t in df.index] == [x.date for x in r.rows]      # 逐列日期語意不變
+        assert not any(isinstance(t, str) for t in df.index)                 # 仍不輸出字串日期
 
     def test_volume_not_scaled_and_not_int_cast(self, monkeypatch):
         r = _ok(monkeypatch, _row("2026-11-25", v=12_345_678), _row("2026-11-26", v=1500))
@@ -456,7 +468,7 @@ class TestToBarsFrame:
     def test_single_row_and_zero_volume(self, monkeypatch):
         r = _ok(monkeypatch, _row(v=0))
         df = to_bars_frame(r)
-        assert len(df) == 1 and df["volume"].iloc[0] == 0.0 and df.index[-1] == r.as_of
+        assert len(df) == 1 and df["volume"].iloc[0] == 0.0 and df.index[-1].date() == r.as_of
         _c_contract_selfcheck(df, r.as_of)
 
     def test_many_rows_leading_zero_symbol_frame(self, monkeypatch):
@@ -474,7 +486,7 @@ class TestToBarsFrame:
         snap = (r.rows, r.latest, r.as_of, r.n_rows, r.state, r.fetched_at)
         df = to_bars_frame(r)
         df.iloc[0, 0] = -999.0                      # 改輸出不得回灌輸入
-        df.loc[date(2026, 11, 24), "volume"] = 1.0
+        df.loc[pd.Timestamp(2026, 11, 24), "volume"] = 1.0
         assert (r.rows, r.latest, r.as_of, r.n_rows, r.state, r.fetched_at) == snap
         assert r.rows[0].open == 98.0 and r.rows[0].volume_shares == 1000.0
         assert to_bars_frame(r).iloc[0, 0] == 98.0   # 再轉一次仍是原值（無共享狀態）
