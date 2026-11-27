@@ -42,6 +42,9 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 - `failed=True`／讀取例外 → 紅；`ok=False` → 灰 Missing；`ohlc_ok=False` → 灰 `⬜ 無法判定`＋原因**類別**人話句（⛔ 原因碼）。
 - 合格：照畫；`is_stale` True／None 的字樣與 TWII 卡**同一套**（Stale 照畫，資料是真歷史但舊）；不足 20 根 →
   照實少畫＋「僅 N 根（不足 20）」（⛔ 補棒／補 0／內插）。
+期間切換（2026-11-26；#1199 留言 7186846291／7186895108 客戶 R16 具名授權）：📊 圖外原生 radio 可選 20／60 日（預設 20；R20 #1199 7191058929 取代前版，120 日另案；
+⛔ 252／縮放／捲動／降採樣）。所選窗＝`RealFeedSnapshot.kbar_days`：驗窗上限、`target_n`、「僅 M 根（不足 N）」都用**同一個**
+已驗證的所選窗；預設 20 時與切換功能之前逐值相同。非法值（bool／252／非 int／未核准值）一律 `ValueError`（程式錯誤，fail closed）。
 """
 from __future__ import annotations
 
@@ -58,16 +61,16 @@ from shared.upstream_state import UPSTREAM_TEXT_FETCH_FAILED, upstream_state_tex
 from shared import twii_ohlc_contract as OC
 from shared.ui2_contract.pages import (
     MODE_CURATED, MODE_LOOKUP, MODE_LABELS, P4_DATA, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
-    SCENARIO_REAL,
+    PAGE_LABELS, SCENARIO_REAL,
 )
 from shared.ui2_contract.text import (
     RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE, TEXT_STALE_UNKNOWN,
 )
 from src.services.ui2.data_page import (
-    FRESHNESS_ITEM_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
+    FRESHNESS_ITEM_LABELS, FRESHNESS_ROW_LABELS, ITEM_ASOF_FMT, ITEM_TEXT_IN_RULE, ITEM_TEXT_STALE, ITEM_TEXT_UNAVAILABLE,
     S_IN_RULE, S_MISSING, S_NOT_EVALUATED, S_STALE, S_UNAVAILABLE, S_UNDETERMINABLE, counts_from_states,
-    data_page_canonical, item_detail_specs,
+    data_page_canonical, freshness_rows, item_detail_specs,
 )
 from src.services.ui2.market_vm import build_market_page_vm
 from src.services.ui2.skeleton_vm import build_skeleton_page_vm
@@ -175,6 +178,23 @@ class RegimeFact:
 #: 📊 主圖預設可見根數（DEC-156 B：手機預設最近 20 根已驗證完整日 K）。feed 的 `TWII_KBAR_DAYS` 必須等於此值
 #: （feed 不得自本檔 import 新名稱〔G2F 精確白名單〕，故兩處各一份，由 tests/test_ui2_twii_kbar.py 釘相等）。
 KBAR_VISIBLE_BARS = 20
+#: 📊 主圖可選期間（客戶 R20 具名授權 #1199 留言 7191058929（取代 7186895108 的選項集）：全裝置 20／60 日；120 另案；預設＝第一個＝`KBAR_VISIBLE_BARS`）。
+#: ⛔ 252／縮放／捲動／降採樣皆未核准。feed 的 `TWII_KBAR_DAY_OPTIONS` 與 view 的 `KBAR_DAY_OPTIONS` 各留一份
+#: （feed／view 不得自本檔取新名稱，G2F 精確白名單／UI 只吃 VM），由 tests/test_ui2_twii_kbar.py 釘相等。
+KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60)
+
+
+def kbar_days_ok(days: Any) -> bool:
+    """所選期間是否為核准選項（純）。必須是 `int` 本身（⛔ bool／float／str／None），且在 `KBAR_DAY_OPTIONS` 內。"""
+    return isinstance(days, int) and not isinstance(days, bool) and days in KBAR_DAY_OPTIONS
+
+
+def _require_kbar_days(days: Any) -> int:
+    if not kbar_days_ok(days):
+        raise ValueError(f"日 K 期間必須是核准選項 {KBAR_DAY_OPTIONS} 之一的 int，收到 {days!r}（⛔ 252／bool／非 int）")
+    return days
+
+
 _UPSTREAM_STATES = ("", "NO_NEW_DATA", "FETCH_FAILED", "UNDETERMINED")
 _ISO_DATE_RX = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")  # ASCII 數字＋fullmatch（擋結尾換行／全形數字）
 
@@ -229,8 +249,10 @@ def _finite_positive(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
 
 
-def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
-    """日 K 事實自洽檢查（純；**重驗** L0 契約的核心條件，⛔ 只信 `ohlc_ok`）。違反 → `RealFeedContractError`。"""
+def validate_twii_kbar_fact(k: TwiiKbarFact, days: int = KBAR_VISIBLE_BARS) -> None:
+    """日 K 事實自洽檢查（純；**重驗** L0 契約的核心條件，⛔ 只信 `ohlc_ok`）。違反 → `RealFeedContractError`。
+    `days`＝所選期間（根數上限；預設 20＝切換功能之前的行為）；非核准值 → `ValueError`（程式錯誤，先於任何事實檢查）。"""
+    _require_kbar_days(days)
     if not (k.is_stale is True or k.is_stale is False or k.is_stale is None):
         raise RealFeedContractError(f"台股日 K：is_stale 不是 True／False／None：{k.is_stale!r}")
     if not (k.as_of_future is True or k.as_of_future is False or k.as_of_future is None):   # N2：同 validate_twii_fact
@@ -253,8 +275,8 @@ def validate_twii_kbar_fact(k: TwiiKbarFact) -> None:
     if not k.ok or k.failed or k.ohlc_reason:
         raise RealFeedContractError(f"台股日 K：ohlc_ok=True 但 ok={k.ok} failed={k.failed} reason={k.ohlc_reason!r}")
     n = len(k.xs)
-    if not (1 <= n <= KBAR_VISIBLE_BARS):
-        raise RealFeedContractError(f"台股日 K：根數 {n} 不在 1..{KBAR_VISIBLE_BARS}")
+    if not (1 <= n <= days):
+        raise RealFeedContractError(f"台股日 K：根數 {n} 不在 1..{days}")
     if not (len(k.opens) == len(k.highs) == len(k.lows) == len(k.closes) == n):
         raise RealFeedContractError("台股日 K：日期／開高低收長度不一致")
     if not all(isinstance(d, str) and _ISO_DATE_RX.fullmatch(d) for d in k.xs):
@@ -283,8 +305,11 @@ class RealFeedSnapshot:
     #: feed 一律讀取 ⇒ Real-data Preview 恰為「有值」或「有錯誤代碼」其一。
     kbar: TwiiKbarFact | None = None
     kbar_error: str = ""
+    #: 這份 snapshot 的日 K 所選期間（核准選項；預設 20）。驗窗上限、`target_n`、不足提示都用它（單一來源）。
+    kbar_days: int = KBAR_VISIBLE_BARS
 
     def __post_init__(self) -> None:
+        _require_kbar_days(self.kbar_days)
         for name, fact, err in (("twii", self.twii, self.twii_error), ("regime", self.regime, self.regime_error)):
             if (fact is None) == (not err):
                 raise ValueError(f"{name}: 必須恰為『有值』或『有錯誤代碼』其一（收到 fact={fact!r}, error={err!r}）")
@@ -298,22 +323,25 @@ class RealFeedSnapshot:
 
     @classmethod
     def of(cls, twii: "TwiiFact | None", twii_error: str, regime: "RegimeFact | None",
-           regime_error: str, *, kbar: "TwiiKbarFact | None" = None, kbar_error: str = "") -> "RealFeedSnapshot":
+           regime_error: str, *, kbar: "TwiiKbarFact | None" = None, kbar_error: str = "",
+           kbar_days: int = KBAR_VISIBLE_BARS) -> "RealFeedSnapshot":
         """feed 唯一的建構入口：錯誤代碼不符正規式 → 降為 `Exception`（複驗 P3-4：⛔ 在 feed 的 try 之外 raise
         讓整頁崩、⛔ 原文進 snapshot）。直接呼叫建構子給壞代碼仍 raise（程式錯誤，fail loud）。"""
         return cls(twii=twii, twii_error=_safe_code(twii_error), regime=regime, regime_error=_safe_code(regime_error),
-                   kbar=kbar, kbar_error=_safe_code(kbar_error))
+                   kbar=kbar, kbar_error=_safe_code(kbar_error), kbar_days=kbar_days)
 
 
-def twii_kbar_fact_of(view: Any, *, error_type: str = "") -> TwiiKbarFact:
+def twii_kbar_fact_of(view: Any, *, error_type: str = "", days: int = KBAR_VISIBLE_BARS) -> TwiiKbarFact:
     """feed 在**自己的 try 內**呼叫：service 回傳值 → `TwiiKbarFact` → 讀取期自洽檢查（違反 raise
     `RealFeedContractError`，feed 接住 → 日 K 紅色 Unavailable、卡片照常）。
 
     純函式（⛔ I/O／時鐘／session／producer；G2 照掃本檔）。Issue #1099 PR-2 以**明列**方式加進 G2F 白名單
     （`tests/test_ui2_guards.py::G2F_IMPORT_ALLOWLIST`，+1 名稱）：feed 不能自本檔取其他新名稱，且 G2F 禁 `.open`
-    屬性（為擋檔案 I/O）——開盤價欄位 `view.open` 的讀取因此留在本檔，G2F 禁用清單不變。"""
+    屬性（為擋檔案 I/O）——開盤價欄位 `view.open` 的讀取因此留在本檔，G2F 禁用清單不變。
+    `days`＝所選期間（預設 20；期間切換 2026-11-26，白名單**不新增名稱**，只多一個關鍵字參數）。"""
+    _require_kbar_days(days)                    # 非核准期間：先於任何事實檢查就 fail closed
     fact = TwiiKbarFact.from_view(view, error_type=error_type)
-    validate_twii_kbar_fact(fact)
+    validate_twii_kbar_fact(fact, days)
     return fact
 
 
@@ -517,13 +545,15 @@ def kbar_chart_spec(snap: RealFeedSnapshot) -> dict | None:
         return None
     base: dict[str, Any] = {"key": "twii_kbar", "label": KBAR_LABEL, "value": None, "as_of": None, "source": None}
 
+    days = snap.kbar_days                       # 所選期間（snapshot 建構時已驗為核准選項）：target_n／不足提示／驗窗同一個值
+
     def out(field: dict, candles: list | None = None, notes: list | None = None) -> dict:
-        return {"field": field, "candles": candles or [], "target_n": KBAR_VISIBLE_BARS, "notes": notes or []}
+        return {"field": field, "candles": candles or [], "target_n": days, "notes": notes or []}
 
     if snap.kbar is None:
         return out({**base, "state": "unavailable", "reason": _error_text("台股日 K", snap.kbar_error)})
     k = snap.kbar
-    validate_twii_kbar_fact(k)                  # 防呆：feed 已驗；直接餵壞 fact 仍 fail loud
+    validate_twii_kbar_fact(k, days)            # 防呆：feed 已驗；直接餵壞 fact 仍 fail loud
     base.update(source=k.source)
     # N2：資料日晚於台北基準日（as_of_future=True，或日 K 原因碼即 FUTURE_DATE）→ 日期不可信，⛔ 帶 as_of
     # （與 twii_card_spec 未來日分支同規則；遮蔽情境：較早列原因碼先回，原因碼≠FUTURE_DATE 但 as_of_future=True）。
@@ -542,7 +572,7 @@ def kbar_chart_spec(snap: RealFeedSnapshot) -> dict | None:
         return out({**base, "state": "unavailable", "reason": KBAR_MISMATCH_TEXT})
     candles = [{"date": d, "open": o, "high": h, "low": lo, "close": c}
                for d, o, h, lo, c in zip(k.xs, k.opens, k.highs, k.lows, k.closes)]
-    notes = [KBAR_PARTIAL_FMT.format(n=len(candles), target=KBAR_VISIBLE_BARS)] if len(candles) < KBAR_VISIBLE_BARS else []
+    notes = [KBAR_PARTIAL_FMT.format(n=len(candles), target=days)] if len(candles) < days else []
     # 新鮮度字樣與 TWII 卡同一套（twii_card_spec）：Stale 照畫（真歷史但舊），⛔ 當 fresh。
     _up_text = _upstream_state_text(k.upstream_state) or (_UPSTREAM_ERROR_TEXT if k.has_upstream_error else "")
     # B-UI2-STALE-COPY-1（DEC-214）：同台股卡——⛔ `k.stale_reason` 原句上畫面（只留 fact）。
@@ -820,6 +850,40 @@ def _data(snap: RealFeedSnapshot) -> dict:
     return data_page_canonical(counts_from_states(freshness_states(snap)), items=freshness_item_specs(snap))
 
 
+# ── 📊 頁尾「接入狀態」（B 線方案 A；客戶授權 #1199 comment 7167315139，依 7160953590／7162031909／7164432247）──
+#: 區塊 id（📊 sections 尾端的唯一一個 L1 區塊；識別字只准出現在本檔，`tests/test_ui2_market_wired_status.py` 守衛）。
+WIRED_STATUS_SECTION_ID = "market_wired_status"
+#: 第二欄 label（新字串 #1）。第一欄 label 沿用既有導覽頁名 `PAGE_LABELS[P4_DATA]`、區塊標題沿用既有 `FRESHNESS_ROW_LABELS[1]`。
+#: 兩欄 label 都不得等於區塊標題（`_label_repeats_title` 只在單欄區塊隱藏重複標籤；兩欄時兩個 label 都會畫）。
+WIRED_STATUS_LABEL = "其中"
+#: 第二欄 detail（新字串 #2；單一常數，客戶可改字）。語意：「已接入」只代表畫面有讀取路徑，⛔ 當成今日有值／市場判斷依據。
+WIRED_STATUS_DETAIL = "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。"
+
+
+def _wired_status_section(snap: RealFeedSnapshot) -> dict | None:
+    """📊 頁尾「接入狀態」區塊 canonical（純）；顯示條件不成立 → `None`（⛔ 補假列／補 0）。
+
+    畫出 ＝ (a) 已接入兩項（台股、位階）狀態皆非 `S_UNAVAILABLE`（正常缺值 missing、stale、not_evaluated、undeterminable、in_rule
+    皆畫；`snap.twii is None` 由台股卡 unavailable 擋），且 (b) 台股上游訊號不是 FETCH_FAILED（含 legacy：upstream_state 為空
+    但 has_upstream_error）。(b) 逐字重用 `twii_card_spec` 自己的算式；NO_NEW_DATA／UNDETERMINED／無錯誤皆照畫。
+    兩欄值＝`freshness_rows` 既有 `fresh_total`／`fresh_wired` 的 value（與 🗂 逐字一致；N、K 由 `FRESHNESS_ITEMS` 現算）。
+    ⛔ 新增來源／公式／取數；⛔ chip／freshness／capability。"""
+    states = freshness_states(snap)
+    if any(v == S_UNAVAILABLE for v in states.values()):
+        return None
+    t = snap.twii
+    if t is None:           # 防呆：(a) 已擋（台股卡 unavailable）；不可達時仍 fail closed，⛔ 當成可畫
+        return None
+    up = _upstream_state_text(t.upstream_state) or (_UPSTREAM_ERROR_TEXT if t.has_upstream_error else "")
+    if up == UPSTREAM_TEXT_FETCH_FAILED:
+        return None
+    rows = {r["key"]: r for r in freshness_rows(counts_from_states(states))}
+    return {"key": WIRED_STATUS_SECTION_ID, "title": FRESHNESS_ROW_LABELS[1], "level": "L1", "fields": [
+        {**rows["fresh_total"], "label": PAGE_LABELS[P4_DATA], "reason": None},
+        {**rows["fresh_wired"], "label": WIRED_STATUS_LABEL, "reason": WIRED_STATUS_DETAIL},
+    ]}
+
+
 def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     """`page_id`×snapshot → canonical dict（`is_fake=False`、`scenario='real'`）。每次回新 dict。"""
     if page_id not in PAGE_IDS:
@@ -828,6 +892,10 @@ def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
         raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap)!r}")
     c = {P4_MARKET: lambda: _market(snap), P4_TARGET: lambda: _target(snap),
          P4_HOLD: _hold, P4_ME: _me, P4_DATA: lambda: _data(snap)}[page_id]()
+    if page_id == P4_MARKET:
+        wired = _wired_status_section(snap)
+        if wired is not None:                   # 新 list 附加於尾端（⛔ 就地改 `_market` 回傳的 sections）
+            c = {**c, "sections": [*c["sections"], wired]}
     c["scenario"] = SCENARIO_REAL
     c["is_fake"] = False
     return c

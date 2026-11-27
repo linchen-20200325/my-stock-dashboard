@@ -879,6 +879,11 @@ WIRED_PATHS = frozenset({
     # `FRESHNESS_ITEMS` 索引 0＝twii、索引 6＝regime（由最終 VM 實證）；精確 tuple，非前綴、非 wildcard；其餘六個未接列**不入豁免**
     # （仍須是無值／無來源／無資料日的 capability `⬜ 尚未提供`）。兩列內容的精確形狀由 tests/test_ui2_data_freshness_items_w3p1.py 補償鎖定。
     (P4_DATA, "sections/data_freshness_items/0"), (P4_DATA, "sections/data_freshness_items/6"),
+    # 📊 頁尾「接入狀態」（B 線方案 A；客戶授權＝#1199 comment 7167315139，依 7160953590／7162031909／7164432247）：只放行**兩個精確 tuple**
+    # （非前綴、非 wildcard、非他頁；無第三欄）。allowlist 命中會跳過整欄檢查，被跳過的形狀／文案／順序檢查全部補在
+    # tests/test_ui2_market_wired_status.py::shape_violations（含注入反例）。
+    (P4_MARKET, "sections/market_wired_status/0"),
+    (P4_MARKET, "sections/market_wired_status/1"),
 })
 #: 契約固定欄（位置 → 期望態／字樣）；無值、無 source／as_of。
 FIXED_PATHS: dict[tuple[str, str], tuple[object, str]] = {

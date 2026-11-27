@@ -1,0 +1,4572 @@
+{
+ "st159": [
+  {
+   "tag": "st159",
+   "case": "live",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2007,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1744.5,
+     "bottom": 1943.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1756.5,
+     "bottom": 1782.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1784.1,
+       "bottom": 1843.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1843.2,
+       "bottom": 1943.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.8
+   },
+   "png_tail_bytes": 28756,
+   "png_full_bytes": 68293,
+   "full_height_px": 2007
+  },
+  {
+   "tag": "st159",
+   "case": "live",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1365,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1170.7,
+     "bottom": 1348.9,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1182.7,
+     "bottom": 1208.3,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1210.3,
+       "bottom": 1269.4,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1269.4,
+       "bottom": 1348.9,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.1
+   },
+   "png_tail_bytes": 43957
+  },
+  {
+   "tag": "st159",
+   "case": "live",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1346,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1151.5,
+     "bottom": 1329.7,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1163.5,
+     "bottom": 1189.1,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1191.1,
+       "bottom": 1250.2,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1250.2,
+       "bottom": 1329.7,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.3
+   },
+   "png_tail_bytes": 47071
+  },
+  {
+   "tag": "st159",
+   "case": "loaded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1919,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1656.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1656.0,
+     "bottom": 1854.6,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1668.0,
+     "bottom": 1693.6,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1695.6,
+       "bottom": 1754.6,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1754.6,
+       "bottom": 1854.6,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 64.4
+   },
+   "png_tail_bytes": 29122,
+   "png_full_bytes": 64653,
+   "full_height_px": 1919
+  },
+  {
+   "tag": "st159",
+   "case": "loaded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1319,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1124.4,
+     "bottom": 1302.6,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1136.4,
+     "bottom": 1162.0,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1164.0,
+       "bottom": 1223.1,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1223.1,
+       "bottom": 1302.6,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.4
+   },
+   "png_tail_bytes": 43837
+  },
+  {
+   "tag": "st159",
+   "case": "loaded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1319,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1124.4,
+     "bottom": 1302.6,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1136.4,
+     "bottom": 1162.0,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1164.0,
+       "bottom": 1223.1,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1223.1,
+       "bottom": 1302.6,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.4
+   },
+   "png_tail_bytes": 47441
+  },
+  {
+   "tag": "st159",
+   "case": "stale",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2007,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1744.5,
+     "bottom": 1943.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1756.5,
+     "bottom": 1782.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1784.1,
+       "bottom": 1843.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1843.2,
+       "bottom": 1943.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.8
+   },
+   "png_tail_bytes": 28756,
+   "png_full_bytes": 68217,
+   "full_height_px": 2007
+  },
+  {
+   "tag": "st159",
+   "case": "stale",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1365,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1170.7,
+     "bottom": 1348.9,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1182.7,
+     "bottom": 1208.3,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1210.3,
+       "bottom": 1269.4,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1269.4,
+       "bottom": 1348.9,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.1
+   },
+   "png_tail_bytes": 43795
+  },
+  {
+   "tag": "st159",
+   "case": "stale",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1346,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1151.5,
+     "bottom": 1329.7,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1163.5,
+     "bottom": 1189.1,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1191.1,
+       "bottom": 1250.2,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1250.2,
+       "bottom": 1329.7,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.3
+   },
+   "png_tail_bytes": 47056
+  },
+  {
+   "tag": "st159",
+   "case": "missing",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1838,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1575.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1575.7,
+     "bottom": 1774.3,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1587.7,
+     "bottom": 1613.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1615.2,
+       "bottom": 1674.3,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1674.3,
+       "bottom": 1774.3,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.7
+   },
+   "png_tail_bytes": 28464,
+   "png_full_bytes": 68274,
+   "full_height_px": 1838
+  },
+  {
+   "tag": "st159",
+   "case": "missing",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1151,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 957.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 957.0,
+     "bottom": 1135.2,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 969.0,
+     "bottom": 994.6,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 996.6,
+       "bottom": 1055.6,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1055.6,
+       "bottom": 1135.2,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 15.8
+   },
+   "png_tail_bytes": 54550
+  },
+  {
+   "tag": "st159",
+   "case": "missing",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1132,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 937.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 937.8,
+     "bottom": 1116.0,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 949.8,
+     "bottom": 975.4,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 977.4,
+       "bottom": 1036.5,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1036.5,
+       "bottom": 1116.0,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.0
+   },
+   "png_tail_bytes": 61993
+  },
+  {
+   "tag": "st159",
+   "case": "no_new_data",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2095,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1832.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1832.4,
+     "bottom": 2031.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1844.4,
+     "bottom": 1870.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1872.0,
+       "bottom": 1931.0,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1931.0,
+       "bottom": 2031.0,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 64.0
+   },
+   "png_tail_bytes": 28489,
+   "png_full_bytes": 69498,
+   "full_height_px": 2095
+  },
+  {
+   "tag": "st159",
+   "case": "no_new_data",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1390,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1195.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1195.7,
+     "bottom": 1373.9,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1207.7,
+     "bottom": 1233.3,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1235.3,
+       "bottom": 1294.4,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1294.4,
+       "bottom": 1373.9,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.1
+   },
+   "png_tail_bytes": 46117
+  },
+  {
+   "tag": "st159",
+   "case": "no_new_data",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1371,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1176.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1176.5,
+     "bottom": 1354.7,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1188.5,
+     "bottom": 1214.1,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1216.1,
+       "bottom": 1275.2,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1275.2,
+       "bottom": 1354.7,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.3
+   },
+   "png_tail_bytes": 49405
+  },
+  {
+   "tag": "st159",
+   "case": "undetermined",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2050,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1787.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1787.4,
+     "bottom": 1986.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1799.4,
+     "bottom": 1825.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1827.0,
+       "bottom": 1886.1,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1886.1,
+       "bottom": 1986.1,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.9
+   },
+   "png_tail_bytes": 28464,
+   "png_full_bytes": 70938,
+   "full_height_px": 2050
+  },
+  {
+   "tag": "st159",
+   "case": "undetermined",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1369,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1175.2,
+     "bottom": 1353.4,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1187.2,
+     "bottom": 1212.8,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1214.8,
+       "bottom": 1273.9,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1273.9,
+       "bottom": 1353.4,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 15.6
+   },
+   "png_tail_bytes": 45785
+  },
+  {
+   "tag": "st159",
+   "case": "undetermined",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1350,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1156.0,
+     "bottom": 1334.2,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1168.0,
+     "bottom": 1193.6,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1195.6,
+       "bottom": 1254.7,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1254.7,
+       "bottom": 1334.2,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 15.8
+   },
+   "png_tail_bytes": 49075
+  },
+  {
+   "tag": "st159",
+   "case": "unavailable",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1574,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1509.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 27835,
+   "png_full_bytes": 58137,
+   "full_height_px": 1574
+  },
+  {
+   "tag": "st159",
+   "case": "unavailable",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 928,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 911.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 55449
+  },
+  {
+   "tag": "st159",
+   "case": "unavailable",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 908,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 892.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 59651
+  },
+  {
+   "tag": "st159",
+   "case": "fetch_failed",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 29507,
+   "png_full_bytes": 64008,
+   "full_height_px": 1831
+  },
+  {
+   "tag": "st159",
+   "case": "fetch_failed",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 46158
+  },
+  {
+   "tag": "st159",
+   "case": "fetch_failed",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 49571
+  },
+  {
+   "tag": "st159",
+   "case": "legacy_upstream_error",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 29507,
+   "png_full_bytes": 62968,
+   "full_height_px": 1831
+  },
+  {
+   "tag": "st159",
+   "case": "legacy_upstream_error",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 45388
+  },
+  {
+   "tag": "st159",
+   "case": "legacy_upstream_error",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 48719
+  },
+  {
+   "tag": "st159",
+   "case": "degraded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1456,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1392.3,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 28058,
+   "png_full_bytes": 50071,
+   "full_height_px": 1456
+  },
+  {
+   "tag": "st159",
+   "case": "degraded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 49161
+  },
+  {
+   "tag": "st159",
+   "case": "degraded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 53258
+  }
+ ],
+ "st156": [
+  {
+   "tag": "st156",
+   "case": "live",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2007,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1744.5,
+     "bottom": 1943.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1756.5,
+     "bottom": 1782.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1784.1,
+       "bottom": 1843.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1843.2,
+       "bottom": 1943.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.8
+   },
+   "png_tail_bytes": 28620,
+   "png_full_bytes": 68390,
+   "full_height_px": 2007
+  },
+  {
+   "tag": "st156",
+   "case": "loaded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1919,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1656.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1656.0,
+     "bottom": 1854.6,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1668.0,
+     "bottom": 1693.6,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1695.6,
+       "bottom": 1754.6,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1754.6,
+       "bottom": 1854.6,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 64.4
+   },
+   "png_tail_bytes": 29078,
+   "png_full_bytes": 64790,
+   "full_height_px": 1919
+  },
+  {
+   "tag": "st156",
+   "case": "stale",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2007,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1744.5,
+     "bottom": 1943.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1756.5,
+     "bottom": 1782.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1784.1,
+       "bottom": 1843.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1843.2,
+       "bottom": 1943.2,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.8
+   },
+   "png_tail_bytes": 28620,
+   "png_full_bytes": 68286,
+   "full_height_px": 2007
+  },
+  {
+   "tag": "st156",
+   "case": "missing",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1838,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1575.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1575.7,
+     "bottom": 1774.3,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1587.7,
+     "bottom": 1613.2,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1615.2,
+       "bottom": 1674.3,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1674.3,
+       "bottom": 1774.3,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.7
+   },
+   "png_tail_bytes": 28413,
+   "png_full_bytes": 68510,
+   "full_height_px": 1838
+  },
+  {
+   "tag": "st156",
+   "case": "no_new_data",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2095,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1832.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1832.4,
+     "bottom": 2031.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1844.4,
+     "bottom": 1870.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1872.0,
+       "bottom": 1931.0,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1931.0,
+       "bottom": 2031.0,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 64.0
+   },
+   "png_tail_bytes": 28467,
+   "png_full_bytes": 69500,
+   "full_height_px": 2095
+  },
+  {
+   "tag": "st156",
+   "case": "undetermined",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 2050,
+   "main_client_height": 844,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1787.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1787.4,
+     "bottom": 1986.1,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 198.7,
+     "width": 361.2
+    },
+    "title_box": {
+     "top": 1799.4,
+     "bottom": 1825.0,
+     "left": 14.4,
+     "right": 375.6,
+     "height": 25.6,
+     "width": 361.2
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1827.0,
+       "bottom": 1886.1,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 59.1,
+       "width": 361.2
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1886.1,
+       "bottom": 1986.1,
+       "left": 14.4,
+       "right": 375.6,
+       "height": 100,
+       "width": 361.2
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 2,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 63.9
+   },
+   "png_tail_bytes": 28410,
+   "png_full_bytes": 70574,
+   "full_height_px": 2050
+  },
+  {
+   "tag": "st156",
+   "case": "unavailable",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1574,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1509.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 27764,
+   "png_full_bytes": 58297,
+   "full_height_px": 1574
+  },
+  {
+   "tag": "st156",
+   "case": "fetch_failed",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 29414,
+   "png_full_bytes": 63879,
+   "full_height_px": 1831
+  },
+  {
+   "tag": "st156",
+   "case": "legacy_upstream_error",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 29414,
+   "png_full_bytes": 62626,
+   "full_height_px": 1831
+  },
+  {
+   "tag": "st156",
+   "case": "degraded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1456,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1392.3,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 28018,
+   "png_full_bytes": 50007,
+   "full_height_px": 1456
+  },
+  {
+   "tag": "st156",
+   "case": "loaded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1319,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1124.4,
+     "bottom": 1302.6,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1136.4,
+     "bottom": 1162.0,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1164.0,
+       "bottom": 1223.1,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1223.1,
+       "bottom": 1302.6,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.4
+   },
+   "png_tail_bytes": 43514
+  },
+  {
+   "tag": "st156",
+   "case": "loaded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1319,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1124.4,
+     "bottom": 1302.6,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1136.4,
+     "bottom": 1162.0,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1164.0,
+       "bottom": 1223.1,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1223.1,
+       "bottom": 1302.6,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.4
+   },
+   "png_tail_bytes": 47117
+  },
+  {
+   "tag": "st156",
+   "case": "no_new_data",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1390,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1195.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1195.7,
+     "bottom": 1373.9,
+     "left": 80,
+     "right": 1200,
+     "height": 178.2,
+     "width": 1120
+    },
+    "title_box": {
+     "top": 1207.7,
+     "bottom": 1233.3,
+     "left": 80,
+     "right": 1200,
+     "height": 25.6,
+     "width": 1120
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1235.3,
+       "bottom": 1294.4,
+       "left": 80,
+       "right": 1200,
+       "height": 59.1,
+       "width": 1120
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1294.4,
+       "bottom": 1373.9,
+       "left": 80,
+       "right": 1200,
+       "height": 79.5,
+       "width": 1120
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.1
+   },
+   "png_tail_bytes": 45825
+  },
+  {
+   "tag": "st156",
+   "case": "no_new_data",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1371,
+   "main_client_height": 900,
+   "title_count_in_body": 1,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain",
+    "wired_status"
+   ],
+   "onebrain_bottom": 1176.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": {
+    "box": {
+     "top": 1176.5,
+     "bottom": 1354.7,
+     "left": 80,
+     "right": 1360,
+     "height": 178.2,
+     "width": 1280
+    },
+    "title_box": {
+     "top": 1188.5,
+     "bottom": 1214.1,
+     "left": 80,
+     "right": 1360,
+     "height": 25.6,
+     "width": 1280
+    },
+    "title_lines": 1,
+    "n_rows": 2,
+    "children": [
+     "ui2-section-title",
+     "ui2-row",
+     "ui2-row"
+    ],
+    "rows": [
+     {
+      "box": {
+       "top": 1216.1,
+       "bottom": 1275.2,
+       "left": 80,
+       "right": 1360,
+       "height": 59.1,
+       "width": 1280
+      },
+      "label": "🗂 資料",
+      "label_lines": 1,
+      "value": "固定清單 8 項",
+      "value_lines": 1,
+      "detail": null,
+      "detail_lines": 0,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     },
+     {
+      "box": {
+       "top": 1275.2,
+       "bottom": 1354.7,
+       "left": 80,
+       "right": 1360,
+       "height": 79.5,
+       "width": 1280
+      },
+      "label": "其中",
+      "label_lines": 1,
+      "value": "已接入畫面 2 項｜尚未提供 6 項",
+      "value_lines": 1,
+      "detail": "已接入只表示畫面已有讀取路徑，不代表今日有值，也不是市場判斷依據。",
+      "detail_lines": 1,
+      "has_chip": false,
+      "clipped": false,
+      "overflow_right": false
+     }
+    ],
+    "clipped": false,
+    "overlap": false,
+    "overflow_right": false,
+    "gap_below_block_to_scroll_end": 16.3
+   },
+   "png_tail_bytes": 49642
+  },
+  {
+   "tag": "st156",
+   "case": "unavailable",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 928,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 911.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 55339
+  },
+  {
+   "tag": "st156",
+   "case": "unavailable",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 908,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 892.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null,
+   "png_tail_bytes": 59622
+  }
+ ],
+ "base_st159": [
+  {
+   "tag": "base_st159",
+   "case": "live",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1809,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "live",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1187,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "live",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1168,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "loaded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1720,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1656.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "loaded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1140,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "loaded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1140,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "stale",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1809,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "stale",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1187,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "stale",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1168,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "missing",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1640,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1575.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "missing",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 973,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 957.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "missing",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 954,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 937.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "no_new_data",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1896,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1832.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "no_new_data",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1212,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1195.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "no_new_data",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1193,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1176.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "undetermined",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1851,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1787.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "undetermined",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "undetermined",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "unavailable",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1574,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1509.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "unavailable",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 928,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 911.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "unavailable",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 908,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 892.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "fetch_failed",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "fetch_failed",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "fetch_failed",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "legacy_upstream_error",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "legacy_upstream_error",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "legacy_upstream_error",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "degraded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1456,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1392.3,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "degraded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st159",
+   "case": "degraded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  }
+ ],
+ "base_st156": [
+  {
+   "tag": "base_st156",
+   "case": "live",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1809,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "live",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1187,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "live",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1168,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "loaded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1720,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1656.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "loaded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1140,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "loaded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1140,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1124.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "stale",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1809,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1744.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "stale",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1187,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1170.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "stale",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1168,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1151.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "missing",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1640,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1575.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "missing",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 973,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 957.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "missing",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 954,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 937.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "no_new_data",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1896,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1832.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "no_new_data",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1212,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1195.7,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "no_new_data",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1193,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1176.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "undetermined",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1851,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1787.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "undetermined",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "undetermined",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "unavailable",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1574,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1509.8,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "unavailable",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 928,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 911.5,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "unavailable",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 908,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 892.4,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "fetch_failed",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "fetch_failed",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "fetch_failed",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "legacy_upstream_error",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1831,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1767.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "legacy_upstream_error",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 1191,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1175.2,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "legacy_upstream_error",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 1172,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1156.0,
+   "degraded_notice": false,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "degraded",
+   "viewport": "390x844",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 390,
+   "doc_cw": 390,
+   "vw": 390,
+   "vh": 844,
+   "main_scroll_height": 1456,
+   "main_client_height": 844,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 1392.3,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "degraded",
+   "viewport": "1280x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1280,
+   "doc_cw": 1280,
+   "vw": 1280,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  },
+  {
+   "tag": "base_st156",
+   "case": "degraded",
+   "viewport": "1440x900",
+   "page_marker": "p4_market",
+   "hscroll": false,
+   "doc_sw": 1440,
+   "doc_cw": 1440,
+   "vw": 1440,
+   "vh": 900,
+   "main_scroll_height": 932,
+   "main_client_height": 900,
+   "title_count_in_body": 0,
+   "order": [
+    "primary_or_kbar",
+    "delta",
+    "grid",
+    "onebrain"
+   ],
+   "onebrain_bottom": 915.7,
+   "degraded_notice": true,
+   "expanders": 0,
+   "block": null
+  }
+ ]
+}

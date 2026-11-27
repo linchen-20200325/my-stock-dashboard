@@ -418,6 +418,11 @@ def test_allowlist_has_exactly_four_new_context_row_tuples_and_removing_them_tur
     assert new == {(P4_DATA, f"first/context_rows/{i}") for i in range(4)} | {
         (P4_DATA, "sections/data_freshness_items/0"), (P4_DATA, "sections/data_freshness_items/6")}
     assert not any("*" in p or p.endswith("/") for _, p in RF.WIRED_PATHS)
+    # 📊 頁尾「接入狀態」（B 線；#1199 comment 7167315139）新增的兩個 tuple 屬 `P4_MARKET`：上面的等式**先篩 P4_DATA**，原六項不變、
+    # 市場項不混入資料頁等式；市場項另以獨立子集合斷言（非資料頁集合的精確 7 項見 test_ui2_data_freshness_items_w3p1.py）。
+    market_new = {k for k in RF.WIRED_PATHS if k[0] == P4_MARKET and "market_wired_status" in k[1]}
+    assert market_new == {(P4_MARKET, "sections/market_wired_status/0"), (P4_MARKET, "sections/market_wired_status/1")}
+    assert all(k[0] == P4_MARKET for k in market_new) and not (market_new & new)
     monkeypatch.setattr(RF, "WIRED_PATHS", frozenset(k for k in RF.WIRED_PATHS if k[0] != P4_DATA))
     assert len(RF.check_only_wired_fields_carry_data(_real_vms())) >= 4
 

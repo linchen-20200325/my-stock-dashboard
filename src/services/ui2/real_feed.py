@@ -18,6 +18,9 @@
 `get_holdings`、任何 save／write／delete／bind）。⛔ import streamlit、`src.data`、`src.compute`（G2F 鎖定）。
 
 每次 rerun 由殼呼叫**一次** `read_real_snapshot()`，四頁共用同一份（位階三處同一次呼叫結果）。
+期間切換（2026-11-26；#1199 留言 7186846291／7186895108 客戶 R16 具名授權）：`read_real_snapshot(days=)`／`_read_twii_kbar(days)` 讀「所選期間」
+（只 20／60 日〔R20 #1199 7191058929 取代前版：120 另案〕；預設 20＝無參呼叫與切換功能之前逐值相同；卡片那次仍恆 `TWII_CARD_DAYS=1`；仍是白名單內同一個
+`get_twii_trend_view` 與 `twii_kbar_fact_of`，**不新增名稱**）。非法值 → `ValueError`，且在**任何**快取讀取之前（fail closed）。
 例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名，僅存 snapshot 內部欄位；訊息全文只 print 進 log；P1 QA 起畫面一律不放型別名）→
 由 `real_canonical` 映射成紅色 Unavailable；各事實互相隔離（一個壞不拖垮另一個；日 K 與卡片亦然）。
 """
@@ -33,6 +36,17 @@ TWII_CARD_DAYS = 1
 #: 📊 主圖日 K 讀取根數（Issue #1099 PR-2；DEC-156 B：手機預設最近 20 根）。卡片那次讀取（`TWII_CARD_DAYS`）不動；
 #: 本值必須等於 `real_canonical.KBAR_VISIBLE_BARS`（測試釘相等；G2F 白名單只為本功能加 `twii_kbar_fact_of` 一個名稱）。
 TWII_KBAR_DAYS = 20
+#: 📊 主圖可選期間（客戶 R20 具名授權 #1199 7191058929：全裝置 20／60 日；⛔ 120 另案、⛔ 252）。與 `real_canonical.KBAR_DAY_OPTIONS`、view 的 `KBAR_DAY_OPTIONS`
+#: 各留一份（本檔不得自 canonical 取新名稱，G2F 精確白名單），由測試釘相等；預設＝第一個＝`TWII_KBAR_DAYS`。
+TWII_KBAR_DAY_OPTIONS: tuple[int, ...] = (20, 60)
+
+
+def _require_kbar_days(days: object) -> int:
+    """所選期間必須是 `int` 本身（⛔ bool／float／str／None）且在核准選項內；否則 `ValueError`。
+    **先於任何快取／service 讀取**呼叫（fail closed）。"""
+    if not (isinstance(days, int) and not isinstance(days, bool) and days in TWII_KBAR_DAY_OPTIONS):
+        raise ValueError(f"日 K 期間必須是核准選項 {TWII_KBAR_DAY_OPTIONS} 之一的 int，收到 {days!r}")
+    return days
 
 
 def _code(e: BaseException) -> str:
@@ -70,18 +84,20 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
         return None, _code(e)
 
 
-def _read_twii_kbar():
+def _read_twii_kbar(days: int = TWII_KBAR_DAYS):
     """📊 主圖日 K：**第二次**呼叫同一個白名單 service（`with_ohlc=True`；唯讀、單一快照讀取、不快取）。
+    `days`＝所選期間（預設 20；非核准值在讀取之前 `ValueError`）。
     與卡片事實隔離：這裡丟例外／契約違反 → 只有日 K 紅色 Unavailable，卡片與位階照常。
     欄位複製與自洽檢查在 `real_canonical.twii_kbar_fact_of()`（純；G2F 白名單明列，見該處說明）；與卡片的同源對帳在 `real_canonical` 映射期。"""
+    _require_kbar_days(days)        # 在 try 之外、在 service 讀取之前：非法值不被「讀取失敗」分類吞掉
     try:
         from src.services.market_twii_view_service import get_twii_trend_view
-        v = get_twii_trend_view(TWII_KBAR_DAYS, with_ohlc=True)
+        v = get_twii_trend_view(days, with_ohlc=True)
         if v.ohlc_detail:
             print(f"[ui2.real_feed] 台股日 K 不合格說明（只進 log）：{v.ohlc_error} {v.ohlc_detail}")
         if v.error:
             print(f"[ui2.real_feed] 台股日 K 讀取說明（只進 log）：{v.error}")
-        fact = twii_kbar_fact_of(v, error_type=_type_of_service_error(v.error) if v.failed else "")
+        fact = twii_kbar_fact_of(v, error_type=_type_of_service_error(v.error) if v.failed else "", days=days)
         return fact, ""
     except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句
         print(f"[ui2.real_feed] 台股日 K 讀取失敗：{exception_code(e)}: {e}")
@@ -103,9 +119,11 @@ def _read_regime() -> tuple[RegimeFact | None, str]:
         return None, _code(e)
 
 
-def read_real_snapshot() -> RealFeedSnapshot:
-    """一次 rerun 的真資料快照（唯讀；台股卡片／市場位階／台股日 K 三個事實各自隔離）。"""
+def read_real_snapshot(days: int = TWII_KBAR_DAYS) -> RealFeedSnapshot:
+    """一次 rerun 的真資料快照（唯讀；台股卡片／市場位階／台股日 K 三個事實各自隔離）。
+    `days`＝日 K 所選期間（預設 20＝無參呼叫，行為與期間切換之前相同）；非核准值 → `ValueError`，**先於任何讀取**。"""
+    _require_kbar_days(days)
     twii, twii_err = _read_twii()
     regime, regime_err = _read_regime()
-    kbar, kbar_err = _read_twii_kbar()
-    return RealFeedSnapshot.of(twii, twii_err, regime, regime_err, kbar=kbar, kbar_error=kbar_err)
+    kbar, kbar_err = _read_twii_kbar(days)
+    return RealFeedSnapshot.of(twii, twii_err, regime, regime_err, kbar=kbar, kbar_error=kbar_err, kbar_days=days)
