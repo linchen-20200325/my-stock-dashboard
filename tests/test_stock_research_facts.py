@@ -140,7 +140,11 @@ class TestNormalAgainstHandCalc:
         f = facts_of(df)
         assert f.rsi14 is None  # 不是 0.0
         assert any("RSI14" in s and "沒有變動" in s for s in f.limitations)
-        assert f.overextension_level == "正常"
+        # 過熱評估含 RSI 項、RSI 無定義 → 整體不判定（不是「正常 / False」）
+        assert f.overextension_level is None
+        assert f.overheated is None
+        assert f.bias20_pct is not None and isc(f.bias20_pct, 0.0, 1e-12)  # 乖離照實列出
+        assert any("過熱評估缺 RSI 項" in s for s in f.limitations)
 
 
 # ── 邊界根數 ─────────────────────────────────────────────────────────
@@ -238,7 +242,9 @@ class TestBoundaryBars:
 # ── 壞輸入 ───────────────────────────────────────────────────────────
 
 def _ok_df() -> pd.DataFrame:
-    return make_bars(30)
+    df = make_bars(30)
+    df["volume"] = df["volume"].astype(float)   # 避免整數欄被賦 NaN 時 pandas 2.x 的 dtype 警告
+    return df
 
 
 class TestBadInputRaises:
@@ -276,8 +282,47 @@ class TestBadInputRaises:
 
     def test_numeric_index_rejected(self):
         df = _ok_df().reset_index(drop=True)
-        with pytest.raises(StockResearchFactsInputError):
-            build_stock_research_facts(df, as_of="1970-01-01")
+        with pytest.raises(StockResearchFactsInputError, match="純數字索引"):
+            build_stock_research_facts(df, as_of="1970-01-01")  # 若未被拒，as_of 恰會相符
+
+    def test_decreasing_with_last_date_equal_as_of(self):
+        df = _ok_df().iloc[::-1]               # 遞減；最後一列 = 最早日期
+        with pytest.raises(StockResearchFactsInputError, match="非嚴格遞增"):
+            build_stock_research_facts(df, as_of=df.index[-1].date())
+
+    def test_bool_dtype_column(self):
+        df = _ok_df()
+        df["volume"] = np.ones(len(df), dtype=bool)
+        with pytest.raises(StockResearchFactsInputError, match="volume"):
+            facts_of(df)
+
+    def test_complex_dtype_column(self):
+        df = _ok_df()
+        df["close"] = df["close"].astype(complex)
+        with pytest.raises(StockResearchFactsInputError, match="close"):
+            facts_of(df)
+
+    def test_duplicate_column_names(self):
+        df = _ok_df()
+        df = pd.concat([df, df[["close"]]], axis=1)
+        with pytest.raises(StockResearchFactsInputError, match="欄名重複"):
+            facts_of(df)
+
+    def test_tz_aware_index_uses_wall_date(self):
+        df = _ok_df()
+        # 當地 00:30：若誤轉 UTC，日期會退一天而與 as_of 不符
+        df.index = (df.index + pd.Timedelta(minutes=30)).tz_localize("Asia/Taipei")
+        f = build_stock_research_facts(df, as_of=df.index[-1].date())
+        assert f.as_of == df.index[-1].date()
+        assert f.first_date == df.index[0].date()
+
+    def test_tz_aware_two_times_same_day_is_duplicate(self):
+        df = _ok_df()
+        idx = list(df.index.tz_localize("Asia/Taipei"))
+        idx[5] = idx[4] + pd.Timedelta(hours=3)
+        df.index = pd.DatetimeIndex(idx)
+        with pytest.raises(StockResearchFactsInputError, match="重複"):
+            facts_of(df)
 
     @pytest.mark.parametrize("col", ["open", "high", "low", "close", "volume"])
     def test_nan(self, col):

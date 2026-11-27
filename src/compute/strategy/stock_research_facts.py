@@ -32,7 +32,22 @@
 - ``overheated`` 沿用 ``assess_price_overextension`` 的定義：**至少一項**過熱訊號成立即為 True
   （level == '偏熱' 或 '過熱'）；不足 → ``None``。
 - RSI 在整段收盤價完全沒有變動時數學上無定義（既有 kernel 會給出 0.0 這種偽值），
-  本模組此情況回 ``None`` 並在 limitations 另寫一句，**不**輸出 0.0。
+  本模組此情況 ``rsi14=None``，並在 limitations 另寫一句，**不**輸出 0.0。
+  同時 ``overheated`` / ``overextension_level`` 也為 ``None``（過熱評估含 RSI 項，來源函式內部
+  以偽 0.0 代入而給出「正常 / False」，那是由缺值造成的偽值，故不採用）；
+  ``bias20_pct`` 仍照實輸出（根數足夠時）。
+
+════════════════════════════════════════════════════════════════════
+輸入型別與 pandas 相容性（requirements：pandas>=2.0.0,<4）
+════════════════════════════════════════════════════════════════════
+- 欄名不可重複；五欄 dtype 僅收整數 / 浮點（含 nullable Int64 / Float64），
+  bool、complex、object 一律 raise（不依賴 ``is_numeric_dtype``，它會放行 bool / complex）。
+- 使用的 pandas API：``Index.is_unique/duplicated``、``is_integer_dtype/is_float_dtype/
+  is_numeric_dtype/is_bool_dtype``、``pd.to_datetime``、``DatetimeIndex.hasnans/tz/tz_localize(None)``、
+  ``Series.to_numpy(dtype, na_value)``、``rolling().mean()``、``ewm`` 皆在 pandas 2.0 即存在且語意相同
+  （依文件 / 記憶判斷）。⚠️ **本環境只有 pandas 3.0.5，未實測 2.x**；
+  其中 ``pd.to_datetime`` 對 str 索引的格式推斷在 2.x 與 3.x 可能不同（皆為「可轉就轉、
+  不可轉 raise」），建議傳 DatetimeIndex。
 
 ════════════════════════════════════════════════════════════════════
 最少根數（具名常數，來源對應既有函式實際門檻）
@@ -106,6 +121,7 @@ _ROUND_DIGITS = 4
 LIMITATION_UNADJUSTED = "價格為未調整原始價，除權息日前後指標可能失真。"
 LIMITATION_MA_REFERENCE = "均線為參考，不等於正式台股趨勢判斷。"
 _LIMITATION_INSUFFICIENT_PREFIX = "下列指標根數不足而無法計算："
+_LIMITATION_OVEREXT_NO_RSI = "過熱評估缺 RSI 項而不予判定（乖離值仍照實列出）。"
 _LIMITATION_RSI_FLAT = "RSI14 因整段收盤價完全沒有變動而無定義。"
 
 
@@ -184,6 +200,9 @@ def _validate_bars(bars) -> tuple[list[_dt.date], pd.DataFrame]:
             f"bars 必須是 pandas DataFrame，收到 {type(bars).__name__}")
     if bars.empty:
         raise StockResearchFactsInputError("bars 為空（無任何 K 線）")
+    if not bars.columns.is_unique:
+        dup = sorted({str(c) for c in bars.columns[bars.columns.duplicated()]})
+        raise StockResearchFactsInputError(f"bars 欄名重複：{dup}")
     missing = [c for c in REQUIRED_COLUMNS if c not in bars.columns]
     if missing:
         raise StockResearchFactsInputError(f"bars 缺必要欄：{missing}（需小寫欄）")
@@ -192,8 +211,11 @@ def _validate_bars(bars) -> tuple[list[_dt.date], pd.DataFrame]:
     cols: dict[str, np.ndarray] = {}
     for c in REQUIRED_COLUMNS:
         s = bars[c]
-        if pd.api.types.is_bool_dtype(s.dtype) or not pd.api.types.is_numeric_dtype(s.dtype):
-            raise StockResearchFactsInputError(f"欄位 {c} 必須為數值型別（dtype={s.dtype}）")
+        # 只收整數 / 浮點（含 nullable Int64 / Float64）；bool、complex、object、
+        # datetime 等一律拒絕（is_numeric_dtype 會放行 bool 與 complex，故不用它）。
+        if not (pd.api.types.is_integer_dtype(s.dtype) or pd.api.types.is_float_dtype(s.dtype)):
+            raise StockResearchFactsInputError(
+                f"欄位 {c} 必須為實數數值型別（整數或浮點；dtype={s.dtype}）")
         arr = s.to_numpy(dtype="float64", na_value=np.nan)
         if not np.isfinite(arr).all():
             raise StockResearchFactsInputError(f"欄位 {c} 含 NaN 或 inf")
@@ -245,9 +267,11 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
 
     # RSI14
     rsi14: float | None = None
+    rsi_undefined = False
     if n < MIN_BARS_RSI:
         insufficient.append(f"RSI{RSI_PERIOD}")
     elif not (close_s.diff().abs() > 0).any():
+        rsi_undefined = True
         notes.append(_LIMITATION_RSI_FLAT)   # 全平盤：kernel 會給 0.0 偽值，不採用
     else:
         rsi14 = calc_rsi(work, RSI_PERIOD)
@@ -269,9 +293,14 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         oe = assess_price_overextension(close_s, ma_window=OVEREXT_MA_WINDOW,
                                         rsi_period=RSI_PERIOD)
         if oe["level"] != "資料不足":
-            level = str(oe["level"])
-            overheated = bool(oe["overheated"])
             bias20_pct = _r(oe["bias_pct"])
+            if rsi_undefined:
+                # 過熱 = 乖離項 + RSI 項；RSI 項無定義（來源內部以偽 0.0 代入）→
+                # 整體不判定（None），不以「僅乖離項為正常 / False」代替。
+                notes.append(_LIMITATION_OVEREXT_NO_RSI)
+            else:
+                level = str(oe["level"])
+                overheated = bool(oe["overheated"])
 
     # 支撐 / 壓力
     support = resistance = None
