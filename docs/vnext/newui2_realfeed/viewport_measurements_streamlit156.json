@@ -2,9 +2,9 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "feed": "real",
-  "git_sha": "b4952ae9c14cb23af54ecf7fc3eabe0146f777a2",
-  "source_hash": "4261f48bcd8bc134fc3f971556050cdbee76cec9781eb6457d300508cb04dc0c",
-  "generated_at": "2026-11-27T00:44:37+00:00",
+  "git_sha": "9cc925618b5a1f5ef45222a436dbcc62163c809e",
+  "source_hash": "669320faa8c69c0a212bc31936898472ccf604a180f06efc10ca6c7dac14fff0",
+  "generated_at": "2026-11-27T08:16:24+00:00",
   "playwright_version": "1.64.1",
   "chromium_version": "158.0.8127.36",
   "streamlit_version": "1.56.0",
@@ -968,7 +968,7 @@
     "banner_bottom": 17.9,
     "qa_top": 324.0
    },
-   "last_content_bottom": 434.3,
+   "last_content_bottom": 418.1,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -1022,7 +1022,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.1,
+    "scroll_end_bottom": 763.9,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -2445,7 +2445,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 538.2,
+   "last_content_bottom": 501.0,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -2499,7 +2499,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.9,
+    "scroll_end_bottom": 846.7,
     "nav_margin_after_risk": null
    },
    "failures": {},
@@ -3946,7 +3946,7 @@
     "banner_bottom": 21.2,
     "qa_top": 275.3
    },
-   "last_content_bottom": 538.2,
+   "last_content_bottom": 501.0,
    "card_heights": [],
    "expanders": [],
    "p2": {
@@ -4000,7 +4000,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": null,
     "risk_line_height": null,
-    "scroll_end_bottom": 867.9,
+    "scroll_end_bottom": 846.7,
     "nav_margin_after_risk": null
    },
    "failures": {},

@@ -427,9 +427,14 @@ def snapshot_html(fields: tuple[FieldVM, ...]) -> str:
 
 
 def lookup_idle_html(lk: LookupResultVM) -> str:
-    """尚未查詢（cold）：只有灰色說明（Wireframes §6；⛔ 畫結果頭／Snapshot／加入觀察、⛔ 紅色）。"""
-    return (f'<div class="ui2-lookup ui2-lookup--idle" data-ui2-mode-content="lookup" data-ui2-queried="false">'
-            f'{empty_state_html(lk.summary)}</div>')
+    """尚未查詢（cold）：只保留空容器（Wireframes §6；⛔ 畫結果頭／Snapshot／加入觀察、⛔ 紅色）。
+
+    「現在狀態」（灰 chip＋原因句）的唯一來源是第一屏 q1 列（`target_first_screen_html`，同一個 `lk.summary` FieldVM）；
+    本容器不再重畫摘要（#1199 R23.25 方案 A：避免同頁出現兩次「查詢摘要」）。容器與屬性不變——
+    `data-ui2-mode-content="lookup"`（兩模式互斥）與 `data-ui2-queried="false"`（G1／模式互斥守衛錨點）。
+    `lk` 保留於簽名以維持呼叫端不變（`lookup_result_html` 的 `queried=False` 路徑）。
+    """
+    return '<div class="ui2-lookup ui2-lookup--idle" data-ui2-mode-content="lookup" data-ui2-queried="false"></div>'
 
 
 def lookup_result_html(lk: LookupResultVM) -> str:
