@@ -881,6 +881,11 @@ def test_batch3_evaluator_has_teeth(name, base, fn, check):
 # ════════════════════════════════════════════════════════════════════
 # 8. 獨立 QA 修正（F2／F3／F4）
 # ════════════════════════════════════════════════════════════════════
+def _visible_text(html_s: str) -> str:
+    """去掉標籤（含屬性值，如 data-ui2-qname）後的可見文字。"""
+    return re.sub(r"<[^>]+>", " ", html_s)
+
+
 def test_f3_lookup_cold_shows_only_search_and_gray_note():
     """Wireframes §6：查一檔冷啟動只有搜尋框＋灰色說明；⛔ FAKE 結果頭／Snapshot／加入觀察。"""
     vm = _target("cold", MODE_LOOKUP)
@@ -889,7 +894,17 @@ def test_f3_lookup_cold_shows_only_search_and_gray_note():
     h = H.lookup_result_html(lk)
     for bad in ("FAKE-0001", "ui2-snapshot", "加入觀察", "ui2-chip--danger"):
         assert bad not in h, bad
-    assert 'data-ui2-queried="false"' in h and T.TEXT_NOT_LOADED in h
+    # 現在狀態只有 q1 列一個來源：idle 容器保留（屬性＝兩模式互斥／G1 守衛錨點），但內容為空、不再重畫摘要
+    assert h == ('<div class="ui2-lookup ui2-lookup--idle" data-ui2-mode-content="lookup" '
+                 'data-ui2-queried="false"></div>')
+    assert T.TEXT_NOT_LOADED not in h and "查詢摘要" not in h
+    q1 = H.target_first_screen_html(vm.context.first_screen, lk.summary)
+    assert 'data-ui2-q="q1"' in q1 and T.TEXT_NOT_LOADED in q1               # 灰 chip＋原因句仍在 q1 列
+    assert _visible_text(q1 + h).count("查詢摘要") == 1                      # 修前 2（q1 一次＋idle 重畫一次）
+    at = _at_target("cold")
+    at.radio(key="ui2_target_mode").set_value(MODE_LOOKUP).run(timeout=60)
+    assert not at.exception
+    assert sum(_visible_text(m.value).count("查詢摘要") for m in at.markdown) == 1
     for sc in SCENARIO_IDS:
         if sc != "cold":
             assert _target(sc, MODE_LOOKUP).context.target.lookup.queried is True
