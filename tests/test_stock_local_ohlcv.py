@@ -310,6 +310,33 @@ class TestColumns:
         data = _csv(_good_rows()) + b"   \n"
         _assert_invalid(_p(data), mod.REASON_ROW_LENGTH_MISMATCH)
 
+    @pytest.mark.parametrize("commas", [6, 7, 8, 1])
+    def test_comma_only_rows_are_never_skipped(self, commas):
+        """SF-4：只有逗號（全空欄）的列不是「空白行」，絕不被略過。"""
+        rows = _good_rows()
+        data = _csv(rows) + ("," * commas).encode() + b"\n"
+        r = _p(data)
+        assert r.state == STATE_INVALID_DATA and r.rows == ()
+        if commas == 6:                                      # 欄數相符（7 欄全空）→ 值層拒絕
+            _assert_invalid(r, "stock_id_mismatch", "open_missing", "volume_shares_missing")
+        else:                                                # 欄數不符 → 結構層拒絕
+            _assert_invalid(r, mod.REASON_ROW_LENGTH_MISMATCH)
+
+    def test_comma_only_row_in_middle_rejects_whole_batch(self):
+        rows = _good_rows()
+        lines = _csv(rows).split(b"\n")
+        lines.insert(2, b",,,,,,")
+        _assert_invalid(_p(b"\n".join(lines)), "stock_id_mismatch", "open_missing")
+
+    def test_truly_blank_lines_are_skipped_but_whitespace_or_quoted_empty_are_not(self):
+        base = _csv(_good_rows())
+        assert _p(base + b"\n\n").n_rows == 3                         # 無任何字元的行：略過（現行行為）
+        assert _p(base.replace(b"\n", b"\n\n")).n_rows == 3
+        assert _p(base + b"\r\n").n_rows == 3
+        assert _p(base + b'""\n').state == STATE_INVALID_DATA         # 引號空欄：欄數不符
+        assert _p(base + b" \n").state == STATE_INVALID_DATA
+        assert _p(base + b"\t\n").state == STATE_INVALID_DATA
+
     def test_bom_in_middle_header_breaks_first_column(self):
         data = _csv(_good_rows(), bom=True)
         data = b"\xef\xbb\xbf" + data                                  # 兩個 BOM：只剝一個
@@ -560,6 +587,8 @@ class TestNotFinite:
         _assert_invalid(r, f"{field}_not_finite")
 
     def test_huge_but_finite_values_do_not_crash(self):
+        # 現況記錄，非核准行為：本層不設價格／volume 絕對上限（上限屬待核准業務門檻）；
+        # 極大有限值被接受，下游滾動均量可能溢位成偽值。請勿把此斷言當成「已防禦」。
         r = _p(_csv([_r(o="1e300", h="1e300", lo="1e300", c="1e300", v="1e300")]))
         assert r.state == STATE_OK and r.latest.close == 1e300
 
@@ -571,6 +600,53 @@ class TestNotFinite:
                    c=self.HUGE_INT, v=self.HUGE_INT) for d in range(1, 20)]
         r = _p(_csv(rows))
         _assert_invalid(r, "open_not_finite", "volume_shares_not_finite")
+
+
+class TestZeroLiterals:
+    """SF-1／SF-2：字面非零卻下溢成 0 不可默默變 0；負零不可輸出 -0.0。"""
+
+    @pytest.mark.parametrize("field,idx", _FIELDS)
+    @pytest.mark.parametrize("bad", ["1e-400", "1e-999", "-1e-400", "9.9e-500", "0.0001e-400", "+5E-324000"])
+    def test_underflow_of_nonzero_literal_rejected(self, field, idx, bad):
+        r = _p(_csv(_with_col(_good_rows(), idx, bad)))
+        _assert_invalid(r, f"{field}_not_representable")
+
+    def test_underflow_volume_does_not_become_zero_row(self):
+        r = _p(_csv([_r(v="1e-400")]))
+        _assert_invalid(r, "volume_shares_not_representable")
+        assert r.rows == ()
+
+    @pytest.mark.parametrize("lit", ["0", "0.0", "0e5", "0.000", "+0", ".0", "0E-400"])
+    def test_true_zero_volume_still_allowed(self, lit):
+        r = _p(_csv([_r(v=lit)]))
+        assert r.state == STATE_OK and r.latest.volume_shares == 0.0
+
+    @pytest.mark.parametrize("lit", ["0", "0.0", "0e5"])
+    def test_true_zero_price_still_rejected_by_old_rule_only(self, lit):
+        r = _p(_csv([_r(o=lit)]))
+        _assert_invalid(r, "open_not_positive")
+        assert "open_not_representable" not in r.reasons and "open_negative_zero" not in r.reasons
+
+    def test_subnormal_nonzero_is_accepted(self):
+        r = _p(_csv([_r(v="1e-320")]))
+        assert r.state == STATE_OK and r.latest.volume_shares > 0.0
+
+    @pytest.mark.parametrize("lit", ["-0", "-0.0", "-0e5", "-.0", " -0 "])
+    def test_negative_zero_volume_rejected_never_minus_zero(self, lit):
+        r = _p(_csv([_r(v=lit)]))
+        _assert_invalid(r, "volume_shares_negative_zero")
+        assert r.rows == ()
+
+    @pytest.mark.parametrize("field,idx", _FIELDS[:4])
+    def test_negative_zero_price_rejected_consistently(self, field, idx):
+        r = _p(_csv(_with_col(_good_rows(), idx, "-0")))
+        _assert_invalid(r, f"{field}_negative_zero", f"{field}_not_positive")
+
+    def test_kind_codes_locked(self):
+        assert (mod.KIND_NOT_REPRESENTABLE, mod.KIND_NEGATIVE_ZERO) == ("not_representable", "negative_zero")
+
+    def test_negative_nonzero_volume_still_volume_negative(self):
+        _assert_invalid(_p(_csv([_r(v="-1")])), "volume_negative")
 
 
 # ───────────────────────── 價格／OHLC／volume ─────────────────────────
@@ -666,6 +742,25 @@ class TestSymbolAndInputTypes:
     def test_non_bytes_input_rejected(self, bad):
         _assert_invalid(_p(bad), mod.REASON_INPUT_NOT_BYTES)
 
+    def test_released_memoryview_is_fixed_reason_not_exception(self):
+        """SF-5：已 release() 的 memoryview 不 raise，回固定原因碼。"""
+        mv = memoryview(_csv(_good_rows()))
+        mv.release()
+        r = _p(mv)
+        _assert_invalid(r, mod.REASON_INPUT_NOT_BYTES)
+        assert r.reasons == (mod.REASON_INPUT_NOT_BYTES,)
+
+    def test_released_memoryview_with_bad_symbol_is_still_invalid_symbol(self):
+        mv = memoryview(b"abc")
+        mv.release()
+        assert _p(mv, "bad").state == STATE_INVALID_SYMBOL
+
+    def test_non_contiguous_memoryview_does_not_raise(self):
+        mv = memoryview(bytearray(_csv(_good_rows()) * 2))[::2]
+        r = _p(mv)
+        assert r.state == STATE_INVALID_DATA                 # 內容被抽樣壞掉，但不 raise
+        assert r.reasons
+
     def test_str_with_valid_csv_text_still_rejected(self):
         text = _csv(_good_rows()).decode("utf-8")
         _assert_invalid(_p(text), mod.REASON_INPUT_NOT_BYTES)
@@ -754,7 +849,8 @@ class TestImmutabilityAndLeaks:
         for name, data in self._poisoned_inputs().items():
             for code in _p(data).reasons:
                 assert code in fixed or code.startswith("missing_column_") or code.endswith(
-                    ("_missing", "_not_finite", "_not_numeric", "_not_positive")) or code in {
+                    ("_missing", "_not_finite", "_not_numeric", "_not_positive",
+                     "_not_representable", "_negative_zero")) or code in {
                     "stock_id_mismatch", "date_unparseable", "date_duplicate", "date_not_ascending",
                     "date_in_future", "price_negative", "high_below_low", "open_outside_low_high",
                     "close_outside_low_high", "volume_negative"}, (name, code)
@@ -866,6 +962,11 @@ class TestStaticSource:
         for n in ast.walk(self.TREE):
             if isinstance(n, ast.Constant) and isinstance(n.value, str):
                 assert n.value not in {"replace", "ignore", "surrogateescape", "backslashreplace"}
+
+    def test_docstring_states_no_upper_bound_limitation(self):
+        doc = ast.get_docstring(self.TREE) or ""
+        assert "1e300" in doc and "上限" in doc and "非核准" in doc and "溢位" in doc
+        assert "not_representable" in doc and "negative_zero" in doc
 
     def test_codec_is_strict_utf8_sig(self):
         assert mod._CODEC == "utf-8-sig"

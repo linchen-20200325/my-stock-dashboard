@@ -29,7 +29,8 @@ L1 Data。直接 import：標準庫 `csv`／`io`／`re`／`dataclasses`／`datet
 - `today`：`datetime.date`（非 `datetime`），**必須由呼叫端傳入**（本層不取時鐘）；型別錯 → `ValueError`（固定訊息）。
 - `symbol`：沿用 `stock_latest_ohlcv._normalize_symbol` 規則（前導零保留；`"0050"`）；不合法 →
   `STATE_INVALID_SYMBOL`，且**完全不解析檔案**（連 `file_bytes` 型別都不看）。
-- `file_bytes`：只收 `bytes`／`bytearray`／`memoryview`，其餘 → `invalid_data`（`input_not_bytes`）。
+- `file_bytes`：只收 `bytes`／`bytearray`／`memoryview`，其餘 → `invalid_data`（`input_not_bytes`）；
+  已 `release()` 或無法讀取的 memoryview 同樣回 `input_not_bytes`（不 raise）。
   大小上限 `MAX_FILE_BYTES`（2 MiB）：超過 → `file_too_large`，**不解析**。資料列上限 `MAX_DATA_ROWS`（5000）：
   超過 → `too_many_rows`。兩者皆為具名常數；剛好等於上限允許，多 1 即拒。
 
@@ -65,9 +66,20 @@ ISO 日期、嚴格遞增、唯一、不晚於 `today`；缺值（空字串／`n
 OverflowError）；其他非數值 → `<欄>_not_numeric`；open／high／low／close ≤ 0 → `<欄>_not_positive`；
 OHLC 關係；volume ≥ 0（`volume==0` 合法，與缺值可區分）。**全有或全無**：任一列有問題 → 整批
 `invalid_data`、`rows=()`，不丟列、不修正、不排序。
-本層在交給 `_validate` 前只做「字串形狀」預濾：數字儲存格須為 ASCII 的十進位／科學記號
+本層在交給 `_validate` 前只做「字串形狀」預濾（另加下列兩條「不可默默變成 0」的字面檢查）：數字儲存格須為 ASCII 的十進位／科學記號
 （`[+-]?digits[.digits][e±digits]`）；其餘（`1_0`、全形數字、`1,234`、`0x10`…）一律當 `not_numeric`
 （Python `float()` 其實會接受底線與全形數字，那不是我們要接受的檔案格式）。
+- **不可表示的非零字面**：尾數含非零位數、但 `float()` 下溢成 0.0（如 `1e-400`、`-1e-999`）→ 整批
+  `<欄>_not_representable`（價格與 volume 同；不默默變 0）。字面真的是 0（`0`、`0.0`、`0e5`）照原規則
+  （volume=0 合法；價格 ≤0 → `<欄>_not_positive`）。
+- **負零**：字面為 `-0`、`-0.0`、`-0e5` → 整批 `<欄>_negative_zero`（價格另外也會帶 `<欄>_not_positive`；
+  volume 因此不會輸出 `-0.0`）。
+
+限制（據實；**非核准行為**）
+==========================
+- **不設價格／volume 的絕對上限**：上限屬尚未核准的業務門檻。極大但有限的值（如 `1e300`）**會被接受**；
+  下游滾動均量等計算可能因此溢位成偽值（inf／NaN 或錯誤量比）。上限待核准門檻，未核准前請勿當成「已防禦」。
+- 單位（元／股、股／張）、是否還原、是否含息，皆未驗證（見「資料口徑」）。
 
 安全
 ====
@@ -95,6 +107,7 @@ from src.data.stock.stock_latest_ohlcv import (
     OhlcvRow,
     _normalize_symbol,
     reason_missing_column,
+    reason_value,
     validate_ohlcv_frame,
 )
 
@@ -121,6 +134,12 @@ REASON_AMBIGUOUS_OHLCV_COLUMNS = "ambiguous_ohlcv_columns"
 REASON_MISSING_OHLCV_COLUMNS = "missing_ohlcv_columns"
 REASON_ROW_LENGTH_MISMATCH = "row_length_mismatch"
 REASON_TOO_MANY_ROWS = "too_many_rows"
+
+#: 數字儲存格原因碼的 kind（與 `reason_value(field, kind)` 組成 `<欄>_<kind>`；由測試鎖定）。
+KIND_NOT_REPRESENTABLE = "not_representable"
+KIND_NEGATIVE_ZERO = "negative_zero"
+#: 輸出欄名（與 `_FINMIND_COLS` 逐位對應；原因碼用的是這組名稱，如 `volume_shares_missing`）。
+_FIELD_NAMES = ("open", "high", "low", "close", "volume_shares")
 
 #: `today` 型別錯誤的固定訊息。
 TODAY_TYPE_MESSAGE = "today must be a datetime.date (not datetime)"
@@ -187,23 +206,30 @@ def _invalid(symbol: str, *reasons: str) -> LocalOhlcvImport:
 
 # ── 內部：儲存格預濾 ────────────────────────────────────────────────────
 
-def _numeric_cell(raw: str) -> str:
-    """CSV 數字儲存格 → 交給 `_validate` 的字串（只改「形狀」，不改數值語意）。
+def _numeric_cell(raw: str) -> tuple[str, str | None]:
+    """CSV 數字儲存格 → `(交給 _validate 的字串, 本層額外原因 kind 或 None)`（只改「形狀」，不改數值語意）。
 
     缺值字面→""（`<欄>_missing`）；ASCII 數字→原樣（`float()` 可能得 inf→`not_finite`）；
     inf 字面→標準 inf 字串；其餘一律→固定非數值字串（`not_numeric`）。絕不產出 0 替代。
+    額外 kind：非零字面下溢成 0.0 → `not_representable`；字面為負零 → `negative_zero`。
     """
     text = raw.strip()
     low = text.lower()
     if low in _MISSING_TOKENS:
-        return ""
+        return "", None
     if low in _POS_INF_TOKENS:
-        return "inf"
+        return "inf", None
     if low in _NEG_INF_TOKENS:
-        return "-inf"
-    if _NUMBER_RE.fullmatch(text) is not None:
-        return text
-    return _NOT_NUMERIC_TOKEN
+        return "-inf", None
+    if _NUMBER_RE.fullmatch(text) is None:
+        return _NOT_NUMERIC_TOKEN, None
+    mantissa = low.split("e", 1)[0]
+    if float(text) == 0.0:                           # 含 -0.0；float(str) 對溢位回 inf、不拋例外
+        if any(c in "123456789" for c in mantissa):  # 字面非零卻變 0：不可默默變 0
+            return text, KIND_NOT_REPRESENTABLE
+        if text.startswith("-"):                     # 字面為負零
+            return text, KIND_NEGATIVE_ZERO
+    return text, None
 
 
 def _decode(data: bytes) -> str | None:
@@ -259,10 +285,13 @@ def parse_local_ohlcv_csv(file_bytes: object, symbol: object, *, today: date) ->
 
     if not isinstance(file_bytes, (bytes, bytearray, memoryview)):
         return _invalid(sym, REASON_INPUT_NOT_BYTES)
-    size = file_bytes.nbytes if isinstance(file_bytes, memoryview) else len(file_bytes)
-    if size > MAX_FILE_BYTES:                         # 複製前先擋，不解析
-        return _invalid(sym, REASON_FILE_TOO_LARGE)
-    data = bytes(file_bytes)
+    try:
+        size = file_bytes.nbytes if isinstance(file_bytes, memoryview) else len(file_bytes)
+        if size > MAX_FILE_BYTES:                     # 複製前先擋，不解析
+            return _invalid(sym, REASON_FILE_TOO_LARGE)
+        data = bytes(file_bytes)
+    except ValueError:                                # 已 release() 的 memoryview：不可讀 → 固定原因碼，不 raise
+        return _invalid(sym, REASON_INPUT_NOT_BYTES)
     if b"\x00" in data:
         return _invalid(sym, REASON_CONTAINS_NUL)
     text = _decode(data)
@@ -302,12 +331,15 @@ def parse_local_ohlcv_csv(file_bytes: object, symbol: object, *, today: date) ->
         _COL_STOCK_ID: [(_MISMATCH_CELL if _normalize_symbol(r[idx[_COL_STOCK_ID]]) != sym else sym)
                         for r in body],
     }
-    for fm_col, src_col in zip(_FINMIND_COLS, group):
-        frame_cols[fm_col] = [_numeric_cell(r[idx[src_col]]) for r in body]
+    extra: list[str] = []                             # 本層的數字字面原因（_validate 看不到）
+    for fm_col, src_col, field in zip(_FINMIND_COLS, group, _FIELD_NAMES):
+        cells = [_numeric_cell(r[idx[src_col]]) for r in body]
+        frame_cols[fm_col] = [c for c, _k in cells]
+        extra.extend(reason_value(field, k) for k in dict.fromkeys(k for _c, k in cells if k is not None))
 
     rows, reasons = validate_ohlcv_frame(pd.DataFrame(frame_cols, dtype=object), sym, today)
-    if reasons:
-        return _invalid(sym, *reasons)
+    if reasons or extra:
+        return _invalid(sym, *reasons, *extra)
     latest = rows[-1]
     return LocalOhlcvImport(state=STATE_OK, symbol=sym, rows=rows, latest=latest, as_of=latest.date,
                             source=SOURCE_LOCAL_IMPORT, error_code=None, reasons=(), n_rows=len(rows))
