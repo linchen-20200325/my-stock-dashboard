@@ -718,3 +718,583 @@ class TestBasisVerifiedMutations:
         f = facts_unverified(make_bars(30))
         with pytest.raises(AssertionError):
             assert f.price_basis == "unadjusted_declared"
+
+
+# ════════════════════════════════════════════════════════════════════
+# F1 數值安全（非有限 / 溢位 / 下溢 → None + 具名限制；不設價量業務上限）
+# ════════════════════════════════════════════════════════════════════
+
+from src.compute.strategy.tech_indicators import (  # noqa: E402
+    calc_ma_series, calc_rsi, calc_volume_ratio)
+
+_NUM = "下列指標因數值超出可穩定計算的範圍而不予輸出："
+_FMAX = 1.7e308
+_FMAX_REAL = float(np.finfo(np.float64).max)
+
+
+def _num_sentence(*names: str) -> str:
+    return _NUM + "、".join(names) + "。"
+
+
+def _num_lims(f: StockResearchFacts) -> list[str]:
+    return [s for s in f.limitations if s.startswith(_NUM)]
+
+
+def _shape_df(n: int, level: float, vol=None) -> pd.DataFrame:
+    """確定性、有漲跌的價格序列，價位約 level（OHLC 一致：low<=open/close<=high）。"""
+    i = np.arange(n)
+    close = level * (0.95 + 0.04 * ((i * 7) % 10) / 10.0)
+    open_ = close.copy()
+    high = close * 1.01
+    low = close * 0.99
+    volume = (np.full(n, 1000.0) if vol is None else np.asarray(vol, dtype="float64"))
+    return pd.DataFrame({"open": open_, "high": high, "low": low,
+                         "close": close, "volume": volume},
+                        index=pd.bdate_range(_START, periods=n))
+
+
+def _vol(n: int, prev5=None, today=None, base=1000.0):
+    v = np.full(n, base)
+    if prev5 is not None:
+        v[-6:-1] = prev5
+    if today is not None:
+        v[-1] = today
+    return v
+
+
+def _exact_ratio(prev5, today) -> float:
+    """獨立精確算式（Python 整數有理數，不經浮點加總）。"""
+    from fractions import Fraction
+    avg = sum(Fraction(float(x)) for x in prev5) / 5
+    return float(Fraction(float(today)) / avg)
+
+
+# ── 斷言輔助（突變測試也會呼叫它們，故寫成函式）────────────────────────
+
+def _assert_volume_overflow_guard() -> None:
+    for vol in (_vol(30, 1.7e308, 1.7e308), _vol(30, 1.7e308), _vol(30, 1.79e308, 1.0),
+                np.full(30, 1.79e308)):
+        f = facts_of(_shape_df(30, 100.0, vol))
+        assert f.volume_ratio5 is None
+        assert _num_sentence("量比5") in f.limitations
+
+
+def _assert_ma_overflow_guard() -> None:
+    f = facts_of(_shape_df(300, 1.7e308))
+    assert all(f.ma[w] is None for w in (5, 20, 60, 120, 240))
+    assert _num_sentence("MA5", "MA20", "MA60", "MA120", "MA240") in [
+        s.replace("乖離20與過熱評估、", "") for s in _num_lims(f)] or \
+        any("MA5、MA20、MA60、MA120、MA240" in s for s in _num_lims(f))
+
+
+def _assert_tiny_price_guard() -> None:
+    f = facts_of(_shape_df(300, 1e-300))
+    assert f.close is None and f.rsi14 is None and f.bias20_pct is None
+    assert f.support_20d is None and f.resistance_20d is None
+    assert all(v is None for v in f.ma.values())
+    assert len(_num_lims(f)) == 1
+
+
+class TestF1VolumeNumericSafety:
+    def test_all_volume_1_7e308_ratio_is_none_not_fake_zero(self):
+        # 修復前：前 5 日量加總溢位 → inf 均量 → 量比偽 0.0（真值 1.0）
+        f = facts_of(_shape_df(30, 100.0, np.full(30, _FMAX)))
+        assert f.volume_ratio5 is None
+        assert _num_sentence("量比5") in f.limitations
+
+    @pytest.mark.parametrize("prev5", [
+        [1.7e308, 1.7e308, 1000.0, 1000.0, 1000.0],   # 2 根極大：精確總和 > float 上限
+        [1.7e308] * 5,
+        [1.79e308, 1.0, 1.0, 1.0, 1.0],               # 單根逼近上限但總和仍可表示 → 見下方獨立斷言
+    ])
+    def test_overflowing_prev5_sum_gives_none(self, prev5):
+        v = _vol(30)
+        v[-6:-1] = prev5
+        f = facts_of(_shape_df(30, 100.0, v))
+        if sum(__import__("fractions").Fraction(x) for x in prev5) > __import__("fractions").Fraction(_FMAX_REAL):
+            assert f.volume_ratio5 is None
+            assert _num_sentence("量比5") in f.limitations
+        else:
+            # 總和未溢位：照常輸出（極小比值屬四捨五入精度，非偽值），無數值限制句
+            assert f.volume_ratio5 is not None and not _num_lims(f)
+
+    def test_three_of_five_1_7e308(self):
+        v = _vol(30)
+        v[-6:-3] = 1.7e308
+        f = facts_of(_shape_df(30, 100.0, v))
+        assert f.volume_ratio5 is None and _num_lims(f)
+
+    def test_ratio_overflow_with_subnormal_prev5(self):
+        # 前 5 日量 5e-324、今日 1000：比值 > float 上限（修復前為 inf）
+        f = facts_of(_shape_df(30, 100.0, _vol(30, 5e-324)))
+        assert f.volume_ratio5 is None
+        assert _num_sentence("量比5") in f.limitations
+
+    def test_mean_underflow_to_zero_is_flagged_not_silent(self):
+        # 精確均量 > 0 但 float 均量下溢成 0 → 來源回 None；不可無聲略過，須具名
+        v = _vol(30)
+        v[-6:-1] = [5e-324, 0.0, 0.0, 0.0, 0.0]
+        f = facts_of(_shape_df(30, 100.0, v))
+        assert f.volume_ratio5 is None
+        assert _num_sentence("量比5") in f.limitations
+
+    @pytest.mark.parametrize("big", [1e300, 1e200, 1e100])
+    def test_large_volumes_still_computable(self, big):
+        # 1e300 級量能不得被誤殺
+        for vol, expect in (
+            (np.full(30, big), 1.0),
+            (_vol(30, big, big), 1.0),
+            (_vol(30, 1000.0, big), None),   # 今日極大：以獨立精確算式比對
+        ):
+            f = facts_of(_shape_df(30, 100.0, vol))
+            assert f.volume_ratio5 is not None
+            if expect is None:
+                ex = _exact_ratio(vol[-6:-1], vol[-1])
+                assert math.isclose(f.volume_ratio5, ex, rel_tol=1e-9)
+            else:
+                assert isc(f.volume_ratio5, expect)
+            assert not _num_lims(f)
+
+    def test_ratio_matches_legacy_function_for_1e300_mixed(self):
+        v = _vol(30)
+        v[-6:-1] = [1e300, 2e300, 3e300, 4e300, 5e300]
+        v[-1] = 6e300
+        df = _shape_df(30, 100.0, v)
+        f = facts_of(df)
+        assert f.volume_ratio5 == calc_volume_ratio(df, 5) == 2.0
+        assert not _num_lims(f)
+
+    @pytest.mark.parametrize("small", [1e-300, 5e-324])
+    def test_tiny_volume_no_fake_zero(self, small):
+        f = facts_of(_shape_df(30, 100.0, np.full(30, small)))
+        assert isc(f.volume_ratio5, 1.0)
+        # 前 5 日量極小、今日正常：比值極大但有限（1e-300 時可表示）
+        if small == 1e-300:
+            f2 = facts_of(_shape_df(30, 100.0, _vol(30, small)))
+            assert math.isclose(f2.volume_ratio5, _exact_ratio([small] * 5, 1000.0), rel_tol=1e-9)
+
+    def test_true_zero_vs_missing_vs_legit_zero(self):
+        # 真 0：今日量 0 且前 5 日正常 → 0.0（合法，停牌 / 跌停鎖死）
+        f0 = facts_of(_shape_df(30, 100.0, _vol(30, today=0.0)))
+        assert f0.volume_ratio5 is not None and isc(f0.volume_ratio5, 0.0)
+        assert not _num_lims(f0)
+        # 前 5 日均量精確為 0：沿用來源既有語意（None），不是數值失真，不加數值限制句
+        fz = facts_of(_shape_df(30, 100.0, _vol(30, 0.0)))
+        assert fz.volume_ratio5 is None and not _num_lims(fz)
+        # 缺值（根數不足）：None + 根數不足句，非數值句
+        fm = facts_of(_shape_df(5, 100.0))
+        assert fm.volume_ratio5 is None and not _num_lims(fm)
+        assert any("量比5" in s and s.startswith("下列指標根數不足") for s in fm.limitations)
+
+    def test_window_boundary_volume_ratio(self):
+        v6 = np.full(6, _FMAX)
+        f6 = facts_of(_shape_df(6, 100.0, v6))          # 6 根：量比 5 恰可算
+        assert f6.volume_ratio5 is None and _num_sentence("量比5") in f6.limitations
+        f5 = facts_of(_shape_df(5, 100.0, np.full(5, _FMAX)))   # 5 根：根數不足
+        assert f5.volume_ratio5 is None and not _num_lims(f5)
+
+    def test_volume_extremes_never_touch_price_fields(self):
+        base = facts_of(_shape_df(300, 100.0))
+        f = facts_of(_shape_df(300, 100.0, _vol(300, 1.7e308)))
+        for name in ("close", "ma", "rsi14", "bias20_pct", "overextension_level",
+                     "overheated", "support_20d", "resistance_20d"):
+            assert getattr(f, name) == getattr(base, name)
+
+
+class TestF1PriceNumericSafety:
+    def test_price_1e300_and_1e200_fully_computable(self):
+        base = facts_of(_shape_df(300, 100.0))
+        for lvl in (1e300, 1e200):
+            f = facts_of(_shape_df(300, lvl))
+            assert not _num_lims(f)
+            assert f.rsi14 == base.rsi14
+            assert f.overextension_level == base.overextension_level
+            assert f.overheated == base.overheated
+            assert math.isclose(f.bias20_pct, base.bias20_pct, abs_tol=1.5e-4)
+            for w in (5, 20, 60, 120, 240):
+                ex = _exact_mean_of_last(_shape_df(300, lvl)["close"].to_numpy(), w)
+                assert math.isclose(f.ma[w], ex, rel_tol=1e-9)
+            assert f.support_20d is not None and f.resistance_20d is not None
+
+    def test_price_1_7e308_ma_none_with_named_limitation(self):
+        # 修復前：rolling 加總溢位 → NaN → MA 被無聲吞成 None；乖離改用較早的 MA（有限偽值）
+        f = facts_of(_shape_df(300, _FMAX))
+        _assert_ma_overflow_guard()
+        assert f.bias20_pct is None and f.overextension_level is None and f.overheated is None
+        assert any("乖離20與過熱評估" in s for s in _num_lims(f))
+        assert f.close is not None and np.isfinite(f.close)
+        assert f.support_20d is not None and f.resistance_20d is not None
+        assert f.rsi14 is not None     # RSI 為尺度不變量，仍可算且與獨立算式一致
+        assert f.rsi14 == facts_of(_shape_df(300, 100.0)).rsi14
+
+    def test_price_1_7e308_does_not_use_stale_earlier_ma_for_bias(self):
+        # 前段價位正常、最後 20 根逼近上限：MA20 溢位，不得退用較早 MA 算乖離
+        df = _shape_df(60, 100.0)
+        for c in ("open", "high", "low", "close"):
+            df.iloc[-20:, df.columns.get_loc(c)] = df.iloc[-20:, df.columns.get_loc(c)] * 1e305
+        f = facts_of(df)
+        assert f.bias20_pct is None and f.overheated is None
+        assert _num_lims(f)
+
+    def test_tiny_price_1e300_no_fake_zero_anywhere(self):
+        # 修復前：close / MA / 支撐 / 壓力 四捨五入成 0.0；RSI 因 +1e-10 epsilon 成偽 0.0
+        f = facts_of(_shape_df(300, 1e-300))
+        _assert_tiny_price_guard()
+        assert _num_lims(f) == [_num_sentence(
+            "收盤價", "MA5", "MA20", "MA60", "MA120", "MA240", "RSI14",
+            "乖離20與過熱評估", "支撐壓力")]
+        assert f.overextension_level is None and f.overheated is None
+
+    def test_5e324_prices(self):
+        n = 300
+        c = np.full(n, 5e-324)
+        df = pd.DataFrame({"open": c, "high": c, "low": c, "close": c,
+                           "volume": np.full(n, 1000.0)},
+                          index=pd.bdate_range(_START, periods=n))
+        f = facts_of(df)
+        assert f.close is None and f.support_20d is None
+        assert all(v is None for v in f.ma.values()) and f.rsi14 is None
+
+    def test_normal_small_price_unaffected(self):
+        # 台股最小報價級距 0.01：價位 0.05 的輸出須與一般算式一致且無數值限制句
+        df = _shape_df(300, 0.05)
+        f = facts_of(df)
+        assert not _num_lims(f)
+        assert f.close is not None and f.close > 0 and f.support_20d > 0
+        assert f.rsi14 == calc_rsi(df, 14)
+
+    def test_zero_never_substituted_for_positive_price_output(self):
+        for lvl in (1e-300, 1e-200, 1e-10, 1e-6, 1e-4, 1e-3, 1.0, 1e50, 1e300, _FMAX):
+            f = facts_of(_shape_df(300, lvl))
+            for v in (f.close, f.support_20d, f.resistance_20d, *f.ma.values()):
+                assert v is None or v > 0, (lvl, v)
+            assert f.rsi14 is None or f.rsi14 > 0
+
+    def test_mixed_extreme_price_and_volume(self):
+        f = facts_of(_shape_df(300, 1e-300, np.full(300, _FMAX)))
+        assert f.volume_ratio5 is None and f.close is None
+        (sent,) = _num_lims(f)
+        assert "量比5" in sent and "收盤價" in sent
+        g = facts_of(_shape_df(300, _FMAX, np.full(300, 1e-300)))
+        assert isc(g.volume_ratio5, 1.0) and all(v is None for v in g.ma.values())
+
+    @pytest.mark.parametrize("w", [5, 20, 60, 120, 240])
+    def test_ma_window_boundary(self, w):
+        at = facts_of(_shape_df(w, _FMAX))
+        assert at.ma[w] is None and any(f"MA{w}" in s for s in _num_lims(at))
+        below = facts_of(_shape_df(w - 1, _FMAX))
+        assert below.ma[w] is None
+        assert not any(f"MA{w}" in s for s in _num_lims(below))      # 根數不足句，不是數值句
+        assert any(f"MA{w}" in s and s.startswith("下列指標根數不足") for s in below.limitations)
+
+    def test_rsi_window_boundary(self):
+        at = facts_of(_shape_df(15, 1e-300))
+        assert at.rsi14 is None and any("RSI14" in s for s in _num_lims(at))
+        below = facts_of(_shape_df(14, 1e-300))
+        assert below.rsi14 is None and not any("RSI14" in s for s in _num_lims(below))
+
+    def test_overextension_window_boundary(self):
+        at = facts_of(_shape_df(21, _FMAX))
+        assert at.bias20_pct is None and any("乖離20與過熱評估" in s for s in _num_lims(at))
+        below = facts_of(_shape_df(20, _FMAX))
+        assert not any("乖離" in s for s in _num_lims(below))
+
+    @pytest.mark.parametrize("n", [5, 6, 12, 19, 20, 21])
+    def test_support_resistance_window_boundary(self, n):
+        f = facts_of(_shape_df(n, 1e-300))
+        assert f.support_20d is None and f.resistance_20d is None and f.support_resistance_bars is None
+        assert any("支撐壓力" in s for s in _num_lims(f))
+        g = facts_of(_shape_df(4, 1e-300))
+        assert not any("支撐壓力" in s for s in _num_lims(g))
+        assert any("支撐壓力" in s and s.startswith("下列指標根數不足") for s in g.limitations)
+
+    def test_flat_prices_still_use_existing_rsi_note(self):
+        c = np.full(40, 100.0)
+        df = pd.DataFrame({"open": c, "high": c + 1, "low": c - 1, "close": c,
+                           "volume": np.full(40, 1000.0)},
+                          index=pd.bdate_range(_START, periods=40))
+        f = facts_of(df)
+        assert f.rsi14 is None and not _num_lims(f)
+        assert "RSI14 因整段收盤價完全沒有變動而無定義。" in f.limitations
+
+
+def _exact_mean_of_last(arr, w) -> float:
+    from fractions import Fraction
+    return float(sum(Fraction(float(x)) for x in arr[-w:]) / w)
+
+
+class TestF1LimitationsWording:
+    def test_sentence_verbatim_and_names_only(self):
+        assert _NUM == "下列指標因數值超出可穩定計算的範圍而不予輸出："
+        assert srf._LIMITATION_NUMERIC_PREFIX == _NUM
+        f = facts_of(_shape_df(300, 1e-300, np.full(300, _FMAX)))
+        (sent,) = _num_lims(f)
+        assert not any(ch.isdigit() for ch in sent.replace("MA5", "").replace("MA20", "")
+                       .replace("MA60", "").replace("MA120", "").replace("MA240", "")
+                       .replace("RSI14", "").replace("量比5", "").replace("乖離20", ""))
+
+    @pytest.mark.parametrize("df", [
+        _shape_df(300, 1e-300, np.full(300, _FMAX)),
+        _shape_df(300, _FMAX),
+        _shape_df(30, 100.0, _vol(30, 5e-324)),
+    ])
+    def test_no_forbidden_words_in_new_sentences(self, df):
+        f = facts_of(df)
+        assert _num_lims(f)
+        for s in _all_strings(f):
+            for w in _FORBIDDEN:
+                assert w not in s, f"禁字 {w!r} 出現在 {s!r}"
+
+    def test_sentence_order_after_existing_ones(self):
+        f = facts_of(_shape_df(10, 1e-300))
+        lim = f.limitations
+        assert lim[0] == LIMITATION_UNADJUSTED and lim[1] == LIMITATION_MA_REFERENCE
+        assert lim[-1].startswith(_NUM)
+
+
+class TestF1BaselineUnchanged:
+    """正常輸入逐欄等於「直接呼叫既有函式」的結果（即修復前行為），且不含數值限制句。"""
+
+    _NS = [1, 4, 5, 6, 14, 15, 16, 20, 21, 22, 30, 59, 60, 61, 100, 119, 120, 121,
+           239, 240, 241, 300]
+
+    @pytest.mark.parametrize("seed,n", list(enumerate(_NS)))
+    def test_fields_equal_legacy_calls(self, seed, n):
+        df = make_bars(n, seed=seed)
+        f = facts_of(df)
+        assert not _num_lims(f)
+        close = df["close"].astype("float64")
+        for w in (5, 20, 60, 120, 240):
+            exp = None if n < w else round(float(calc_ma_series(close, w).iloc[-1]), 4)
+            assert f.ma[w] == exp
+        assert f.rsi14 == (calc_rsi(df, 14) if n >= 15 else None)
+        assert f.volume_ratio5 == (calc_volume_ratio(df, 5) if n >= 6 else None)
+        if n >= 21:
+            oe = assess_price_overextension(close, ma_window=20, rsi_period=14)
+            assert f.bias20_pct == round(float(oe["bias_pct"]), 4)
+            assert f.overextension_level == oe["level"] and f.overheated == oe["overheated"]
+        else:
+            assert f.bias20_pct is None and f.overheated is None
+        assert f.close == round(float(close.iloc[-1]), 4)
+        if n >= 5:
+            m = min(n, 20)
+            assert f.support_20d == round(float(df["low"].tail(m).min()), 2)
+            assert f.resistance_20d == round(float(df["high"].tail(m).max()), 2)
+            assert f.support_resistance_bars == m
+        else:
+            assert f.support_20d is None
+
+
+class TestF1Mutations:
+    """拔掉數值防線 → 對應斷言輔助函式必紅（pytest.raises(AssertionError)）。"""
+
+    def test_baseline_helpers_pass(self):
+        _assert_volume_overflow_guard()
+        _assert_ma_overflow_guard()
+        _assert_tiny_price_guard()
+
+    def test_mutation_volume_guard_removed(self, monkeypatch):
+        monkeypatch.setattr(srf, "_volume_ratio_valid", lambda legacy, volumes: True)
+        with pytest.raises(AssertionError):
+            _assert_volume_overflow_guard()
+
+    def test_mutation_overflow_check_dropped_keeps_fake_zero(self, monkeypatch):
+        # 只檢查「來源輸出是否貼近精確值」而不看中間值溢位 → 前 5 日極大 + 今日正常的 0.0 會被放行
+        orig = srf._volume_ratio_valid
+
+        def legacy_noerr(df, period=5):   # 重現預設警告設定下的來源行為（溢位不轉例外）
+            with np.errstate(all="ignore"):
+                avg = float(df["volume"].iloc[-(period + 1):-1].mean())
+                return round(float(df["volume"].iloc[-1]) / avg, 2)
+        monkeypatch.setattr(srf, "calc_volume_ratio", legacy_noerr)
+
+        def weak(legacy, volumes):
+            if legacy is not None and legacy == 0.0:
+                return True
+            return orig(legacy, volumes)
+        monkeypatch.setattr(srf, "_volume_ratio_valid", weak)
+        with pytest.raises(AssertionError):
+            _assert_volume_overflow_guard()
+
+    def test_mutation_rsi_guard_removed(self, monkeypatch):
+        monkeypatch.setattr(srf, "_rsi_valid", lambda legacy, exact: legacy is not None)
+        with pytest.raises(AssertionError):
+            _assert_tiny_price_guard()
+
+    def test_mutation_round_to_zero_guard_removed(self, monkeypatch):
+        monkeypatch.setattr(srf, "_positive_rounds_to_zero", lambda x: False)
+        with pytest.raises(AssertionError):
+            _assert_tiny_price_guard()
+
+    def test_mutation_ma_guard_removed_with_garbage_series(self, monkeypatch):
+        # 來源給出「有限的錯值」且防線被拔 → 斷言必紅；防線在時改為 None
+        import src.compute.strategy.tech_indicators as ti
+        garbage = lambda close, window=20: close.rolling(window).mean() * 2.0 + 1.0  # noqa: E731
+        monkeypatch.setattr(srf, "calc_ma_series", garbage)
+        f = facts_of(make_bars(300))
+        assert all(f.ma[w] is None for w in (5, 20, 60, 120, 240))
+        assert len(_num_lims(f)) == 1
+        monkeypatch.setattr(srf, "_ma_valid", lambda legacy, closes, w: True)
+        g = facts_of(make_bars(300))
+        with pytest.raises(AssertionError):
+            assert all(g.ma[w] is None for w in (5, 20, 60, 120, 240))
+        assert ti is not None
+
+    def test_mutation_stale_ma_bias_guard_removed(self, monkeypatch):
+        # 來源（模擬）在 MA20 溢位時退用較早 MA，給出有限的乖離與過熱判定。
+        stale = {"level": "正常", "overheated": False, "bias_pct": 5.0,
+                 "rsi": 50.0, "reasons": [], "icon": "🟢"}
+        monkeypatch.setattr(srf, "assess_price_overextension", lambda *a, **k: dict(stale))
+        df = _shape_df(60, 100.0)
+        for c in ("open", "high", "low", "close"):
+            df.iloc[-20:, df.columns.get_loc(c)] = df.iloc[-20:, df.columns.get_loc(c)] * 1e305
+        f = facts_of(df)
+        assert f.bias20_pct is None and f.overheated is None      # 防線在：不採用
+        # 拔掉 MA20 驗證並讓 NaN 被前值填補 → 偽乖離 5.0 被輸出 → 斷言必紅
+        monkeypatch.setattr(srf, "_ma_valid", lambda legacy, closes, w: True)
+        monkeypatch.setattr(srf, "calc_ma_series",
+                            lambda close, window=20: close.rolling(window).mean().ffill())
+        g = facts_of(df)
+        with pytest.raises(AssertionError):
+            assert g.bias20_pct is None
+
+
+class TestF1ValidatorUnits:
+    """驗證器本身：有限但錯誤的來源值必須被拒；正確值必須被放行（防止驗證器被放鬆）。"""
+
+    def test_ma_valid_rejects_finite_wrong_value(self):
+        closes = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        assert srf._ma_valid(30.0, closes, 5)
+        assert not srf._ma_valid(30.001, closes, 5)      # 相對誤差 3e-5，遠大於浮點誤差
+        assert not srf._ma_valid(float("nan"), closes, 5)
+        assert not srf._ma_valid(float("inf"), closes, 5)
+
+    def test_volume_ratio_valid_rejects_finite_wrong_value(self):
+        v = np.array([1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 2000.0])
+        assert srf._volume_ratio_valid(2.0, v) is True
+        assert srf._volume_ratio_valid(2.5, v) is False  # 偏離超過半個四捨五入階
+        assert srf._volume_ratio_valid(None, v) is False
+        assert srf._volume_ratio_valid(float("inf"), v) is False
+        z = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 5.0])
+        assert srf._volume_ratio_valid(None, z) is None  # 均量精確為 0：沿用來源語意
+
+    def test_rsi_valid_rejects_finite_wrong_value(self):
+        assert srf._rsi_valid(58.4, 58.43)
+        assert not srf._rsi_valid(0.0, 58.43)            # epsilon 偽 0.0
+        assert not srf._rsi_valid(58.4, 70.0)
+        assert not srf._rsi_valid(None, 58.4)
+        assert not srf._rsi_valid(58.4, None)
+
+    def test_rsi_unbiased_scale_invariant(self):
+        c = _shape_df(60, 1.0)["close"].to_numpy()
+        base = srf._rsi_unbiased(c)
+        for k in (1e-300, 1e-100, 1e100, 1e300):
+            assert math.isclose(srf._rsi_unbiased(c * k), base, rel_tol=1e-9)
+
+    def test_exact_mean_overflow_returns_none_not_inf(self):
+        assert srf._exact_mean_float(np.array([1.7e308] * 5)) == 1.7e308
+        assert srf._exact_mean_float(np.array([5e-324, 0.0])) is not None
+
+
+# ── 補強：中度失真必須被拒（容差不得被放大）、支撐壓力歸零、尺度正規化、精確平均 ──
+
+def _walk_df(n: int, level: float, seed: int) -> pd.DataFrame:
+    """價位約 level 的隨機漫步（OHLC 一致）。"""
+    rng = np.random.default_rng(seed)
+    c = level * (1.0 + np.cumsum(rng.normal(0.0, 0.02, n)))
+    c = np.maximum(c, level * 0.5)
+    return pd.DataFrame({"open": c, "high": c * 1.01, "low": c * 0.99, "close": c,
+                         "volume": np.full(n, 1000.0)},
+                        index=pd.bdate_range(_START, periods=n))
+
+
+class TestF1ToleranceNotInflated:
+    """來源值與獨立精確值相差「略大於一個四捨五入階」時必須判失真；
+    把 _RSI_TOL / _REL_TOL / _VOL_RATIO_HALF_STEP 放大 10 倍的突變會讓這些轉紅。"""
+
+    @pytest.mark.parametrize("delta", [0.2, 0.5, 0.9])
+    def test_rsi_moderate_distortion_rejected(self, delta):
+        assert not srf._rsi_valid(58.4 + delta, 58.4)
+        assert not srf._rsi_valid(58.4 - delta, 58.4)
+
+    def test_rsi_within_one_rounding_step_accepted(self):
+        assert srf._rsi_valid(58.4, 58.43)          # 四捨五入內
+        assert srf._rsi_valid(58.4, 58.49)          # 差 0.09：仍在一個四捨五入階內
+
+    def test_rsi_rel_tol_additive_boundary(self):
+        assert not srf._rsi_valid(58.5 + 5e-9, 58.4)   # 差 0.1 + 5e-9：略超出
+
+    @pytest.mark.parametrize("delta", [0.01, 0.03, 0.049])
+    def test_volume_ratio_moderate_distortion_rejected(self, delta):
+        v = np.array([1000.0] * 5 + [2000.0])        # 精確比值 2.0
+        assert srf._volume_ratio_valid(2.0 + delta, v) is False
+        assert srf._volume_ratio_valid(2.0 - delta, v) is False
+
+    def test_volume_ratio_rounding_step_accepted(self):
+        v = np.array([1000.0] * 5 + [2034.0])        # 精確 2.034，來源四捨五入 2.03
+        assert srf._volume_ratio_valid(2.03, v) is True
+
+    def test_volume_ratio_relative_tolerance_not_inflated(self):
+        v = np.array([1.0] * 5 + [1e12])             # 精確比值 1e12
+        assert srf._volume_ratio_valid(1e12, v) is True
+        assert srf._volume_ratio_valid(1e12 * (1 + 5e-9), v) is False   # 相對差 5e-9 > 1e-9
+
+    def test_ma_relative_tolerance_not_inflated(self):
+        closes = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        assert srf._ma_valid(30.0 * (1 + 5e-10), closes, 5)
+        assert not srf._ma_valid(30.0 * (1 + 5e-9), closes, 5)
+
+    def test_integration_rsi_off_by_half_is_none(self, monkeypatch):
+        df = make_bars(60)
+        exact = srf._rsi_unbiased(df["close"].to_numpy())
+        monkeypatch.setattr(srf, "calc_rsi", lambda d, period=14: round(exact + 0.5, 1))
+        f = facts_of(df)
+        assert f.rsi14 is None and any("RSI14" in s for s in _num_lims(f))
+        assert f.overheated is None          # 同時不輸出依 RSI 而定的過熱判定
+
+    def test_integration_volume_ratio_off_by_003_is_none(self, monkeypatch):
+        df = make_bars(60)
+        true = calc_volume_ratio(df, 5)
+        monkeypatch.setattr(srf, "calc_volume_ratio", lambda d, period=5: round(true + 0.03, 2))
+        f = facts_of(df)
+        assert f.volume_ratio5 is None and _num_sentence("量比5") in f.limitations
+
+
+class TestF1SupportResistanceZeroGuard:
+    @pytest.mark.parametrize("seed", [0, 1, 2, 3])
+    def test_price_around_1e_3_support_resistance_none_with_sentence(self, seed):
+        # 價位約 1e-3：來源 2 位小數四捨五入會給出 0.0 / 0.0（偽 0）
+        df = _walk_df(60, 1e-3, seed)
+        from src.compute.strategy.entry_stop_levels import compute_support_resistance
+        legacy = compute_support_resistance(df, current_price=float(df["close"].iloc[-1]))
+        assert legacy.support is not None and not legacy.support > 0     # 舊路徑確為偽 0.0
+        f = facts_of(df)
+        assert f.support_20d is None and f.resistance_20d is None
+        assert f.support_resistance_bars is None
+        assert any("支撐壓力" in s for s in _num_lims(f))
+        assert f.close is not None and f.close > 0      # close 在 4 位小數仍可表示，不受影響
+
+
+class TestF1RsiScaleNormalizationAndExactMean:
+    def test_rsi_normalization_needed_for_subnormal_prices(self):
+        # 價格為 5e-324 的整數倍（次正規數）：未正規化時 ewm 的乘法下溢而失真
+        rng = np.random.default_rng(5)
+        k = np.maximum(np.round(1000 + rng.normal(0, 3, 40).cumsum()), 1.0)
+        c = k * 5e-324 * 2.0 ** 0           # 次正規數網格上的精確價格
+        c = np.maximum(c, 5e-324)
+        got = srf._rsi_unbiased(c)
+        assert got is not None
+        # 獨立算式：以 2**1000 精確放大回常規範圍後，用一般 Wilder 公式
+        s = pd.Series(np.ldexp(c, 1000))
+        d = s.diff()
+        g = float(d.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean().iloc[-1])
+        lo = float((-d.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean().iloc[-1])
+        expect = 100.0 - 100.0 / (1.0 + g / lo)
+        assert math.isclose(got, expect, rel_tol=1e-9)
+
+    def test_ma_valid_uses_exact_mean_not_float_mean(self):
+        # 精確平均 1.7e308 可表示；浮點加總會溢位成 inf。來源若（例如換版 pandas）給出正確值，
+        # 驗證器須放行；若改成以浮點平均當基準，會把正確值誤判為失真。
+        closes = np.array([1.7e308] * 5)
+        assert srf._ma_valid(1.7e308, closes, 5)
+        assert not srf._ma_valid(1.6e308, closes, 5)
