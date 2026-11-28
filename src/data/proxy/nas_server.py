@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import Response as _RawResponse
 from pydantic import BaseModel
 from typing import Optional
+import hmac
 import ipaddress
 import socket
 import requests, datetime, os
@@ -52,17 +53,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 app = FastAPI(title="NAS 中繼站", version="1.0.0")
 
 _API_KEY = os.environ.get("NAS_API_KEY", "")
-# v19.86 安全（第八份 review D）:未設 NAS_API_KEY = `/proxy` `/api/fetch` 無認證
-# 開放,任何人可把本機當跳板(SSRF)。此處大聲警告;硬性「未設 key 拒絕啟動」屬
-# 部署行為變更,列 user 決定(見 PR 描述)。無論有無 key,下方 _assert_public_url
-# 都會封鎖內網/metadata 目標,先堵住 SSRF 最危險面。
+# v19.86 安全（第八份 review D）:未設 NAS_API_KEY 原為 `/proxy` `/api/fetch` 無認證
+# 開放,任何人可把本機當跳板(SSRF)。A-SEC-1110(#1110):改為 fail closed ——
+# 未設 NAS_API_KEY 時,受 _auth 保護的端點一律回 503(不得匿名放行);`/`(health)
+# 維持原狀。此處仍於啟動時大聲警告。無論有無 key,下方 _assert_public_url 都會
+# 封鎖內網/metadata 目標。
 if not _API_KEY:
     print("=" * 72, flush=True)
-    print("⚠️  [NAS 安全警告] NAS_API_KEY 未設定 — /proxy 與 /api/fetch 目前"
-          "「無認證開放」!", flush=True)
-    print("    任何知道本站網址者都可驅動本機發出 HTTP 請求。強烈建議:", flush=True)
-    print('    export NAS_API_KEY="<高強度隨機字串>" 後重啟。', flush=True)
-    print("    (SSRF 內網存取已由 _assert_public_url 封鎖,但認證仍應設定)", flush=True)
+    print("⚠️  [NAS 安全警告] NAS_API_KEY 未設定 — /proxy 與 /api/fetch 將一律"
+          "回 503(fail closed,拒絕服務)!", flush=True)
+    print("    請設定高強度金鑰後重啟,服務才會恢復:", flush=True)
+    print('    export NAS_API_KEY="<高強度隨機字串>"', flush=True)
     print("=" * 72, flush=True)
 
 _HDR = {
@@ -75,9 +76,19 @@ _HDR = {
 }
 
 
+_PROXY_502_DETAIL = "中繼失敗"  # /proxy 502 對外固定文案(A-SEC-1110:禁含 URL/例外原文)
+
+
 # ── 認證 ──────────────────────────────────────────────────────────────────
 def _auth(x_api_key: str = Header(None)):
-    if _API_KEY and x_api_key != _API_KEY:
+    # A-SEC-1110:未設 NAS_API_KEY ⇒ fail closed(503 固定文案,不得匿名放行)。
+    if not _API_KEY:
+        raise HTTPException(status_code=503,
+                            detail="Service unavailable: server auth not configured")
+    # key 已設:常數時間比對(hmac.compare_digest);以 utf-8 bytes 比,避免
+    # 非 ASCII header 值使 compare_digest(str) 丟 TypeError;缺 header ⇒ 401。
+    if not x_api_key or not hmac.compare_digest(
+            x_api_key.encode("utf-8"), _API_KEY.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
 
@@ -379,7 +390,8 @@ def proxy_relay(url: str, _=Depends(_auth)):
         )
     except Exception as _e_px:
         print(f'[NAS/proxy] ❌ {url[:80]} {type(_e_px).__name__}: {_e_px}')
-        raise HTTPException(status_code=502, detail=f'中繼失敗: {_e_px}')
+        # A-SEC-1110:對外一律固定脫敏文案(不含 URL / 例外原文 / 內網 IP);詳情僅留上方 server log。
+        raise HTTPException(status_code=502, detail=_PROXY_502_DETAIL)
 
 
 @app.get("/")
