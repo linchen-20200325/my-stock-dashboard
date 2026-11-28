@@ -9,7 +9,7 @@
 ════════════════════════════════════════════════════════════════════
 介面
 ════════════════════════════════════════════════════════════════════
-    build_stock_research_facts(bars, *, as_of) -> StockResearchFacts
+    build_stock_research_facts(bars, *, as_of, basis_verified=True) -> StockResearchFacts
 
 - ``bars``：DataFrame，**小寫欄** open / high / low / close / volume；
   index 為日期（DatetimeIndex，或可無歧義轉成日期的 str / date 索引），
@@ -19,6 +19,16 @@
 - ``as_of``：資料日（'YYYY-MM-DD' 字串或 ``datetime.date``），**必須等於 bars 最後一列日期**，
   否則 raise。資料日不得由呼叫端任意宣稱，也不得以抓取時間頂替；本函式不讀時鐘。
   ``datetime.datetime``（含 pandas Timestamp）因時間成分有歧義而拒絕。
+
+- ``basis_verified``（keyword-only，預設 True）：價格口徑「未調整原始價」是否**已被驗證**。
+  **呼叫端責任**：本機使用者匯入的日K（口徑僅為使用者聲明、系統無法驗證）**必須**傳
+  ``basis_verified=False``；僅當呼叫端有**可驗證證據**證明為未調整價時才可用預設 True。
+  預設 True 是為了讓既有 caller 行為不變（目前 repo 內 0 production caller）。
+  False 時：``price_basis='unadjusted_declared'``、``price_basis_verified=False``，
+  limitations 第一句改為「價格口徑由使用者聲明為未調整原始價，系統未驗證。」＋
+  「除權息日前後指標可能失真。」兩句（不把未驗證口徑當事實）；其他事實值不變。
+  非 ``bool``（含 int 0/1、None、numpy.bool_、字串）一律 raise —— 口徑未知不可當 verified，
+  也不做 truthy 轉型。
 
 ════════════════════════════════════════════════════════════════════
 §1 Fail Loud / missing ≠ 0
@@ -106,6 +116,7 @@ __all__ = [
 
 # ── 具名常數（見模組 docstring「最少根數」）──────────────────────────
 PRICE_BASIS_UNADJUSTED = "unadjusted"
+PRICE_BASIS_UNADJUSTED_DECLARED = "unadjusted_declared"   # 使用者聲明、系統未驗證
 REQUIRED_COLUMNS: tuple[str, ...] = ("open", "high", "low", "close", "volume")
 MA_WINDOWS: tuple[int, ...] = (5, 20, 60, 120, 240)
 RSI_PERIOD = 14
@@ -119,6 +130,8 @@ SR_MIN_BARS = _SR_MIN_BARS_SRC              # entry_stop_levels.MIN_BARS（=5）
 _ROUND_DIGITS = 4
 
 LIMITATION_UNADJUSTED = "價格為未調整原始價，除權息日前後指標可能失真。"
+LIMITATION_UNADJUSTED_DECLARED = "價格口徑由使用者聲明為未調整原始價，系統未驗證。"
+LIMITATION_EX_RIGHTS_DISTORTION = "除權息日前後指標可能失真。"
 LIMITATION_MA_REFERENCE = "均線為參考，不等於正式台股趨勢判斷。"
 _LIMITATION_INSUFFICIENT_PREFIX = "下列指標根數不足而無法計算："
 _LIMITATION_OVEREXT_NO_RSI = "過熱評估缺 RSI 項而不予判定（乖離值仍照實列出）。"
@@ -148,6 +161,8 @@ class StockResearchFacts:
     resistance_20d: float | None
     support_resistance_bars: int | None
     limitations: tuple[str, ...]
+    # 放最後並給預設 True：既有（含位置式）建構不受影響；預設路徑恆為 True。
+    price_basis_verified: bool = True
 
 
 # ── 輸入驗證 ─────────────────────────────────────────────────────────
@@ -237,12 +252,21 @@ def _r(x: float | None) -> float | None:
 
 
 def build_stock_research_facts(bars: pd.DataFrame, *,
-                               as_of: str | _dt.date) -> StockResearchFacts:
+                               as_of: str | _dt.date,
+                               basis_verified: bool = True) -> StockResearchFacts:
     """由單檔日K建立 ``StockResearchFacts``。純函式、不改輸入、不讀時鐘。
 
+    ``basis_verified``：價格口徑（未調整原始價）是否已被驗證。本機使用者匯入的日K
+    （口徑僅為使用者聲明）必須傳 False；僅當呼叫端有可驗證證據時才可用預設 True。
+    預設 True 保持既有行為不變。詳見模組 docstring。
+
     Raises:
-        StockResearchFactsInputError: 輸入結構性錯誤，或 as_of 與最後一列日期不符。
+        StockResearchFactsInputError: 輸入結構性錯誤、as_of 與最後一列日期不符，
+            或 basis_verified 不是 bool。
     """
+    if not isinstance(basis_verified, bool):   # 不 truthy 轉型；np.bool_ / int / None / str 皆拒
+        raise StockResearchFactsInputError(
+            f"basis_verified 必須是 bool，收到 {type(basis_verified).__name__}")
     as_of_date = _parse_as_of(as_of)
     dates, work = _validate_bars(bars)
     if dates[-1] != as_of_date:
@@ -316,7 +340,11 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
             if sr_bars < SR_WINDOW_BARS:
                 notes.append(f"支撐與壓力實際僅涵蓋 {sr_bars} 根日K，少於標準 {SR_WINDOW_BARS} 根。")
 
-    limitations = [LIMITATION_UNADJUSTED, LIMITATION_MA_REFERENCE]
+    if basis_verified:
+        limitations = [LIMITATION_UNADJUSTED, LIMITATION_MA_REFERENCE]
+    else:
+        limitations = [LIMITATION_UNADJUSTED_DECLARED, LIMITATION_EX_RIGHTS_DISTORTION,
+                       LIMITATION_MA_REFERENCE]
     if insufficient:
         limitations.append(_LIMITATION_INSUFFICIENT_PREFIX + "、".join(insufficient) + "。")
     limitations.extend(notes)
@@ -325,7 +353,8 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         as_of=as_of_date,
         bar_count=n,
         first_date=dates[0],
-        price_basis=PRICE_BASIS_UNADJUSTED,
+        price_basis=(PRICE_BASIS_UNADJUSTED if basis_verified
+                     else PRICE_BASIS_UNADJUSTED_DECLARED),
         close=_r(last_close),
         ma=MappingProxyType(ma),
         rsi14=rsi14,
@@ -337,4 +366,5 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         resistance_20d=resistance,
         support_resistance_bars=sr_bars,
         limitations=tuple(limitations),
+        price_basis_verified=basis_verified,
     )
