@@ -48,7 +48,7 @@ import numbers
 from dataclasses import dataclass
 
 from shared.ui2_contract.quote_view import (
-    CLOSE_DISPLAY_MAX, CLOSE_DISPLAY_MIN, VALUE_BEARING, QuoteView, QuoteViewState,
+    CHIP_TEXT, CLOSE_DISPLAY_MAX, CLOSE_DISPLAY_MIN, NOTICE_TEXT, VALUE_BEARING, QuoteView, QuoteViewState,
 )
 from shared.ui2_contract.text import TEXT_MISSING_NOT_READY
 from shared.ui2_contract.tones import ChipTone
@@ -59,6 +59,14 @@ TEXT_LIMIT_UNADJUSTED = "價格口徑由使用者聲明為未調整原始價，�
 TEXT_LIMIT_NOT_REALTIME = "日K非即時"
 TEXT_SOURCE_USER_DECLARED = "使用者自述，未經系統驗證"
 TEXT_RESEARCH_DISABLED = "🤖 研究解釋：尚未啟用 ⬜"
+#: L5 本機日K檔選擇區的固定字樣。`TEXT_LOCAL_FILE_LABEL`＝R23.50 已拍板線框用語「本機日K檔選擇」；
+#: ⚠️ `TEXT_LOCAL_UNAVAILABLE`／`TEXT_LOCAL_NO_FILES` 是**新增字樣，尚未過 Copy Gate**（接線 PR 須請 P／客戶核可或改字）。
+TEXT_LOCAL_FILE_LABEL = "本機日K檔選擇"
+TEXT_LOCAL_UNAVAILABLE = "本機日K檔功能目前無法使用"       # 所有拒絕類原因共用一句（不洩漏是哪個檢查失敗）
+TEXT_LOCAL_NO_FILES = "受控目錄內沒有可選的日K檔"
+#: 系統真的讀不到／檔案本身有問題 → 紅色「讀取失敗」：沿用 `quote_view` 既有文案（不新增第二套）。
+TEXT_LOCAL_FAILED_CHIP = CHIP_TEXT[QuoteViewState.FETCH_FAILED]
+TEXT_LOCAL_FAILED_NOTICE = NOTICE_TEXT[QuoteViewState.FETCH_FAILED] or ""
 SOURCE_SEP = "｜"
 
 # ── 顯示範圍（具名、可調；單位錯誤防線，同 quote_view 的 CLOSE_DISPLAY_*）────────

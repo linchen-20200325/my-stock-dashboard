@@ -25,10 +25,10 @@ from src.services.ui2.real_canonical import RealFeedSnapshot, get_real_page_vm
 from src.services.ui2.real_feed import read_real_snapshot
 from shared.ui2_contract.text import PREVIEW_BANNER_NOTE, REAL_FEED_DEGRADED_TEXT, REAL_PREVIEW_BANNER_NOTE
 from src.ui2.components.html import degraded_notice_html, real_mobile_note_html, top_status_row_html
-from src.ui2.shell.css import CSS
+from src.ui2.shell.css import CSS, LOCAL_LOOKUP_RESULT_STYLE
 from src.ui2.views import VIEWS
 from src.ui2.views.market import KBAR_DAYS_DEFAULT, KBAR_DAY_OPTIONS
-from src.ui2.views.target import render_with_lookup
+from src.ui2.views.target import render_with_local_lookup, render_with_lookup
 
 KEY_PAGE = "ui2_page"
 KEY_SCENARIO = "ui2_scenario"
@@ -95,8 +95,10 @@ def _selected_kbar_days(page: str) -> int:
     return KBAR_DAYS_DEFAULT
 
 
-def run(diag_check=None, lookup_input: bool = False) -> None:
+def run(diag_check=None, lookup_input: bool = False, local_lookup=None) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
+    if local_lookup is not None:       # 本機日K查詢（opt-in；L6 注入）：僅此時多注入一次結果區 CSS（None＝零額外元素）
+        st.markdown(LOCAL_LOOKUP_RESULT_STYLE, unsafe_allow_html=True)
     dev = dev_surface_enabled()
     if KEY_PAGE not in st.session_state:
         st.session_state[KEY_PAGE] = PAGE_IDS[0]
@@ -133,6 +135,8 @@ def run(diag_check=None, lookup_input: bool = False) -> None:
         st.markdown(real_mobile_note_html(REAL_PREVIEW_BANNER_NOTE), unsafe_allow_html=True)
     if page == P4_DATA:      # 🔌 連線診斷：唯一注入點（只傳給資料頁；其他頁 render 簽名不變）
         VIEWS[page](vm, diag_check=diag_check)
+    elif page == P4_TARGET and local_lookup is not None:    # 本機日K檔查詢（opt-in；優先於僅代號輸入；不經 VIEWS）
+        render_with_local_lookup(vm, local_lookup)
     elif page == P4_TARGET and lookup_input is True:    # 股票代號輸入（功能開關開；預設關＝下方原呼叫不變）
         render_with_lookup(vm)
     else:
