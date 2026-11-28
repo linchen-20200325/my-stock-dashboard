@@ -82,6 +82,20 @@
   支撐 / 壓力沿用 ``compute_support_resistance`` 的 2 位小數（台股報價最小跳動不小於 0.01）。
   以上是既有 SSOT 函式本身的輸出精度，本模組不再重算以免雙寫。
 
+════════════════════════════════════════════════════════════════════
+數值安全（F1，非有限 / 溢位 / 下溢 → None + 具名限制，不設任何價量業務上限）
+════════════════════════════════════════════════════════════════════
+- 不對價格或成交量設任何上限 / 下限 / 裁切；1e300 這類可正常計算的值照常輸出。
+- 既有函式在極端值下可能給出**有限的偽值**（例如前 5 日量加總溢位成 inf → 量比 0.0；
+  價格 1e-300 時 RSI 的 +1e-10 epsilon 壓過全部漲跌 → 0.0；rolling 加總溢位 → NaN 被靜默吞掉）。
+  本模組**不修改**那些函式，改以**獨立精確重算**驗證其輸出：
+  * MA(n)：以整數精確平均（float.as_integer_ratio，不經浮點）對照 rolling mean；
+  * 量比5：以精確分數算前 5 日均量與比值，檢查來源輸出落在四捨五入解析度內；
+  * RSI14：以 2 的冪次正規化（精確、不引入誤差）後、不含 epsilon 的 Wilder 公式對照；
+  * 價位類輸出（close / MA / 支撐 / 壓力）：驗證通過的正價格不得因四捨五入變成 0.0。
+  任一驗證不通過 → 該指標 ``None``，並在 limitations 加一句僅列指標名稱的固定句。
+- 量比5 四捨五入到 2 位後為 0.0（今日量相對均量不到 0.005）屬既有精度慣例，不在本節處理。
+
 不使用（有偽值或越界輸出目標價 / 停損 / 風報比）：calc_trend_score、compute_tech_bearish、
 calc_ibs、calc_volume_score、calc_momentum_score、calc_atr_stop、compute_pattern_targets、
 summarize_pattern、compute_entry_stop_levels、calc_rr_ratio、stock_score；
@@ -136,6 +150,11 @@ LIMITATION_MA_REFERENCE = "均線為參考，不等於正式台股趨勢判斷�
 _LIMITATION_INSUFFICIENT_PREFIX = "下列指標根數不足而無法計算："
 _LIMITATION_OVEREXT_NO_RSI = "過熱評估缺 RSI 項而不予判定（乖離值仍照實列出）。"
 _LIMITATION_RSI_FLAT = "RSI14 因整段收盤價完全沒有變動而無定義。"
+# F1：數值不可穩定計算（溢位 / 下溢 / 精度不足）。僅列指標名稱，不含數值。
+_LIMITATION_NUMERIC_PREFIX = "下列指標因數值超出可穩定計算的範圍而不予輸出："
+_REL_TOL = 1e-9                  # 與精確重算比對的相對容差（浮點誤差遠小於此）
+_RSI_TOL = 0.1                   # RSI 輸出 1 位小數 → 容許差一個四捨五入階
+_VOL_RATIO_HALF_STEP = 0.005     # 量比輸出 2 位小數 → 容許半個四捨五入階
 
 
 class StockResearchFactsInputError(ValueError):
@@ -150,7 +169,7 @@ class StockResearchFacts:
     bar_count: int
     first_date: _dt.date
     price_basis: str
-    close: float
+    close: float | None     # 正價格因四捨五入會變 0.0（< 5e-5）時為 None（F1，不輸出偽 0）
     ma: Mapping[int, float | None]
     rsi14: float | None
     volume_ratio5: float | None
@@ -251,6 +270,86 @@ def _r(x: float | None) -> float | None:
     return None if x is None else round(float(x), _ROUND_DIGITS)
 
 
+# ── F1 數值安全：獨立精確重算（只驗證既有函式輸出，不取代它）─────────────
+
+def _positive_rounds_to_zero(x: float) -> bool:
+    """正值經 ``_r`` 四捨五入後落成 0.0（價位類輸出不可能為 0，故屬偽 0）。"""
+    return bool(x > 0 and not (_r(x) > 0))
+
+
+def _exact_sum(values) -> tuple[int, int]:
+    """float 序列的**精確**總和，以 (分子, 分母) 兩個整數表示（不經浮點、不溢位）。
+    每個 float 皆為 m/2^k，故以最大分母通分即可；不 import fractions（沿用既有 import 集合）。"""
+    ratios = [float(v).as_integer_ratio() for v in values]
+    den = max(d for _, d in ratios)
+    return sum(nu * (den // d) for nu, d in ratios), den
+
+
+def _exact_mean_float(values) -> float | None:
+    """精確平均轉 float（整數真除法為正確捨入）；超出 float 範圍 → None。"""
+    num, den = _exact_sum(values)
+    try:
+        return num / (den * len(values))
+    except OverflowError:
+        return None
+
+
+def _ma_valid(legacy: float, closes: np.ndarray, w: int) -> bool:
+    """rolling mean 結果須為有限，且與精確平均相符（相對容差 1e-9）。"""
+    if not np.isfinite(legacy):
+        return False
+    exact = _exact_mean_float(closes[-w:])
+    return exact is not None and bool(np.isclose(legacy, exact, rtol=_REL_TOL, atol=0.0))
+
+
+_FLOAT_MAX_INT_RATIO = float(np.finfo(np.float64).max).as_integer_ratio()
+
+
+def _volume_ratio_valid(legacy: float | None, volumes: np.ndarray) -> bool | None:
+    """檢查 ``calc_volume_ratio`` 輸出。
+
+    回傳 True＝可採用；False＝數值失真（溢位 / 下溢，應改 None 並具名限制）；
+    None＝前 5 日均量精確為 0，沿用來源「None」語意（無定義，非數值失真，行為不變）。
+    前 5 日量的精確總和超過 float 上限時，來源的 rolling/mean 中間值為 inf，
+    其輸出即使碰巧落在四捨五入範圍內也不採用（非有限中間值）。
+    """
+    num, den = _exact_sum(volumes[-(VOLUME_RATIO_PERIOD + 1):-1])
+    if num <= 0:
+        return None
+    max_num, max_den = _FLOAT_MAX_INT_RATIO
+    if num * max_den > max_num * den:       # 精確總和 > float 最大值 → 中間值溢位
+        return False
+    if legacy is None or not np.isfinite(legacy):
+        return False
+    t_num, t_den = float(volumes[-1]).as_integer_ratio()
+    try:
+        exact = (t_num * den * VOLUME_RATIO_PERIOD) / (t_den * num)
+    except OverflowError:
+        return False
+    return bool(abs(legacy - exact) <= _VOL_RATIO_HALF_STEP + _REL_TOL * abs(exact) + 1e-12)
+
+
+def _rsi_unbiased(closes: np.ndarray) -> float | None:
+    """不含 epsilon 的 Wilder RSI（驗證用）。以 2 的冪次正規化尺度（精確），RSI 為尺度不變量。"""
+    _, e = np.frexp(float(np.max(closes)))
+    s = pd.Series(np.ldexp(closes, -int(e)))
+    d = s.diff()
+    alpha = 1 / RSI_PERIOD
+    g = float(d.clip(lower=0).ewm(alpha=alpha, adjust=False).mean().iloc[-1])
+    lo = float((-d.clip(upper=0)).ewm(alpha=alpha, adjust=False).mean().iloc[-1])
+    if not (np.isfinite(g) and np.isfinite(lo)):
+        return None
+    if not lo > 0:
+        return 100.0 if g > 0 else None
+    return 100.0 - 100.0 / (1.0 + g / lo)
+
+
+def _rsi_valid(legacy: float | None, exact: float | None) -> bool:
+    if legacy is None or exact is None or not np.isfinite(legacy):
+        return False
+    return abs(legacy - exact) <= _RSI_TOL + _REL_TOL
+
+
 def build_stock_research_facts(bars: pd.DataFrame, *,
                                as_of: str | _dt.date,
                                basis_verified: bool = True) -> StockResearchFacts:
@@ -275,37 +374,73 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
 
     n = len(work)
     close_s = work["close"]
+    closes = close_s.to_numpy(dtype="float64")
+    volumes = work["volume"].to_numpy(dtype="float64")
     last_close = float(close_s.iloc[-1])
     insufficient: list[str] = []
     notes: list[str] = []
+    numeric_failed: list[str] = []   # F1：數值不可穩定計算而改 None 的指標名稱
+
+    close_out: float | None = _r(last_close)
+    if _positive_rounds_to_zero(last_close):
+        close_out = None             # 正價格四捨五入成 0.0 = 偽 0
+        numeric_failed.append("收盤價")
 
     # MA
     ma: dict[int, float | None] = {}
+    ma20_ok = False
     for w in MA_WINDOWS:
         if n < w:
             ma[w] = None
             insufficient.append(f"MA{w}")
             continue
         v = calc_ma_series(close_s, w).iloc[-1]
-        ma[w] = _r(v) if pd.notna(v) else None
+        if pd.isna(v):
+            # rolling 加總溢位會被靜默吞成 NaN：輸入皆有限，故 NaN 必為數值失真，不可無聲略過
+            ma[w] = None
+            numeric_failed.append(f"MA{w}")
+            continue
+        v = float(v)
+        if not _ma_valid(v, closes, w) or _positive_rounds_to_zero(v):
+            ma[w] = None
+            numeric_failed.append(f"MA{w}")
+            continue
+        ma[w] = _r(v)
+        if w == OVEREXT_MA_WINDOW:
+            ma20_ok = True
 
     # RSI14
     rsi14: float | None = None
     rsi_undefined = False
+    rsi_exact: float | None = None
+    rsi_numeric_bad = False
     if n < MIN_BARS_RSI:
         insufficient.append(f"RSI{RSI_PERIOD}")
     elif not (close_s.diff().abs() > 0).any():
         rsi_undefined = True
         notes.append(_LIMITATION_RSI_FLAT)   # 全平盤：kernel 會給 0.0 偽值，不採用
     else:
-        rsi14 = calc_rsi(work, RSI_PERIOD)
+        rsi_exact = _rsi_unbiased(closes)
+        legacy_rsi = calc_rsi(work, RSI_PERIOD)
+        if _rsi_valid(legacy_rsi, rsi_exact):
+            rsi14 = legacy_rsi
+        else:
+            rsi_numeric_bad = True           # 例：價格極小時 +1e-10 epsilon 壓過全部漲跌 → 偽 0.0
+            numeric_failed.append(f"RSI{RSI_PERIOD}")
 
     # 量比5
     volume_ratio5: float | None = None
     if n < MIN_BARS_VOLUME_RATIO:
         insufficient.append(f"量比{VOLUME_RATIO_PERIOD}")
     else:
-        volume_ratio5 = calc_volume_ratio(work, VOLUME_RATIO_PERIOD)
+        legacy_vr = calc_volume_ratio(work, VOLUME_RATIO_PERIOD)
+        verdict = _volume_ratio_valid(legacy_vr, volumes)
+        if verdict is None:
+            volume_ratio5 = legacy_vr        # 前 5 日均量精確為 0：維持來源既有語意（None）
+        elif verdict:
+            volume_ratio5 = legacy_vr
+        else:
+            numeric_failed.append(f"量比{VOLUME_RATIO_PERIOD}")   # 例：均量加總溢位 → 偽 0.0
 
     # 乖離 / 過熱
     bias20_pct: float | None = None
@@ -317,14 +452,31 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         oe = assess_price_overextension(close_s, ma_window=OVEREXT_MA_WINDOW,
                                         rsi_period=RSI_PERIOD)
         if oe["level"] != "資料不足":
-            bias20_pct = _r(oe["bias_pct"])
-            if rsi_undefined:
-                # 過熱 = 乖離項 + RSI 項；RSI 項無定義（來源內部以偽 0.0 代入）→
-                # 整體不判定（None），不以「僅乖離項為正常 / False」代替。
-                notes.append(_LIMITATION_OVEREXT_NO_RSI)
+            bias_raw = oe["bias_pct"]
+            bias_ok = (ma20_ok and bias_raw is not None
+                       and np.isfinite(float(bias_raw)))
+            oe_rsi = oe.get("rsi")
+            # 過熱評估內部的 RSI 同樣可能因 epsilon / 溢位而失真，獨立驗證
+            oe_rsi_ok = (rsi_undefined or (
+                rsi_exact is not None and oe_rsi is not None
+                and np.isfinite(float(oe_rsi))
+                and abs(float(oe_rsi) - rsi_exact) <= _RSI_TOL + _REL_TOL))
+            if not bias_ok:
+                # MA20 失真時，來源會退用較早的 MA 算乖離（有限的偽值）→ 乖離與過熱全不採用
+                numeric_failed.append("乖離20與過熱評估")
             else:
-                level = str(oe["level"])
-                overheated = bool(oe["overheated"])
+                bias20_pct = _r(bias_raw)
+                if rsi_undefined:
+                    # 過熱 = 乖離項 + RSI 項；RSI 項無定義（來源內部以偽 0.0 代入）→
+                    # 整體不判定（None），不以「僅乖離項為正常 / False」代替。
+                    notes.append(_LIMITATION_OVEREXT_NO_RSI)
+                elif rsi_numeric_bad or not oe_rsi_ok:
+                    if not rsi_numeric_bad:
+                        numeric_failed.append("過熱評估")
+                    notes.append(_LIMITATION_OVEREXT_NO_RSI)
+                else:
+                    level = str(oe["level"])
+                    overheated = bool(oe["overheated"])
 
     # 支撐 / 壓力
     support = resistance = None
@@ -335,10 +487,17 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         sr = compute_support_resistance(work, current_price=last_close,
                                         window=SR_WINDOW_BARS, min_bars=SR_MIN_BARS)
         if sr.window_bars > 0 and sr.support is not None and sr.resistance is not None:
-            support, resistance = _r(sr.support), _r(sr.resistance)
-            sr_bars = int(sr.window_bars)
-            if sr_bars < SR_WINDOW_BARS:
-                notes.append(f"支撐與壓力實際僅涵蓋 {sr_bars} 根日K，少於標準 {SR_WINDOW_BARS} 根。")
+            sup_f, res_f = float(sr.support), float(sr.resistance)
+            if (np.isfinite(sup_f) and np.isfinite(res_f)
+                    and sup_f > 0 and res_f > 0
+                    and not _positive_rounds_to_zero(sup_f)
+                    and not _positive_rounds_to_zero(res_f)):
+                support, resistance = _r(sup_f), _r(res_f)
+                sr_bars = int(sr.window_bars)
+                if sr_bars < SR_WINDOW_BARS:
+                    notes.append(f"支撐與壓力實際僅涵蓋 {sr_bars} 根日K，少於標準 {SR_WINDOW_BARS} 根。")
+            else:
+                numeric_failed.append("支撐壓力")   # 正價位經 2 位四捨五入落成 0.0 = 偽 0
 
     if basis_verified:
         limitations = [LIMITATION_UNADJUSTED, LIMITATION_MA_REFERENCE]
@@ -348,6 +507,8 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
     if insufficient:
         limitations.append(_LIMITATION_INSUFFICIENT_PREFIX + "、".join(insufficient) + "。")
     limitations.extend(notes)
+    if numeric_failed:
+        limitations.append(_LIMITATION_NUMERIC_PREFIX + "、".join(numeric_failed) + "。")
 
     return StockResearchFacts(
         as_of=as_of_date,
@@ -355,7 +516,7 @@ def build_stock_research_facts(bars: pd.DataFrame, *,
         first_date=dates[0],
         price_basis=(PRICE_BASIS_UNADJUSTED if basis_verified
                      else PRICE_BASIS_UNADJUSTED_DECLARED),
-        close=_r(last_close),
+        close=close_out,
         ma=MappingProxyType(ma),
         rsi14=rsi14,
         volume_ratio5=volume_ratio5,
