@@ -7,9 +7,20 @@
 ═══ 三個 frozen dataclass ═══
 - `LocalProof`：L3 判斷用的**證據**（bind_address 原值、是否有 headers、Host 去 port 小寫、proxy 類標頭名稱）。
 - `LocalLookupRequest`：`op` ∈ {list, query}；query 須帶 symbol／filename，**list 時兩者必須為 None**
-  （依 P 表「query 必填」推得的收緊，待 P 確認）。`filename` 以 `repr=False` 隱藏。
+  （依 P 表「query 必填」推得的收緊，待 P 確認）。`filename`／`symbol` 以 `repr=False` 隱藏；`LocalProof.bind_address`／`request_host` 亦同。
 - `LocalLookupResponse`：`ok=True ⇒ reason_code=None`；`ok=False ⇒ reason_code ∈ REASON_CODE_SET`；
   `filenames` 僅 list 成功可非空；`vm` 僅 query 成功、或 query 且 `parse_failed` 可非 None。
+
+═══ 接線批須知（L3／L5；本檔不能代勞）═══
+1. **L3 列目錄時必須先過濾不合規檔名**（含空字串、`.`／`..`、含 `/`、**含反斜線 `\\`**、含 NUL 者），再組
+   `LocalLookupResponse.filenames`，**不可讓單一怪檔名使整個清單失敗**。已知取捨：POSIX 合法檔名 `a\\b.csv`
+   會使 `LocalLookupResponse` 建構時 ValueError，故過濾是 L3 的責任（本檔刻意不放寬 `\\` 的拒絕）。
+2. **`st.context.headers` 是 `StreamlitHeaders`：同名多值只回第一個值**（`headers["host"]` 看不到第二個 Host）。
+   本檔 `build_local_proof` 的「衝突多 Host 偵測」**只對 dict 型、大小寫變體並存**的輸入有效，**不能**防多個同名 Host。
+   L3／L5 接線時須**先**以 `headers.get_all("host")` 檢查筆數與值（多於 1 筆即視為異常），**再**呼叫本函式。
+   **L0 沒有防多 Host，不得宣稱它有。**
+3. 未加括號的 `::1:8501` 會被當成 IPv6 位址原樣保留為 `request_host="::1:8501"`（保守方向：不去 port）；
+   L3 **不得**把它視為本機。
 
 ═══ Fail Loud ═══
 `__post_init__` 一律以固定訊息 raise（TypeError／ValueError），**不回顯任何輸入內容**。型別嚴格：bool 不可冒充 str；
@@ -20,6 +31,9 @@ tuple 元素須為 str。
 無 Host→None、proxy 類標頭名稱（`x-forwarded-*`／`forwarded`／`x-real-ip`／`via`）小寫排序去重；
 `None`／空 mapping ⇒ `headers_present=False`。Host 格式不合法（如 `:8501`、`a:b`、`[::1`）或同一請求出現互相衝突的多個
 Host 標頭 ⇒ `ValueError`（固定訊息；由 L3 對映為 `bad_request`）。
+
+⚠️ 同名多值：`headers` 若為 `StreamlitHeaders`，本函式只看得到每個名稱的第一個值；多 Host 須由呼叫端先以
+`headers.get_all("host")` 檢查（見「接線批須知」2）。本函式**不能**防多 Host。
 
 ⛔ 接線批待辦：L3 才可決定 loopback／proxy／hosted 的放行與否；本檔的 `reason_code` 只是固定詞彙。
 """
@@ -94,9 +108,9 @@ def _host_ok(host: str) -> bool:
 @dataclass(frozen=True)
 class LocalProof:
     """L3 判斷用證據（只正規化、不下結論）。欄位見模組 docstring。"""
-    bind_address: str | None
+    bind_address: str | None = field(repr=False)       # repr=False：不讓位址／Host 進 log 或錯誤畫面
     headers_present: bool
-    request_host: str | None
+    request_host: str | None = field(repr=False)
     proxy_header_names: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -124,7 +138,7 @@ class LocalProof:
 class LocalLookupRequest:
     op: Literal["list", "query"]
     proof: LocalProof
-    symbol: str | None = None
+    symbol: str | None = field(default=None, repr=False)
     filename: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -161,8 +175,8 @@ class LocalLookupResponse:
             raise TypeError("LocalLookupResponse.filenames 必須是 str 的 tuple")
         if self.vm is not None and not isinstance(self.vm, LocalLookupResultVM):
             raise TypeError("LocalLookupResponse.vm 必須是 LocalLookupResultVM 或 None")
-        if any(n == "" or "/" in n or "\\" in n or "\x00" in n for n in self.filenames):
-            raise ValueError("LocalLookupResponse.filenames 只可含非空的檔名（basename）")
+        if any(n in ("", ".", "..") or "/" in n or "\\" in n or "\x00" in n for n in self.filenames):
+            raise ValueError("LocalLookupResponse.filenames 只可含非空的檔名（basename；不得為 . 或 ..）")
         if self.ok:
             if self.reason_code is not None:
                 raise ValueError("LocalLookupResponse ok=True 時 reason_code 必須為 None")
@@ -206,7 +220,12 @@ def _normalize_host(value: object) -> str | None:
 
 
 def build_local_proof(bind_address: str | None, headers: Mapping[str, str] | None) -> LocalProof:
-    """只正規化證據，**不做**任何本機／loopback／安全判斷（見模組 docstring）。"""
+    """只正規化證據，**不做**任何本機／loopback／安全判斷（見模組 docstring）。
+
+    ⚠️ `headers` 為 `StreamlitHeaders`（`st.context.headers`）時，同名多值只會取到第一個值；「衝突多 Host 偵測」只對
+    dict 型的**大小寫變體並存**（如 `{"Host": a, "host": b}`）有效。呼叫端須先以 `headers.get_all("host")` 檢查筆數與值，
+    本函式不保證能防多 Host。
+    """
     if bind_address is not None and not _is_str(bind_address):
         raise TypeError("bind_address 必須是 str 或 None")
     if headers is None or (isinstance(headers, Mapping) and len(headers) == 0):

@@ -144,6 +144,18 @@ def test_request_repr_does_not_leak_filename():
     assert next(f for f in dataclasses.fields(Req) if f.name == "filename").repr is False
 
 
+def test_repr_hides_symbol_bind_address_and_request_host():
+    secret_sym, secret_bind, secret_host = "ZZSYM9", "10.9.8.7", "secret-host.example"
+    proof = LocalProof(secret_bind, True, secret_host, ())
+    r = Req("query", proof, symbol=secret_sym, filename="SECRETFILE.csv")
+    for text in (repr(r), str(r), repr(proof), str(proof), repr(Resp("list", True, None, ("a.csv",)))):
+        for needle in (secret_sym, secret_bind, secret_host, "SECRETFILE"):
+            assert needle not in text, (needle, text)
+    for cls, names in ((LocalProof, {"bind_address", "request_host"}), (Req, {"symbol", "filename"})):
+        assert {f.name for f in dataclasses.fields(cls) if f.repr is False} == names
+    assert (r.symbol, r.proof.request_host, r.proof.bind_address) == (secret_sym, secret_host, secret_bind)
+
+
 def test_request_frozen():
     r = Req("list", PROOF)
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -203,6 +215,9 @@ def test_response_valid_forms():
     (dict(op="list", ok=True, filenames=("",)), ValueError),
     (dict(op="list", ok=True, filenames=("../a.csv",)), ValueError), (dict(op="list", ok=True, filenames=("d\\a.csv",)), ValueError),
     (dict(op="list", ok=True, filenames=("a\x00.csv",)), ValueError),
+    (dict(op="list", ok=True, filenames=(".",)), ValueError), (dict(op="list", ok=True, filenames=("..",)), ValueError),
+    (dict(op="list", ok=True, filenames=("a.csv", "..")), ValueError),
+    (dict(op="list", ok=True, filenames=("a\\b.csv",)), ValueError),                  # 已知取捨：反斜線一律拒，過濾屬 L3
     (dict(op="query", ok=True, filenames=("a.csv",), vm=VM), ValueError),            # filenames 僅 list
     (dict(op="list", ok=False, reason_code="dir_invalid", filenames=("a.csv",)), ValueError),
     (dict(op="query", ok=False, reason_code="parse_failed", filenames=("a.csv",)), ValueError),
@@ -216,6 +231,17 @@ def test_response_valid_forms():
 def test_response_invalid(kw, exc):
     with pytest.raises(exc):
         Resp(**kw)
+
+
+@pytest.mark.parametrize("op", ["LIST", "Query", "QUERY", "List", " list", "list ", "query\n", "ｌｉｓｔ"])
+@pytest.mark.parametrize("ok", [True, False])
+def test_response_op_case_and_whitespace_variants_rejected(op, ok):
+    with pytest.raises(ValueError):
+        Resp(op, ok, None if ok else "bad_request")
+
+
+def test_response_valid_dotted_names_still_ok():
+    assert Resp("list", True, None, (".hidden.csv", "a..b.csv", "...csv", "a.csv"))
 
 
 def test_response_frozen_and_fields():
@@ -249,6 +275,12 @@ def test_blp_host_normalization(host, want):
 def test_blp_host_key_case_insensitive(key):
     p = blp(None, {key: "LocalHost:1"})
     assert p.request_host == "localhost" and p.headers_present
+
+
+def test_blp_unbracketed_ipv6_with_port_is_kept_verbatim_not_stripped():
+    """未加括號的 `::1:8501`：保守方向——原樣保留為 IPv6 位址形（不去 port）。L3 不得因此視為本機。"""
+    assert blp(None, {"Host": "::1:8501"}).request_host == "::1:8501"
+    assert blp(None, {"Host": "[::1]:8501"}).request_host == "::1"
 
 
 def test_blp_no_host_is_none_but_headers_present():
@@ -300,6 +332,36 @@ def test_blp_bind_address_verbatim():
 def test_blp_type_errors(bind, headers):
     with pytest.raises(TypeError):
         blp(bind, headers)                                       # type: ignore[arg-type]
+
+
+def _streamlit_headers(pairs):
+    from streamlit.runtime.context import StreamlitHeaders          # 只在測試檔 import（L0 模組本身不 import streamlit）
+    return StreamlitHeaders(pairs)
+
+
+def test_blp_with_real_streamlit_headers_type():
+    h = _streamlit_headers([("Host", "LocalHost:8501"), ("X-Forwarded-For", "1.1.1.1"), ("Via", "p"), ("Accept", "*/*")])
+    assert type(h).__name__ == "StreamlitHeaders"
+    p = blp("127.0.0.1", h)
+    assert p == LocalProof("127.0.0.1", True, "localhost", ("via", "x-forwarded-for"))
+    assert blp(None, _streamlit_headers([])) == LocalProof(None, False, None, ())
+    assert blp(None, _streamlit_headers([("Accept", "x")])).request_host is None
+
+
+def test_blp_cannot_see_second_host_in_streamlit_headers_so_caller_must_use_get_all():
+    """記錄已知限制（QA SF-1）：StreamlitHeaders 同名多值只回第一個；L0 看不到第二個 Host → 呼叫端須用 get_all("host")。"""
+    h = _streamlit_headers([("Host", "localhost:8501"), ("host", "evil.example")])
+    assert h.get_all("host") == ["localhost:8501", "evil.example"]           # 呼叫端可偵測
+    assert blp(None, h).request_host == "localhost"                           # L0 只看到第一個（不得宣稱能防多 Host）
+
+
+def test_docstrings_state_the_wiring_obligations():
+    doc = R.__doc__ or ""
+    for must in ("get_all", "StreamlitHeaders", "不能", "L3 列目錄時必須先過濾", "反斜線", "::1:8501", "不得"):
+        assert must in doc, must
+    assert 'headers.get_all("host")` 檢查筆數與值' in doc and "L0 沒有防多 Host，不得宣稱它有" in doc
+    bdoc = R.build_local_proof.__doc__ or ""
+    assert "get_all" in bdoc and "StreamlitHeaders" in bdoc and "不保證" in bdoc
 
 
 def test_blp_is_pure_does_not_mutate_input():
