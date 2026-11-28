@@ -1456,6 +1456,64 @@ class TestFspathNormalisation:
         assert r.reason_code == REASON_BAD_REQUEST
 
 
+class TestFdRealpathHostileReadlink:
+    """`os.readlink` 回傳／行為異常 → `_fd_realpath` 回 None 或讓呼叫端 fail closed（dir_invalid），不 raise、不漏 fd。"""
+
+    @staticmethod
+    def _fd_count():
+        return len(os.listdir("/proc/self/fd"))
+
+    @pytest.mark.parametrize("op_req", [_list, _query])
+    @pytest.mark.parametrize("label,behaviour", [
+        ("bytes", lambda p: b"/tmp"),
+        ("int", lambda p: 7),
+        ("none", lambda p: None),
+        ("value_error", lambda p: (_ for _ in ()).throw(ValueError("SECRETX"))),
+        ("os_error", lambda p: (_ for _ in ()).throw(OSError(errno.EIO, "SECRETX"))),
+        ("nul_string", lambda p: "/tmp/a\x00b"),
+        ("empty_string", lambda p: ""),
+        ("path_object", lambda p: Path("/tmp")),
+    ])
+    def test_hostile_readlink_fails_closed_without_leaking_fds(self, world, monkeypatch, op_req, label, behaviour):
+        _put(world)
+        opened, closed = [], []
+        real_open, real_close, real_readlink = os.open, os.close, os.readlink
+
+        def o(*a, **k):
+            fd = real_open(*a, **k)
+            opened.append(fd)
+            return fd
+
+        def readlink(path, *a, **k):
+            if str(path).startswith("/proc/self/fd/"):
+                return behaviour(path)
+            return real_readlink(path, *a, **k)
+
+        monkeypatch.setattr(svc.os, "open", o)
+        monkeypatch.setattr(svc.os, "close", lambda fd: (closed.append(fd), real_close(fd))[1])
+        monkeypatch.setattr(svc.os, "readlink", readlink)
+        before = self._fd_count()
+        r = _run(world, op_req())
+        assert (r.ok, r.reason_code, r.filenames, r.vm) == (False, REASON_DIR_INVALID, (), None), label
+        assert opened and sorted(opened) == sorted(closed)
+        assert self._fd_count() == before
+        assert "SECRETX" not in _all_text(r)
+
+    @pytest.mark.parametrize("label,behaviour,expected", [
+        ("bytes", lambda p: b"/tmp", None), ("int", lambda p: 7, None), ("none", lambda p: None, None),
+        ("value_error", lambda p: (_ for _ in ()).throw(ValueError("x")), None),
+        ("os_error", lambda p: (_ for _ in ()).throw(OSError(errno.ENOENT, "x")), None),
+        ("str", lambda p: "/some/where", "/some/where"),
+    ])
+    def test_helper_contract(self, monkeypatch, label, behaviour, expected):
+        monkeypatch.setattr(svc.os, "readlink", behaviour)
+        assert svc._fd_realpath(3) == expected
+
+    def test_docstring_no_longer_claims_raising(self):
+        doc = svc._fd_realpath.__doc__ or ""
+        assert "永不 raise" in doc and "str" in doc
+
+
 class TestHardLinks:
     def test_hardlink_to_repo_file_rejected(self, world):
         target = world["repo"] / "secret.csv"
