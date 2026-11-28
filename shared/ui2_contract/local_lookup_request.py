@@ -77,9 +77,9 @@ REASON_CODES: tuple[str, ...] = (
 )
 REASON_CODE_SET: frozenset[str] = frozenset(REASON_CODES)
 
-#: proxy 類標頭（名稱，小寫）：完整名稱集合＋前綴。
+#: proxy 類標頭（名稱，小寫）：精確名稱集合（逐字相等比對，不代表清單完備）＋前綴。
 #: ⚠️ **此清單不完備，不得單獨證明隔離**（黑名單不是正向證明）；isolation 由 L3 精確 loopback 驗證。
-#: 多列一個名稱＝多偵測＝多拒絕（純收緊）。`x-original-forwarded-for` 不以 `x-forwarded-` 開頭，故須列為完整名稱。
+#: 多列一個名稱＝多偵測＝多拒絕（純收緊）。`x-original-forwarded-for` 不以 `x-forwarded-` 開頭，故須列為精確名稱。
 PROXY_HEADER_EXACT = frozenset({
     "forwarded", "x-real-ip", "via",
     "cf-connecting-ip", "cf-ray", "cdn-loop", "true-client-ip", "x-client-ip", "x-original-forwarded-for",
