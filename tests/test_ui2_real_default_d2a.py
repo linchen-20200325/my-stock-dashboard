@@ -107,7 +107,8 @@ def test_app_ui2_seeds_before_run_and_imports_nothing_private():
     src = APP_UI2.read_text(encoding="utf-8")
     tree = ast.parse(src)
     mods = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
-    assert all(m == "src.ui2" or m.startswith("src.ui2.") or m == "src.services.connection_diag_service" for m in mods), mods
+    assert all(m == "src.ui2" or m.startswith("src.ui2.") or m in ("src.services.connection_diag_service",
+                                                                  "src.services.stock_local_lookup_service") for m in mods), mods
     assert not any(w in src for w in ("portfolio", "holdings", "OneBrain", "onebrain", "gsheet"))
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "run"]
     seeds = [n for n in ast.walk(tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "st.session_state['ui2_feed']"]

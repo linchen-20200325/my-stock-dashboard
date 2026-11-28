@@ -14,6 +14,7 @@ from shared.ui2_contract.models import (
     JudgementState, KbarChartVM, LookupResultVM, SearchBoxVM,
 )
 from shared.ui2_contract import text as _T
+from shared.ui2_contract.local_lookup_result import LocalLookupCell, LocalLookupResultVM
 from shared.ui2_contract.quote_view import CHIP_TEXT, CHIP_TONE, NOTICE_TEXT, QuoteViewState
 from shared.ui2_contract.text import TEXT_ASOF_MISSING, TEXT_NOT_PROVIDED, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
@@ -407,9 +408,12 @@ def search_html(search: SearchBoxVM) -> str:
             f'{cta_html(search.cta, with_reason=False)}</div>{reason}{hint}')
 
 
-def target_first_screen_html(fs: FirstScreenVM, summary: FieldVM) -> str:
-    """🎯 標的頁第一屏（搜尋列在模式切換之下；本函式只含 ① 摘要、W-4 context 行、② ③）。"""
-    return ('<div class="ui2-qa">' + qa_row_html("現在狀態（查詢摘要）", summary, qid="q1")
+def target_first_screen_html(fs: FirstScreenVM, summary: FieldVM, *, show_summary: bool = True) -> str:
+    """🎯 標的頁第一屏（搜尋列在模式切換之下；本函式只含 ① 摘要、W-4 context 行、② ③）。
+
+    `show_summary=False`（只有本機日K查詢已執行時，由 `views/target.py::render_with_local_lookup` 傳入）：不渲染 ① 查詢摘要列；
+    預設 True＝與原輸出逐字相同。"""
+    return ('<div class="ui2-qa">' + (qa_row_html("現在狀態（查詢摘要）", summary, qid="q1") if show_summary else "")
             + ctxline_html(fs.context_rows)
             + qa_row_html("是否需要行動", fs.action_needed, qid="q2")
             + qa_row_html("下一步", fs.next_step, qid="q3") + "</div>")
@@ -670,3 +674,65 @@ def top_status_row_html(banner_text: str | None = None, banner_note: str = "", *
             f'<span class="ui2-top1__item" data-ui2-top-item="sheet">{escape(TOP_SHEET_LABEL)} {chip}</span>'
             f'{mode}'
             f'<span class="ui2-top1__item" data-ui2-top-item="account">{escape(TOP_ACCOUNT_LABEL)} {chip}</span></div>')
+
+
+# ════════════════════════════════════════════════════════════════════
+# 即時查一檔結果區（客戶已拍板線框，GitHub #1199 R23.50）：由 `views/target.py::render_with_local_lookup` 呼叫；CSS 常數由 `shell/css.py` 包成 `LOCAL_LOOKUP_RESULT_STYLE`，
+# 僅在 `run(local_lookup=…)` 不為 None（opt-in）時由 `shell/app.py` 注入。
+# ════════════════════════════════════════════════════════════════════
+#: 手機單欄（預設）；桌機（≥769px）兩欄：左＝價格＋OHLCV＋來源、右＝指標＋限制註記。接線批待辦：(a) 本常數須併入 `src/ui2/shell/css.py` 的 CSS（單一注入點），不可直接丟 st.markdown；(b) 本區硬編碼字樣須過 Copy Gate／三軸字樣守衛。
+LOCAL_LOOKUP_RESULT_CSS = (
+    ".ui2-ll{border:1px solid rgba(128,128,128,.45);border-radius:10px;padding:8px 12px;margin:8px 0;min-width:0}"
+    ".ui2-ll__status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:2px 0 6px 0}"
+    ".ui2-ll__cols{display:block}"
+    ".ui2-ll__col{min-width:0}"
+    ".ui2-ll__block{margin:6px 0}"
+    ".ui2-ll__close{font-size:1.5rem;font-weight:600;line-height:1.3}"
+    ".ui2-ll__secondary{font-size:.8rem;opacity:.8;line-height:1.5;overflow-wrap:anywhere}"
+    ".ui2-ll__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}"
+    ".ui2-ll__cell{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px;min-width:0}"
+    ".ui2-ll__k{min-width:0;overflow-wrap:anywhere}"
+    ".ui2-ll__v{flex:0 0 auto;white-space:nowrap;text-align:right;margin-left:auto}"
+    ".ui2-ll__cell--missing .ui2-ll__v{opacity:.75;flex:0 1 auto;white-space:normal;overflow-wrap:break-word}"
+    ".ui2-ll__note{font-size:.75rem;opacity:.8;line-height:1.5;overflow-wrap:anywhere}"
+    ".ui2-ll__research{font-size:.85rem;opacity:.85;margin-top:8px}"
+    "@media (min-width:769px){.ui2-ll__cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}}"
+)
+
+
+def _ll_cell_html(c: LocalLookupCell) -> str:
+    miss = " ui2-ll__cell--missing" if c.is_missing else ""
+    return (f'<div class="ui2-ll__cell{miss}" data-ll-key="{escape(c.key)}" data-ll-missing="{1 if c.is_missing else 0}">'
+            f'<span class="ui2-ll__k">{escape(c.label)}</span><span class="ui2-ll__v">{escape(c.value_text)}</span></div>')
+
+
+def local_lookup_result_html(vm: LocalLookupResultVM) -> str:
+    """即時查一檔結果區（純呈現；單行 HTML、動態字串一律 escape、無 expander／無互動元件）。
+
+    狀態列沿用 `quote_view` 六態 chip 與說明（FETCH_FAILED 才紅；NOT_LOADED／SELECTION_INVALID 灰；MISSING／STALE 警示）。
+    `vm.has_data=False` → 只畫狀態列＋研究解釋固定字樣（⛔ 把「尚未查詢」畫成一排缺值）。
+    缺值格＝`⬜ 資料未備`（`data-ll-missing="1"`），真 0 照實顯示（`data-ll-missing="0"`）。⛔ 日K圖、⛔ 加入觀察（既有 html 沿用）。
+    """
+    sym = f'<strong class="ui2-ll__symbol">{escape(vm.symbol)}</strong> ' if vm.symbol else ""
+    notice = f'<span class="ui2-row__detail">{escape(vm.notice_text)}</span>' if vm.notice_text else ""
+    status = f'<div class="ui2-ll__status">{sym}{chip_html(vm.chip_text, vm.tone)} {notice}</div>'
+    cols = ""
+    if vm.has_data:
+        left = ('<div class="ui2-ll__col ui2-ll__col--left">'
+                '<div class="ui2-ll__block ui2-ll__price" data-ll-block="price">'
+                f'<div class="ui2-ll__close" data-ll-field="close">{escape(vm.close_text or "")}</div>'
+                f'<div class="ui2-ll__secondary" data-ll-field="as_of">{escape(vm.as_of_text or "")}</div>'
+                f'<div class="ui2-ll__secondary" data-ll-field="fetched_at">{escape(vm.fetched_at_text or "")}</div></div>'
+                '<div class="ui2-ll__block ui2-ll__ohlcv" data-ll-block="ohlcv">'
+                f'<div class="ui2-ll__grid">{"".join(_ll_cell_html(c) for c in vm.ohlcv)}</div></div>'
+                '<div class="ui2-ll__block ui2-ll__source" data-ll-block="source">'
+                f'<div class="ui2-ll__secondary" data-ll-field="source">{escape(vm.source_text or "")}</div></div></div>')
+        notes = "".join(f'<div class="ui2-ll__note" data-ll-note="1">{escape(n)}</div>' for n in vm.notes)
+        right = ('<div class="ui2-ll__col ui2-ll__col--right">'
+                 '<div class="ui2-ll__block ui2-ll__ind" data-ll-block="indicators">'
+                 f'<div class="ui2-ll__grid">{"".join(_ll_cell_html(c) for c in vm.indicators)}</div></div>'
+                 f'<div class="ui2-ll__block ui2-ll__notes" data-ll-block="notes">{notes}</div></div>')
+        cols = f'<div class="ui2-ll__cols">{left}{right}</div>'
+    research = f'<div class="ui2-ll__research" data-ll-field="research">{escape(vm.research_text)}</div>'
+    return (f'<div class="ui2-ll" data-ui2-l1="local_lookup_result" data-ui2-lookup-state="{escape(vm.state.value)}" '
+            f'data-ll-has-data="{1 if vm.has_data else 0}">{status}{cols}{research}</div>')
