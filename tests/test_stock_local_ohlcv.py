@@ -642,6 +642,37 @@ class TestZeroLiterals:
         r = _p(_csv(_with_col(_good_rows(), idx, "-0")))
         _assert_invalid(r, f"{field}_negative_zero", f"{field}_not_positive")
 
+    @staticmethod
+    def _with_cell(row_idx, col_idx, value):
+        rows = [list(x) for x in _good_rows()]
+        rows[row_idx][col_idx] = value
+        return _csv(rows)
+
+    @pytest.mark.parametrize("field,idx,lit,kind", [
+        ("volume_shares", 6, "1e-400", "not_representable"),
+        ("volume_shares", 6, "-0", "negative_zero"),
+        ("open", 2, "1e-400", "not_representable"),
+        ("high", 3, "1e-400", "not_representable"),
+        ("low", 4, "1e-400", "not_representable"),
+        ("close", 5, "1e-400", "not_representable"),
+        ("open", 2, "-0", "negative_zero"),
+        ("close", 5, "-0", "negative_zero"),
+    ])
+    @pytest.mark.parametrize("row_idx", [0, 1, 2], ids=["first_row", "middle_row", "last_row"])
+    def test_extra_reasons_are_collected_from_every_row(self, row_idx, field, idx, lit, kind):
+        """SF-A：本層額外原因不可只取第一列或最後一列（三列正常檔，只壞指定那一列）。"""
+        assert _p(_csv(_good_rows())).state == STATE_OK                    # 對照：未動手腳時是好檔
+        r = _p(self._with_cell(row_idx, idx, lit))
+        _assert_invalid(r, f"{field}_{kind}")
+        assert r.rows == () and r.n_rows == 0
+
+    def test_extra_reasons_from_different_rows_are_all_reported(self):
+        rows = [list(x) for x in _good_rows()]
+        rows[0][6] = "-0"                      # 第 1 列：volume 負零
+        rows[1][5] = "1e-400"                  # 第 2 列：close 下溢
+        r = _p(_csv(rows))
+        _assert_invalid(r, "volume_shares_negative_zero", "close_not_representable")
+
     def test_kind_codes_locked(self):
         assert (mod.KIND_NOT_REPRESENTABLE, mod.KIND_NEGATIVE_ZERO) == ("not_representable", "negative_zero")
 
