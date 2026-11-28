@@ -36,7 +36,7 @@
 ═══ 接線批待辦（本批未接線，下一批必做）═══
 (a) `src/ui2/components/html.py::LOCAL_LOOKUP_RESULT_CSS` 必須併入 `src/ui2/shell/css.py` 的 CSS（單一注入點），
     **不可**直接丟 `st.markdown`。
-(b) 「🤖 研究解釋：尚未啟用 ⬜」「日K非即時」「價格為原始未調整價（未還原除權息）」「使用者自述，未經系統驗證」
+(b) 「🤖 研究解釋：尚未啟用 ⬜」「日K非即時」「價格口徑由使用者聲明為未調整原始價，系統未驗證；除權息日前後指標可能失真」「使用者自述，未經系統驗證」
     是本檔**硬編碼字樣**，接線時須過 Copy Gate／三軸字樣守衛。
 
 ⚠️ 未驗：本檔以 `build_stock_research_facts` 與 `OhlcvRow` 原始碼為準，**尚未**與真實 FinMind 回應做端對端核對（本批無接線）。
@@ -55,7 +55,7 @@ from shared.ui2_contract.tones import ChipTone
 
 # ── 字樣（本檔新增；不改 `text.py`）────────────────────────────────────
 TEXT_MISSING = TEXT_MISSING_NOT_READY                 # 「⬜ 資料未備」（沿用既有字樣，不新造）
-TEXT_LIMIT_UNADJUSTED = "價格為原始未調整價（未還原除權息）"
+TEXT_LIMIT_UNADJUSTED = "價格口徑由使用者聲明為未調整原始價，系統未驗證；除權息日前後指標可能失真"   # 已核准 Copy（R23.52 U1；P-M2k D-1）
 TEXT_LIMIT_NOT_REALTIME = "日K非即時"
 TEXT_SOURCE_USER_DECLARED = "使用者自述，未經系統驗證"
 TEXT_RESEARCH_DISABLED = "🤖 研究解釋：尚未啟用 ⬜"

@@ -265,6 +265,16 @@ def test_missing_fetched_at_is_unknown_not_replaced(fa):
     assert "抓取時間未知" in H.local_lookup_result_html(v)
 
 
+# ── D-1：價格口徑文案不得把「使用者聲明」寫成事實 ───────────────────────
+def test_unadjusted_limit_text_is_the_approved_copy_and_not_a_fact_assertion():
+    want = "價格口徑由使用者聲明為未調整原始價，系統未驗證；除權息日前後指標可能失真"
+    assert LL.TEXT_LIMIT_UNADJUSTED == want
+    assert vm().notes[0] == want and want in H.local_lookup_result_html(vm())
+    old = "價格為原始未調整價（未還原除權息）"
+    assert old not in H.local_lookup_result_html(vm()) and old not in (LL.__doc__ or "")
+    assert "系統未驗證" in want and "使用者聲明" in want
+
+
 # ── 支撐壓力窗口標籤 ─────────────────────────────────────────────────
 @pytest.mark.parametrize("bars,label", [(20, "（近20日）"), (7, "（近7根日K）"), (None, ""), (0, ""), (True, ""), ("20", "")])
 def test_support_resistance_label_honest(bars, label):
