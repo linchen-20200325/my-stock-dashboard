@@ -102,11 +102,11 @@ def put(world, name="a.csv", data: bytes | None = None):
     (world.data / name).write_bytes(_csv() if data is None else data)
 
 
-def app(world=None, *, mode=MODE_LOOKUP) -> AppTest:
+def app(world=None, *, mode=MODE_LOOKUP, scenario="cold") -> AppTest:
     at = AppTest.from_file(str(APP_UI2), default_timeout=60)
     at.session_state["ui2_feed"] = "fake"
     at.session_state["ui2_page"] = P4_TARGET
-    at.session_state["ui2_scenario"] = "cold"
+    at.session_state["ui2_scenario"] = scenario
     at.session_state["ui2_target_mode"] = mode
     at.run(timeout=60)
     assert not at.exception, at.exception
@@ -840,3 +840,48 @@ def test_sf2_first_screen_default_output_is_unchanged():
     assert sig.parameters["show_summary"].default is True
     src = TARGET_PY.read_text(encoding="utf-8")
     assert src.count("show_summary=False") == 1                                  # 只有新入口的一處傳 False
+
+
+# ════════════════════════════════════════════════════════════════════
+# 8. 差額 QA 補洞（N12／N15）
+# ════════════════════════════════════════════════════════════════════
+FAKE_LOOKUP_RESULT = 'data-ui2-queried="true"'                                 # FAKE 場景「已查詢」結果區的錨點（lookup_result_html）
+
+
+def test_n12_fake_loaded_lookup_result_exists_when_local_mode_is_off(monkeypatch):
+    """對照組：FAKE `loaded` 場景的即時查一檔模式（旗標關）本來就畫出 FAKE 結果區——下面的拒絕測試才有意義。"""
+    monkeypatch.delenv(ENV, raising=False)
+    at = app(scenario="loaded")
+    assert FAKE_LOOKUP_RESULT in md(at)
+
+
+@pytest.mark.parametrize("how", ["no_host", "two_hosts", "non_loopback", "empty_directory"])
+def test_n12_rejected_or_unavailable_never_brings_back_the_fake_result_area(world, how):
+    put(world)
+    if how == "no_host":
+        world.ctx.headers = _sh([])
+    elif how == "two_hosts":
+        world.ctx.headers = _sh([("Host", "localhost"), ("host", "evil.example")])
+    elif how == "non_loopback":
+        world.ctx.headers = _sh([("Host", "example.com")])
+    else:
+        (world.data / "a.csv").unlink()
+    at = app(scenario="loaded")
+    page = md(at)
+    assert FAKE_LOOKUP_RESULT not in page and "ui2-lookup__head" not in page and "ui2-lookup__add" not in page
+    assert NOTICE in page                                                      # 灰字說明仍在
+
+
+def test_n15_curated_mode_submitted_and_matching_keeps_the_summary_row(world):
+    """curated＋已送出且條件相符：不執行查詢、不顯示本機結果，且不得誤判為『查詢已執行』而隱藏「查詢摘要」列。"""
+    put(world)
+    at = app(mode=MODE_CURATED)
+    at = submit(at, symbol="0050", filename="a.csv")
+    assert at.session_state["ui2_local_queried"] == "1"                          # 已送出且仍相符（旗標保留）
+    page = md(at)
+    assert 'data-ui2-q="q1"' in page and SUMMARY_LABEL in page
+    assert not any(LOCAL_RESULT in m.value for m in at.markdown) and OP_QUERY not in [c.op for c in world.calls]
+    # 切到即時查一檔模式：同一組（代號、檔名）仍相符 → 才查詢並隱藏摘要列
+    at.session_state["ui2_target_mode"] = MODE_LOOKUP
+    at.run(timeout=60)
+    assert not at.exception and LOCAL_RESULT in md(at) and SUMMARY_LABEL not in md(at)
