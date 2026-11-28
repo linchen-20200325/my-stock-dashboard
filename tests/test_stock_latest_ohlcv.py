@@ -20,7 +20,8 @@ from src.data.stock import stock_latest_ohlcv as mod
 from src.data.stock.stock_latest_ohlcv import (
     ALL_STATES, DATASET_STOCK_PRICE, SOURCE_FINMIND_STOCK_PRICE,
     STATE_FETCH_FAILED, STATE_INVALID_DATA, STATE_INVALID_SYMBOL, STATE_NO_DATA, STATE_OK,
-    OhlcvRow, StockLatestOhlcv, fetch_stock_latest_ohlcv, to_bars_frame,
+    OhlcvRow, StockLatestOhlcv, fetch_stock_latest_ohlcv, rows_to_bars_frame, to_bars_frame,
+    validate_ohlcv_frame,
 )
 
 MODULE_PATH = Path(mod.__file__)
@@ -701,3 +702,257 @@ class TestStaticSource:
         data_imports = [i for i in self._imports() if i.startswith("src.")]
         assert set(data_imports) == {"src.data.core.finmind_client",
                                      "src.data.core.finmind_client.finmind_get"}
+
+
+# ───────────────────────── 公開薄函式：validate_ohlcv_frame（A 線本機匯入重用；規則不複製）─────────────────────────
+
+def _frame_cases():
+    """(名稱, df) 一組涵蓋正常與各類壞資料的 FinMind 欄名 DataFrame。"""
+    good = _df(*_good_rows())
+    cases = [("good", good),
+             ("single", _df(_row())),
+             ("zero_vol", _df(_row(v=0))),
+             ("desc", _df(_row("2026-11-26"), _row("2026-11-25"))),
+             ("dup", _df(_row("2026-11-25"), _row("2026-11-25"))),
+             ("future", _df(_row("2026-11-28"))),
+             ("zero_price", _df(_row(o=0))),
+             ("neg_price", _df(_row(o=-1, lo=-2))),
+             ("hl", _df(_row(o=100, h=98, lo=99, c=99))),
+             ("neg_vol", _df(_row(v=-1))),
+             ("nan_close", _df(_row(c=float("nan")))),
+             ("none_open", _df(_row(o=None))),
+             ("sid", _df(_row(sid="2330"))),
+             ("missing_col", _df(_row()).drop(columns=["max"])),
+             ("bad_date", _df(_row("2026/11/25")))]
+    return cases
+
+
+class TestValidateOhlcvFrame:
+    @pytest.mark.parametrize("name,df", _frame_cases(), ids=[n for n, _ in _frame_cases()])
+    def test_identical_to_private_validate(self, name, df):
+        assert validate_ohlcv_frame(df, "0050", TODAY) == mod._validate(df, "0050", TODAY)
+
+    @pytest.mark.parametrize("name,df", _frame_cases(), ids=[n for n, _ in _frame_cases()])
+    def test_same_verdict_as_fetch_path(self, monkeypatch, name, df):
+        rows, reasons = validate_ohlcv_frame(df, "0050", TODAY)
+        r = _run(monkeypatch, _Fake(df))
+        assert r.rows == rows and r.reasons == reasons
+        assert (r.state == STATE_OK) == (reasons == ())
+
+    def test_return_type_is_rows_reasons_tuples(self):
+        rows, reasons = validate_ohlcv_frame(_df(*_good_rows()), "0050", TODAY)
+        assert isinstance(rows, tuple) and isinstance(reasons, tuple) and reasons == ()
+        assert [type(x) for x in rows] == [OhlcvRow] * 3 and rows[-1].date == date(2026, 11, 26)
+
+    def test_reasons_nonempty_implies_rows_empty(self):
+        for _name, df in _frame_cases():
+            rows, reasons = validate_ohlcv_frame(df, "0050", TODAY)
+            assert not (reasons and rows)
+
+    def test_today_is_the_future_boundary(self):
+        df = _df(_row("2026-11-28"))
+        assert validate_ohlcv_frame(df, "0050", date(2026, 11, 27))[1] == (mod.REASON_DATE_IN_FUTURE,)
+        assert validate_ohlcv_frame(df, "0050", date(2026, 11, 28))[1] == ()
+
+    def test_non_positive_price_whole_batch_and_never_zero(self):
+        rows, reasons = validate_ohlcv_frame(_df(*_good_rows()[:2], _row("2026-11-26", o=0)), "0050", TODAY)
+        assert rows == () and mod.REASON_OPEN_NOT_POSITIVE in reasons
+
+    def test_missing_value_never_becomes_zero(self):
+        rows, reasons = validate_ohlcv_frame(_df(_row(c=None)), "0050", TODAY)
+        assert rows == () and "close_missing" in reasons
+
+    def test_string_cells_accepted_like_fetch_path(self):
+        rows, reasons = validate_ohlcv_frame(_df(_row(o="100.5", h="101", lo="99", c="100", v="1000")), "0050", TODAY)
+        assert reasons == () and rows[0].open == 100.5 and rows[0].volume_shares == 1000.0
+
+    def test_string_overflow_is_not_finite_not_exception(self):
+        huge = "1" + "0" * 400
+        rows, reasons = validate_ohlcv_frame(_df(_row(c=huge)), "0050", TODAY)
+        assert rows == () and "close_not_finite" in reasons
+
+    def test_descending_not_sorted_and_not_dropped(self):
+        rows, reasons = validate_ohlcv_frame(_df(_row("2026-11-26"), _row("2026-11-25")), "0050", TODAY)
+        assert rows == () and reasons == (mod.REASON_DATE_NOT_ASCENDING,)
+
+    def test_empty_frame_with_columns_is_empty_not_valid_data(self):
+        empty = _df(_row()).iloc[0:0]
+        assert validate_ohlcv_frame(empty, "0050", TODAY) == ((), ())      # docstring：呼叫端自行判 NO_DATA
+
+    def test_empty_frame_without_columns_reports_missing_columns(self):
+        rows, reasons = validate_ohlcv_frame(pd.DataFrame(), "0050", TODAY)
+        assert rows == () and mod.reason_missing_column("date") in reasons
+
+    @pytest.mark.parametrize("bad", [None, [], {"date": []}, "df", 5])
+    def test_non_dataframe(self, bad):
+        assert validate_ohlcv_frame(bad, "0050", TODAY) == ((), (mod.REASON_RESPONSE_NOT_DATAFRAME,))
+
+    @pytest.mark.parametrize("bad", [None, 50, "50", "0050 ", " 0050", "0050.TW", "00631l", "", b"0050", ["0050"]])
+    def test_symbol_must_already_be_normalised(self, bad):
+        with pytest.raises(ValueError) as ei:
+            validate_ohlcv_frame(_df(_row()), bad, TODAY)
+        assert str(ei.value) == mod.VALIDATE_ARGS_MESSAGE
+
+    @pytest.mark.parametrize("bad", [None, "2026-11-27", datetime(2026, 11, 27), 20261127])
+    def test_today_must_be_date(self, bad):
+        with pytest.raises(ValueError) as ei:
+            validate_ohlcv_frame(_df(_row()), "0050", bad)
+        assert str(ei.value) == mod.VALIDATE_ARGS_MESSAGE
+
+    def test_duplicate_columns_raise_fixed_message(self):
+        df = pd.concat([_df(_row()), _df(_row())[["close"]]], axis=1)
+        assert not df.columns.is_unique
+        with pytest.raises(ValueError) as ei:
+            validate_ohlcv_frame(df, "0050", TODAY)
+        assert str(ei.value) == mod.VALIDATE_ARGS_MESSAGE
+
+    def test_does_not_mutate_input(self):
+        df = _df(*_good_rows())
+        snap = df.copy(deep=True)
+        validate_ohlcv_frame(df, "0050", TODAY)
+        pd.testing.assert_frame_equal(df, snap)
+
+    def test_wrapper_adds_no_provenance_or_network(self, monkeypatch):
+        def _no_fetch(*a, **k):
+            raise AssertionError("validate_ohlcv_frame must not fetch")
+        monkeypatch.setattr(mod, "finmind_get", _no_fetch)
+        out = validate_ohlcv_frame(_df(*_good_rows()), "0050", TODAY)
+        assert len(out) == 2 and not hasattr(out, "fetched_at") and not hasattr(out, "source")
+        assert mod.SOURCE_FINMIND_STOCK_PRICE == "FinMind:TaiwanStockPrice:raw_http"   # 常數未動
+
+    def test_wrapper_delegates_to_private_validate_no_second_rule_set(self, monkeypatch):
+        seen = []
+        real = mod._validate
+        monkeypatch.setattr(mod, "_validate", lambda *a: (seen.append(a), real(*a))[1])
+        validate_ohlcv_frame(_df(_row()), "0050", TODAY)
+        assert len(seen) == 1
+
+    def test_existing_public_surface_unchanged(self):
+        for name in ("fetch_stock_latest_ohlcv", "to_bars_frame", "StockLatestOhlcv", "OhlcvRow",
+                     "SOURCE_FINMIND_STOCK_PRICE", "DATASET_STOCK_PRICE", "BARS_NOT_OK_MESSAGE", "ALL_STATES",
+                     "REASON_PRICE_NEGATIVE", "FETCH_ATTEMPTS", "reason_missing_column", "reason_value"):
+            assert hasattr(mod, name), name
+
+
+class TestRowsToBarsFrame:
+    def _rows(self):
+        return _run_rows_ok()
+
+    def test_matches_to_bars_frame_exactly(self, monkeypatch):
+        r = _ok(monkeypatch)
+        pd.testing.assert_frame_equal(rows_to_bars_frame(r.rows), to_bars_frame(r))
+
+    def test_shape_dtype_and_index(self, monkeypatch):
+        r = _ok(monkeypatch)
+        df = rows_to_bars_frame(r.rows)
+        assert list(df.columns) == ["open", "high", "low", "close", "volume"]
+        assert all(str(t) == "float64" for t in df.dtypes)
+        assert type(df.index) is pd.DatetimeIndex and df.index.name == "date" and df.index.tz is None
+        assert df.index.is_monotonic_increasing and df.index.is_unique
+        assert (df.index == df.index.normalize()).all() and df.index[-1].date() == r.as_of
+        assert df.attrs == {}
+        _c_contract_selfcheck(df, r.as_of)
+
+    def test_accepts_list_and_tuple(self, monkeypatch):
+        r = _ok(monkeypatch)
+        pd.testing.assert_frame_equal(rows_to_bars_frame(list(r.rows)), rows_to_bars_frame(tuple(r.rows)))
+
+    def test_volume_untouched_and_ints_become_float64(self):
+        rows = (OhlcvRow(date(2026, 11, 25), 100, 105, 99, 104, 12_345_678),
+                OhlcvRow(date(2026, 11, 26), 100.5, 105.5, 99.5, 104.5, 1500.5))
+        df = rows_to_bars_frame(rows)
+        assert df["volume"].tolist() == [12_345_678.0, 1500.5]          # 不 /1000、不截斷
+        assert all(str(t) == "float64" for t in df.dtypes)
+        assert df["open"].tolist() == [100.0, 100.5]
+
+    def test_single_row_and_zero_volume(self):
+        df = rows_to_bars_frame((OhlcvRow(date(2026, 11, 25), 1.0, 2.0, 0.5, 1.5, 0.0),))
+        assert len(df) == 1 and df["volume"].iloc[0] == 0.0
+
+    @pytest.mark.parametrize("bad", [(), [], None, "rows", 5, {"a": 1}, b"x", pd.DataFrame(), iter([])])
+    def test_empty_or_wrong_container_raises_fixed_message(self, bad):
+        with pytest.raises(ValueError) as ei:
+            rows_to_bars_frame(bad)
+        assert str(ei.value) == mod.BARS_ROWS_INVALID_MESSAGE
+
+    def test_generator_is_not_accepted(self):
+        gen = (OhlcvRow(date(2026, 11, 25), 1, 2, 1, 2, 3) for _ in range(1))
+        with pytest.raises(ValueError):
+            rows_to_bars_frame(gen)
+
+    @pytest.mark.parametrize("bad_item", [None, {"date": "2026-11-25"}, (date(2026, 11, 25), 1, 2, 1, 2, 3), "x"])
+    def test_non_ohlcvrow_element(self, bad_item):
+        good = OhlcvRow(date(2026, 11, 24), 1, 2, 1, 2, 3)
+        with pytest.raises(ValueError):
+            rows_to_bars_frame((good, bad_item))
+
+    def test_unsorted_and_duplicate_dates_not_sorted_silently(self):
+        a = OhlcvRow(date(2026, 11, 25), 1, 2, 1, 2, 3)
+        b = OhlcvRow(date(2026, 11, 26), 1, 2, 1, 2, 3)
+        for bad in ((b, a), (a, a), (a, b, a)):
+            with pytest.raises(ValueError) as ei:
+                rows_to_bars_frame(bad)
+            assert str(ei.value) == mod.BARS_ROWS_INVALID_MESSAGE
+
+    @pytest.mark.parametrize("field", ["open", "high", "low", "close", "volume_shares"])
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), None, "1", True])
+    def test_non_finite_or_non_numeric_value(self, field, bad):
+        kw = dict(date=date(2026, 11, 25), open=1.0, high=2.0, low=1.0, close=1.5, volume_shares=3.0)
+        kw[field] = bad
+        with pytest.raises(ValueError) as ei:
+            rows_to_bars_frame((OhlcvRow(**kw),))
+        assert str(ei.value) == mod.BARS_ROWS_INVALID_MESSAGE
+
+    def test_huge_int_is_fixed_message_not_overflow(self):
+        with pytest.raises(ValueError) as ei:
+            rows_to_bars_frame((OhlcvRow(date(2026, 11, 25), 10 ** 400, 2.0, 1.0, 1.5, 3.0),))   # type: ignore[arg-type]
+        assert str(ei.value) == mod.BARS_ROWS_INVALID_MESSAGE
+
+    def test_datetime_instead_of_date_rejected(self):
+        with pytest.raises(ValueError):
+            rows_to_bars_frame((OhlcvRow(datetime(2026, 11, 25), 1.0, 2.0, 1.0, 1.5, 3.0),))   # type: ignore[arg-type]
+
+    def test_error_message_has_no_input_echo(self):
+        with pytest.raises(ValueError) as ei:
+            rows_to_bars_frame(("SECRET-LOOKING",))
+        assert "SECRET" not in str(ei.value) and "SECRET" not in repr(ei.value)
+
+    def test_does_not_mutate_input_and_output_is_independent(self, monkeypatch):
+        r = _ok(monkeypatch)
+        snap = r.rows
+        df = rows_to_bars_frame(r.rows)
+        df.iloc[0, 0] = -999.0
+        assert r.rows == snap and rows_to_bars_frame(r.rows).iloc[0, 0] == 98.0
+
+    def test_no_provenance_leaks_into_frame(self, monkeypatch):
+        df = rows_to_bars_frame(_ok(monkeypatch).rows)
+        assert set(df.columns) == C_REQUIRED_COLUMNS and df.attrs == {}
+        assert "source" not in df.columns and "fetched_at" not in df.columns
+
+    def test_to_bars_frame_still_delegates_and_keeps_fixed_message(self, monkeypatch):
+        r = _ok(monkeypatch)
+        calls = []
+        real = mod.rows_to_bars_frame
+        monkeypatch.setattr(mod, "rows_to_bars_frame", lambda rows: (calls.append(rows), real(rows))[1])
+        to_bars_frame(r)
+        assert calls == [r.rows]
+        # OK 狀態但 rows 內容不合法（手工構造）→ 仍是 to_bars_frame 的固定訊息，且不回空表
+        bad_rows = (r.rows[1], r.rows[0])
+        base = dataclasses.replace(r, rows=bad_rows, latest=bad_rows[-1], as_of=bad_rows[-1].date)
+        with pytest.raises(ValueError) as ei:
+            to_bars_frame(base)
+        assert str(ei.value) == mod.BARS_NOT_OK_MESSAGE
+
+    def test_static_no_new_dependencies_in_thin_functions(self):
+        tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+        for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                   and n.name in {"validate_ohlcv_frame", "rows_to_bars_frame"}):
+            names = {x.id for x in ast.walk(fn) if isinstance(x, ast.Name)}
+            attrs = {x.attr for x in ast.walk(fn) if isinstance(x, ast.Attribute)}
+            assert not names & {"finmind_get", "requests", "open", "print"}, fn.name
+            assert not attrs & {"fillna", "sort_values", "sort_index", "dropna", "ffill", "bfill", "astype"}, fn.name
+            assert not {x.attr for x in ast.walk(fn) if isinstance(x, ast.Attribute)} & {"now", "today", "utcnow"}
+
+
+def _run_rows_ok():
+    return tuple(OhlcvRow(date(2026, 11, 24 + i), 1.0, 2.0, 0.5, 1.5, 10.0) for i in range(3))
