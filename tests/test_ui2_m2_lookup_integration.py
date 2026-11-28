@@ -122,6 +122,19 @@ def submit(at: AppTest, symbol="0050", filename="a.csv") -> AppTest:
     return at
 
 
+def session_items(at: AppTest) -> dict:
+    """AppTest 的 session 狀態（使用者鍵＋具名 widget；不含內部鍵）。
+
+    Streamlit 的 AppTest 在新版（本專案 requirements 上限 <1.60 之外的版本，已於 1.67.0 實測）把 `at.session_state` 換成不再暴露
+    `.filtered_state` 的包裝類別（改提供 `items()`／`keys()`／迭代，語意同為過濾後的使用者狀態）；本專案支援版本仍用 `.filtered_state`。
+    兩條路徑取同一份資料——不跳過、不放寬任何斷言。"""
+    ss = at.session_state
+    try:
+        return dict(ss.filtered_state)
+    except AttributeError:
+        return dict(ss.items())
+
+
 def md(at: AppTest) -> str:
     """頁面 markdown（去掉 <style> 區塊：全域 CSS 本來就含 `ui2-chip--danger` 等 class 定義，不是畫面元素）。"""
     return re.sub(r"<style>.*?</style>", "", "\n".join(m.value for m in at.markdown), flags=re.S)
@@ -284,10 +297,11 @@ def test_result_persists_across_rerun_without_storing_data(world):
     at = submit(app())
     at.run(timeout=60)
     assert LOCAL_RESULT in md(at)
-    for k in at.session_state.filtered_state:
+    items = session_items(at)
+    assert "ui2_lookup_symbol" in items and "ui2_local_queried" in items            # 確實取到了狀態（防「空迴圈假通過」）
+    for k, v in items.items():
         if k.startswith("FormSubmitter:"):                                        # Streamlit 內部的表單提交旗標
             continue
-        v = at.session_state[k]
         assert k.startswith("ui2_") and not re.search(r"hold|strategy|sheet|portfolio", k, re.I), k
         assert isinstance(v, (str, bool, int, type(None))), (k, type(v))
         assert "130.00" not in str(v) and "stock_id" not in str(v)
