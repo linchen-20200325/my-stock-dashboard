@@ -317,6 +317,70 @@ def test_blp_each_proxy_header_alone(hdr):
     assert p.proxy_header_names == (hdr.lower(),)
 
 
+NEW_PROXY_NAMES = ("cf-connecting-ip", "cf-ray", "cdn-loop", "true-client-ip", "x-client-ip", "x-original-forwarded-for")
+OLD_PROXY_NAMES = ("forwarded", "x-real-ip", "via")
+
+
+def test_proxy_name_set_exact_and_documented_incomplete():
+    assert R.PROXY_HEADER_EXACT == frozenset(OLD_PROXY_NAMES + NEW_PROXY_NAMES)
+    assert R.PROXY_HEADER_PREFIX == "x-forwarded-" and isinstance(R.PROXY_HEADER_EXACT, frozenset)
+    src = SRC.read_text(encoding="utf-8")
+    assert "此清單不完備，不得單獨證明隔離" in src and "黑名單不是正向證明" in src and "L3 精確 loopback 驗證" in src
+    assert "不完備" in (R.__doc__ or "") + (R.build_local_proof.__doc__ or "")
+
+
+@pytest.mark.parametrize("name", NEW_PROXY_NAMES)
+def test_each_new_proxy_name_detected_alone_and_in_proof_validation(name):
+    assert blp(None, {name: "v"}).proxy_header_names == (name,)
+    assert blp(None, {"Host": "localhost", name: "v"}).proxy_header_names == (name,)
+    assert LocalProof(None, True, None, (name,))                       # 驗證端同步接受
+
+
+@pytest.mark.parametrize("name", NEW_PROXY_NAMES)
+def test_new_proxy_names_http_header_case_normalized(name):
+    http_case = "-".join(w.capitalize() for w in name.split("-"))        # Cf-Connecting-Ip／X-Original-Forwarded-For
+    for variant in (http_case, name.upper(), name, " " + http_case):
+        assert blp(None, {variant: "v"}).proxy_header_names == (name,), variant
+    with pytest.raises(ValueError):
+        LocalProof(None, True, None, (http_case,))                      # LocalProof 本身只收小寫
+
+
+def test_all_proxy_names_combined_sorted_deduped():
+    allnames = OLD_PROXY_NAMES + NEW_PROXY_NAMES + ("x-forwarded-for", "x-forwarded-host")
+    h = {}
+    for i, n in enumerate(allnames):
+        h[n.upper() if i % 2 else "-".join(w.capitalize() for w in n.split("-"))] = "v"
+        h[n] = "dup"                                                       # 同名多種大小寫＝去重
+    h["Host"] = "LocalHost:1"
+    p = blp("127.0.0.1", h)
+    assert p.proxy_header_names == tuple(sorted(allnames))
+    assert list(p.proxy_header_names) == sorted(set(p.proxy_header_names)) and len(p.proxy_header_names) == 11
+    assert LocalProof(p.bind_address, p.headers_present, p.request_host, p.proxy_header_names) == p
+
+
+def test_new_names_combined_with_existing_three_classes():
+    p = blp(None, {"Cf-Ray": "1", "Via": "p", "X-Forwarded-For": "1.1.1.1", "Forwarded": "for=1", "X-Real-IP": "2",
+                   "True-Client-IP": "3", "CDN-Loop": "c"})
+    assert p.proxy_header_names == ("cdn-loop", "cf-ray", "forwarded", "true-client-ip", "via", "x-forwarded-for", "x-real-ip")
+
+
+@pytest.mark.parametrize("name", ["x-custom", "authorization", "cookie", "cf-visitor", "cf-ipcountry", "x-original-url",
+                                  "x-original-forwarded", "x-client", "client-ip", "true-client", "cdn", "x-forwarded",
+                                  "user-agent", "accept"])
+def test_non_proxy_names_not_kept_and_values_never_in_output(name):
+    secret = "SECRETVALUE-abc123"
+    p = blp("127.0.0.1", {name: secret, "Host": "localhost"})
+    assert p.proxy_header_names == () and secret not in repr(p) and secret not in str(dataclasses.astuple(p))
+    with pytest.raises(ValueError):
+        LocalProof(None, True, None, (name,))                              # 不在允許集合的任意名稱仍拒
+
+
+def test_new_proxy_name_values_not_in_output():
+    secret = "SECRETVALUE-xyz"
+    p = blp(None, {n: secret for n in NEW_PROXY_NAMES})
+    assert secret not in repr(p) and secret not in str(dataclasses.astuple(p))
+
+
 def test_blp_no_proxy_headers_empty_tuple():
     assert blp(None, {"Host": "localhost", "Accept": "x"}).proxy_header_names == ()
 

@@ -28,12 +28,15 @@ tuple 元素須為 str。
 
 ═══ build_local_proof（建議、可刪）═══
 `build_local_proof(bind_address, headers)`：只正規化——標頭名稱小寫、Host 去 port 並小寫（`[::1]:8501`→`::1`）、
-無 Host→None、proxy 類標頭名稱（`x-forwarded-*`／`forwarded`／`x-real-ip`／`via`）小寫排序去重；
+無 Host→None、proxy 類標頭名稱（`x-forwarded-*`／`forwarded`／`x-real-ip`／`via`／`cf-connecting-ip`／`cf-ray`／
+`cdn-loop`／`true-client-ip`／`x-client-ip`／`x-original-forwarded-for`）小寫排序去重；
 `None`／空 mapping ⇒ `headers_present=False`。Host 格式不合法（如 `:8501`、`a:b`、`[::1`）或同一請求出現互相衝突的多個
 Host 標頭 ⇒ `ValueError`（固定訊息；由 L3 對映為 `bad_request`）。
 
 ⚠️ 同名多值：`headers` 若為 `StreamlitHeaders`，本函式只看得到每個名稱的第一個值；多 Host 須由呼叫端先以
 `headers.get_all("host")` 檢查（見「接線批須知」2）。本函式**不能**防多 Host。
+
+⚠️ **proxy 標頭名稱清單不完備，不得單獨證明隔離**（黑名單不是正向證明）；isolation 由 L3 精確 loopback 驗證。
 
 ⛔ 接線批待辦：L3 才可決定 loopback／proxy／hosted 的放行與否；本檔的 `reason_code` 只是固定詞彙。
 """
@@ -75,7 +78,12 @@ REASON_CODES: tuple[str, ...] = (
 REASON_CODE_SET: frozenset[str] = frozenset(REASON_CODES)
 
 #: proxy 類標頭（名稱，小寫）：完整名稱集合＋前綴。
-PROXY_HEADER_EXACT = frozenset({"forwarded", "x-real-ip", "via"})
+#: ⚠️ **此清單不完備，不得單獨證明隔離**（黑名單不是正向證明）；isolation 由 L3 精確 loopback 驗證。
+#: 多列一個名稱＝多偵測＝多拒絕（純收緊）。`x-original-forwarded-for` 不以 `x-forwarded-` 開頭，故須列為完整名稱。
+PROXY_HEADER_EXACT = frozenset({
+    "forwarded", "x-real-ip", "via",
+    "cf-connecting-ip", "cf-ray", "cdn-loop", "true-client-ip", "x-client-ip", "x-original-forwarded-for",
+})
 PROXY_HEADER_PREFIX = "x-forwarded-"
 
 _HOST_HEADER = "host"
