@@ -2,10 +2,10 @@
  "meta": {
   "tool": "tests/ui2_viewport/measure_viewport.py",
   "streamlit_version": "1.59.2",
-  "git_sha": "9cc925618b5a1f5ef45222a436dbcc62163c809e",
-  "source_hash": "669320faa8c69c0a212bc31936898472ccf604a180f06efc10ca6c7dac14fff0",
-  "generated_at": "2026-11-27T08:21:45+00:00",
-  "playwright_version": "1.64.1",
+  "git_sha": "919bdacca55cbc086194ae93401af1c6569585cb",
+  "source_hash": "a72a19daf8b8b2796842da95c94ca99e89156f9b67fa1b52b99c013c959b2ae3",
+  "generated_at": "2026-11-28T11:52:47+00:00",
+  "playwright_version": "1.65.2",
   "chromium_version": "158.0.8127.36",
   "viewports": {
    "mobile": [
