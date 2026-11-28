@@ -269,10 +269,16 @@ class TestLegacyFakeValues:
         with pytest.raises(FinancialPeriodAdapterError):
             adapt_financial_period(make_raw([ob("cash", val, ev)]))
 
-    @pytest.mark.parametrize("val", [0.0, 3.0, -2.5])
+    @pytest.mark.parametrize("val", [0.0, -0.0, 3.0, -2.5, 0])
     def test_source_absent_with_finite_value_raises(self, val):
         with pytest.raises(FinancialPeriodAdapterError):
             adapt_financial_period(make_raw([ob("cash", val, "source_absent")]))
+
+    def test_source_absent_with_numpy_zero_raises(self):
+        np = pytest.importorskip("numpy")
+        for v in (np.int64(0), np.float32(0.0), np.float64(-0.0)):
+            with pytest.raises(FinancialPeriodAdapterError):
+                adapt_financial_period(make_raw([ob("cash", v, "source_absent")]))
 
     @pytest.mark.parametrize("ev,code", [("source_absent", "source_absent"),
                                          ("legacy_default", "legacy_default_zero"),
@@ -452,6 +458,12 @@ class TestEnvelopeVerbatimAndCaseSensitivity:
         with pytest.raises(FinancialPeriodAdapterError):
             adapt_financial_period(make_raw([ob("cash", 1.0, currency="TWD ")], currency="TWD"))
 
+    @pytest.mark.parametrize("obs_unit,period_unit", [("KTWD ", "KTWD"), (" KTWD", "KTWD"),
+                                                     ("KTWD", "KTWD "), ("KTWD", " KTWD")])
+    def test_observation_unit_whitespace_sensitive(self, obs_unit, period_unit):
+        with pytest.raises(FinancialPeriodAdapterError):
+            adapt_financial_period(make_raw([ob("cash", 1.0, unit=obs_unit)], unit=period_unit))
+
     def test_exact_match_still_accepted(self):
         a = adapt_financial_period(make_raw([ob("cash", 1.0, currency="TWD", unit="KTWD")],
                                             currency="TWD", unit="KTWD"))
@@ -622,6 +634,16 @@ class TestValidationRaises:
         np = pytest.importorskip("numpy")
         a = adapt_financial_period(make_raw([ob("cash", np.float32("nan")), ob("capex", np.float64("inf"))]))
         assert gaps_of(a)["cash"] == gaps_of(a)["capex"] == "non_finite_value"
+
+    @pytest.mark.parametrize("ev", list(EVIDENCE_KINDS))
+    @pytest.mark.parametrize("val", ["1D", "NaT"])
+    def test_numpy_timedelta_raises_adapter_error_not_other_exception(self, ev, val):
+        np = pytest.importorskip("numpy")
+        v = np.timedelta64(1, "D") if val == "1D" else np.timedelta64("NaT", "D")
+        with pytest.raises(Exception) as ei:
+            adapt_financial_period(make_raw([ob("cash", v, ev)]))
+        assert type(ei.value) is FinancialPeriodAdapterError
+        assert "timedelta64" in str(ei.value) and "NaT" not in str(ei.value)
 
     def test_numpy_bool_rejected(self):
         np = pytest.importorskip("numpy")
@@ -801,7 +823,8 @@ class TestWording:
         for needle in ("_v()", "legacy_default", "legacy_reset", "_first_hit", "source_reported",
                        "不判斷", "不處理幣別", "換算", "PIT", "零 production caller", "28", "58",
                        "AdaptedEvidence", "成對", "numbers.Real", "不得丟失", "source_label",
-                       "原樣回顯", "大小寫"):
+                       "原樣回顯", "大小寫", "timedelta64", "下溢", "與觀測順序無關",
+                       "gap.detail", "含 ``0.0``"):
             assert needle in doc, needle
 
     def test_reason_code_set_is_exactly_seven(self):
@@ -988,6 +1011,29 @@ def _assert_numeric_types_match_pack() -> None:
         assert adapt_financial_period(make_raw([ob("cash", v)])).period.items["cash"] == 2.0
     for v in (np.bool_(True), Decimal("2"), "2", 2 + 0j, True):
         _expect_raises(lambda v=v: adapt_financial_period(make_raw([ob("cash", v)])))
+
+
+def _assert_unconvertible_real_is_adapter_error() -> None:
+    np = pytest.importorskip("numpy")
+    for v in (np.timedelta64(1, "D"), np.timedelta64("NaT", "D")):
+        for ev in EVIDENCE_KINDS:
+            try:
+                adapt_financial_period(make_raw([ob("cash", v, ev)]))
+            except FinancialPeriodAdapterError:
+                continue
+            except Exception as exc:  # noqa: BLE001 — 洩漏了別種例外也算失敗
+                raise AssertionError(f"洩漏 {type(exc).__name__}") from exc
+            raise AssertionError("應 raise")
+
+
+def _assert_unit_whitespace_sensitive() -> None:
+    _expect_raises(lambda: adapt_financial_period(
+        make_raw([ob("cash", 1.0, unit="KTWD ")], unit="KTWD")))
+
+
+def _assert_source_absent_zero_raises() -> None:
+    for v in (0.0, -0.0, 0):
+        _expect_raises(lambda v=v: adapt_financial_period(make_raw([ob("cash", v, "source_absent")])))
 
 
 def _assert_currency_paired() -> None:
@@ -1198,6 +1244,49 @@ class TestMutationGuards:
         monkeypatch.setattr(fpa, "_validate_value", mutant)
         with pytest.raises(self._RED):
             _assert_numeric_types_match_pack()
+
+    def test_baseline_d_guards_pass(self):
+        for f in (_assert_unconvertible_real_is_adapter_error, _assert_unit_whitespace_sensitive,
+                  _assert_source_absent_zero_raises):
+            f()
+
+    def test_unit_only_stripped_in_comparison_goes_red(self, monkeypatch):
+        orig = fpa._check_observation_consistency
+
+        def mutant(raw, obs):
+            return orig(raw, dataclasses.replace(obs, unit=obs.unit.strip() if obs.unit else obs.unit))
+        monkeypatch.setattr(fpa, "_check_observation_consistency", mutant)
+        with pytest.raises(self._RED):
+            _assert_unit_whitespace_sensitive()
+
+    def test_source_absent_zero_allowed_goes_red(self, monkeypatch):
+        orig = fpa._validate_value
+
+        def mutant(obs):
+            if obs.evidence == "source_absent":
+                return None
+            return orig(obs)
+        monkeypatch.setattr(fpa, "_validate_value", mutant)
+        with pytest.raises(self._RED):
+            _assert_source_absent_zero_raises()
+
+    def test_only_overflow_caught_leaks_type_error_goes_red(self, monkeypatch):
+        """縮回只捕捉 OverflowError 的舊行為：以等價 mutant 取代轉換步驟，TypeError 洩漏 → 守衛紅。"""
+        import numbers as _n
+
+        def mutant(obs):
+            v = obs.value
+            if v is None:
+                return
+            if isinstance(v, bool) or not isinstance(v, _n.Real):
+                raise FinancialPeriodAdapterError("type")
+            try:
+                float(v)
+            except OverflowError:
+                raise FinancialPeriodAdapterError("overflow")
+        monkeypatch.setattr(fpa, "_validate_value", mutant)
+        with pytest.raises(AssertionError):
+            _assert_unconvertible_real_is_adapter_error()
 
     def test_currency_dropped_goes_red(self, monkeypatch):
         orig = fpa.adapt_financial_period

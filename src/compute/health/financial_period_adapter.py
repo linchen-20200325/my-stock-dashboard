@@ -74,10 +74,17 @@ pack 裡的 ``None`` 只會顯示 ``missing_input``，看不出是缺值、legac
 不在允許集的取值、未知科目、bool / Decimal / str / complex 值、單位 / 幣別 / 期間不符 ……）。
 數值型別與 pack 的 ``_normalize_items`` 一致：排除 bool，其餘接受 ``numbers.Real``
 （含 numpy 的 int / float 純量，一律轉 float）；``numpy.bool_`` 不是 ``numbers.Real``，同樣拒絕。
-證據種類與值互相矛盾者也 raise：``source_absent`` 帶了任何**有限**值、``legacy_default`` /
+通過 ``numbers.Real`` 但無法 ``float()`` 的型別（例：``numpy.timedelta64``，含 NaT）與超大 int 一律
+raise ``FinancialPeriodAdapterError``，訊息只含型別名、不回顯值。
+已知限制（不改行為）：極小的 ``Fraction``（如 ``1/10**400``）經 ``float()`` 下溢為 ``0.0``，
+會被視為有證據的真 0；由來源層負責不提供這類值，本層不偵測。
+證據種類與值互相矛盾者也 raise：``source_absent`` 要帶「無值」——``None`` 或非有限值，
+帶有限值（含 ``0.0``、``-0.0``、``numpy.int64(0)``）整份 raise；``legacy_default`` /
 ``legacy_reset`` 帶了**有限的非 0** 值（legacy 這兩種情境輸出的只會是 0.0；帶別的值代表標記貼錯）。
 這三種標記搭配 NaN / ±inf 時**不 raise**，與 ``None`` 同路徑：值 ``None`` + 該 evidence 對應的缺口。
 ``source_label`` 會原樣回顯到 ``gap.detail``，呼叫端須維持為來源科目原名（不放敏感或自由文字）。
+結果「與觀測順序無關」僅對 ``items``、gap 的 ``item`` 與 ``reason_code`` 成立；
+``gap.detail`` 內來源科目原名的排列依觀測出現順序。
 
 ════════════════════════════════════════════════════════════════════
 (e) 範圍聲明
@@ -250,8 +257,10 @@ def _validate_value(obs: RawObservation) -> None:
         _fail(f"科目 {obs.item} 值型別不合法：{type(v).__name__}（排除 bool，只收 numbers.Real 或 None）")
     try:
         fv = float(v)
-    except OverflowError:
-        _fail(f"科目 {obs.item} 數值過大無法轉 float")
+    except (OverflowError, TypeError, ValueError):
+        # 例：超大 int（OverflowError）、numpy.timedelta64（通過 numbers.Real 但 float() 丟 TypeError）。
+        # 訊息只含型別名，不回顯值。
+        _fail(f"科目 {obs.item} 值無法轉為 float（型別 {type(v).__name__}）")
     if not math.isfinite(fv):
         return          # 非有限值：reported → non_finite_value 缺口；其他標記 → 與 None 同路徑
     if obs.evidence == EVIDENCE_SOURCE_ABSENT:
