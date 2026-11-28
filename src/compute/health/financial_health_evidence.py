@@ -26,11 +26,38 @@ legacy 取數層（`financial_statements_fetcher._v()`）查無時回 ``0.0``、
 - quick_ratio    (倍)   = (流動資產 − 存貨) / 流動負債  （同上；存貨欄必須存在，**不**把缺存貨當 0）
 - ocf_to_net_income (倍)= 營業現金流 / 稅後淨利        （引擎 ``Earnings_Quality`` 以 % 表示；換算同上）
 
-單位：``*_pct`` 為 ×100 的 float；倍數無單位；金額需同幣別同單位（本模組不驗證，只在 limitations 聲明）。
+單位：``*_pct`` 為 ×100 的 float；倍數無單位；金額需同幣別同單位（本模組不驗證幣別與單位是否一致，
+只在 limitations 聲明；唯一例外是下節的「單位異常防線」）。
 輸出一律 ``round(x, ROUND_DIGITS)``（引擎自身只取 1 位小數，對照時以其捨入誤差為容差）。
 
 與引擎**刻意不同**之處（不是 bug）：引擎因 legacy 輸入缺值為 0，把「讀到 0」一律當缺漏；
 本包輸入是型別化的，真 0 是有效觀測（例：現金 0 → 現金比 0.0%），缺值才是 ``None``。
+
+════════════════════════════════════════════════════════════════════
+單位異常防線（重用引擎既有條件，不自創門檻）
+════════════════════════════════════════════════════════════════════
+引擎 ``financial_health_engine._no_ai_profitability`` 有一條數據健全性檢查：
+``rev > 0 and abs(oi) > rev * 1.2``（營業利益）與 ``rev > 0 and abs(ni) > rev * 1.2``（淨利），
+成立時營業利益率 / 安全邊際 / 淨利率改回「N/A (rev 單位異常)」。本包同條件對應如下
+（倍數見 ``UNIT_ANOMALY_REV_MULTIPLE``，嚴格大於、取絕對值、僅營收為正才檢查）：
+- operating_margin_pct、net_margin_pct：條件成立 → ``unknown`` + ``unit_anomaly``，value=None。
+- 其餘比率（含毛利率）：引擎**沒有**此防線，本包**不新增**，行為不變。
+- MOS（安全邊際）不在本 pack 的比率範圍內，故不對應。
+- 營收缺 / 0 / 負：先走原本的 missing_input / zero_denominator / non_positive_denominator，
+  不觸發本防線（與引擎「rev > 0 才檢查」一致）。
+- 真 0 的營業利益 / 淨利不觸發；條件不成立時所有輸出與加入防線前逐欄相同。
+
+════════════════════════════════════════════════════════════════════
+legacy 轉接責任（本模組無轉接層、不處理）
+════════════════════════════════════════════════════════════════════
+legacy ``fin_data`` / 取數層 ``_v()`` 查無科目時回 ``0.0``。日後若有轉接層把 legacy 字典轉成
+``FinancialPeriodInput``，**必須把「legacy 缺失預設 0.0」轉為 None，但有證據的真 0 必須保留為 0**
+（例：總負債確實為 0）。**不得把所有 0 一律改成 None**，也不得把缺失 0.0 原樣當真 0 傳入。
+注意：legacy 取數層 ``financial_statements_fetcher.py``（約 288–294 行）對「``rev > 0`` 且
+``abs(營業利益或淨利) > rev × 1.2``」會 print 後把該值**靜默改成 0**。若轉接層直接吃該輸出，
+被重置的異常值會變成 ``0.0``，本包無法辨識，且會與「有證據的真 0」混淆；轉接層須在上游處理或標記
+（本模組不處理）。
+如何分辨「有證據的真 0」屬轉接層職責（例如來源明示該科目已揭露為 0）；本模組只收型別化輸入，不做判斷。
 
 ════════════════════════════════════════════════════════════════════
 明確**不輸出**（原因：口徑 / 公告日 / 公式未驗證，或屬聚合判定）
@@ -92,12 +119,17 @@ REASON_NOT_APPLICABLE_COMPANY_TYPE = "not_applicable_company_type"
 REASON_UNKNOWN_COMPANY_TYPE = "unknown_company_type"
 REASON_INVALID_NEGATIVE_INPUT = "invalid_negative_input"
 REASON_INCONSISTENT_INPUT = "inconsistent_input"
+REASON_UNIT_ANOMALY = "unit_anomaly"
 REASON_CODES: tuple[str, ...] = (
     REASON_MISSING_INPUT, REASON_ZERO_DENOMINATOR, REASON_NON_POSITIVE_DENOMINATOR,
     REASON_NON_FINITE_INPUT, REASON_NON_FINITE_RESULT, REASON_BASIS_UNKNOWN,
     REASON_NOT_APPLICABLE_COMPANY_TYPE, REASON_UNKNOWN_COMPANY_TYPE,
-    REASON_INVALID_NEGATIVE_INPUT, REASON_INCONSISTENT_INPUT,
+    REASON_INVALID_NEGATIVE_INPUT, REASON_INCONSISTENT_INPUT, REASON_UNIT_ANOMALY,
 )
+
+#: 單位異常防線倍數。來源：引擎 `financial_health_engine._no_ai_profitability` 的
+#: `_bad_om` / `_bad_nm`（`rev > 0 and abs(x) > rev * 1.2`）同一條件；不自創門檻。
+UNIT_ANOMALY_REV_MULTIPLE = 1.2
 
 PIT_UNKNOWN = "unknown_publication_date"
 PIT_DECLARED = "published_at_declared"
@@ -109,7 +141,10 @@ LIMITATION_BASIS = "財報口徑（單季或累計）由來源提供，未驗證
 LIMITATION_PIT = "未取得發布可得日時不聲稱時點正確，亦不可用於歷史判斷。"
 LIMITATION_EXCLUDED = ("本包不輸出 DSO／DPO／DIO、年化 ROE、100-100-10、現金流矩陣與 DNA、"
                        "任何分數或標籤、趨勢分數；原因為口徑、公告日或公式未驗證。")
-LIMITATION_UNITS = "金額欄位需為同一幣別與單位，本模組不驗證；比率不受單位影響。"
+LIMITATION_UNITS = ("金額欄位需為同一幣別與單位，本模組不驗證幣別與單位是否一致"
+                    "（僅營業利益率與淨利率套用單位異常防線，其餘比率不驗證）。")
+LIMITATION_UNIT_ANOMALY = ("營業利益率與淨利率沿用既有引擎條件：營收為正且營業利益或淨利的絕對值"
+                           "大於營收的 1.2 倍時，視為單位異常並不輸出該比率。")
 LIMITATION_NOT_APPLICABLE = "金融股與 ETF 的財報科目意義不同，一般公司比率不適用，一律不輸出。"
 LIMITATION_UNKNOWN_TYPE = "公司類型未指明，適用性未證，比率一律不輸出。"
 LIMITATION_BASIS_UNKNOWN = "此期口徑未知，損益與現金流量類比率不輸出。"
@@ -192,15 +227,18 @@ class _Spec:
     flow: bool                      # True＝涉及損益 / 現金流量科目，受 basis 影響
     zero_means_non_positive: bool   # True＝分母 ≤ 0 一律回 non_positive_denominator
     numerator_must_be_non_negative: bool = False
+    unit_anomaly_guard: bool = False  # True＝|分子| > 營收 × 倍數 時 unknown（僅引擎有此防線者）
 
 
 _SPECS: tuple[_Spec, ...] = (
     _Spec("gross_margin_pct", "gross_profit/revenue*100", ("gross_profit", "revenue"),
           lambda v: v["gross_profit"], "revenue", 100.0, "%", True, False),
     _Spec("operating_margin_pct", "operating_income/revenue*100", ("operating_income", "revenue"),
-          lambda v: v["operating_income"], "revenue", 100.0, "%", True, False),
+          lambda v: v["operating_income"], "revenue", 100.0, "%", True, False,
+          unit_anomaly_guard=True),
     _Spec("net_margin_pct", "net_income/revenue*100", ("net_income", "revenue"),
-          lambda v: v["net_income"], "revenue", 100.0, "%", True, False),
+          lambda v: v["net_income"], "revenue", 100.0, "%", True, False,
+          unit_anomaly_guard=True),
     _Spec("cash_ratio_pct", "cash/total_assets*100", ("cash", "total_assets"),
           lambda v: v["cash"], "total_assets", 100.0, "%", False, False),
     _Spec("debt_ratio_pct", "total_liabilities/total_assets*100",
@@ -332,6 +370,10 @@ def _evaluate(spec: _Spec, vals: Mapping[str, float | None], nonfinite: set[str]
     if reason is not None:
         return _unknown(spec, reason)
     num = spec.numerator(got)
+    # 單位異常防線：運算式與引擎逐字同構（abs(x) > rev * 1.2，嚴格大於）；
+    # 走到這裡分母（營收）已確定 > 0，等同引擎的 `rev > 0` 前提。
+    if spec.unit_anomaly_guard and abs(num) > got[spec.denominator] * UNIT_ANOMALY_REV_MULTIPLE:
+        return _unknown(spec, REASON_UNIT_ANOMALY)
     if spec.numerator_must_be_non_negative and num < 0:
         return _unknown(spec, REASON_INCONSISTENT_INPUT)
     val = num / got[spec.denominator] * spec.scale
@@ -368,7 +410,8 @@ def build_financial_evidence(period: FinancialPeriodInput, *,
             metrics[spec.name] = _evaluate(spec, vals, nonfinite, period.basis)
 
     issues = tuple(f"non_finite_item:{n}" for n in ITEM_NAMES if n in nonfinite)
-    limitations = [LIMITATION_BASIS, LIMITATION_PIT, LIMITATION_EXCLUDED, LIMITATION_UNITS]
+    limitations = [LIMITATION_BASIS, LIMITATION_PIT, LIMITATION_EXCLUDED, LIMITATION_UNITS,
+                   LIMITATION_UNIT_ANOMALY]
     if company_type in ("financial", "etf"):
         limitations.append(LIMITATION_NOT_APPLICABLE)
     elif company_type == "unknown":

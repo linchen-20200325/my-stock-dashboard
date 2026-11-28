@@ -808,3 +808,245 @@ class TestMutationGuards:
         for n in ("gross_margin_pct", "operating_margin_pct", "net_margin_pct"):
             v = e.metrics[n].value
             assert v is None and v != 0 and v != math.inf
+
+
+# ── SF1：單位異常防線（重用引擎 `_no_ai_profitability` 的 1.2 倍條件）──────────
+
+import random  # noqa: E402
+import sys  # noqa: E402
+import types  # noqa: E402
+
+_UA_NAMES = ("operating_margin_pct", "net_margin_pct")
+_UA_OTHERS = tuple(n for n in METRIC_NAMES if n not in _UA_NAMES)
+
+
+def _ua_items(rev, oi, ni, **extra):
+    return {"revenue": rev, "operating_income": oi, "net_income": ni, **extra}
+
+
+def _ua_engine_flags(eng, rev, oi, ni):
+    """餵引擎，回傳 (營業利益率是否單位異常, 淨利率是否單位異常)。rev<=0 時引擎不會走到防線。"""
+    fd = _fd({**BASE_ITEMS, "revenue": rev if rev > 0 else 1.0,
+              "operating_income": oi, "net_income": ni})
+    fd["營業收入(千)"] = rev
+    prof = eng._no_ai_profitability(fd)["Profitability_Module"]
+    return (prof["Operating_Margin"]["Value"] == eng.NA_UNIT_ANOMALY,
+            prof["Net_Margin"]["Value"] == eng.NA_UNIT_ANOMALY)
+
+
+# (營收, 營業利益, 淨利, 期望營益率異常, 期望淨利率異常)
+_UA_CASES = [
+    (1000.0, 2500.0, -3000.0, True, True),      # O 的案例 SF-1
+    (1000.0, 1200.0, 1200.0, False, False),     # 恰等於 1.2 倍：不觸發（嚴格大於）
+    (1000.0, 1200.0001, 1200.0001, True, True),  # 略高於：觸發
+    (1000.0, -1200.0, -1200.0, False, False),   # 負值恰等於：不觸發
+    (1000.0, -1200.5, -1200.5, True, True),     # 負值取絕對值
+    (1000.0, 2500.0, 100.0, True, False),       # 僅營業利益異常
+    (1000.0, 100.0, -3000.0, False, True),      # 僅淨利異常
+    (1000.0, 0.0, 0.0, False, False),           # 真 0 不觸發
+    (1000.0, 150.0, 120.0, False, False),       # 正常
+]
+
+
+class TestUnitAnomalyGuard:
+    def test_constant_matches_engine_literal(self):
+        assert fhe.UNIT_ANOMALY_REV_MULTIPLE == 1.2
+        src = (pathlib.Path(fhe.__file__).resolve().parents[2]
+               / "services/financial_health_engine.py").read_text(encoding="utf-8")
+        assert "rev > 0 and abs(oi) > rev * 1.2" in src
+        assert "rev > 0 and abs(ni) > rev * 1.2" in src
+
+    @pytest.mark.parametrize("rev,oi,ni,bad_o,bad_n", _UA_CASES)
+    def test_pack_flags_as_expected(self, rev, oi, ni, bad_o, bad_n):
+        e = ev(items_over=_ua_items(rev, oi, ni))
+        for name, bad, num in (("operating_margin_pct", bad_o, oi), ("net_margin_pct", bad_n, ni)):
+            m = e.metrics[name]
+            if bad:
+                assert (m.status, m.value, m.reason_code) == ("unknown", None, "unit_anomaly")
+            else:
+                assert m.status == "ok" and m.reason_code is None
+                assert m.value == round(num / rev * 100, fhe.ROUND_DIGITS)
+            assert m.inputs[-1] == "revenue" and len(m.inputs) == 2
+
+    @pytest.mark.parametrize("rev,oi,ni,bad_o,bad_n", _UA_CASES)
+    def test_engine_parity_iff(self, rev, oi, ni, bad_o, bad_n):
+        eng = _engine()
+        eo, en = _ua_engine_flags(eng, rev, oi, ni)
+        e = ev(items_over=_ua_items(rev, oi, ni))
+        assert eo == (e.metrics["operating_margin_pct"].reason_code == "unit_anomaly")
+        assert en == (e.metrics["net_margin_pct"].reason_code == "unit_anomaly")
+
+    def test_engine_parity_random(self):
+        eng = _engine()
+        rnd = random.Random(1293)
+        for _ in range(300):
+            rev = rnd.choice([1000.0, 123_456.0, 3.5])
+            oi = round(rnd.uniform(-2, 2) * rev, 1) or 1.0   # 引擎把 0 當缺漏，避開
+            ni = round(rnd.uniform(-2, 2) * rev, 1) or 1.0
+            eo, en = _ua_engine_flags(eng, rev, oi, ni)
+            e = ev(items_over=_ua_items(rev, oi, ni))
+            assert eo == (e.metrics["operating_margin_pct"].reason_code == "unit_anomaly"), (rev, oi)
+            assert en == (e.metrics["net_margin_pct"].reason_code == "unit_anomaly"), (rev, ni)
+
+    @pytest.mark.parametrize("rev", [0.0, -1000.0])
+    def test_non_positive_revenue_keeps_old_reason(self, rev):
+        e = ev(items_over=_ua_items(rev, 2500.0, -3000.0))
+        want = "zero_denominator" if rev == 0 else "non_positive_denominator"
+        for n in _UA_NAMES:
+            assert e.metrics[n].reason_code == want, n
+
+    def test_engine_does_not_flag_when_revenue_non_positive(self):
+        eng = _engine()
+        assert _ua_engine_flags(eng, -1000.0, 2500.0, -3000.0) == (False, False)
+
+    def test_missing_oi_or_ni_stays_missing_input(self):
+        e = ev(items_over=_ua_items(1000.0, None, None))
+        for n in _UA_NAMES:
+            assert e.metrics[n].reason_code == "missing_input"
+
+    def test_other_metrics_unaffected_by_anomaly(self):
+        base = ev(items_over=_ua_items(1000.0, 150.0, 120.0))
+        bad = ev(items_over=_ua_items(1000.0, 2500.0, -3000.0))
+        for n in ("gross_margin_pct", "cash_ratio_pct", "debt_ratio_pct", "current_ratio",
+                  "quick_ratio"):
+            assert bad.metrics[n] == base.metrics[n], n
+        # ocf_to_net_income 不受本防線影響（引擎無單位防線）：淨利異常但為正 → 照算；
+        # 淨利為負 → 維持原本的 non_positive_denominator（非 unit_anomaly）
+        pos = ev(items_over=_ua_items(1000.0, 2500.0, 3000.0, ocf=600.0))
+        assert pos.metrics["ocf_to_net_income"].status == "ok"
+        assert pos.metrics["ocf_to_net_income"].value == 0.2
+        assert bad.metrics["ocf_to_net_income"].reason_code == "non_positive_denominator"
+        # 毛利率（引擎無此防線）即使毛利遠大於營收也照算
+        g = ev(items_over={"revenue": 1000.0, "gross_profit": 5000.0})
+        assert g.metrics["gross_margin_pct"].status == "ok"
+        assert g.metrics["gross_margin_pct"].value == 500.0
+
+    def test_normal_values_property(self):
+        """隨機合法輸入：未觸發者逐值等於手算；觸發者恰為 |x| > rev*1.2。"""
+        rnd = random.Random(7)
+        for _ in range(400):
+            rev = rnd.uniform(1.0, 1e7)
+            oi, ni = rnd.uniform(-1.5, 1.5) * rev, rnd.uniform(-1.5, 1.5) * rev
+            e = ev(items_over=_ua_items(rev, oi, ni))
+            for n, x in (("operating_margin_pct", oi), ("net_margin_pct", ni)):
+                m = e.metrics[n]
+                if abs(x) > rev * 1.2:
+                    assert (m.status, m.reason_code) == ("unknown", "unit_anomaly")
+                else:
+                    assert m.value == round(x / rev * 100, fhe.ROUND_DIGITS)
+
+    def test_limitations_and_wording(self):
+        e = ev()
+        assert fhe.LIMITATION_UNIT_ANOMALY in e.limitations
+        assert fhe.LIMITATION_UNITS in e.limitations
+        assert "1.2" in fhe.LIMITATION_UNIT_ANOMALY
+        assert "不驗證" in fhe.LIMITATION_UNITS and "不受單位影響" not in fhe.LIMITATION_UNITS
+        assert fhe.REASON_UNIT_ANOMALY in fhe.REASON_CODES
+        for w in _BANNED_WORDS:
+            assert w not in fhe.LIMITATION_UNIT_ANOMALY.lower()
+            assert w not in fhe.LIMITATION_UNITS.lower()
+
+    def test_legacy_adapter_responsibility_documented(self):
+        doc = fhe.__doc__
+        assert "legacy 轉接責任" in doc and "轉為 None" in doc and "真 0 必須保留為 0" in doc
+        assert "不得把所有 0 一律改成 None" in doc
+
+    def test_true_zero_inputs_unchanged(self):
+        e = ev(items_over=_ua_items(1000.0, 0.0, 0.0))
+        for n in _UA_NAMES:
+            assert e.metrics[n].status == "ok" and e.metrics[n].value == 0.0
+
+
+class TestUnitGuardNegativeControls:
+    """防線只屬營益率 / 淨利率；現金比、負債比即使比值 > 1.2 也照算（引擎無此防線）。"""
+
+    def test_insolvent_debt_ratio_still_ok(self):
+        e = ev(items_over={"total_assets": 1000.0, "total_liabilities": 1500.0,
+                           "current_assets": 2000.0, "current_liabilities": 1000.0})
+        m = e.metrics["debt_ratio_pct"]
+        assert (m.status, m.reason_code, m.value) == ("ok", None, 150.0)
+        assert e.metrics["current_ratio"].value == 2.0
+
+    def test_cash_above_1_2x_assets_still_ok(self):
+        # 現金 > 總資產 會計上不合理，但本包無此一致性規則（只擋負值），能到達比率計算 →
+        # 與加入防線前相同：照算 200.0
+        e = ev(items_over={"total_assets": 1000.0, "cash": 2000.0})
+        m = e.metrics["cash_ratio_pct"]
+        assert (m.status, m.reason_code, m.value) == ("ok", None, 200.0)
+
+
+def _build_mutant(old: str, new: str):
+    """以改壞的原始碼組一個臨時模組（不動磁碟檔），回傳 (module, 清理函式)。"""
+    assert _SRC.count(old) == 1, old
+    name = "_fhe_mutant_tmp"
+    mod = types.ModuleType(name)
+    mod.__file__ = fhe.__file__
+    sys.modules[name] = mod
+    exec(compile(_SRC.replace(old, new), name, "exec"), mod.__dict__)
+    return mod, lambda: sys.modules.pop(name, None)
+
+
+def _assert_unit_guard(mod) -> None:
+    def run(rev, oi, ni, **extra):
+        items = {**BASE_ITEMS, "revenue": rev, "operating_income": oi, "net_income": ni, **extra}
+        p = mod.FinancialPeriodInput(
+            period_end=dt.date(2026, 9, 30), source="T", fetched_at=FETCHED, unit="千元",
+            basis="single_quarter", published_at=None, items=items)
+        return mod.build_financial_evidence(p, company_type="general").metrics
+    m = run(1000.0, 2500.0, -3000.0)
+    for n in _UA_NAMES:
+        assert (m[n].status, m[n].reason_code) == ("unknown", "unit_anomaly"), n
+    m = run(1000.0, 1200.0, 1200.0)                       # 邊界：恰 1.2 倍不觸發
+    assert m["operating_margin_pct"].value == 120.0 and m["net_margin_pct"].value == 120.0
+    m = run(1000.0, -1500.0, -1500.0)                     # 負值取絕對值
+    assert m["operating_margin_pct"].reason_code == "unit_anomaly"
+    m = run(1000.0, 1500.0, 1500.0, gross_profit=5000.0)  # 毛利率不得被誤加防線
+    assert m["gross_margin_pct"].value == 500.0
+    m = run(1000.0, 1500.0, 1300.0)                       # 倍數不得放寬到 2.0
+    assert m["net_margin_pct"].reason_code == "unit_anomaly"
+
+
+class TestUnitAnomalyMutations:
+    def test_baseline_passes(self):
+        _assert_unit_guard(fhe)
+
+    @pytest.mark.parametrize("which", ["debt", "cash"])
+    def test_negative_control_mutant_goes_red(self, which):
+        num = "total_liabilities" if which == "debt" else "cash"
+        old = (f'lambda v: v["{num}"], "total_assets", 100.0, "%", False, False)')
+        assert _SRC.count(old) == 1, old
+        mod, cleanup = _build_mutant(old, old[:-1] + ", unit_anomaly_guard=True)")
+        try:
+            with pytest.raises(AssertionError):
+                # 以突變模組重跑同一斷言
+                def run(items):
+                    p = mod.FinancialPeriodInput(
+                        period_end=dt.date(2026, 9, 30), source="T", fetched_at=FETCHED,
+                        unit="千元", basis="single_quarter", published_at=None,
+                        items={**BASE_ITEMS, **items})
+                    return mod.build_financial_evidence(p, company_type="general").metrics
+                if which == "debt":
+                    m = run({"total_assets": 1000.0, "total_liabilities": 1500.0})["debt_ratio_pct"]
+                    assert (m.status, m.value) == ("ok", 150.0)
+                else:
+                    m = run({"total_assets": 1000.0, "cash": 2000.0})["cash_ratio_pct"]
+                    assert (m.status, m.value) == ("ok", 200.0)
+        finally:
+            cleanup()
+
+    @pytest.mark.parametrize("old,new", [
+        ("spec.unit_anomaly_guard and abs(num) >", "False and abs(num) >"),            # 移除防線
+        ("abs(num) > got[spec.denominator] *", "abs(num) >= got[spec.denominator] *"),  # >= 取代 >
+        ("UNIT_ANOMALY_REV_MULTIPLE = 1.2", "UNIT_ANOMALY_REV_MULTIPLE = 2.0"),         # 倍數 2.0
+        ("abs(num) > got[spec.denominator] *", "num > got[spec.denominator] *"),        # 去掉 abs
+        ('lambda v: v["gross_profit"], "revenue", 100.0, "%", True, False),',
+         'lambda v: v["gross_profit"], "revenue", 100.0, "%", True, False,\n'
+         '          unit_anomaly_guard=True),'),                                         # 毛利率誤加防線
+    ])
+    def test_mutant_goes_red(self, old, new):
+        mod, cleanup = _build_mutant(old, new)
+        try:
+            with pytest.raises(AssertionError):
+                _assert_unit_guard(mod)
+        finally:
+            cleanup()
