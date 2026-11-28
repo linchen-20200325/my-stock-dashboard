@@ -25,8 +25,11 @@ import pytest
 import src.compute.strategy.stock_research_facts as srf
 from src.compute.strategy.overextension import assess_price_overextension
 from src.compute.strategy.stock_research_facts import (
+    LIMITATION_EX_RIGHTS_DISTORTION,
     LIMITATION_MA_REFERENCE,
     LIMITATION_UNADJUSTED,
+    LIMITATION_UNADJUSTED_DECLARED,
+    PRICE_BASIS_UNADJUSTED_DECLARED,
     StockResearchFacts,
     StockResearchFactsInputError,
     build_stock_research_facts,
@@ -602,3 +605,116 @@ class TestMutationGuards:
                   f.support_20d, f.resistance_20d, *f.ma.values()):
             assert v is None
             assert v != 0 and v is not False
+
+
+# ── basis_verified（口徑是否已驗證）────────────────────────────────────
+
+_DECL = "價格口徑由使用者聲明為未調整原始價，系統未驗證。"
+_DIST = "除權息日前後指標可能失真。"
+_OLD1 = "價格為未調整原始價，除權息日前後指標可能失真。"
+_MA = "均線為參考，不等於正式台股趨勢判斷。"
+
+
+def facts_unverified(df: pd.DataFrame) -> StockResearchFacts:
+    return build_stock_research_facts(df, as_of=df.index[-1].date(), basis_verified=False)
+
+
+class TestBasisVerified:
+    def test_default_true_unchanged_verbatim(self):
+        f = facts_of(make_bars(300))
+        assert f.price_basis == "unadjusted"
+        assert f.price_basis_verified is True
+        assert f.limitations == (_OLD1, _MA)
+        explicit = build_stock_research_facts(make_bars(300), as_of=f.as_of, basis_verified=True)
+        assert explicit == f
+
+    def test_false_fields_and_limitations_verbatim(self):
+        f = facts_unverified(make_bars(300))
+        assert f.price_basis == "unadjusted_declared" == PRICE_BASIS_UNADJUSTED_DECLARED
+        assert f.price_basis_verified is False
+        assert f.limitations == (_DECL, _DIST, _MA)
+        assert LIMITATION_UNADJUSTED_DECLARED == _DECL
+        assert LIMITATION_EX_RIGHTS_DISTORTION == _DIST
+        assert _OLD1 not in f.limitations
+        assert not any("價格為未調整原始價" in s for s in f.limitations)
+
+    def test_false_other_facts_identical(self):
+        df = make_bars(300)
+        a, b = facts_of(df), facts_unverified(df)
+        for fld in dataclasses.fields(StockResearchFacts):
+            if fld.name in ("price_basis", "price_basis_verified", "limitations"):
+                continue
+            assert getattr(a, fld.name) == getattr(b, fld.name), fld.name
+        assert isc(a.close, b.close) and isc(a.rsi14, b.rsi14)
+
+    def test_false_with_insufficient_bars(self):
+        f = facts_unverified(make_bars(12))
+        assert f.limitations[:3] == (_DECL, _DIST, _MA)
+        assert any(s.startswith("下列指標根數不足而無法計算：") for s in f.limitations)
+        assert any("實際僅涵蓋 12 根" in s for s in f.limitations)
+        assert f.price_basis_verified is False
+
+    def test_false_flat_series_notes_coexist(self):
+        c = np.full(40, 50.0)
+        df = pd.DataFrame({"open": c, "high": c + 1, "low": c - 1, "close": c,
+                           "volume": np.full(40, 100)},
+                          index=pd.bdate_range(_START, periods=40))
+        f = facts_unverified(df)
+        assert f.rsi14 is None
+        assert f.limitations[:3] == (_DECL, _DIST, _MA)
+        assert any("RSI14" in s for s in f.limitations)
+
+    @pytest.mark.parametrize("bad", [1, 0, None, np.True_, np.False_, "False", "True"])
+    def test_non_bool_rejected(self, bad):
+        df = make_bars(30)
+        with pytest.raises(StockResearchFactsInputError, match="basis_verified"):
+            build_stock_research_facts(df, as_of=df.index[-1].date(),
+                                       basis_verified=bad)  # type: ignore[arg-type]
+
+    def test_keyword_only(self):
+        df = make_bars(30)
+        with pytest.raises(TypeError):
+            build_stock_research_facts(df, df.index[-1].date(), False)  # type: ignore[misc]
+
+    @pytest.mark.parametrize("n", [1, 5, 12, 21, 300])
+    def test_no_forbidden_words_false(self, n):
+        for s in _all_strings(facts_unverified(make_bars(n))):
+            for w in _FORBIDDEN:
+                assert w not in s, f"禁字 {w!r} 出現在 {s!r}"
+
+    def test_no_new_imports_beyond_original(self):
+        mods = set(_imported_modules())
+        assert mods <= {"__future__", "datetime", "dataclasses", "types", "typing", "numpy",
+                        "pandas", "src.compute.strategy.entry_stop_levels",
+                        "src.compute.strategy.overextension",
+                        "src.compute.strategy.tech_indicators"}
+
+
+class TestBasisVerifiedMutations:
+    """改壞實作 → 上列斷言必紅（以 monkeypatch 模擬突變，離線不改檔）。"""
+
+    def test_mutation_false_still_old_sentence_goes_red(self, monkeypatch):
+        # 突變：False 路徑仍輸出舊第一句
+        monkeypatch.setattr(srf, "LIMITATION_UNADJUSTED_DECLARED", srf.LIMITATION_UNADJUSTED)
+        monkeypatch.setattr(srf, "LIMITATION_EX_RIGHTS_DISTORTION", "")
+        f = facts_unverified(make_bars(300))
+        with pytest.raises(AssertionError):
+            assert f.limitations == (_DECL, _DIST, _MA)
+        with pytest.raises(AssertionError):
+            assert _OLD1 not in f.limitations
+
+    def test_mutation_bool_check_removed_goes_red(self):
+        # 突變：以 truthy 轉型取代 bool 檢查的行為 → 非 bool 不再 raise，拒絕測試會紅
+        def mutant(df, *, as_of, basis_verified=True):
+            return srf.build_stock_research_facts(df, as_of=as_of, basis_verified=bool(basis_verified))
+        df = make_bars(30)
+        for bad in (1, 0, None, "False"):
+            with pytest.raises(pytest.fail.Exception):   # 內層「應 raise 卻沒 raise」→ Failed
+                with pytest.raises(StockResearchFactsInputError, match="basis_verified"):
+                    mutant(df, as_of=df.index[-1].date(), basis_verified=bad)
+
+    def test_mutation_basis_not_switched_goes_red(self, monkeypatch):
+        monkeypatch.setattr(srf, "PRICE_BASIS_UNADJUSTED_DECLARED", srf.PRICE_BASIS_UNADJUSTED)
+        f = facts_unverified(make_bars(30))
+        with pytest.raises(AssertionError):
+            assert f.price_basis == "unadjusted_declared"
