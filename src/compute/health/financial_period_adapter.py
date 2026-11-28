@@ -76,8 +76,22 @@ pack 裡的 ``None`` 只會顯示 ``missing_input``，看不出是缺值、legac
 （含 numpy 的 int / float 純量，一律轉 float）；``numpy.bool_`` 不是 ``numbers.Real``，同樣拒絕。
 通過 ``numbers.Real`` 但無法 ``float()`` 的型別（例：``numpy.timedelta64``，含 NaT）與超大 int 一律
 raise ``FinancialPeriodAdapterError``，訊息只含型別名、不回顯值。
-已知限制（不改行為）：極小的 ``Fraction``（如 ``1/10**400``）經 ``float()`` 下溢為 ``0.0``，
-會被視為有證據的真 0；由來源層負責不提供這類值，本層不偵測。
+**精確值語意**：「是不是 0」「兩筆觀測是否相同」「標記與值是否矛盾」一律以**精確值**
+（``fractions.Fraction``：int / numpy 整數 → 精確整數；Fraction → 自身；float / numpy 浮點 →
+``as_integer_ratio()``）判定，不看轉成 float 之後的結果，也不用容差。float 只用於最後輸出到
+``items``。因此：極小非零的 ``Fraction``（如 ``1/10**400``）若轉 float 下溢為 ``0.0``，**不會**被當成
+真 0，而是輸出 ``None`` + 缺口 ``unrepresentable_value``；``2**53`` 與 ``2**53 + 1`` 轉 float 後相同，
+但精確值不同，視為 ``conflicting_observations``；``0.1``（float）與 ``Fraction(1, 10)`` 精確值不同，
+同樣衝突；``0.5`` 與 ``Fraction(1, 2)``、``0`` / ``-0.0`` / ``Fraction(0)`` 精確值相等，可合併。
+無法取得精確值的 ``numbers.Real`` 型別（沒有 ``as_integer_ratio`` 者）一律 fail closed：
+raise ``FinancialPeriodAdapterError``。病態自訂型別（``denominator == 0``、``as_integer_ratio()``
+回傳非數、``__float__`` 丟 ``RuntimeError`` ……）造成的任何 ``Exception`` 也一律收斂成同一個例外
+（不捕捉 ``BaseException``），訊息只含科目名與型別名。
+**次正規區**：``source_reported`` 的精確值轉 float 後落在次正規區（絕對值小於最小正規 double）
+且被捨入成**不同的**值，與下溢同樣輸出 ``None`` + ``unrepresentable_value``（次正規區相對誤差可達 100%，
+故 fail closed）；本身就是 double 的次正規值（如 ``5e-324``、``1e-310``）精確等於其 float，照常輸出。
+正常範圍內的 0.5-ulp 捨入（如 ``Fraction(1, 3)``、``2**53 + 1``）屬可接受的有損輸出；
+衝突比較仍用精確值，不受影響。
 證據種類與值互相矛盾者也 raise：``source_absent`` 要帶「無值」——``None`` 或非有限值，
 帶有限值（含 ``0.0``、``-0.0``、``numpy.int64(0)``）整份 raise；``legacy_default`` /
 ``legacy_reset`` 帶了**有限的非 0** 值（legacy 這兩種情境輸出的只會是 0.0；帶別的值代表標記貼錯）。
@@ -101,6 +115,7 @@ import numbers
 from collections.abc import Mapping as _AbcMapping
 from collections.abc import Sequence as _AbcSequence
 from dataclasses import dataclass
+from fractions import Fraction
 from types import MappingProxyType
 from typing import Literal, Sequence
 
@@ -131,9 +146,11 @@ GAP_LEGACY_ANOMALY_RESET = "legacy_anomaly_reset"
 GAP_NON_FINITE_VALUE = "non_finite_value"
 GAP_CONFLICTING_OBSERVATIONS = "conflicting_observations"
 GAP_VALUE_MISSING_FOR_REPORTED = "value_missing_for_reported"
+GAP_UNREPRESENTABLE_VALUE = "unrepresentable_value"
 GAP_REASON_CODES: tuple[str, ...] = (
     GAP_NOT_OBSERVED, GAP_SOURCE_ABSENT, GAP_LEGACY_DEFAULT_ZERO, GAP_LEGACY_ANOMALY_RESET,
     GAP_NON_FINITE_VALUE, GAP_CONFLICTING_OBSERVATIONS, GAP_VALUE_MISSING_FOR_REPORTED,
+    GAP_UNREPRESENTABLE_VALUE,
 )
 
 #: 缺口說明模板（固定文字；{item} 為科目名，{labels} 為呼叫端提供的來源科目原名）。
@@ -145,6 +162,7 @@ _DETAIL_TEMPLATES: dict[str, str] = {
     GAP_NON_FINITE_VALUE: "{item}：來源值為 NaN 或 inf（{labels}）",
     GAP_CONFLICTING_OBSERVATIONS: "{item}：多筆觀測互相衝突，未擇一（{labels}）",
     GAP_VALUE_MISSING_FOR_REPORTED: "{item}：標為來源回報但未帶值（{labels}）",
+    GAP_UNREPRESENTABLE_VALUE: "{item}：來源值非零，但無法以 float 表示（下溢或超出範圍）（{labels}）",
 }
 
 #: 觀測結論 → 缺口原因（reported 且有限數者不在此表，直接是值）。
@@ -153,6 +171,10 @@ _EVIDENCE_TO_GAP: dict[str, str] = {
     EVIDENCE_LEGACY_DEFAULT: GAP_LEGACY_DEFAULT_ZERO,
     EVIDENCE_LEGACY_RESET: GAP_LEGACY_ANOMALY_RESET,
 }
+
+
+#: 最小正規 double（= ``sys.float_info.min``，測試以 sys 對照；此處不 import sys 以維持白名單）。
+_FLOAT_MIN_NORMAL = 2.0 ** -1022
 
 
 class FinancialPeriodAdapterError(ValueError):
@@ -244,28 +266,83 @@ def _non_empty_str(x: object) -> bool:
     return isinstance(x, str) and bool(x.strip())
 
 
+def _fail_exact(item: str, v: object) -> None:
+    """訊息只含科目名與型別名，不回顯值。"""
+    _fail(f"科目 {item} 值無法取得精確表示（型別 {type(v).__name__}）")
+
+
+def _to_float(item: str, v: object) -> float:
+    """float() 的統一包裝：任何 Exception（含病態自訂型別丟的 RuntimeError 等）→ 適配層例外。
+
+    只捕捉 Exception，不捕捉 BaseException（KeyboardInterrupt 等照常往上傳）。訊息不回顯值。
+    """
+    try:
+        return float(v)  # type: ignore[arg-type]
+    except Exception:                                      # noqa: BLE001 — 一律 fail closed
+        pass                                               # 在 except 外 raise，避免串接原例外
+    _fail(f"科目 {item} 值無法轉為 float（型別 {type(v).__name__}）")
+    raise AssertionError("unreachable")                    # _fail 一定 raise
+
+
+def _exact_unsafe(item: str, v: object) -> Fraction | None:
+    """_exact 的本體；可能丟出任何例外，由 ``_exact`` 統一收斂。"""
+    if isinstance(v, numbers.Rational):                  # int / Fraction / numpy 整數
+        return Fraction(int(v.numerator), int(v.denominator))
+    ratio = getattr(v, "as_integer_ratio", None)         # float / numpy 浮點
+    if ratio is None:
+        _fail_exact(item, v)
+    try:
+        n, d = ratio()
+    except (ValueError, OverflowError):                   # NaN / ±inf 的正常路徑
+        try:
+            nonfinite = not math.isfinite(float(v))       # type: ignore[arg-type]
+        except Exception:                                 # noqa: BLE001
+            nonfinite = False
+        if nonfinite:
+            return None
+        _fail_exact(item, v)
+    return Fraction(int(n), int(d))
+
+
+def _exact(item: str, v: object) -> Fraction | None:
+    """原值的精確表示。有限值 → Fraction；NaN / ±inf → None（非有限）；無法精確表示 → raise。
+
+    只在 ``numbers.Real`` 且非 bool 的值上呼叫。不經 float，故不受下溢 / 大整數碰撞影響。
+    病態型別（``denominator == 0``、``as_integer_ratio()`` 回傳非數、方法本身丟例外 ……）造成的任何
+    ``Exception``（ZeroDivisionError / ValueError / TypeError / RuntimeError / OverflowError ……）
+    一律收斂成 ``FinancialPeriodAdapterError``；不捕捉 BaseException。NaN / ±inf 回 None 是正常路徑，
+    不會變成 raise。
+    """
+    try:
+        return _exact_unsafe(item, v)
+    except FinancialPeriodAdapterError:
+        raise
+    except Exception:                                      # noqa: BLE001 — 一律 fail closed
+        raise FinancialPeriodAdapterError(
+            f"科目 {item} 值無法取得精確表示（型別 {type(v).__name__}）") from None
+
+
 def _validate_value(obs: RawObservation) -> None:
     """值型別（與 pack 一致：排除 bool、接受 numbers.Real）與「證據種類 ↔ 值」是否矛盾。
 
     source_absent / legacy_default / legacy_reset 搭配 NaN 或 ±inf 視同 None，不 raise；
-    搭配有限值：source_absent 任何有限值、legacy_* 的非 0 有限值皆為標記貼錯，raise。
+    搭配**精確有限值**：source_absent 任何有限值、legacy_* 的精確非 0 值皆為標記貼錯，raise
+    （以精確值判定，極小非零值轉 float 下溢為 0.0 也算非 0）。
     """
     v = obs.value
     if v is None:
         return
     if isinstance(v, bool) or not isinstance(v, numbers.Real):
         _fail(f"科目 {obs.item} 值型別不合法：{type(v).__name__}（排除 bool，只收 numbers.Real 或 None）")
-    try:
-        fv = float(v)
-    except (OverflowError, TypeError, ValueError):
-        # 例：超大 int（OverflowError）、numpy.timedelta64（通過 numbers.Real 但 float() 丟 TypeError）。
-        # 訊息只含型別名，不回顯值。
-        _fail(f"科目 {obs.item} 值無法轉為 float（型別 {type(v).__name__}）")
-    if not math.isfinite(fv):
+    # 例：超大 int（OverflowError）、numpy.timedelta64（通過 numbers.Real 但 float() 丟 TypeError）、
+    # 病態自訂型別（任何 Exception）。訊息只含型別名，不回顯值。
+    _to_float(obs.item, v)
+    exact = _exact(obs.item, v)
+    if exact is None:
         return          # 非有限值：reported → non_finite_value 缺口；其他標記 → 與 None 同路徑
     if obs.evidence == EVIDENCE_SOURCE_ABSENT:
         _fail(f"科目 {obs.item} 標為 source_absent 卻帶了值（證據自相矛盾）")
-    if obs.evidence in (EVIDENCE_LEGACY_DEFAULT, EVIDENCE_LEGACY_RESET) and abs(fv) > 0.0:
+    if obs.evidence in (EVIDENCE_LEGACY_DEFAULT, EVIDENCE_LEGACY_RESET) and exact != 0:
         _fail(f"科目 {obs.item} 標為 {obs.evidence} 卻帶了非 0 值（legacy 只會輸出 0.0；標記貼錯）")
 
 
@@ -328,37 +405,40 @@ def _validate_raw(raw: object) -> None:
 
 # ── 單科目解析 ───────────────────────────────────────────────────────
 
-def _pos_zero(x: float) -> float:
-    """負零正規化：-0.0 + 0.0 == +0.0，其餘值不變。"""
-    return x + 0.0
+def _outcome(obs: RawObservation) -> tuple[str | None, float | None, Fraction | None]:
+    """單筆觀測 → (缺口原因 | None, 輸出值 | None, 精確值 | None)。
 
-
-def _outcome(obs: RawObservation) -> tuple[str | None, float | None]:
-    """單筆觀測 → (缺口原因 | None, 值 | None)。值只在「有證據的有限數」時非 None。
-
-    本層不替呼叫端判斷 evidence；這裡只是把四種證據種類逐一對映成結論。
+    輸出值只在「有證據、精確值為有限且可表示」時非 None。精確值只用於比較（真 0 判定與衝突偵測），
+    不輸出。本層不替呼叫端判斷 evidence；這裡只是把四種證據種類逐一對映成結論。
     """
     if obs.evidence == EVIDENCE_SOURCE_REPORTED:
         if obs.value is None:
-            return GAP_VALUE_MISSING_FOR_REPORTED, None
-        val = float(obs.value)
-        if not math.isfinite(val):
-            return GAP_NON_FINITE_VALUE, None
-        return None, _pos_zero(val)
+            return GAP_VALUE_MISSING_FOR_REPORTED, None, None
+        exact = _exact(obs.item, obs.value)
+        if exact is None:
+            return GAP_NON_FINITE_VALUE, None, None
+        if exact == 0:
+            return None, 0.0, exact                      # 精確值為 0：真 0（-0.0 一律正規化為 0.0）
+        val = _to_float(obs.item, obs.value)
+        if not math.isfinite(val) or not abs(val) > 0.0:
+            return GAP_UNREPRESENTABLE_VALUE, None, exact  # 非零卻下溢 / 溢位：不得當真 0
+        if abs(val) < _FLOAT_MIN_NORMAL and exact != Fraction(val):
+            return GAP_UNREPRESENTABLE_VALUE, None, exact  # 次正規區被捨入成不同的值：fail closed
+        return None, val, exact
     # source_absent / legacy_default / legacy_reset：值一律不採（驗證階段已確保不矛盾）
-    return _EVIDENCE_TO_GAP[obs.evidence], None
+    return _EVIDENCE_TO_GAP[obs.evidence], None, None
 
 
-def _merge_outcomes(outcomes: Sequence[tuple[str | None, float | None]]
+def _merge_outcomes(outcomes: Sequence[tuple[str | None, float | None, Fraction | None]]
                     ) -> tuple[str | None, float | None]:
     """多筆結論全部一致才合併；任一不一致 → 衝突缺口。不取 max / abs / 平均 / 後者覆蓋。
 
-    此處的 ``==`` 是刻意的「逐位相同」判斷：來源重複回報同一值才算一致，
-    任何差異（含 1e-9）都屬衝突，不容差合併（容差合併等於偷偷平均）。
+    「一致」以（缺口原因、精確值）判定：精確值逐位相同才算相同，任何差異（含 1e-9、
+    float 碰撞的大整數）都屬衝突，不容差、不看轉 float 後是否相等。
     """
     first = outcomes[0]
-    if all(o == first for o in outcomes[1:]):
-        return first
+    if all(o[0] == first[0] and o[2] == first[2] for o in outcomes[1:]):
+        return first[0], first[1]
     return GAP_CONFLICTING_OBSERVATIONS, None
 
 

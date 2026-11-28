@@ -16,8 +16,11 @@ import datetime as dt
 import math
 import pathlib
 import random
+import numbers
 import re
+import sys
 from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -105,6 +108,69 @@ def _handcalc(i: dict) -> dict:
         "quick_ratio": (i["current_assets"] - i["inventory"]) / i["current_liabilities"],
         "ocf_to_net_income": i["ocf"] / i["net_income"],
     }
+
+
+# ── 病態自訂 numbers.Real / Rational（只用來驗證「一律收斂成適配層例外」）──────
+
+class _ZeroDenominatorRational:
+    """denominator == 0 的 Rational：Fraction(1, 0) 會丟 ZeroDivisionError。"""
+    numerator = 1
+    denominator = 0
+
+    def __float__(self):
+        return 1.0
+
+
+class _ZeroDivRatioReal:
+    """as_integer_ratio() 回傳 (1, 0)：Fraction(1, 0) 丟 ZeroDivisionError。"""
+    def __float__(self):
+        return 1.0
+
+    def as_integer_ratio(self):
+        return (1, 0)
+
+
+class _StrRatioReal:
+    """as_integer_ratio() 回傳非數：int('a') 丟 ValueError。"""
+    def __float__(self):
+        return 1.0
+
+    def as_integer_ratio(self):
+        return ("a", "b")
+
+
+class _FloatRuntimeErrorReal:
+    """__float__ 丟 RuntimeError。"""
+    def __float__(self):
+        raise RuntimeError("boom 12345")
+
+    def as_integer_ratio(self):
+        return (1, 2)
+
+
+class _FloatInterruptReal:
+    """__float__ 丟 KeyboardInterrupt（BaseException，不得被吞掉）。"""
+    def __float__(self):
+        raise KeyboardInterrupt
+
+    def as_integer_ratio(self):
+        return (1, 2)
+
+
+class _RatioInterruptReal:
+    """as_integer_ratio() 丟 KeyboardInterrupt（走 _exact 路徑；BaseException 不得被吞掉）。"""
+    def __float__(self):
+        return 1.0
+
+    def as_integer_ratio(self):
+        raise KeyboardInterrupt
+
+
+numbers.Real.register(_RatioInterruptReal)
+numbers.Rational.register(_ZeroDenominatorRational)
+for _cls in (_ZeroDivRatioReal, _StrRatioReal, _FloatRuntimeErrorReal, _FloatInterruptReal):
+    numbers.Real.register(_cls)
+_PATHOLOGICAL = (_ZeroDenominatorRational, _ZeroDivRatioReal, _StrRatioReal, _FloatRuntimeErrorReal)
 
 
 # ── 正常流程 ─────────────────────────────────────────────────────────
@@ -470,6 +536,303 @@ class TestEnvelopeVerbatimAndCaseSensitivity:
         assert a.period.items["cash"] == 1.0
 
 
+# ── 精確值語意（R23.68：下溢不得當真 0、大整數碰撞不得合併）─────────────
+
+TINY = Fraction(1, 10 ** 400)          # float(TINY) == 0.0 下溢，但精確值非零
+
+
+def _cash(obs_values, extra_ev="source_reported"):
+    """對 cash 一個科目餵多筆觀測（其餘科目取完整基準），回傳 AdaptedPeriod。"""
+    return adapt_financial_period(make_raw(
+        full_obs(drop=("cash",)) + [ob("cash", v, extra_ev) for v in obs_values]))
+
+
+class TestExactValueSemantics:
+    @pytest.mark.parametrize("tiny", [TINY, -TINY])
+    def test_tiny_reported_is_unrepresentable_gap_not_true_zero(self, tiny):
+        assert float(tiny) == 0.0 or float(tiny) == -0.0       # 前提：float 下溢
+        a = _cash([tiny])
+        assert a.period.items["cash"] is None
+        assert gaps_of(a) == {"cash": "unrepresentable_value"}
+
+    def test_tiny_reported_flows_to_pack_as_missing_not_zero_ratio(self):
+        e, gaps = _be(make_raw(full_obs(drop=("cash",)) + [ob("cash", TINY)]))
+        assert e.items["cash"] is None
+        m = e.metrics["cash_ratio_pct"]
+        assert m.status == "unknown" and m.reason_code == "missing_input" and m.value is None
+        assert [(g.item, g.reason_code) for g in gaps] == [("cash", "unrepresentable_value")]
+
+    @pytest.mark.parametrize("tiny", [TINY, -TINY])
+    @pytest.mark.parametrize("ev", ["legacy_default", "legacy_reset", "source_absent"])
+    def test_tiny_nonzero_with_contradicting_marker_raises(self, tiny, ev):
+        with pytest.raises(FinancialPeriodAdapterError):
+            adapt_financial_period(make_raw([ob("cash", tiny, ev)]))
+
+    def test_tiny_with_reported_is_the_only_non_raising_combination(self):
+        for ev in EVIDENCE_KINDS:
+            try:
+                adapt_financial_period(make_raw([ob("cash", TINY, ev)]))
+                assert ev == "source_reported"
+            except FinancialPeriodAdapterError:
+                assert ev != "source_reported"
+
+    def test_identical_tiny_duplicates_merge_to_one_unrepresentable_gap(self):
+        a = _cash([TINY, Fraction(1, 10 ** 400)])
+        assert gaps_of(a) == {"cash": "unrepresentable_value"}
+
+    def test_different_tiny_values_conflict(self):
+        a = _cash([TINY, 2 * TINY])
+        assert gaps_of(a) == {"cash": "conflicting_observations"}
+
+    def test_tiny_vs_true_zero_conflict(self):
+        for perm in ([TINY, 0.0], [0.0, TINY]):
+            assert gaps_of(_cash(perm)) == {"cash": "conflicting_observations"}
+
+    @pytest.mark.parametrize("order", [0, 1, 2])
+    def test_float_colliding_big_ints_conflict_any_order(self, order):
+        vals = [[2 ** 53, 2 ** 53 + 1], [2 ** 53 + 1, 2 ** 53], [2 ** 53, 5, 2 ** 53 + 1]][order]
+        a = _cash(vals)
+        assert a.period.items["cash"] is None
+        assert gaps_of(a) == {"cash": "conflicting_observations"}
+
+    def test_big_int_alone_still_outputs_float_lossy_but_nonzero(self):
+        a = _cash([2 ** 53 + 1])
+        assert a.period.items["cash"] == float(2 ** 53) and "cash" not in gaps_of(a)
+
+    def test_int_and_equal_float_merge(self):
+        a = _cash([2 ** 53, float(2 ** 53)])
+        assert a.period.items["cash"] == 9007199254740992.0 and "cash" not in gaps_of(a)
+
+    def test_numpy_int_equals_python_int(self):
+        np = pytest.importorskip("numpy")
+        a = _cash([np.int64(7), 7, np.int32(7), 7.0])
+        assert a.period.items["cash"] == 7.0 and "cash" not in gaps_of(a)
+
+    def test_numpy_int_vs_colliding_int_conflict(self):
+        np = pytest.importorskip("numpy")
+        assert gaps_of(_cash([np.int64(2 ** 53 + 1), 2 ** 53])) == {"cash": "conflicting_observations"}
+
+    @pytest.mark.parametrize("perm", [(Fraction(1, 10), 0.1), (0.1, Fraction(1, 10))])
+    def test_float_vs_decimal_fraction_with_different_exact_value_conflict(self, perm):
+        assert gaps_of(_cash(list(perm))) == {"cash": "conflicting_observations"}
+
+    def test_half_float_equals_half_fraction(self):
+        a = _cash([0.5, Fraction(1, 2)])
+        assert a.period.items["cash"] == 0.5 and "cash" not in gaps_of(a)
+
+    def test_numpy_float32_exactness(self):
+        np = pytest.importorskip("numpy")
+        assert "cash" not in gaps_of(_cash([np.float32(0.5), 0.5]))
+        assert gaps_of(_cash([np.float32(0.1), 0.1])) == {"cash": "conflicting_observations"}
+
+    def test_true_zero_of_every_type_is_zero_and_all_equal(self):
+        np = pytest.importorskip("numpy")
+        zeros = [0, 0.0, -0.0, Fraction(0), np.int64(0), np.float32(-0.0), np.float64(0.0)]
+        for z in zeros:
+            a = _cash([z])
+            assert a.period.items["cash"] == 0.0 and a.period.items["cash"] is not None
+            assert math.copysign(1.0, a.period.items["cash"]) == 1.0 and "cash" not in gaps_of(a)
+        merged = _cash(zeros)
+        assert merged.period.items["cash"] == 0.0 and "cash" not in gaps_of(merged)
+
+    @pytest.mark.parametrize("v", [1e-300, -1e-300, 5e-324, -5e-324, 1e-310,
+                                   Fraction(1, 10 ** 300)])
+    def test_representable_tiny_values_stay_nonzero(self, v):
+        a = _cash([v])
+        assert a.period.items["cash"] is not None and abs(a.period.items["cash"]) > 0.0
+        assert "cash" not in gaps_of(a)
+
+    def test_ordinary_decimals_not_rejected(self):
+        for v in (0.1, 1234.5678, 1e-9, 12345678.9):
+            a = _cash([v])
+            assert a.period.items["cash"] == v and "cash" not in gaps_of(a)
+
+    def test_huge_fraction_overflow_still_raises(self):
+        for ev in ("source_reported", "legacy_default"):
+            with pytest.raises(FinancialPeriodAdapterError):
+                _cash([Fraction(10 ** 400)], ev)
+
+    def test_marker_with_non_finite_still_same_as_none(self):
+        np = pytest.importorskip("numpy")
+        for bad in (float("nan"), float("inf"), np.float32("nan"), np.float64("-inf")):
+            for ev in ("source_absent", "legacy_default", "legacy_reset"):
+                a = _cash([bad], ev)
+                assert a.period.items["cash"] is None and len(gaps_of(a)) == 1
+
+    def test_real_type_without_exact_representation_fails_closed(self):
+        import numbers as _n
+
+        class OpaqueReal:
+            def __float__(self):
+                return 1.5
+        _n.Real.register(OpaqueReal)
+        for ev in EVIDENCE_KINDS:
+            with pytest.raises(FinancialPeriodAdapterError, match="精確表示"):
+                adapt_financial_period(make_raw([ob("cash", OpaqueReal(), ev)]))
+
+    def test_real_type_whose_ratio_fails_is_fail_closed(self):
+        import numbers as _n
+
+        class BrokenReal:
+            def __float__(self):
+                return 1.5
+
+            def as_integer_ratio(self):
+                raise TypeError("x")
+        _n.Real.register(BrokenReal)
+        with pytest.raises(FinancialPeriodAdapterError, match="精確表示"):
+            adapt_financial_period(make_raw([ob("cash", BrokenReal())]))
+
+    def test_new_reason_code_registered_with_clean_detail(self):
+        assert "unrepresentable_value" in GAP_REASON_CODES
+        g = next(x for x in _cash([TINY]).gaps if x.item == "cash")
+        assert g.detail.strip() and "cash" in g.detail
+
+    def test_exact_helper_values(self):
+        assert fpa._exact("cash", 0.5) == Fraction(1, 2)
+        assert fpa._exact("cash", 7) == Fraction(7)
+        assert fpa._exact("cash", Fraction(1, 3)) == Fraction(1, 3)
+        assert fpa._exact("cash", float("nan")) is None and fpa._exact("cash", float("-inf")) is None
+        assert fpa._exact("cash", 0.1) != Fraction(1, 10)
+
+
+class TestPathologicalNumericTypes:
+    @pytest.mark.parametrize("cls", _PATHOLOGICAL, ids=lambda c: c.__name__)
+    @pytest.mark.parametrize("ev", list(EVIDENCE_KINDS))
+    def test_all_pathological_types_raise_adapter_error_exactly(self, cls, ev):
+        with pytest.raises(Exception) as ei:
+            adapt_financial_period(make_raw([ob("cash", cls(), ev)]))
+        assert type(ei.value) is FinancialPeriodAdapterError
+        msg = str(ei.value)
+        assert "cash" in msg and cls.__name__ in msg and "12345" not in msg and "boom" not in msg
+
+    @pytest.mark.parametrize("cls", _PATHOLOGICAL, ids=lambda c: c.__name__)
+    def test_pathological_through_build_evidence_too(self, cls):
+        with pytest.raises(FinancialPeriodAdapterError):
+            build_evidence_from_raw(make_raw([ob("cash", cls())]))
+
+    @pytest.mark.parametrize("cls", [_FloatInterruptReal, _RatioInterruptReal],
+                             ids=lambda c: c.__name__)
+    def test_base_exception_is_not_swallowed(self, cls):
+        # _FloatInterruptReal 走 float() 路徑，_RatioInterruptReal 走精確值路徑；兩條都不得吞 BaseException
+        with pytest.raises(KeyboardInterrupt):
+            adapt_financial_period(make_raw([ob("cash", cls())]))
+
+    def test_known_handled_paths_do_not_become_raise(self):
+        np = pytest.importorskip("numpy")
+        assert gaps_of(_cash([float("nan")])) == {"cash": "non_finite_value"}
+        assert gaps_of(_cash([np.float32("inf")])) == {"cash": "non_finite_value"}
+        assert gaps_of(_cash([TINY])) == {"cash": "unrepresentable_value"}
+        assert gaps_of(_cash([Fraction(1, 10 ** 310)])) == {"cash": "unrepresentable_value"}
+
+
+class TestLongdoubleExactness:
+    def test_adjacent_longdoubles_with_same_double_conflict(self):
+        np = pytest.importorskip("numpy")
+        if np.finfo(np.longdouble).nmant <= np.finfo(np.float64).nmant:
+            pytest.skip("此平台 np.longdouble 精度與 float64 相同，無法構造「轉 double 後相同」的相鄰值")
+        a = np.longdouble(1)
+        b = np.nextafter(a, np.longdouble(2))
+        assert a != b and float(a) == float(b)               # 前提：不同的 longdouble，同一個 double
+        for pair in ([a, b], [b, a]):
+            assert gaps_of(_cash(pair)) == {"cash": "conflicting_observations"}
+        assert "cash" not in gaps_of(_cash([a, np.longdouble(1)]))   # 相同值仍合併
+
+
+class TestMixedNoValueReasons:
+    """兩筆都「無值」但原因不同，不得被當成一致（以現行正式碼行為為準：皆為衝突）。"""
+
+    @pytest.mark.parametrize("pair", [
+        (("source_absent", None), ("source_reported", float("nan"))),
+        (("legacy_default", 0.0), ("legacy_reset", 0.0)),
+        (("source_absent", None), ("legacy_default", 0.0)),
+        (("source_absent", None), ("legacy_reset", None)),
+        (("source_reported", None), ("source_absent", None)),
+        (("source_reported", None), ("source_reported", float("inf"))),
+    ])
+    def test_every_permutation_is_conflict(self, pair):
+        for order in (pair, pair[::-1]):
+            a = adapt_financial_period(make_raw(full_obs(drop=("cash",)) + [
+                ob("cash", v, ev) for ev, v in order]))
+            assert a.period.items["cash"] is None
+            assert gaps_of(a) == {"cash": "conflicting_observations"}
+
+    def test_same_reason_no_value_pairs_still_merge(self):
+        for ev, v in (("source_absent", None), ("legacy_default", 0.0), ("legacy_reset", None)):
+            a = adapt_financial_period(make_raw(full_obs(drop=("cash",)) + [
+                ob("cash", v, ev), ob("cash", None, ev)]))
+            assert len(gaps_of(a)) == 1 and gaps_of(a)["cash"] != "conflicting_observations"
+
+
+class TestSubnormalFailClosed:
+    MIN = sys.float_info.min
+
+    def test_constant_equals_sys_float_info_min(self):
+        assert fpa._FLOAT_MIN_NORMAL == sys.float_info.min
+
+    @pytest.mark.parametrize("sign", [1, -1])
+    def test_non_double_subnormal_is_unrepresentable(self, sign):
+        v = sign * Fraction(1, 10 ** 310)
+        assert 0.0 < abs(float(v)) < self.MIN                 # 前提：落在次正規區、未下溢成 0
+        a = _cash([v])
+        assert a.period.items["cash"] is None
+        assert gaps_of(a) == {"cash": "unrepresentable_value"}
+
+    @pytest.mark.parametrize("v", [5e-324, -5e-324, 1e-310, -1e-310])
+    def test_float_subnormal_originals_are_output(self, v):
+        a = _cash([v])
+        assert a.period.items["cash"] == v and "cash" not in gaps_of(a)
+
+    def test_exactly_representable_fraction_subnormal_is_output(self):
+        a = _cash([Fraction(5e-324), Fraction(1e-310)])       # 兩個不同值 → 衝突，但各自單獨可輸出
+        assert gaps_of(a) == {"cash": "conflicting_observations"}
+        for v in (5e-324, 1e-310):
+            b = _cash([Fraction(v)])
+            assert b.period.items["cash"] == v and "cash" not in gaps_of(b)
+
+    def test_numpy_float32_subnormal_double_exact_is_output(self):
+        np = pytest.importorskip("numpy")
+        v = np.float32(1e-40)                                 # float32 次正規，但轉 double 為正規值
+        a = _cash([v])
+        assert a.period.items["cash"] == float(v) and "cash" not in gaps_of(a)
+
+    def test_boundary_min_normal_and_neighbours(self):
+        m = self.MIN
+        below = math.nextafter(m, 0.0)                        # 最大次正規 double（本身可精確表示）
+        above = math.nextafter(m, 1.0)
+        for v in (m, below, above, -m, -below):
+            a = _cash([v])
+            assert a.period.items["cash"] == v and "cash" not in gaps_of(a), v
+        # 恰在 min 與其下一個 double 之間、會被捨入成次正規 double（值不同）→ fail closed
+        mid_below = Fraction(below) + Fraction(5e-324) / 4
+        assert float(mid_below) == below and Fraction(below) != mid_below
+        assert gaps_of(_cash([mid_below])) == {"cash": "unrepresentable_value"}
+        # 在 min 之下極近處、會被捨入成 min（正規值）→ 屬正常範圍捨入，照常輸出
+        round_up = Fraction(m) - Fraction(1, 10 ** 330)
+        assert float(round_up) == m
+        a = _cash([round_up])
+        assert a.period.items["cash"] == m and "cash" not in gaps_of(a)
+        # 在 min 之上的非 double 值（正常範圍捨入）→ 輸出
+        above_mid = Fraction(m) + Fraction(1, 10 ** 330)
+        b = _cash([above_mid])
+        assert b.period.items["cash"] == m and "cash" not in gaps_of(b)
+
+    def test_normal_range_half_ulp_rounding_still_accepted(self):
+        for v in (Fraction(1, 3), 2 ** 53 + 1, Fraction(2, 3), Fraction(10 ** 20 + 1, 7)):
+            a = _cash([v])
+            assert a.period.items["cash"] is not None and "cash" not in gaps_of(a), v
+
+    def test_identical_inexact_subnormals_merge_and_different_conflict(self):
+        v = Fraction(1, 10 ** 310)
+        assert gaps_of(_cash([v, Fraction(1, 10 ** 310)])) == {"cash": "unrepresentable_value"}
+        assert gaps_of(_cash([v, 2 * v])) == {"cash": "conflicting_observations"}
+
+    def test_marker_with_inexact_subnormal_still_contradiction(self):
+        for ev in ("legacy_default", "legacy_reset", "source_absent"):
+            with pytest.raises(FinancialPeriodAdapterError):
+                _cash([Fraction(1, 10 ** 310)], ev)
+
+
 class TestAnomalyVersusReset:
     def _obs(self, oi_kind):
         base = full_obs(drop=("operating_income",))
@@ -535,10 +898,11 @@ class TestGapOrdering:
 # ── 所有 reason code 情境 ────────────────────────────────────────────
 
 class TestEveryReasonCodeReachable:
-    def test_all_seven_codes_produced(self):
+    def test_all_eight_codes_produced(self):
         obs = [ob("revenue", None, "source_absent"), ob("cogs", 0.0, "legacy_default"),
                ob("gross_profit", 0.0, "legacy_reset"), ob("operating_income", float("nan")),
-               ob("net_income", 1.0), ob("net_income", 2.0), ob("total_assets", None)]
+               ob("net_income", 1.0), ob("net_income", 2.0), ob("total_assets", None),
+               ob("equity", Fraction(1, 10 ** 400))]
         a = adapt_financial_period(make_raw(obs))
         codes = set(gaps_of(a).values())
         assert codes == set(GAP_REASON_CODES)
@@ -652,7 +1016,6 @@ class TestValidationRaises:
 
     def test_numeric_acceptance_matches_pack(self):
         """與 pack 的 _normalize_items 型別行為一致：同一個值，兩邊同進同出。"""
-        from fractions import Fraction
         np = pytest.importorskip("numpy")
         samples = [1, 1.5, True, False, Decimal("1"), "1", 1 + 2j, Fraction(1, 2), [1], b"1",
                    np.int64(1), np.int32(1), np.float32(1.5), np.float64(1), np.bool_(True)]
@@ -785,7 +1148,8 @@ def _all_gap_strings() -> list[str]:
         out.append(code)
     obs = [ob("revenue", None, "source_absent"), ob("cogs", 0.0, "legacy_default"),
            ob("gross_profit", 0.0, "legacy_reset"), ob("operating_income", float("nan")),
-           ob("net_income", 1.0), ob("net_income", 2.0), ob("total_assets", None)]
+           ob("net_income", 1.0), ob("net_income", 2.0), ob("total_assets", None),
+           ob("equity", Fraction(1, 10 ** 400))]
     a = adapt_financial_period(make_raw(obs))
     for g in a.gaps:
         out += [g.item, g.reason_code, g.detail]
@@ -824,13 +1188,15 @@ class TestWording:
                        "不判斷", "不處理幣別", "換算", "PIT", "零 production caller", "28", "58",
                        "AdaptedEvidence", "成對", "numbers.Real", "不得丟失", "source_label",
                        "原樣回顯", "大小寫", "timedelta64", "下溢", "與觀測順序無關",
-                       "gap.detail", "含 ``0.0``"):
+                       "gap.detail", "含 ``0.0``", "精確值", "unrepresentable_value", "fail closed"):
             assert needle in doc, needle
 
-    def test_reason_code_set_is_exactly_seven(self):
+    def test_reason_code_set_is_exactly_eight(self):
+        # 第 8 碼 unrepresentable_value 為 R23.68 新增（非零原值轉 float 下溢 / 溢位）
         assert GAP_REASON_CODES == ("not_observed", "source_absent", "legacy_default_zero",
                                     "legacy_anomaly_reset", "non_finite_value",
-                                    "conflicting_observations", "value_missing_for_reported")
+                                    "conflicting_observations", "value_missing_for_reported",
+                                    "unrepresentable_value")
 
 
 # ── 模組純度（AST）───────────────────────────────────────────────────
@@ -862,7 +1228,7 @@ class TestModulePurity:
 
     def test_only_stdlib_and_pack_imports(self):
         assert set(_imported_modules()) <= {
-            "__future__", "datetime", "math", "numbers", "dataclasses", "types", "typing",
+            "__future__", "datetime", "math", "numbers", "dataclasses", "fractions", "types", "typing",
             "collections.abc",
             "src.compute.health.financial_health_evidence"}
 
@@ -1036,6 +1402,60 @@ def _assert_source_absent_zero_raises() -> None:
         _expect_raises(lambda v=v: adapt_financial_period(make_raw([ob("cash", v, "source_absent")])))
 
 
+def _assert_exact_semantics() -> None:
+    assert gaps_of(_cash([TINY])) == {"cash": "unrepresentable_value"}
+    assert _cash([TINY]).period.items["cash"] is None
+    assert gaps_of(_cash([2 ** 53, 2 ** 53 + 1])) == {"cash": "conflicting_observations"}
+    assert gaps_of(_cash([Fraction(1, 10), 0.1])) == {"cash": "conflicting_observations"}
+    ok = _cash([0.5, Fraction(1, 2), 0.5])
+    assert ok.period.items["cash"] == 0.5 and "cash" not in gaps_of(ok)
+    z = _cash([0, -0.0, Fraction(0)])
+    assert z.period.items["cash"] == 0.0 and z.period.items["cash"] is not None and "cash" not in gaps_of(z)
+
+
+def _assert_tiny_marker_raises() -> None:
+    for ev in ("legacy_default", "legacy_reset", "source_absent"):
+        for t in (TINY, -TINY):
+            _expect_raises(lambda ev=ev, t=t: adapt_financial_period(make_raw([ob("cash", t, ev)])))
+
+
+def _assert_pathological_raise_adapter_error() -> None:
+    for cls in _PATHOLOGICAL:
+        for ev in EVIDENCE_KINDS:
+            try:
+                adapt_financial_period(make_raw([ob("cash", cls(), ev)]))
+            except FinancialPeriodAdapterError:
+                continue
+            except Exception as exc:  # noqa: BLE001 — 洩漏別種例外也算失敗
+                raise AssertionError(f"{cls.__name__}/{ev} 洩漏 {type(exc).__name__}") from exc
+            raise AssertionError("應 raise")
+
+
+def _assert_longdouble_exact() -> None:
+    np = pytest.importorskip("numpy")
+    if np.finfo(np.longdouble).nmant <= np.finfo(np.float64).nmant:
+        pytest.skip("平台 longdouble 精度等同 float64")
+    a = np.longdouble(1)
+    b = np.nextafter(a, np.longdouble(2))
+    assert gaps_of(_cash([a, b])) == {"cash": "conflicting_observations"}
+
+
+def _assert_no_value_reasons_conflict() -> None:
+    combos = [(("source_absent", None), ("source_reported", float("nan"))),
+              (("legacy_default", 0.0), ("legacy_reset", 0.0)),
+              (("source_absent", None), ("legacy_default", 0.0))]
+    for pair in combos:
+        for order in (pair, pair[::-1]):
+            a = adapt_financial_period(make_raw(full_obs(drop=("cash",)) + [
+                ob("cash", v, ev) for ev, v in order]))
+            assert gaps_of(a) == {"cash": "conflicting_observations"}
+
+
+def _assert_subnormal_fail_closed() -> None:
+    assert gaps_of(_cash([Fraction(1, 10 ** 310)])) == {"cash": "unrepresentable_value"}
+    assert _cash([1e-310]).period.items["cash"] == 1e-310
+
+
 def _assert_currency_paired() -> None:
     res = build_evidence_from_raw(make_raw(currency="USD"))
     assert isinstance(res, AdaptedEvidence) and res.currency == "USD"
@@ -1059,7 +1479,7 @@ class TestMutationGuards:
         orig = fpa._outcome
         monkeypatch.setattr(
             fpa, "_outcome",
-            lambda o: (None, 0.0) if o.evidence == "legacy_default" else orig(o))
+            lambda o: (None, 0.0, None) if o.evidence == "legacy_default" else orig(o))
         with pytest.raises(self._RED):
             _assert_legacy_default_not_zero()
 
@@ -1067,7 +1487,7 @@ class TestMutationGuards:
         orig = fpa._outcome
         monkeypatch.setattr(
             fpa, "_outcome",
-            lambda o: (None, 0.0) if o.evidence == "legacy_reset" else orig(o))
+            lambda o: (None, 0.0, None) if o.evidence == "legacy_reset" else orig(o))
         with pytest.raises(self._RED):
             _assert_legacy_reset_not_zero()
 
@@ -1075,10 +1495,10 @@ class TestMutationGuards:
         orig = fpa._outcome
 
         def mutant(o):
-            reason, val = orig(o)
+            reason, val, ex = orig(o)
             if reason is None and val is not None and abs(val) < 1e-12:
-                return "not_observed", None
-            return reason, val
+                return "not_observed", None, None
+            return reason, val, ex
         monkeypatch.setattr(fpa, "_outcome", mutant)
         with pytest.raises(self._RED):
             _assert_true_zero_kept()
@@ -1086,12 +1506,13 @@ class TestMutationGuards:
     def test_conflict_resolved_by_max_goes_red(self, monkeypatch):
         monkeypatch.setattr(
             fpa, "_merge_outcomes",
-            lambda outs: max(outs, key=lambda x: (x[1] is not None, x[1] if x[1] is not None else 0.0)))
+            lambda outs: max(((x[0], x[1]) for x in outs),
+                             key=lambda x: (x[1] is not None, x[1] if x[1] is not None else 0.0)))
         with pytest.raises(self._RED):
             _assert_conflict_not_resolved()
 
     def test_conflict_resolved_by_last_wins_goes_red(self, monkeypatch):
-        monkeypatch.setattr(fpa, "_merge_outcomes", lambda outs: outs[-1])
+        monkeypatch.setattr(fpa, "_merge_outcomes", lambda outs: outs[-1][:2])
         with pytest.raises(self._RED):
             _assert_conflict_not_resolved()
 
@@ -1145,8 +1566,8 @@ class TestMutationGuards:
         orig = fpa._outcome
 
         def mutant(o):
-            reason, val = orig(o)
-            return (None, 0.0) if reason == "non_finite_value" else (reason, val)
+            reason, val, ex = orig(o)
+            return (None, 0.0, None) if reason == "non_finite_value" else (reason, val, ex)
         monkeypatch.setattr(fpa, "_outcome", mutant)
         with pytest.raises(self._RED):
             _assert_non_finite_not_zero()
@@ -1155,8 +1576,8 @@ class TestMutationGuards:
         orig = fpa._outcome
 
         def mutant(o):
-            reason, val = orig(o)
-            return (None, 0.0) if reason == "value_missing_for_reported" else (reason, val)
+            reason, val, ex = orig(o)
+            return (None, 0.0, None) if reason == "value_missing_for_reported" else (reason, val, ex)
         monkeypatch.setattr(fpa, "_outcome", mutant)
         with pytest.raises(self._RED):
             _assert_reported_none_not_zero()
@@ -1217,7 +1638,7 @@ class TestMutationGuards:
         def mutant(o):
             if (o.evidence != "source_reported" and o.value is not None
                     and not math.isfinite(float(o.value))):
-                return None, 0.0
+                return None, 0.0, None
             return orig(o)
         monkeypatch.setattr(fpa, "_outcome", mutant)
         with pytest.raises(self._RED):
@@ -1287,6 +1708,125 @@ class TestMutationGuards:
         monkeypatch.setattr(fpa, "_validate_value", mutant)
         with pytest.raises(AssertionError):
             _assert_unconvertible_real_is_adapter_error()
+
+    def test_baseline_exact_guards_pass(self):
+        _assert_exact_semantics()
+        _assert_tiny_marker_raises()
+
+    def test_merge_compares_float_value_instead_of_exact_goes_red(self, monkeypatch):
+        def mutant(outs):
+            first = outs[0]
+            if all(o[0] == first[0] and o[1] == first[1] for o in outs[1:]):
+                return first[0], first[1]
+            return "conflicting_observations", None
+        monkeypatch.setattr(fpa, "_merge_outcomes", mutant)
+        with pytest.raises(self._RED):
+            _assert_exact_semantics()
+
+    def test_merge_uses_approximate_equality_goes_red(self, monkeypatch):
+        def mutant(outs):
+            first = outs[0]
+            same = all(o[0] == first[0] and (o[1] is None) == (first[1] is None)
+                       and (o[1] is None or math.isclose(o[1], first[1], rel_tol=1e-9))
+                       for o in outs[1:])
+            return (first[0], first[1]) if same else ("conflicting_observations", None)
+        monkeypatch.setattr(fpa, "_merge_outcomes", mutant)
+        with pytest.raises(self._RED):
+            _assert_exact_semantics()
+
+    def test_underflow_treated_as_true_zero_goes_red(self, monkeypatch):
+        orig = fpa._outcome
+
+        def mutant(o):
+            reason, val, ex = orig(o)
+            return (None, 0.0, ex) if reason == "unrepresentable_value" else (reason, val, ex)
+        monkeypatch.setattr(fpa, "_outcome", mutant)
+        with pytest.raises(self._RED):
+            _assert_exact_semantics()
+
+    def test_new_gap_removed_goes_red(self, monkeypatch):
+        orig = fpa._outcome
+
+        def mutant(o):
+            reason, val, ex = orig(o)
+            return (None, None, ex) if reason == "unrepresentable_value" else (reason, val, ex)
+        monkeypatch.setattr(fpa, "_outcome", mutant)
+        with pytest.raises(self._RED):
+            _assert_exact_semantics()
+
+    def test_marker_contradiction_judged_on_float_goes_red(self, monkeypatch):
+        orig = fpa._validate_value
+
+        def mutant(obs):
+            if obs.value is not None and obs.evidence != "source_reported":
+                return orig(dataclasses.replace(obs, value=float(obs.value)))
+            return orig(obs)
+        monkeypatch.setattr(fpa, "_validate_value", mutant)
+        with pytest.raises(self._RED):
+            _assert_tiny_marker_raises()
+
+    def test_exact_representation_replaced_by_float_goes_red(self, monkeypatch):
+        orig = fpa._exact
+
+        def mutant(item, v):
+            r = orig(item, v)
+            return None if r is None else Fraction(float(v))
+        monkeypatch.setattr(fpa, "_exact", mutant)
+        with pytest.raises(self._RED):
+            _assert_exact_semantics()
+
+    def test_baseline_r2369_guards_pass(self):
+        _assert_pathological_raise_adapter_error()
+        _assert_no_value_reasons_conflict()
+        _assert_subnormal_fail_closed()
+        _assert_longdouble_exact()
+
+    def test_exact_narrowed_to_some_exceptions_goes_red(self, monkeypatch):
+        def mutant(item, v):
+            try:
+                return fpa._exact_unsafe(item, v)
+            except (TypeError, ValueError, OverflowError):
+                raise FinancialPeriodAdapterError("mutant") from None
+        monkeypatch.setattr(fpa, "_exact", mutant)
+        with pytest.raises(self._RED):
+            _assert_pathological_raise_adapter_error()
+
+    def test_to_float_narrowed_goes_red(self, monkeypatch):
+        def mutant(item, v):
+            try:
+                return float(v)
+            except (TypeError, ValueError, OverflowError):
+                raise FinancialPeriodAdapterError("mutant") from None
+        monkeypatch.setattr(fpa, "_to_float", mutant)
+        with pytest.raises(self._RED):
+            _assert_pathological_raise_adapter_error()
+
+    def test_longdouble_float_branch_goes_red(self, monkeypatch):
+        orig = fpa._exact
+
+        def mutant(item, v):
+            r = orig(item, v)
+            if r is None or isinstance(v, numbers.Rational):
+                return r
+            return Fraction(float(v))
+        monkeypatch.setattr(fpa, "_exact", mutant)
+        with pytest.raises(self._RED):
+            _assert_longdouble_exact()
+
+    def test_merge_ignores_gap_reason_goes_red(self, monkeypatch):
+        def mutant(outs):
+            first = outs[0]
+            if all(o[2] == first[2] for o in outs[1:]):
+                return first[0], first[1]
+            return "conflicting_observations", None
+        monkeypatch.setattr(fpa, "_merge_outcomes", mutant)
+        with pytest.raises(self._RED):
+            _assert_no_value_reasons_conflict()
+
+    def test_subnormal_criterion_removed_goes_red(self, monkeypatch):
+        monkeypatch.setattr(fpa, "_FLOAT_MIN_NORMAL", 0.0)
+        with pytest.raises(self._RED):
+            _assert_subnormal_fail_closed()
 
     def test_currency_dropped_goes_red(self, monkeypatch):
         orig = fpa.adapt_financial_period
