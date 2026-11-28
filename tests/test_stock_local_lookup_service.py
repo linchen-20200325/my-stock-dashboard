@@ -132,6 +132,51 @@ def _unblock_fifo(path):
     return go
 
 
+class _TargetFstat:
+    """只對「被測程式自己開出的目標 fd」注入 `os.fstat` 行為；其餘 fd（含 pytest 自己的）一律轉發真函式。
+
+    背景（MF-2）：pytest 9.2 內部會呼叫 `os.fstat`；舊測試用 `monkeypatch.setattr(svc.os, "fstat", …)` 全域替換，
+    注入的 OSError／謊報會打到 pytest 自己。做法：包住 `os.open`（記錄回傳 fd；`kind`＝"dir" 取 O_DIRECTORY 開的、
+    "file" 取其餘）與 `os.close`（目標 fd 一關閉就移出，避免 fd 號碼被重用後誤注入），`os.fstat` 只對目標 fd 呼叫 `inject`。
+    `opened`／`closed` 記錄**所有**經此包裝的 open／close（供 fd 洩漏斷言）；`hits` 記錄注入次數（證明注入真的發生）。"""
+
+    def __init__(self, monkeypatch, kind: str, inject):
+        assert kind in ("dir", "file")
+        self.opened: list[int] = []
+        self.closed: list[int] = []
+        self.hits: list[int] = []
+        self._targets: set[int] = set()
+        real_open, real_close, real_fstat = os.open, os.close, os.fstat
+        want_dir = kind == "dir"
+
+        def o(path, flags, *a, **k):
+            fd = real_open(path, flags, *a, **k)
+            self.opened.append(fd)
+            if bool(flags & getattr(os, "O_DIRECTORY", 0)) == want_dir:
+                self._targets.add(fd)
+            return fd
+
+        def c(fd):
+            self._targets.discard(fd)
+            self.closed.append(fd)
+            return real_close(fd)
+
+        def fs(fd):
+            st = real_fstat(fd)
+            if fd in self._targets:
+                self.hits.append(fd)
+                return inject(fd, st)
+            return st
+
+        monkeypatch.setattr(svc.os, "open", o)
+        monkeypatch.setattr(svc.os, "close", c)
+        monkeypatch.setattr(svc.os, "fstat", fs)
+
+
+def _raise_eio(fd, st):
+    raise OSError(errno.EIO, "SECRET")
+
+
 def _all_text(resp) -> str:
     """回應的所有可見面：repr＋每個欄位＋vm 的 repr。"""
     parts = [repr(resp), str(resp.reason_code), repr(resp.filenames), repr(resp.vm)]
@@ -637,26 +682,24 @@ class TestQueryFilename:
 
     def test_fstat_oserror_is_unreadable_and_closes(self, world, monkeypatch):
         _put(world)
-        opened, closed = [], []
-        real_open, real_close, real_fstat = os.open, os.close, os.fstat
-
-        def fs(fd):
-            st = real_fstat(fd)
-            if stat.S_ISDIR(st.st_mode):
-                return st
-            raise OSError(errno.EIO, "SECRET")
-
-        def o(*a, **k):
-            fd = real_open(*a, **k)
-            opened.append(fd)
-            return fd
-
-        monkeypatch.setattr(svc.os, "fstat", fs)
-        monkeypatch.setattr(svc.os, "open", o)
-        monkeypatch.setattr(svc.os, "close", lambda fd: (closed.append(fd), real_close(fd))[1])
+        hook = _TargetFstat(monkeypatch, "file", _raise_eio)           # 只對「檔案 fd」注入（目錄 fd 與 pytest 的 fstat 不受影響）
         r = _run(world, _query())
-        assert r.reason_code == REASON_FILE_UNREADABLE and len(opened) == 2 and sorted(opened) == sorted(closed)
+        assert hook.hits and len(hook.hits) == 1
+        assert r.reason_code == REASON_FILE_UNREADABLE and len(hook.opened) == 2 and sorted(hook.opened) == sorted(hook.closed)
         assert "SECRET" not in _all_text(r)
+
+    def test_fstat_injection_does_not_outlive_the_target_fd(self, world, monkeypatch):
+        """目標 fd 一關閉就不再注入：fd 號碼被重用（例如 pytest 或之後的 pipe）時，`os.fstat` 必須是真的。"""
+        _put(world)
+        hook = _TargetFstat(monkeypatch, "file", _raise_eio)
+        _run(world, _query())
+        assert hook.hits
+        r, w = os.pipe()
+        try:
+            assert os.fstat(r).st_nlink >= 1 and os.fstat(w).st_nlink >= 1   # 若殘留注入且號碼重用，這裡會拋 OSError
+        finally:
+            os.close(r)
+            os.close(w)
 
     def test_read_oserror_is_unreadable(self, world, monkeypatch):
         _put(world)
@@ -701,22 +744,18 @@ class TestFileSize:
 
     def test_read_cap_when_fstat_lies_about_size(self, world, monkeypatch):
         _put(world, data=b"x" * (MAX_FILE_BYTES + 10))
-        real_fstat = os.fstat
 
         class _St:
             st_mode = stat.S_IFREG | 0o644
             st_size = 1
             st_nlink = 1
 
-        def lying(fd):
-            real = real_fstat(fd)
-            return real if stat.S_ISDIR(real.st_mode) else _St()
-
-        monkeypatch.setattr(svc.os, "fstat", lying)
+        hook = _TargetFstat(monkeypatch, "file", lambda fd, st: _St())  # 只對檔案 fd 謊報大小
         total = []
         real_read = os.read
         monkeypatch.setattr(svc.os, "read", lambda fd, n: (lambda b: (total.append(len(b)), b)[1])(real_read(fd, n)))
         r = _run(world, _query())
+        assert len(hook.hits) == 1
         assert r.reason_code == REASON_FILE_TOO_LARGE
         assert sum(total) == MAX_FILE_BYTES + 1                    # 最多讀 MAX+1
 
@@ -1367,9 +1406,11 @@ class TestDirectoryFdRace:
     @pytest.mark.parametrize("op_req", [_list, _query])
     def test_fstat_of_dir_oserror_fails_closed(self, world, monkeypatch, op_req):
         _put(world)
-        monkeypatch.setattr(svc.os, "fstat", lambda fd: (_ for _ in ()).throw(OSError(errno.EIO, "SECRET")))
+        hook = _TargetFstat(monkeypatch, "dir", _raise_eio)            # 只對目錄 fd 注入
         r = _run(world, op_req())
+        assert len(hook.hits) == 1
         assert r.reason_code == REASON_DIR_INVALID and "SECRET" not in _all_text(r)
+        assert sorted(hook.opened) == sorted(hook.closed)
 
     def test_dir_open_oserror_fails_closed(self, world, monkeypatch):
         _put(world)
@@ -1498,12 +1539,17 @@ class TestFdRealpathHostileReadlink:
         assert opened and sorted(opened) == sorted(closed)
         assert self._fd_count() == before
         assert "SECRETX" not in _all_text(r)
+        assert str(world["data"]) not in _all_text(r) and "/tmp" not in _all_text(r)      # 路徑不外洩
 
     @pytest.mark.parametrize("label,behaviour,expected", [
         ("bytes", lambda p: b"/tmp", None), ("int", lambda p: 7, None), ("none", lambda p: None, None),
         ("value_error", lambda p: (_ for _ in ()).throw(ValueError("x")), None),
         ("os_error", lambda p: (_ for _ in ()).throw(OSError(errno.ENOENT, "x")), None),
         ("str", lambda p: "/some/where", "/some/where"),
+        ("path_object", lambda p: Path("/tmp"), None),
+        ("permission_error", lambda p: (_ for _ in ()).throw(PermissionError(errno.EACCES, "x")), None),
+        ("nul_string_not_judged_here", lambda p: "/tmp/\x00x", "/tmp/\x00x"),    # helper 不驗內容；呼叫端比對 ctrl 而 fail closed
+        ("empty_string_not_judged_here", lambda p: "", ""),
     ])
     def test_helper_contract(self, monkeypatch, label, behaviour, expected):
         monkeypatch.setattr(svc.os, "readlink", behaviour)
@@ -1511,7 +1557,24 @@ class TestFdRealpathHostileReadlink:
 
     def test_docstring_no_longer_claims_raising(self):
         doc = svc._fd_realpath.__doc__ or ""
-        assert "永不 raise" in doc and "str" in doc
+        assert "永不 raise" in doc and "str" in doc and "fail closed" in doc
+
+    @pytest.mark.parametrize("op_req", [_list, _query])
+    def test_unexpected_exception_type_is_never_success_and_never_leaks_the_dir_fd(self, world, monkeypatch, op_req):
+        """helper 只吞 OSError／ValueError；其他例外型別如實拋出（程式錯誤），**不得**被偽裝成 ok、且目錄 fd 必須由 finally 關閉。"""
+        _put(world)
+        real_readlink = os.readlink
+
+        def readlink(path, *a, **k):
+            if str(path).startswith("/proc/self/fd/"):
+                raise RuntimeError("SECRETX")
+            return real_readlink(path, *a, **k)
+
+        monkeypatch.setattr(svc.os, "readlink", readlink)
+        before = self._fd_count()
+        with pytest.raises(RuntimeError):
+            _run(world, op_req())
+        assert self._fd_count() == before
 
 
 class TestHardLinks:
@@ -1782,32 +1845,324 @@ class TestStaticGuards:
             assert bad not in src, bad
 
 
+# ── 「無 production caller」掃描（R23.65）：唯一合法引用＝repo 根的 app_ui2.py，且以 AST 鎖定形狀 ─────────────────────
+SVC_NAME = "stock_local_lookup_service"
+FN_NAME = "run_local_lookup"
+ENV_NAME = "UI2_LOCAL_OHLCV_DIR"
+TARGET_MODULE = "src.services.stock_local_lookup_service"
+SVC_REL = "src/services/stock_local_lookup_service.py"
+APP_UI2_REL = "app_ui2.py"                         # 精確的 repo 相對路徑；不做 basename／glob／前綴比對
+OPT_IN_FN = "_read_local_ohlcv_opt_in"
+#: 掃描的 production 目錄（遞迴 *.py）；另掃 repo 根的所有 `*.py*` 檔（含 `xapp_ui2.py`、`app_ui2.py.bak`、`app_ui22.py`）。
+#: 不掃：tests／docs／scratchpad／data_cache 等非 production 目錄。
+PRODUCTION_DIRS = ("src", "shared", "scripts", "infra", "mcp_server", "tools")
+_BANNED_DYNAMIC_NAMES = frozenset({"importlib", "__import__", "getattr", "import_module", "eval", "exec", "globals",
+                                   "locals", "vars", "compile"})
+
+KIND_MODULE = "module"            # 模組名／函式名引用
+KIND_ENV = "env"                  # 環境變數名引用
+
+
+def production_files(root: Path) -> list[tuple[str, Path]]:
+    found: dict[str, Path] = {}
+    for base in PRODUCTION_DIRS:
+        d = root / base
+        if d.is_dir():
+            for p in d.rglob("*.py"):
+                if p.is_file():
+                    found[p.relative_to(root).as_posix()] = p
+    for p in root.glob("*.py*"):
+        if p.is_file():
+            found[p.relative_to(root).as_posix()] = p
+    return sorted(found.items())
+
+
+def check_app_ui2_source(source: str) -> list[tuple[str, str]]:
+    """app_ui2.py 的「唯一例外」形狀（AST）；回傳違規清單 [(kind, 訊息)]，空＝合規。
+
+    **只要出現任一名稱（服務模組名／函式名／環境變數名）就走嚴格檢查；完全沒有引用（尚未接線）視為合規。**
+    鎖定：恰一個絕對 ImportFrom（module＝TARGET_MODULE、單一 name＝run_local_lookup、無 alias）；`run_local_lookup` 這個 Name 恰一次 Load、
+    且為 `run(..., local_lookup=(run_local_lookup if _read_local_ohlcv_opt_in() else None))` 的 IfExp.body；無 attribute／動態取用旁路；
+    `UI2_LOCAL_OHLCV_DIR` 在非 docstring 字串常數中恰一個、且為函式 `_read_local_ohlcv_opt_in` 內 `os.environ.get(...)` 的第一個參數。"""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return [(KIND_MODULE, "syntax_error")]
+    if not any(x in source for x in (SVC_NAME, FN_NAME, ENV_NAME)):
+        return []                                  # 尚未接線（整合前的狀態）：沒有任何引用 → 沒有東西要鎖
+    out: list[tuple[str, str]] = []
+    parents: dict[ast.AST, ast.AST] = {}
+    for n in ast.walk(tree):
+        for c in ast.iter_child_nodes(n):
+            parents[c] = n
+    doc_ids: set[int] = set()
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body:
+            f = n.body[0]
+            if isinstance(f, ast.Expr) and isinstance(f.value, ast.Constant) and isinstance(f.value.value, str):
+                doc_ids.add(id(f.value))
+
+    # 1) imports
+    approved = 0
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                if SVC_NAME in a.name or a.name.split(".")[0] in _BANNED_DYNAMIC_NAMES:
+                    out.append((KIND_MODULE, f"import:{a.name}"))
+        elif isinstance(n, ast.ImportFrom):
+            mod = n.module or ""
+            names = [a.name for a in n.names]
+            touches = (SVC_NAME in mod or mod.split(".")[0] in _BANNED_DYNAMIC_NAMES
+                       or any(SVC_NAME in x or x == FN_NAME or x in _BANNED_DYNAMIC_NAMES for x in names))
+            if not touches:
+                continue
+            if (n.level == 0 and mod == TARGET_MODULE and len(n.names) == 1 and n.names[0].name == FN_NAME
+                    and n.names[0].asname is None):
+                approved += 1
+            else:
+                out.append((KIND_MODULE, "importfrom_not_the_exact_exception"))
+    if approved != 1:
+        out.append((KIND_MODULE, f"approved_import_count={approved}"))
+
+    # 2) attribute／動態取用旁路、字串常數
+    env_consts = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Attribute) and (n.attr in (FN_NAME, SVC_NAME) or n.attr in _BANNED_DYNAMIC_NAMES):
+            out.append((KIND_MODULE, f"attribute:{n.attr}"))
+        elif isinstance(n, ast.Name) and (n.id == SVC_NAME or n.id in _BANNED_DYNAMIC_NAMES):
+            out.append((KIND_MODULE, f"name:{n.id}"))
+        elif isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in doc_ids:
+            if FN_NAME in n.value or SVC_NAME in n.value:
+                out.append((KIND_MODULE, "string_constant_names_the_service"))
+            if ENV_NAME in n.value:
+                env_consts.append(n)
+
+    # 3) run_local_lookup 的 Name：恰一次 Load，且在核准的條件式注入位置
+    fn_names = [n for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == FN_NAME]
+    if any(not isinstance(n.ctx, ast.Load) for n in fn_names):
+        out.append((KIND_MODULE, "run_local_lookup_rebound"))
+    loads = [n for n in fn_names if isinstance(n.ctx, ast.Load)]
+    run_calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "run"]
+    if len(run_calls) != 1:
+        out.append((KIND_MODULE, f"run_call_count={len(run_calls)}"))
+    if len(loads) != 1:
+        out.append((KIND_MODULE, f"run_local_lookup_load_count={len(loads)}"))
+    else:
+        nm = loads[0]
+        ifx = parents.get(nm)
+        kw = parents.get(ifx) if ifx is not None else None
+        call = parents.get(kw) if kw is not None else None
+        stmt = parents.get(call) if call is not None else None
+        shape_ok = (
+            isinstance(ifx, ast.IfExp) and ifx.body is nm
+            and isinstance(ifx.orelse, ast.Constant) and ifx.orelse.value is None
+            and isinstance(ifx.test, ast.Call) and isinstance(ifx.test.func, ast.Name) and ifx.test.func.id == OPT_IN_FN
+            and not ifx.test.args and not ifx.test.keywords
+            and isinstance(kw, ast.keyword) and kw.arg == "local_lookup" and kw.value is ifx
+            and isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "run"
+            and isinstance(stmt, ast.Expr) and isinstance(parents.get(stmt), ast.Module))
+        if not shape_ok:
+            out.append((KIND_MODULE, "run_local_lookup_not_in_the_approved_conditional_injection"))
+
+    # 4) 環境變數字面值：非 docstring 的字串常數中恰一個，且是 `_read_local_ohlcv_opt_in` 內 os.environ.get 的第一個參數
+    if len(env_consts) != 1:
+        out.append((KIND_ENV, f"env_literal_count={len(env_consts)}"))
+    for c in env_consts[:1]:
+        call = parents.get(c)
+        fn = call
+        while fn is not None and not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            fn = parents.get(fn)
+        ok = (c.value == ENV_NAME and isinstance(call, ast.Call) and call.args and call.args[0] is c
+              and len(call.args) <= 2 and not call.keywords
+              and isinstance(call.func, ast.Attribute) and call.func.attr == "get"
+              and isinstance(call.func.value, ast.Attribute) and call.func.value.attr == "environ"
+              and isinstance(call.func.value.value, ast.Name) and call.func.value.value.id == "os"
+              and isinstance(fn, ast.FunctionDef) and fn.name == OPT_IN_FN and isinstance(parents.get(fn), ast.Module))
+        if not ok:
+            out.append((KIND_ENV, "env_literal_not_os_environ_get_in_the_opt_in_function"))
+    opt_defs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == OPT_IN_FN]
+    if len(opt_defs) != 1:
+        out.append((KIND_MODULE, f"opt_in_function_count={len(opt_defs)}"))
+    return out
+
+
+def scan_production(root: Path) -> list[tuple[str, str, str]]:
+    """對 `root` 做 production 掃描；回傳 [(repo 相對路徑, kind, 訊息)]，空＝合規。
+    除精確等於 `app_ui2.py` 者外，其他 production 檔對 SVC_NAME／FN_NAME／ENV_NAME 全面禁止（純文字比對，連註解字串都算）。"""
+    hits: list[tuple[str, str, str]] = []
+    for rel, path in production_files(root):
+        if rel == SVC_REL:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if rel == APP_UI2_REL:
+            hits += [(rel, k, m) for k, m in check_app_ui2_source(text)]
+            continue
+        for name, kind in ((SVC_NAME, KIND_MODULE), (FN_NAME, KIND_MODULE), (ENV_NAME, KIND_ENV)):
+            if name in text:
+                hits.append((rel, kind, name))
+    return hits
+
+
+GOOD_APP_UI2 = '''"""docstring 內提到 UI2_LOCAL_OHLCV_DIR 與 run_local_lookup 不算引用。"""
+import os
+
+import streamlit as st
+
+from src.services.connection_diag_service import run_connection_check
+from src.services.stock_local_lookup_service import run_local_lookup  # noqa: E402
+from src.ui2.shell import run
+
+
+def _read_local_ohlcv_opt_in() -> bool:
+    """opt-in：環境變數 `UI2_LOCAL_OHLCV_DIR` 已設且非空才開。"""
+    try:
+        v = os.environ.get("UI2_LOCAL_OHLCV_DIR")
+        return v is not None and v != ""
+    except Exception:
+        return False
+
+
+run(diag_check=run_connection_check, lookup_input=False,
+    local_lookup=(run_local_lookup if _read_local_ohlcv_opt_in() else None))
+'''
+
+
+def _mk_root(tmp_path: Path, files: dict[str, str]) -> Path:
+    root = tmp_path / "fakeroot"
+    for rel, text in files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    root.mkdir(exist_ok=True)
+    return root
+
+
+def _variant(old: str, new: str) -> str:
+    assert GOOD_APP_UI2.count(old) == 1, old
+    return GOOD_APP_UI2.replace(old, new)
+
+
 class TestNoProductionCaller:
-    NAME = "stock_local_lookup_service"
-
-    @staticmethod
-    def _py_files():
-        for base in ("src", "shared", "scripts"):
-            yield from (ROOT / base).rglob("*.py")
-        yield from ROOT.glob("app*.py")
-
     def test_no_production_module_imports_it(self):
-        hits = [p.relative_to(ROOT).as_posix() for p in self._py_files()
-                if p.resolve() != SVC_PATH and self.NAME in p.read_text(encoding="utf-8", errors="replace")]
+        hits = [h for h in scan_production(ROOT) if h[1] == KIND_MODULE]
         assert hits == []
+
+    def test_env_var_name_not_referenced_by_other_production_code(self):
+        hits = [h for h in scan_production(ROOT) if h[1] == KIND_ENV]
+        assert hits == []
+
+    def test_the_real_app_ui2_if_present_is_exactly_the_approved_shape(self):
+        p = ROOT / APP_UI2_REL
+        if p.exists():
+            assert check_app_ui2_source(p.read_text(encoding="utf-8")) == []
 
     def test_workflows_and_export_script_do_not_reference_it(self):
         paths = list((ROOT / ".github" / "workflows").glob("*")) + [ROOT / "scripts" / "export_stock_db.py"]
         assert (ROOT / "scripts" / "export_stock_db.py").exists()
         for p in paths:
             if p.is_file():
-                assert self.NAME not in p.read_text(encoding="utf-8", errors="replace"), p.name
-                assert "UI2_LOCAL_OHLCV_DIR" not in p.read_text(encoding="utf-8", errors="replace"), p.name
+                text = p.read_text(encoding="utf-8", errors="replace")
+                assert SVC_NAME not in text and FN_NAME not in text, p.name
+                assert ENV_NAME not in text, p.name
 
-    def test_env_var_name_not_referenced_by_other_production_code(self):
-        hits = [p.relative_to(ROOT).as_posix() for p in self._py_files()
-                if p.resolve() != SVC_PATH and "UI2_LOCAL_OHLCV_DIR" in p.read_text(encoding="utf-8", errors="replace")]
-        assert hits == []
+    # ── 負控：對 tmp 根餵入變體，證明檢查「必紅」（不改真檔）──────────────────────────
+    def test_control_good_shape_passes(self, tmp_path):
+        assert check_app_ui2_source(GOOD_APP_UI2) == []
+        assert scan_production(_mk_root(tmp_path, {APP_UI2_REL: GOOD_APP_UI2})) == []
+
+    def test_control_unwired_app_ui2_is_compliant_but_any_mention_triggers_the_strict_shape(self):
+        unwired = 'import os\n\nrun(local_lookup=None)\n'
+        assert check_app_ui2_source(unwired) == []
+        assert check_app_ui2_source(unwired + "# comment only\n") == []
+        assert check_app_ui2_source(unwired + "X = 'run_local_lookup'\n") != []
+
+    def test_control_service_file_itself_is_exempt_but_only_at_its_exact_path(self, tmp_path):
+        body = f"{FN_NAME} {ENV_NAME} {SVC_NAME}\n"
+        assert scan_production(_mk_root(tmp_path, {SVC_REL: body})) == []
+        other = _mk_root(tmp_path / "b", {"src/services/other/stock_local_lookup_service.py": body})
+        assert scan_production(other) != []
+
+    @pytest.mark.parametrize("label,files", [
+        ("extra_caller_in_src", {APP_UI2_REL: GOOD_APP_UI2, "src/other.py": f"from {TARGET_MODULE} import {FN_NAME}\n"}),
+        ("extra_caller_in_shared", {APP_UI2_REL: GOOD_APP_UI2, "shared/x.py": f"x = '{SVC_NAME}'\n"}),
+        ("extra_caller_in_scripts", {APP_UI2_REL: GOOD_APP_UI2, "scripts/x.py": f"y = {FN_NAME}\n"}),
+        ("extra_caller_in_root_app_py", {APP_UI2_REL: GOOD_APP_UI2, "app.py": f"from {TARGET_MODULE} import {FN_NAME}\n"}),
+        ("extra_env_reader_elsewhere", {APP_UI2_REL: GOOD_APP_UI2, "src/y.py": f"import os\nos.environ.get('{ENV_NAME}')\n"}),
+        ("env_name_in_a_comment_elsewhere", {APP_UI2_REL: GOOD_APP_UI2, "src/z.py": f"# {ENV_NAME}\n"}),
+        # 路徑必須精確等於 app_ui2.py：下列「同 basename／近似名」一律當違規
+        ("xapp_ui2_at_root", {"xapp_ui2.py": GOOD_APP_UI2}),
+        ("app_ui22_at_root", {"app_ui22.py": GOOD_APP_UI2}),
+        ("app_ui2_py_bak_at_root", {"app_ui2.py.bak": GOOD_APP_UI2}),
+        ("app_ui2_in_src_subdir", {"src/sub/app_ui2.py": GOOD_APP_UI2}),
+        ("app_ui2_in_scripts_subdir", {"scripts/app_ui2.py": GOOD_APP_UI2}),
+        ("app_ui2_in_tools_subdir", {"tools/sub/app_ui2.py": GOOD_APP_UI2}),
+        ("app_ui2_in_infra_subdir", {"infra/app_ui2.py": GOOD_APP_UI2}),
+        ("real_one_plus_a_copy_elsewhere", {APP_UI2_REL: GOOD_APP_UI2, "src/ui2/app_ui2.py": GOOD_APP_UI2}),
+    ])
+    def test_control_path_and_other_file_violations_turn_red(self, tmp_path, label, files):
+        assert scan_production(_mk_root(tmp_path, files)) != [], label
+
+    @pytest.mark.parametrize("label,source", [
+        ("alias", _variant("import run_local_lookup  #", "import run_local_lookup as x  #").replace("run_local_lookup if", "x if")),
+        ("multi_symbol", _variant("import run_local_lookup  #", "import run_local_lookup, other  #")),
+        ("star_import", _variant("import run_local_lookup  #", "import *  #")),
+        ("relative_import", _variant("from src.services.stock_local_lookup_service import run_local_lookup",
+                                     "from .services.stock_local_lookup_service import run_local_lookup")),
+        ("relative_import_with_the_same_module_text",
+         _variant("from src.services.stock_local_lookup_service import run_local_lookup",
+                  "from .src.services.stock_local_lookup_service import run_local_lookup")),
+        ("wrong_module_same_name", _variant("from src.services.stock_local_lookup_service import run_local_lookup",
+                                            "from src.services.other import run_local_lookup")),
+        ("second_import_statement", GOOD_APP_UI2 + f"\nfrom {TARGET_MODULE} import {FN_NAME}\n"),
+        ("no_import_at_all", _variant("from src.services.stock_local_lookup_service import run_local_lookup  # noqa: E402\n", "")),
+        ("second_env_literal_in_another_function",
+         GOOD_APP_UI2 + "\ndef _other():\n    return os.environ.get('UI2_LOCAL_OHLCV_DIR')\n"),
+        ("second_env_literal_plain_assignment", GOOD_APP_UI2 + "\nX = 'UI2_LOCAL_OHLCV_DIR'\n"),
+        ("env_literal_via_getenv", _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.getenv("UI2_LOCAL_OHLCV_DIR")')),
+        ("env_literal_only_in_docstring_valid_one_missing",
+         _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.get("UI2_" + "LOCAL_OHLCV_DIR")')),
+        ("env_literal_not_first_argument", _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.get("X", "UI2_LOCAL_OHLCV_DIR")')),
+        ("env_literal_in_wrong_function", _variant("def _read_local_ohlcv_opt_in()", "def _other_fn()")),
+        ("unconditional_injection", _variant("local_lookup=(run_local_lookup if _read_local_ohlcv_opt_in() else None)",
+                                             "local_lookup=run_local_lookup")),
+        ("constant_true_condition", _variant("if _read_local_ohlcv_opt_in() else None", "if True else None")),
+        ("other_condition_function", _variant("if _read_local_ohlcv_opt_in() else None", "if _read_diag_flag() else None")),
+        ("condition_with_args", _variant("if _read_local_ohlcv_opt_in() else None", "if _read_local_ohlcv_opt_in(1) else None")),
+        ("else_branch_not_none", _variant("if _read_local_ohlcv_opt_in() else None", "if _read_local_ohlcv_opt_in() else 0")),
+        ("wrong_keyword", _variant("local_lookup=(run_local_lookup", "other_kw=(run_local_lookup")),
+        ("second_name_reference", GOOD_APP_UI2 + f"\n_x = {FN_NAME}\n"),
+        ("second_reference_nested_deeper_than_the_approved_one",
+         GOOD_APP_UI2 + f"\ndef _f():\n    if True:\n        for _ in []:\n            return [{FN_NAME}]\n"),
+        ("env_literal_only_in_another_function_while_opt_in_fn_exists",
+         _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.get("X")')
+         + "\ndef _other():\n    return os.environ.get('UI2_LOCAL_OHLCV_DIR')\n"),
+        ("env_literal_via_setdefault", _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.setdefault("UI2_LOCAL_OHLCV_DIR", "x")')),
+        ("env_literal_via_pop", _variant('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.pop("UI2_LOCAL_OHLCV_DIR")')),
+        ("attribute_chain_bypass_without_naming_the_module_in_an_import",
+         GOOD_APP_UI2 + f"\nfrom src import services\nservices.{SVC_NAME}.{FN_NAME}\n"),
+        ("obfuscated_getattr", GOOD_APP_UI2 + "\ngetattr(object(), 'run_' + 'local_lookup')\n"),
+        ("obfuscated_dunder_import", GOOD_APP_UI2 + "\n__import__('src.services.' + 'stock_' + 'local_lookup_service')\n"),
+        ("rebinding", GOOD_APP_UI2 + f"\n{FN_NAME} = None\n"),
+        ("second_run_call", GOOD_APP_UI2 + "\nrun(local_lookup=None)\n"),
+        ("attribute_bypass", GOOD_APP_UI2 + f"\nimport {TARGET_MODULE} as m\nm.{FN_NAME}\n"),
+        ("package_import_bypass", GOOD_APP_UI2 + f"\nfrom src.services import {SVC_NAME}\n"),
+        ("getattr_string", GOOD_APP_UI2 + f"\ngetattr(object(), '{FN_NAME}')\n"),
+        ("importlib_import_module", GOOD_APP_UI2 + f"\nimport importlib\nimportlib.import_module('{TARGET_MODULE}')\n"),
+        ("dunder_import", GOOD_APP_UI2 + f"\n__import__('{TARGET_MODULE}')\n"),
+        ("service_name_in_a_string", GOOD_APP_UI2 + f"\nS = '{SVC_NAME}'\n"),
+        ("syntax_error", "def broken(:\n"),
+        ("docstring_only_mention_is_not_a_valid_reference",
+         '"""UI2_LOCAL_OHLCV_DIR run_local_lookup stock_local_lookup_service"""\nimport os\n'),
+    ])
+    def test_control_app_ui2_shape_violations_turn_red(self, tmp_path, label, source):
+        assert check_app_ui2_source(source) != [], label
+        assert scan_production(_mk_root(tmp_path, {APP_UI2_REL: source})) != [], label
+
+    def test_control_docstring_mentions_are_not_counted_as_the_valid_literal(self):
+        """docstring 裡的 UI2_LOCAL_OHLCV_DIR 既不算違規、也不能頂替「恰一個有效字面值」。"""
+        only_doc = GOOD_APP_UI2.replace('os.environ.get("UI2_LOCAL_OHLCV_DIR")', 'os.environ.get("X")')
+        assert any(k == KIND_ENV for k, _ in check_app_ui2_source(only_doc))
+        assert check_app_ui2_source(GOOD_APP_UI2) == []             # GOOD 的 docstring 內有該名稱，仍合規
 
 
 def test_module_import_is_side_effect_free_on_filesystem(monkeypatch):
