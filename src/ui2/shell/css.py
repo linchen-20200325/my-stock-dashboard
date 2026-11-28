@@ -261,3 +261,10 @@ CSS = """
 [data-testid="stMain"]:focus-visible{outline:2px solid var(--ui2-nav-fg);outline-offset:-2px}
 </style>
 """
+
+
+# 本機日K查詢結果區（`views/target.py::render_with_local_lookup`）專用 CSS。**只在 `local_lookup is not None` 時**由
+# `shell/app.py::run()` 另注入一次（旗標關＝零額外元素，與既有 golden 逐元素相同）；本檔只把 html.py 的 CSS 常數包上 <style>。
+from src.ui2.components.html import LOCAL_LOOKUP_RESULT_CSS  # noqa: E402
+
+LOCAL_LOOKUP_RESULT_STYLE = "\n<style>" + LOCAL_LOOKUP_RESULT_CSS + "</style>\n"

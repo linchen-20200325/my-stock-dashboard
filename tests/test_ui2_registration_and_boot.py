@@ -99,8 +99,12 @@ def test_app_ui2_first_streamlit_call_is_set_page_config():
     assert first.value.func.attr == "set_page_config"
 
 
-#: #1110 D-T2（GPT 方案 A′）：app_ui2.py 唯一 AST 精確例外＝單一 module＋單一 symbol（無別名）；⛔ 寬鬆白名單。
-_APP_UI2_EXACT = ("src.services.connection_diag_service", "run_connection_check")
+#: #1110 D-T2（GPT 方案 A′）＋ M2（R23.52 U2／R23.61／R23.62）：app_ui2.py **恰兩條** AST 精確例外，各為單一 module＋單一 symbol（無別名）；⛔ 寬鬆白名單。
+_APP_UI2_EXACT = frozenset({
+    ("src.services.connection_diag_service", "run_connection_check"),
+    ("src.services.stock_local_lookup_service", "run_local_lookup"),
+})
+_APP_UI2_EXACT_MODULES = frozenset(m for m, _ in _APP_UI2_EXACT)
 
 
 def check_app_ui2_imports(source: str, relpath: str = "app_ui2.py") -> list[str]:
@@ -114,8 +118,8 @@ def check_app_ui2_imports(source: str, relpath: str = "app_ui2.py") -> list[str]
                 bad.append(f"L{n.lineno}: 相對 import")
             elif n.module == "src.ui2" or n.module.startswith("src.ui2."):
                 continue
-            elif (relpath == "app_ui2.py" and n.module == _APP_UI2_EXACT[0] and len(n.names) == 1
-                  and n.names[0].name == _APP_UI2_EXACT[1] and n.names[0].asname is None):
+            elif (relpath == "app_ui2.py" and len(n.names) == 1 and n.names[0].asname is None
+                  and (n.module, n.names[0].name) in _APP_UI2_EXACT):
                 continue
             else:
                 bad.append(f"L{n.lineno}: from {n.module}")
@@ -126,8 +130,8 @@ def test_app_ui2_only_imports_src_ui2():
     src = APP_UI2.read_text(encoding="utf-8")
     assert check_app_ui2_imports(src) == []
     mods = [n.module for n in ast.walk(ast.parse(src)) if isinstance(n, ast.ImportFrom) and n.module]
-    assert mods and mods.count(_APP_UI2_EXACT[0]) == 1 and all(
-        m == "src.ui2" or m.startswith("src.ui2.") or m == _APP_UI2_EXACT[0] for m in mods), mods
+    assert mods and all(mods.count(m) == 1 for m in _APP_UI2_EXACT_MODULES) and all(
+        m == "src.ui2" or m.startswith("src.ui2.") or m in _APP_UI2_EXACT_MODULES for m in mods), mods
 
 
 @pytest.mark.parametrize("src,rel", [
@@ -140,6 +144,19 @@ def test_app_ui2_only_imports_src_ui2():
     ("from src.data.proxy.proxy_helper import get_nas_relay\n", "app_ui2.py"),
     ("from src.services.connection_diag_service import run_connection_check\n", "app.py"),    # 別的檔案
     ("from .x import y\n", "app_ui2.py"),
+    # ── 第二 pair（run_local_lookup）的負控 ──
+    ("from src.services.stock_local_lookup_service import run_local_lookup, x\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import x\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import run_local_lookup as r\n", "app_ui2.py"),
+    ("import src.services.stock_local_lookup_service\n", "app_ui2.py"),
+    ("from src.services import stock_local_lookup_service\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import run_local_lookup\n", "app.py"),          # 他檔
+    ("from src.services.stock_local_lookup_service import run_local_lookup\n", "src/ui2/views/target.py"),
+    ("from src.services.stock_local_lookup_service import run_connection_check\n", "app_ui2.py"),   # 跨 pair
+    ("from src.services.connection_diag_service import run_local_lookup\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import *\n", "app_ui2.py"),
+    ("from src.data.stock.stock_local_ohlcv import parse_local_ohlcv_csv\n", "app_ui2.py"),         # 夾帶 L1／L2
+    ("from src.compute.strategy.stock_research_facts import build_stock_research_facts\n", "app_ui2.py"),
 ])
 def test_app_ui2_import_exception_has_teeth(src, rel):
     assert check_app_ui2_imports(src, rel), f"沒抓到：{src!r}"

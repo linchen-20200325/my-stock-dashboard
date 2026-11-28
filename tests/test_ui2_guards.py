@@ -372,17 +372,21 @@ def test_g4_src_ui2_is_not_confused_with_src_ui():
     assert _mod_match("src.ui.views", "src.ui")
 
 
-#: #1110 D-T2（GPT 核准方案 A′）：唯一一條 AST 精確例外——只有 `app_ui2.py`，只有下列 module＋單一 symbol（無 `as` 別名）。
-#: ⛔ 不得改成整個 `src.services.*`／`src.data.*` 的寬鬆白名單；⛔ 第二個 symbol／第二個檔案都不在例外內。
-G4B_EXACT_EXCEPTIONS: dict[str, tuple[str, str]] = {
-    "app_ui2.py": ("src.services.connection_diag_service", "run_connection_check"),
+#: #1110 D-T2（GPT 核准方案 A′）＋ M2 本機日K（R23.52 U2／R23.61／R23.62 精確授權）：**恰兩條** AST 精確例外——只有 `app_ui2.py`，
+#: 各為 module＋單一 symbol（無 `as` 別名）。原 `run_connection_check` pair 一字不變；新增 `run_local_lookup` pair。
+#: ⛔ 不得改成整個 `src.services.*`／`src.data.*` 的寬鬆白名單；⛔ 第三條／第二個檔案／跨 pair 組合（A 的 module＋B 的 symbol）都不在例外內。
+G4B_EXACT_EXCEPTIONS: dict[str, frozenset[tuple[str, str]]] = {
+    "app_ui2.py": frozenset({
+        ("src.services.connection_diag_service", "run_connection_check"),
+        ("src.services.stock_local_lookup_service", "run_local_lookup"),
+    }),
 }
 
 
 def _g4b_node_approved(n: ast.AST, relpath: str) -> bool:
-    exc = G4B_EXACT_EXCEPTIONS.get(relpath)
-    return bool(exc and isinstance(n, ast.ImportFrom) and n.level == 0 and n.module == exc[0]
-                and len(n.names) == 1 and n.names[0].name == exc[1] and n.names[0].asname is None)
+    exc = G4B_EXACT_EXCEPTIONS.get(relpath, frozenset())
+    return bool(isinstance(n, ast.ImportFrom) and n.level == 0 and len(n.names) == 1
+                and n.names[0].asname is None and (n.module, n.names[0].name) in exc)
 
 
 def check_l5_service_reads(source: str, relpath: str) -> list[str]:
@@ -412,11 +416,17 @@ def test_g4b_l5_only_reads_services_ui2():
 
 
 _G4B_OK = "from src.services.connection_diag_service import run_connection_check\n"
+_G4B_OK2 = "from src.services.stock_local_lookup_service import run_local_lookup\n"
 
 
-def test_g4b_exception_dict_is_exactly_one_precise_entry():
-    assert G4B_EXACT_EXCEPTIONS == {"app_ui2.py": ("src.services.connection_diag_service", "run_connection_check")}
-    assert check_l5_service_reads(_G4B_OK, "app_ui2.py") == []
+def test_g4b_exception_dict_is_exactly_two_precise_pairs_for_app_ui2_only():
+    assert G4B_EXACT_EXCEPTIONS == {"app_ui2.py": frozenset({
+        ("src.services.connection_diag_service", "run_connection_check"),
+        ("src.services.stock_local_lookup_service", "run_local_lookup"),
+    })}
+    assert check_l5_service_reads(_G4B_OK, "app_ui2.py") == []                 # 原 pair 仍放行
+    assert check_l5_service_reads(_G4B_OK2, "app_ui2.py") == []                # 新 pair 放行
+    assert check_l5_service_reads(_G4B_OK + _G4B_OK2, "app_ui2.py") == []
 
 
 @pytest.mark.parametrize("src,rel", [
@@ -433,6 +443,21 @@ def test_g4b_exception_dict_is_exactly_one_precise_entry():
     ("from src.data.core import data_loader\n", "app_ui2.py"),
     ("from src.compute.risk import risk_radar\n", "app_ui2.py"),
     (_G4B_OK + "from src.services.allocation_service import get_allocation\n", "app_ui2.py"),         # 例外旁夾帶別的
+    # ── 第二 pair（run_local_lookup）的負控 ──
+    (_G4B_OK2, "src/ui2/views/target.py"), (_G4B_OK2, "src/ui2/shell/app.py"), (_G4B_OK2, "src/ui2/views/data.py"),
+    (_G4B_OK2, "other_entry.py"), (_G4B_OK2, "app.py"),                                              # 他檔
+    ("from src.services.stock_local_lookup_service import run_local_lookup, other\n", "app_ui2.py"),  # 多 symbol
+    ("from src.services.stock_local_lookup_service import other\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import run_local_lookup as r\n", "app_ui2.py"),   # 別名
+    ("import src.services.stock_local_lookup_service\n", "app_ui2.py"),                               # 整包 import
+    ("from src.services import stock_local_lookup_service\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import *\n", "app_ui2.py"),
+    ("from src.services.stock_local_lookup_service import run_connection_check\n", "app_ui2.py"),     # 跨 pair：B module＋A symbol
+    ("from src.services.connection_diag_service import run_local_lookup\n", "app_ui2.py"),            # 跨 pair：A module＋B symbol
+    ("from src.services.other_service import run_local_lookup\n", "app_ui2.py"),
+    (_G4B_OK2 + "from src.services.allocation_service import get_allocation\n", "app_ui2.py"),        # 第二 pair 旁夾帶別的
+    (_G4B_OK2 + "from src.data.stock.stock_local_ohlcv import parse_local_ohlcv_csv\n", "app_ui2.py"),  # 夾帶 L1
+    (_G4B_OK2 + "from src.compute.strategy.stock_research_facts import build_stock_research_facts\n", "app_ui2.py"),  # 夾帶 L2
 ])
 def test_g4b_exception_has_teeth(src, rel):
     assert check_l5_service_reads(src, rel), f"L5/L6 守衛沒抓到：{src!r} @ {rel}"
