@@ -45,11 +45,11 @@ def _read_lookup_flag() -> bool:
 
 
 def _read_local_ohlcv_opt_in() -> bool:
-    """本機日K查詢（M2）的 opt-in（預設關）：環境變數 `UI2_LOCAL_OHLCV_DIR` 已設且非空才開（與 L3 的啟用條件一致；值本身此處不使用、不記錄）。
+    """本機日K查詢（M2）的 opt-in（預設關）：環境變數 `UI2_LOCAL_OHLCV_DIR` 已設且去除空白後非空才開（非安全隔離證明；L3 仍自行驗證；值本身此處不使用、不記錄）。
     ⛔ callable 存在不是 opt-in；⛔ 不使用 secrets／`?ui2_dev`。任何讀取失敗＝關。"""
     try:
         v = os.environ.get("UI2_LOCAL_OHLCV_DIR")
-        return v is not None and v != ""
+        return v is not None and v.strip() != ""          # 純空白（" "、"\t"、"\n"）不是 opt-in；L3 自己仍會再驗
     except Exception:  # noqa: BLE001
         return False
 

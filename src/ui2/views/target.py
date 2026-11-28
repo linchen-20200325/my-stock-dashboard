@@ -94,7 +94,7 @@ def derive_local_proof(raw_headers: object, bind_address: object) -> tuple[Local
         hosts = get_all("host")
     except Exception:  # noqa: BLE001 — 取不到＝無法證明；固定碼
         return None, REASON_BAD_REQUEST
-    if not isinstance(hosts, (list, tuple)):
+    if not isinstance(hosts, list):            # 真 StreamlitHeaders.get_all 只回 list；tuple／str／None／generator 一律「不可證」→ 拒絕
         return None, REASON_BAD_REQUEST
     if len(hosts) == 0:
         return None, REASON_NO_REQUEST_CONTEXT

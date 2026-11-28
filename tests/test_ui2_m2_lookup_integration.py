@@ -899,3 +899,115 @@ def test_n15_curated_mode_submitted_and_matching_keeps_the_summary_row(world):
     at.session_state["ui2_target_mode"] = MODE_LOOKUP
     at.run(timeout=60)
     assert not at.exception and LOCAL_RESULT in md(at) and SUMMARY_LABEL not in md(at)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 9. T2：「把接線整個拿掉」必紅（A 的 check_app_ui2_source 在完全沒有引用時視為合規，不會擋）
+# ════════════════════════════════════════════════════════════════════
+def _app_tree():
+    return ast.parse(APP_UI2.read_text(encoding="utf-8"))
+
+
+def test_t2_app_ui2_must_be_wired_exactly_once():
+    """app_ui2.py **必須**含：恰一個 run_local_lookup import、IfExp 注入、_read_local_ohlcv_opt_in（os.environ.get 讀 UI2_LOCAL_OHLCV_DIR）。"""
+    tree = _app_tree()
+    imps = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module == "src.services.stock_local_lookup_service"]
+    assert len(imps) == 1 and [(a.name, a.asname) for a in imps[0].names] == [("run_local_lookup", None)] and imps[0].level == 0
+    runs = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "run"]
+    assert len(runs) == 1
+    loc = {k.arg: k.value for k in runs[0].keywords}.get("local_lookup")
+    assert isinstance(loc, ast.IfExp) and ast.unparse(loc) == "run_local_lookup if _read_local_ohlcv_opt_in() else None"
+    fns = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_read_local_ohlcv_opt_in"]
+    assert len(fns) == 1
+    body = "\n".join(ast.unparse(x) for x in fns[0].body[1:])
+    assert "os.environ.get('UI2_LOCAL_OHLCV_DIR')" in body and body.count("UI2_LOCAL_OHLCV_DIR") == 1
+
+
+@pytest.fixture
+def run_spy(monkeypatch):
+    """攔截 app_ui2 呼叫的 `src.ui2.shell.run`：記錄收到的關鍵字參數，再轉呼叫真的 run。"""
+    import src.ui2.shell as shell_pkg
+    got: list[dict] = []
+    real = shell_pkg.run
+
+    def spy(*a, **kw):
+        got.append(dict(kw))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(shell_pkg, "run", spy)
+    return got
+
+
+def test_t2_run_really_receives_the_callable_when_env_is_set(world, run_spy):
+    put(world)
+    app()
+    assert run_spy and callable(run_spy[-1]["local_lookup"]) and run_spy[-1]["local_lookup"] is svc.run_local_lookup
+
+
+@pytest.mark.parametrize("val", [None, "", " ", "   ", "\t", "\n", " \t\n "])
+def test_t2_t4b_run_receives_none_when_env_unset_empty_or_whitespace_only(world, run_spy, val):
+    if val is None:
+        world.monkeypatch.delenv(ENV)
+    else:
+        world.monkeypatch.setenv(ENV, val)
+    put(world)
+    at = app()
+    assert run_spy and run_spy[-1]["local_lookup"] is None
+    assert not [w for w in at.selectbox if w.key == "ui2_local_file"] and world.calls == []
+    assert not any("ui2-ll" in m.value for m in at.markdown)
+
+
+@pytest.mark.parametrize("val", ["x", "/x", " /x ", "relative/dir"])
+def test_t4b_nonblank_values_still_opt_in(world, run_spy, val):
+    world.monkeypatch.setenv(ENV, val)
+    app()
+    assert callable(run_spy[-1]["local_lookup"])                                # opt-in；之後 L3 自行驗證（拒絕為灰字，不 raise）
+
+
+def test_t4b_opt_in_function_shape_keeps_a_ast_lock_valid():
+    """strip 在 get() 之後處理；A 的 AST 形狀鎖（check_app_ui2_source）仍合規。"""
+    from tests.test_stock_local_lookup_service import check_app_ui2_source
+    assert check_app_ui2_source(APP_UI2.read_text(encoding="utf-8")) == []
+
+
+# ════════════════════════════════════════════════════════════════════
+# 10. T4(a)：get_all 回傳型別非 list（tuple／str／None／generator…）一律「不可證」→ bad_request，且不呼叫 L3
+# ════════════════════════════════════════════════════════════════════
+class _GetAll:
+    def __init__(self, value):
+        self.value = value
+
+    def get_all(self, key):
+        return self.value
+
+    def __iter__(self):
+        return iter(["host"])
+
+    def __getitem__(self, key):
+        return "localhost"
+
+
+def _gen():
+    yield "localhost"
+
+
+@pytest.mark.parametrize("ret", [("localhost",), "localhost", None, _gen(), {"localhost"}, b"localhost", 5, ("a", "b")])
+def test_t4a_non_list_get_all_is_bad_request(ret):
+    assert target.derive_local_proof(_GetAll(ret), "127.0.0.1") == (None, REASON_BAD_REQUEST)
+
+
+def test_t4a_list_get_all_is_still_accepted_and_empty_list_is_no_request_context():
+    p, code = target.derive_local_proof(_GetAll(["localhost"]), "127.0.0.1")
+    assert code is None and p.request_host == "localhost"
+    assert target.derive_local_proof(_GetAll([]), "127.0.0.1") == (None, REASON_NO_REQUEST_CONTEXT)
+    assert target.derive_local_proof(_GetAll(["a", "b"]), "127.0.0.1") == (None, REASON_BAD_REQUEST)
+
+
+@pytest.mark.parametrize("ret", [("localhost",), "localhost", None, _gen()])
+def test_t4a_non_list_get_all_never_reaches_l3_in_the_app(world, ret):
+    put(world)
+    world.ctx.headers = _GetAll(ret)
+    at = app()
+    assert world.calls == [] and LLR.TEXT_LOCAL_UNAVAILABLE in md(at)
+    assert not [w for w in at.selectbox if w.key == "ui2_local_file"]
+    assert_no_reason_codes(at)
