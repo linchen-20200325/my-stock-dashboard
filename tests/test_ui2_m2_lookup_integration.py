@@ -190,7 +190,7 @@ def test_callable_existing_is_not_an_opt_in():
 def test_list_shows_only_basenames_in_selectbox(world):
     put(world, "a.csv")
     put(world, "b.csv")
-    (world.data / "notes.txt").write_text("x")
+    (world.data / "notes.txt").write_text("x", encoding="utf-8")
     at = app()
     sb = at.selectbox(key="ui2_local_file")
     assert list(sb.options) == ["a.csv", "b.csv"] and sb.label == LLR.TEXT_LOCAL_FILE_LABEL == "本機日K檔選擇"
