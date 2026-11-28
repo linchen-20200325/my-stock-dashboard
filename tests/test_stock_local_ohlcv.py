@@ -188,8 +188,27 @@ class TestOk:
                          "reasons", "n_rows"}
         assert not names & {"fetched_at", "authenticated", "imported_at", "filename", "path"}
 
+    def test_source_exact_string_no_verification_claims_no_input_echo(self):
+        """F2：source 精確等於「本機匯入（使用者提供檔案）」；免責字樣只由呼叫端 VM 單一輸出。"""
+        exact = "本機匯入（使用者提供檔案）"
+        assert mod.SOURCE_LOCAL_IMPORT == exact
+        for banned in ("已驗證", "合法", "即時", "經系統驗證", "未驗證", "官方", "真實"):
+            assert banned not in mod.SOURCE_LOCAL_IMPORT, banned
+        inputs = [
+            _csv(_good_rows()), _csv(_good_rows(), FM_HEADER), _csv([], EN_HEADER), b"", b"\xff", b"\x00",
+            _csv([_r(sid=SENT)]), _csv([_r(c="")]), f"C:\\Users\\{SENT}\\x.csv".encode(),
+            _csv(_good_rows()) + b"\n" + SENT.encode(), 123, None,
+        ]
+        for data in inputs:
+            for sym in ("0050", "bad", SENT):
+                r = _p(data, sym)
+                assert r.source == exact, (data, sym)
+                assert SENT not in r.source and "0050" not in r.source and ".csv" not in r.source
+        r = _p(_csv(_good_rows()))
+        assert r.source == exact and r.symbol == "0050" and r.symbol not in r.source
+
     def test_source_is_fixed_constant(self):
-        assert mod.SOURCE_LOCAL_IMPORT == "本機匯入（使用者提供檔案，來源未經系統驗證）"
+        assert mod.SOURCE_LOCAL_IMPORT == "本機匯入（使用者提供檔案）"
         for data in (_csv(_good_rows()), b"", b"\xff", _csv(_good_rows()).replace(b"0050", b"2330")):
             assert _p(data).source == mod.SOURCE_LOCAL_IMPORT
 
