@@ -15,7 +15,6 @@ D-1 文案可見、L5 邊界全分支（0／1／2 筆 Host、無 get_all、malfo
 from __future__ import annotations
 
 import ast
-import os
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -29,7 +28,7 @@ import src.services.stock_local_lookup_service as svc
 import src.ui2.views.target as target
 from shared.ui2_contract import local_lookup_result as LLR
 from shared.ui2_contract.local_lookup_request import (
-    OP_LIST, OP_QUERY, REASON_BAD_REQUEST, REASON_FILE_UNREADABLE, REASON_NO_REQUEST_CONTEXT,
+    OP_LIST, OP_QUERY, REASON_BAD_REQUEST, REASON_CODE_SET, REASON_FILE_UNREADABLE, REASON_NO_REQUEST_CONTEXT,
     LocalLookupRequest, LocalLookupResponse,
 )
 from shared.ui2_contract.pages import MODE_CURATED, MODE_LOOKUP, P4_TARGET
@@ -126,6 +125,20 @@ def submit(at: AppTest, symbol="0050", filename="a.csv") -> AppTest:
 def md(at: AppTest) -> str:
     """頁面 markdown（去掉 <style> 區塊：全域 CSS 本來就含 `ui2-chip--danger` 等 class 定義，不是畫面元素）。"""
     return re.sub(r"<style>.*?</style>", "", "\n".join(m.value for m in at.markdown), flags=re.S)
+
+
+def assert_no_reason_codes(at: AppTest) -> None:
+    """拒絕／失敗畫面不得印出任何固定原因碼（不洩漏是哪個檢查失敗）。"""
+    page = md(at)
+    for code in REASON_CODE_SET:
+        assert code not in page, code
+
+
+def assert_falls_back_to_plain_symbol_input(at: AppTest) -> None:
+    """被拒絕／不可用時退回原代號輸入（有輸入框與送出鈕、沒有檔案選單）。"""
+    assert [w for w in at.text_input if w.key == "ui2_lookup_text"]
+    assert [b.label for b in at.button] == ["查詢"]
+    assert not [w for w in at.selectbox if w.key == "ui2_local_file"]
 
 
 def result_html(at: AppTest) -> str:
@@ -284,6 +297,8 @@ def test_no_files_in_directory_is_grey_note(world):
     at = app()
     assert not [w for w in at.selectbox if w.key == "ui2_local_file"]
     assert LLR.TEXT_LOCAL_NO_FILES in md(at) and NOTICE in md(at) and "ui2-chip--danger" not in md(at)
+    assert_no_reason_codes(at)
+    assert [w for w in at.text_input if w.key == "ui2_lookup_text"]
 
 
 def test_weird_filenames_are_filtered_and_do_not_break_page(world):
@@ -306,6 +321,8 @@ def _assert_rejected(at, world):
     assert world.calls == [], "L3 不得在 L5 邊界拒絕時被呼叫"
     assert LLR.TEXT_LOCAL_UNAVAILABLE in md(at) and "ui2-chip--danger" not in md(at)
     assert str(world.data) not in md(at)
+    assert_no_reason_codes(at)
+    assert_falls_back_to_plain_symbol_input(at)
 
 
 @pytest.mark.parametrize("headers", [
@@ -369,6 +386,8 @@ def test_l3_rejections_are_grey_fixed_sentence_and_leak_nothing(world, name, mut
     assert not [w for w in at.selectbox if w.key == "ui2_local_file"]
     assert LLR.TEXT_LOCAL_UNAVAILABLE in md(at) and "ui2-chip--danger" not in md(at)
     assert str(world.data) not in md(at) and "a.csv" not in md(at)
+    assert_no_reason_codes(at)
+    assert_falls_back_to_plain_symbol_input(at)
 
 
 def test_good_loopback_variants_are_accepted(world):
@@ -409,6 +428,7 @@ def test_l3_exception_on_query_shows_red_fixed_failure(world, capsys):
     out = capsys.readouterr()
     assert "ui2-chip--danger" in md(at) and "讀取失敗" in md(at) and "讀取失敗，請稍後再試" in md(at)
     assert SECRET_PATH_TEXT not in md(at) + out.out + out.err and "failed: RuntimeError" in out.out
+    assert_no_reason_codes(at)
 
 
 @pytest.mark.parametrize("bad", ["not a response", None, 5, LocalLookupResponse(op=OP_LIST, ok=True)])
@@ -419,6 +439,7 @@ def test_l3_wrong_return_type_or_op_is_fixed_code(world, bad):
     at = app()
     at = submit(at)
     assert "讀取失敗" in md(at) and "ui2-chip--danger" in md(at)
+    assert_no_reason_codes(at)
 
 
 def real_list(request):
@@ -618,3 +639,204 @@ def test_style_injected_only_when_opt_in(world):
     assert any("ui2-ll__cols" in m.value for m in app().markdown)
     world.monkeypatch.delenv(ENV)
     assert not any("ui2-ll__cols" in m.value for m in app().markdown)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 6. SF-1：已送出的（代號、檔名）與目前輸入不一致時，不得殘留／顯示舊結果
+# ════════════════════════════════════════════════════════════════════
+def _two_files(world):
+    put(world, "a.csv", _csv())                                                 # 末列收盤 130
+    put(world, "b.csv", _csv(close_last="130.5"))                                 # 末列收盤 130.5（仍在 low~high 內）
+
+
+def _shown_symbol(html: str) -> str | None:
+    m = re.search(r'<strong class="ui2-ll__symbol">([^<]*)</strong>', html)
+    return m.group(1) if m else None
+
+
+def test_sf1_selected_file_disappears_no_stale_result(world):
+    _two_files(world)
+    at = submit(app(), symbol="0050", filename="b.csv")
+    assert "130.50" in result_html(at)
+    (world.data / "b.csv").unlink()
+    at.run(timeout=60)
+    assert not at.exception
+    assert list(at.selectbox(key="ui2_local_file").options) == ["a.csv"]
+    assert at.selectbox(key="ui2_local_file").value == "a.csv"
+    assert not any(LOCAL_RESULT in m.value for m in at.markdown), "選單已回預設 a.csv，不得自動顯示 (代號, a.csv) 的結果"
+    assert "130.00" not in md(at) and "130.50" not in md(at)
+    assert at.session_state["ui2_local_queried"] == ""                          # 旗標已清掉
+
+
+def test_sf1_page_switch_and_back_clears_stale_result(world):
+    _two_files(world)
+    at = submit(app(), symbol="0050", filename="b.csv")
+    assert LOCAL_RESULT in md(at)
+    at.session_state["ui2_page"] = "p4_market"
+    at.run(timeout=60)
+    assert not at.exception
+    at.session_state["ui2_page"] = P4_TARGET
+    at.run(timeout=60)
+    assert not at.exception
+    assert at.text_input(key="ui2_lookup_text").value == ""                      # widget 狀態被清空（Streamlit 行為）
+    assert not any(LOCAL_RESULT in m.value for m in at.markdown) and "130.50" not in md(at)
+    assert "ui2-lookup-status__symbol" not in md(at), "狀態列不得顯示已失效的舊代號"
+
+
+def test_sf1_stale_flags_without_matching_widgets_never_show_a_result(world):
+    """模擬『伺服器端殘留旗標、但 widget 已被重設』：只有旗標與已送出檔名，輸入框／選單是預設值。"""
+    _two_files(world)
+    at = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"
+    at.session_state["ui2_page"] = P4_TARGET
+    at.session_state["ui2_scenario"] = "cold"
+    at.session_state["ui2_target_mode"] = MODE_LOOKUP
+    at.session_state["ui2_local_queried"] = "1"
+    at.session_state["ui2_lookup_symbol"] = "0050"
+    at.session_state["ui2_local_submitted_file"] = "b.csv"
+    at.run(timeout=60)
+    assert not at.exception
+    assert not any(LOCAL_RESULT in m.value for m in at.markdown)
+    assert OP_QUERY not in [c.op for c in world.calls]                           # 連查詢都不會發出
+
+
+def test_sf1_stale_flags_with_same_file_but_empty_symbol_input_never_show_a_result(world):
+    """已送出檔名恰等於目前選單預設值，但輸入框是空的（切頁再回）→ 仍不得顯示（代號必須等於目前輸入）。"""
+    _two_files(world)
+    at = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    at.session_state["ui2_feed"] = "fake"
+    at.session_state["ui2_page"] = P4_TARGET
+    at.session_state["ui2_scenario"] = "cold"
+    at.session_state["ui2_target_mode"] = MODE_LOOKUP
+    at.session_state["ui2_local_queried"] = "1"
+    at.session_state["ui2_lookup_symbol"] = "0050"
+    at.session_state["ui2_local_submitted_file"] = "a.csv"
+    at.run(timeout=60)
+    assert not at.exception
+    assert not any(LOCAL_RESULT in m.value for m in at.markdown) and OP_QUERY not in [c.op for c in world.calls]
+
+
+def test_sf1_fresh_session_has_no_result(world):
+    _two_files(world)
+    submit(app(), symbol="0050", filename="b.csv")
+    at2 = app()                                                                  # 重新整理＝新 session
+    assert not any(LOCAL_RESULT in m.value for m in at2.markdown)
+
+
+def test_sf1_result_always_matches_current_inputs(world):
+    """不論 AppTest 是否模擬表單延遲提交：只要畫出結果，其代號與檔案必須等於目前輸入框／選單。"""
+    _two_files(world)
+    at = submit(app(), symbol="0050", filename="b.csv")
+    assert _shown_symbol(result_html(at)) == "0050" and "130.50" in result_html(at)
+    at.selectbox(key="ui2_local_file").set_value("a.csv")
+    at.run(timeout=60)
+    assert not at.exception
+    hits = [m.value for m in at.markdown if LOCAL_RESULT in m.value]
+    if hits:
+        assert at.selectbox(key="ui2_local_file").value == "b.csv" and "130.50" in hits[0]
+        assert "130.00" not in hits[0]
+    at.text_input(key="ui2_lookup_text").set_value("2330")
+    at.run(timeout=60)
+    assert not at.exception
+    hits = [m.value for m in at.markdown if LOCAL_RESULT in m.value]
+    for h in hits:
+        assert _shown_symbol(h) == at.text_input(key="ui2_lookup_text").value or _shown_symbol(h) == "0050" and at.text_input(
+            key="ui2_lookup_text").value == "0050"
+
+
+def test_sf1_change_file_then_submit_shows_the_new_file_only(world):
+    _two_files(world)
+    at = submit(app(), symbol="0050", filename="b.csv")
+    assert "130.50" in result_html(at)
+    at = submit(at, symbol="0050", filename="a.csv")
+    h = result_html(at)
+    assert "130.00" in h and "130.50" not in h
+
+
+def test_sf1_change_symbol_then_submit_shows_the_new_symbol_only(world):
+    put(world, "a.csv", _csv(symbol="0050"))
+    put(world, "b.csv", _csv(symbol="2330", close_last="129"))
+    at = submit(app(), symbol="0050", filename="a.csv")
+    assert _shown_symbol(result_html(at)) == "0050"
+    at = submit(at, symbol="2330", filename="b.csv")
+    h = result_html(at)
+    assert _shown_symbol(h) == "2330" and "129.00" in h and "130.00" not in h
+
+
+def test_sf1_submitted_file_key_is_ui2_prefixed_and_clean():
+    assert target.KEY_LOCAL_SUBMITTED_FILE == "ui2_local_submitted_file"
+    assert not re.search(r"lookup|hold|strategy|sheet|portfolio", target.KEY_LOCAL_SUBMITTED_FILE, re.I)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 7. SF-2（待 P／總管確認的 UI 處置）：查詢摘要卡、拒絕說明在兩模式可見
+# ════════════════════════════════════════════════════════════════════
+SUMMARY_LABEL = "現在狀態（查詢摘要）"
+
+
+def test_sf2_summary_card_hidden_only_after_a_local_query_ran(world):
+    put(world)
+    at = app()
+    assert SUMMARY_LABEL in md(at) and 'data-ui2-q="q1"' in md(at)               # 未查詢：維持現狀
+    at = submit(at)
+    page = md(at)
+    assert LOCAL_RESULT in page and SUMMARY_LABEL not in page and 'data-ui2-q="q1"' not in page
+    assert 'data-ui2-q="q2"' in page and 'data-ui2-q="q3"' in page               # 其餘第一屏列保留
+
+
+def test_sf2_summary_card_stays_when_rejected_or_curated(world):
+    put(world)
+    at = app(mode=MODE_CURATED)
+    assert 'data-ui2-q="q1"' in md(at)
+    world.ctx.headers = _sh([])
+    at = app()
+    assert SUMMARY_LABEL in md(at) and 'data-ui2-q="q1"' in md(at)               # 被拒絕：維持現狀
+
+
+def test_sf2_failed_query_also_drops_the_contradicting_card(world):
+    put(world)
+    at = app()
+    real = svc.run_local_lookup
+
+    def flaky(request, **kw):
+        if request.op == OP_QUERY:
+            raise RuntimeError(SECRET_PATH_TEXT)
+        return real(request, **kw)
+
+    world.monkeypatch.setattr(svc, "run_local_lookup", flaky)
+    at = submit(at)
+    assert "讀取失敗" in md(at) and SUMMARY_LABEL not in md(at)
+
+
+@pytest.mark.parametrize("mode", [MODE_CURATED, MODE_LOOKUP])
+def test_sf2_rejection_note_visible_in_both_modes(world, mode):
+    put(world)
+    world.ctx.headers = _sh([])
+    at = app(mode=mode)
+    assert LLR.TEXT_LOCAL_UNAVAILABLE in md(at) and NOTICE in md(at)
+    assert_no_reason_codes(at)
+    assert_falls_back_to_plain_symbol_input(at)
+
+
+@pytest.mark.parametrize("mode", [MODE_CURATED, MODE_LOOKUP])
+def test_sf2_empty_directory_note_visible_in_both_modes(world, mode):
+    at = app(mode=mode)
+    assert LLR.TEXT_LOCAL_NO_FILES in md(at) and NOTICE in md(at)
+
+
+def test_sf2_rejection_note_sits_with_the_input_before_the_summary_card(world):
+    put(world)
+    world.ctx.headers = _sh([])
+    page = md(app())
+    assert page.index(LLR.TEXT_LOCAL_UNAVAILABLE) < page.index(SUMMARY_LABEL)
+
+
+def test_sf2_first_screen_default_output_is_unchanged():
+    """`target_first_screen_html` 的預設輸出（既有 render／render_with_lookup 使用）不受 show_summary 參數影響。"""
+    import inspect
+
+    from src.ui2.components.html import target_first_screen_html
+    sig = inspect.signature(target_first_screen_html)
+    assert sig.parameters["show_summary"].default is True
+    src = TARGET_PY.read_text(encoding="utf-8")
+    assert src.count("show_summary=False") == 1                                  # 只有新入口的一處傳 False

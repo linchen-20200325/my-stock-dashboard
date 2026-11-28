@@ -408,9 +408,12 @@ def search_html(search: SearchBoxVM) -> str:
             f'{cta_html(search.cta, with_reason=False)}</div>{reason}{hint}')
 
 
-def target_first_screen_html(fs: FirstScreenVM, summary: FieldVM) -> str:
-    """🎯 標的頁第一屏（搜尋列在模式切換之下；本函式只含 ① 摘要、W-4 context 行、② ③）。"""
-    return ('<div class="ui2-qa">' + qa_row_html("現在狀態（查詢摘要）", summary, qid="q1")
+def target_first_screen_html(fs: FirstScreenVM, summary: FieldVM, *, show_summary: bool = True) -> str:
+    """🎯 標的頁第一屏（搜尋列在模式切換之下；本函式只含 ① 摘要、W-4 context 行、② ③）。
+
+    `show_summary=False`（只有本機日K查詢已執行時，由 `views/target.py::render_with_local_lookup` 傳入）：不渲染 ① 查詢摘要列；
+    預設 True＝與原輸出逐字相同。"""
+    return ('<div class="ui2-qa">' + (qa_row_html("現在狀態（查詢摘要）", summary, qid="q1") if show_summary else "")
             + ctxline_html(fs.context_rows)
             + qa_row_html("是否需要行動", fs.action_needed, qid="q2")
             + qa_row_html("下一步", fs.next_step, qid="q3") + "</div>")
@@ -674,7 +677,8 @@ def top_status_row_html(banner_text: str | None = None, banner_note: str = "", *
 
 
 # ════════════════════════════════════════════════════════════════════
-# 即時查一檔結果區（客戶已拍板線框，GitHub #1199 R23.50；**本批未接線**：無 caller、shell 尚未注入下方 CSS）
+# 即時查一檔結果區（客戶已拍板線框，GitHub #1199 R23.50）：由 `views/target.py::render_with_local_lookup` 呼叫；CSS 常數由 `shell/css.py` 包成 `LOCAL_LOOKUP_RESULT_STYLE`，
+# 僅在 `run(local_lookup=…)` 不為 None（opt-in）時由 `shell/app.py` 注入。
 # ════════════════════════════════════════════════════════════════════
 #: 手機單欄（預設）；桌機（≥769px）兩欄：左＝價格＋OHLCV＋來源、右＝指標＋限制註記。接線批待辦：(a) 本常數須併入 `src/ui2/shell/css.py` 的 CSS（單一注入點），不可直接丟 st.markdown；(b) 本區硬編碼字樣須過 Copy Gate／三軸字樣守衛。
 LOCAL_LOOKUP_RESULT_CSS = (

@@ -10,6 +10,7 @@ from __future__ import annotations
 import streamlit as st
 
 from html import escape
+from typing import NamedTuple
 
 from shared.ui2_contract.local_lookup_request import (
     OP_LIST, OP_QUERY, REASON_BAD_REQUEST, REASON_FILE_INVALID, REASON_FILE_NOT_REGULAR, REASON_FILE_TOO_LARGE,
@@ -42,6 +43,7 @@ KEY_LOOKUP_SYMBOL = "ui2_lookup_symbol"       # 只存已解析代號字串（�
 # ── 本機日K檔查詢（M2；僅 `render_with_local_lookup`；L6 以參數注入 callable，本檔不 import L1／L2／L3）──
 KEY_LOCAL_FILE = "ui2_local_file"             # selectbox（只存 basename 字串；選項來自注入 callable 的 list 回應）
 KEY_LOCAL_QUERIED = "ui2_local_queried"       # "1"＝最近一次提交有效（只是旗標字串；⛔ 不存 vm／資料／檔案內容）
+KEY_LOCAL_SUBMITTED_FILE = "ui2_local_submitted_file"   # 已送出的檔名（basename 字串）；重查前須仍等於目前選單且在最新清單內
 
 
 def lookup_submission_view(raw: object) -> QuoteView:
@@ -168,42 +170,58 @@ def local_response_html(resp: LocalLookupResponse) -> str:
     return local_notice_html(resp.reason_code or REASON_BAD_REQUEST)
 
 
-def _render_local_block(placeholder: str, local_lookup, *, show_result: bool) -> str | None:
-    """代號輸入＋本機日K檔選擇（同一個 form）。回傳要畫在結果區的 HTML（無則 None）。
+class LocalOutcome(NamedTuple):
+    """`_render_local_block` 的結果：`html`＝要畫在結果區的 HTML（無則 None）；`replaces_lookup`＝結果區不得再畫 FAKE／舊查詢區；
+    `query_shown`＝本次渲染確實執行並顯示了查詢（成功、缺值或失敗皆算）→ 查詢摘要卡不再渲染（其「尚未開放」字樣與結果矛盾）。"""
+    html: str | None
+    replaces_lookup: bool
+    query_shown: bool
 
-    session_state 只寫 `ui2_` 前綴常數 key、值為 str；⛔ 存 vm／資料。每次渲染都重新 list（受控目錄可能變動）；
-    已提交的查詢在後續 rerun 以同一組（代號、檔名）重查（不存結果）。清單不可用／空 → 退回原代號輸入＋固定說明。"""
+
+def _render_local_block(placeholder: str, local_lookup, *, show_result: bool) -> LocalOutcome:
+    """代號輸入＋本機日K檔選擇（同一個 form）。
+
+    session_state 只寫 `ui2_` 前綴常數 key、值為 str；⛔ 存 vm／資料。每次渲染都重新 list（受控目錄可能變動）。
+    **已送出的查詢只有在「已送出的（代號、檔名）仍等於目前輸入框與選單、且檔名仍在最新清單內」時才重查並顯示**；
+    否則清掉查詢旗標（不顯示舊結果）——涵蓋：檔案消失（選單回預設）、切頁再回來（widget 狀態被清空）、換代號。
+    清單不可用／空 → 退回原代號輸入，並在兩個模式都顯示固定灰字說明（不洩漏原因碼）。"""
     listing = call_local(local_lookup, OP_LIST)
     names = listing.filenames if listing.ok else ()
     if not listing.ok or not names:
         _render_lookup_input(placeholder)
-        return local_notice_html(listing.reason_code or REASON_BAD_REQUEST) if not listing.ok else local_notice_html_no_files()
+        _md(local_notice_html(listing.reason_code or REASON_BAD_REQUEST) if not listing.ok else local_notice_html_no_files())
+        return LocalOutcome(None, True, False)
     if st.session_state.get(KEY_LOCAL_FILE) not in names:        # 檔案被移走／竄改：fail closed 回預設
         st.session_state.pop(KEY_LOCAL_FILE, None)
     with st.form(KEY_LOOKUP_FORM, border=False):
         raw = st.text_input(LOOKUP_INPUT_LABEL, key=KEY_LOOKUP_TEXT, placeholder=placeholder,
                             label_visibility="collapsed")
-        st.selectbox(TEXT_LOCAL_FILE_LABEL, list(names), key=KEY_LOCAL_FILE)
+        picked = st.selectbox(TEXT_LOCAL_FILE_LABEL, list(names), key=KEY_LOCAL_FILE)
         submitted = st.form_submit_button(LOOKUP_SUBMIT_LABEL)
     if submitted:
         view = lookup_submission_view(raw)
         st.session_state[KEY_LOOKUP_STATE] = view.state.value
         st.session_state[KEY_LOOKUP_SYMBOL] = view.symbol or ""
+        st.session_state[KEY_LOCAL_SUBMITTED_FILE] = picked if isinstance(picked, str) else ""
         st.session_state[KEY_LOCAL_QUERIED] = "1" if view.symbol else ""
+    current_symbol = parse_ticker_input(raw).symbol or ""
     symbol = st.session_state.get(KEY_LOOKUP_SYMBOL) or ""
-    filename = st.session_state.get(KEY_LOCAL_FILE)
-    if st.session_state.get(KEY_LOCAL_QUERIED) == "1" and symbol and filename in names:
-        if not show_result:
-            return None
-        return local_response_html(call_local(local_lookup, OP_QUERY, symbol=symbol, filename=filename))
+    submitted_file = st.session_state.get(KEY_LOCAL_SUBMITTED_FILE) or ""
+    if st.session_state.get(KEY_LOCAL_QUERIED) == "1":
+        if symbol and symbol == current_symbol and submitted_file and submitted_file == picked and picked in names:
+            if not show_result:
+                return LocalOutcome(None, False, False)
+            html = local_response_html(call_local(local_lookup, OP_QUERY, symbol=symbol, filename=submitted_file))
+            return LocalOutcome(html, True, True)
+        st.session_state[KEY_LOCAL_QUERIED] = ""                  # 輸入已與送出時不同／檔案消失／重新進頁：不顯示舊結果
     try:
         state = QuoteViewState(st.session_state.get(KEY_LOOKUP_STATE, QuoteViewState.NOT_LOADED.value))
     except ValueError:
         state = QuoteViewState.NOT_LOADED
     if state not in LOOKUP_P1_STATES:
         state = QuoteViewState.NOT_LOADED
-    _md(lookup_status_html(state, symbol or None))
-    return None
+    _md(lookup_status_html(state, current_symbol or None))
+    return LocalOutcome(None, False, False)
 
 
 def local_notice_html_no_files() -> str:
@@ -238,22 +256,27 @@ def _render(vm: PageVM, *, lookup_input: bool, local_lookup=None) -> None:
         st.radio("模式", [m.mode_id for m in t.modes], key=KEY_TARGET_MODE, horizontal=True,
                  format_func=lambda m: labels[m], label_visibility="collapsed")
     # ② 搜尋框＋搜尋 CTA（兩模式都在）。lookup_input 預設關＝與原路徑逐字相同；開＝頂端輸入元件取代 disabled searchbox。
-    local_html = None
+    local = LocalOutcome(None, False, False)
     if local_lookup is not None:
-        local_html = _render_local_block(t.search.placeholder, local_lookup, show_result=(mode == MODE_LOOKUP))
+        local = _render_local_block(t.search.placeholder, local_lookup, show_result=(mode == MODE_LOOKUP))
     elif lookup_input:
         _render_lookup_input(t.search.placeholder)
     else:
         _md(search_html(t.search))
     # ③ 查詢摘要＋W-4 市場 context 一行＋②③（依模式取摘要；context 不變）
     summary = t.lookup.summary if mode == MODE_LOOKUP else vm.context.first_screen.current_state
-    _md(target_first_screen_html(vm.context.first_screen, summary))
+    if local.query_shown:       # 本機查詢已執行：結果區（線框 R23.50）沒有「查詢摘要」卡，不渲染其「尚未開放」字樣
+        _md(target_first_screen_html(vm.context.first_screen, summary, show_summary=False))
+    else:
+        _md(target_first_screen_html(vm.context.first_screen, summary))
     # ④ 只展開目前模式
     if mode == MODE_CURATED:
         render_cards(vm, content_mode=MODE_CURATED)
         render_sections(vm, mode=MODE_CURATED)
-    elif local_html is not None:
-        _md(local_html)                                     # 本機查詢結果／固定失敗畫面（取代 FAKE 結果區）
+    elif local.html is not None:
+        _md(local.html)                                     # 本機查詢結果／固定失敗畫面（取代 FAKE 結果區）
+    elif local.replaces_lookup:
+        pass                                                # 本機入口被拒絕／無檔：灰字說明已畫在輸入框下方，不再畫 FAKE 結果區
     else:
         _md(lookup_result_html(t.lookup))
         if t.lookup.queried:
