@@ -68,6 +68,13 @@ index 為 `pd.DatetimeIndex`（名稱 `date`、tz-naive、午夜、嚴格遞增�
 `df.index[-1].date() == result.as_of`。**不輸出字串日期**（ISO 轉換是畫面橋接的責任）。`state != OK` 一律
 `ValueError`（固定訊息，不含 token／例外原文），不回空表。純函式：不連網、不快取、不改輸入。
 
+公開薄函式（供同層的本機匯入解析器重用，不另寫第二套規則）
+==========================================================
+- `validate_ohlcv_frame(df, symbol, today)`：公開包裝私有 `_validate`，回傳型別與 `_validate` 完全一致
+  `(rows, reasons)`；規則一字不變（FinMind 欄名 date／open／max／min／close／Trading_Volume，可選 stock_id）。
+- `rows_to_bars_frame(rows)`：把「已驗證的 `OhlcvRow` 序列」轉成與 `to_bars_frame` 相同形狀的 DataFrame；
+  `to_bars_frame` 即呼叫它。**不輸出任何來源／抓取時間**（不偽造 FinMind provenance）。
+
 安全
 ====
 token 不進任何回傳欄位／`repr`／例外訊息／print／log；log 只記例外「類別名」。`finmind_get` 內部自己的
@@ -349,6 +356,39 @@ def _validate(df: pd.DataFrame, symbol: str, today: date) -> tuple[tuple[OhlcvRo
     return tuple(rows), ()
 
 
+#: `validate_ohlcv_frame` 呼叫端錯誤的固定訊息（不含輸入內容）。
+VALIDATE_ARGS_MESSAGE = "validate_ohlcv_frame: bad symbol, today or duplicate columns"
+
+
+def validate_ohlcv_frame(df: Any, symbol: str, today: date) -> tuple[tuple[OhlcvRow, ...], tuple[str, ...]]:
+    """`_validate` 的公開薄包裝（規則完全重用，不另寫第二套）。
+
+    Args:
+        df:     以 FinMind 欄名表示的 DataFrame（date／open／max／min／close／Trading_Volume，
+                可選 `stock_id`，其餘欄忽略）。非 DataFrame → `((), (REASON_RESPONSE_NOT_DATAFRAME,))`。
+        symbol: 已正規化的合法代號（`"0050"`、`"00631L"`；**不在此處正規化**）；不合法 → ValueError。
+        today:  台北日（`datetime.date`，非 `datetime`）；晚於它的日期 → `date_in_future`。
+
+    Returns:
+        `(rows, reasons)`，型別與 `_validate` 完全一致：`reasons` 非空 ⇒ `rows == ()`（不丟列、不修正、不排序）；
+        `reasons` 為空 ⇒ `rows` 為日期嚴格遞增的 `OhlcvRow` tuple。
+        ⚠️ **零列 DataFrame（有表頭、無資料）回 `((), ())`**——這不是「驗證通過的資料」，而是「沒有資料」；
+        是否視為 NO_DATA 由呼叫端決定（本函式不替它判斷）。
+
+    Raises:
+        ValueError: `symbol` 不是合法代號、`today` 不是 `date`（含 `datetime`）、或 `df` 有重複欄名
+            （重複欄名會讓逐欄取值語意不明）。訊息固定（`VALIDATE_ARGS_MESSAGE`），不含輸入內容。
+    """
+    normalised = _normalize_symbol(symbol)
+    if normalised is None or normalised != symbol or isinstance(today, datetime) or not isinstance(today, date):
+        raise ValueError(VALIDATE_ARGS_MESSAGE)
+    if not isinstance(df, pd.DataFrame):
+        return (), (REASON_RESPONSE_NOT_DATAFRAME,)
+    if not df.columns.is_unique:
+        raise ValueError(VALIDATE_ARGS_MESSAGE)
+    return _validate(df, symbol, today)
+
+
 # ── 公開 API ────────────────────────────────────────────────────────────
 
 def fetch_stock_latest_ohlcv(
@@ -442,29 +482,71 @@ BARS_INDEX_NAME = "date"
 BARS_NOT_OK_MESSAGE = "stock latest OHLCV result is not usable as bars (state != ok)"
 
 
+#: `rows_to_bars_frame` 輸入不合法時的固定訊息（不含輸入內容）。
+BARS_ROWS_INVALID_MESSAGE = "OHLCV rows are empty or invalid for bars frame"
+
+
+def rows_to_bars_frame(rows: Any) -> pd.DataFrame:
+    """把「已驗證的 `OhlcvRow` 序列」轉成 L2 `build_stock_research_facts` 可直接吃的 DataFrame。
+
+    輸出（與 `to_bars_frame` 完全同形）：欄 `open／high／low／close／volume`（小寫、float64；volume＝
+    `volume_shares` **原樣、不換算**）、index＝`pd.DatetimeIndex`（名稱 `date`、tz-naive、午夜、嚴格遞增且唯一）；
+    價格為原始未調整價。**不帶任何來源／抓取時間資訊**（呼叫端各自負責 provenance，本函式不偽造）。純函式：
+    不連網、不改輸入。
+
+    Raises:
+        ValueError: `rows` 不是非空的 tuple／list、含非 `OhlcvRow` 元素、日期不是 `date`（含 `datetime`）、
+            日期未嚴格遞增（重複或亂序；**不自行排序**）、或任一數值不是有限的 int／float（含 bool、NaN、inf）。
+            訊息固定（`BARS_ROWS_INVALID_MESSAGE`），**不回空表**讓下游誤用。
+    """
+    if not isinstance(rows, (tuple, list)) or not rows:
+        raise ValueError(BARS_ROWS_INVALID_MESSAGE)
+    prev: date | None = None
+    for r in rows:
+        if not isinstance(r, OhlcvRow) or isinstance(r.date, datetime) or not isinstance(r.date, date):
+            raise ValueError(BARS_ROWS_INVALID_MESSAGE)
+        if prev is not None and r.date <= prev:
+            raise ValueError(BARS_ROWS_INVALID_MESSAGE)
+        prev = r.date
+        for x in (r.open, r.high, r.low, r.close, r.volume_shares):
+            if isinstance(x, bool) or not isinstance(x, (int, float)):
+                raise ValueError(BARS_ROWS_INVALID_MESSAGE)
+            try:
+                finite = math.isfinite(x)
+            except OverflowError:                  # 例如手工構造的 10**400：與 NaN／inf 同樣視為不可用
+                finite = False
+            if not finite:
+                raise ValueError(BARS_ROWS_INVALID_MESSAGE)
+    return pd.DataFrame(
+        {
+            "open": [float(r.open) for r in rows],
+            "high": [float(r.high) for r in rows],
+            "low": [float(r.low) for r in rows],
+            "close": [float(r.close) for r in rows],
+            "volume": [float(r.volume_shares) for r in rows],
+        },
+        index=pd.DatetimeIndex(pd.to_datetime([r.date for r in rows]), name=BARS_INDEX_NAME),
+        columns=list(BARS_COLUMNS),
+    )
+
+
 def to_bars_frame(result: StockLatestOhlcv) -> pd.DataFrame:
     """把 OK 的 `StockLatestOhlcv` 轉成 L2 `build_stock_research_facts` 可直接吃的 DataFrame。
 
     輸出：欄 `open／high／low／close／volume`（小寫、float64；volume＝`volume_shares` 原樣、**不換算**）、
     index＝`pd.DatetimeIndex`（名稱 `date`、tz-naive、午夜、嚴格遞增且唯一；r03／P c7216937148 核准輸出）；價格為原始未調整價；
     `df.index[-1].date() == result.as_of`（`Timestamp.date()`）。不輸出字串日期；不改輸入；不連網。
+    實際轉換委派給 `rows_to_bars_frame`（同一份邏輯）。
 
     Raises:
         ValueError: `result` 不是 `StockLatestOhlcv`、`state != OK`（含 NO_DATA／FETCH_FAILED／INVALID_*／
-            未知狀態）、`rows` 為空，或 `as_of` 與末列日期不一致。訊息固定（`BARS_NOT_OK_MESSAGE`），
-            **不回空表**讓下游誤用。
+            未知狀態）、`rows` 為空（或內容不合法），或 `as_of` 與末列日期不一致。訊息固定
+            （`BARS_NOT_OK_MESSAGE`），**不回空表**讓下游誤用。
     """
     if (not isinstance(result, StockLatestOhlcv) or result.state != STATE_OK
             or not result.rows or result.as_of != result.rows[-1].date):
         raise ValueError(BARS_NOT_OK_MESSAGE)
-    return pd.DataFrame(
-        {
-            "open": [r.open for r in result.rows],
-            "high": [r.high for r in result.rows],
-            "low": [r.low for r in result.rows],
-            "close": [r.close for r in result.rows],
-            "volume": [r.volume_shares for r in result.rows],
-        },
-        index=pd.DatetimeIndex(pd.to_datetime([r.date for r in result.rows]), name=BARS_INDEX_NAME),
-        columns=list(BARS_COLUMNS),
-    )
+    try:
+        return rows_to_bars_frame(result.rows)
+    except ValueError:
+        raise ValueError(BARS_NOT_OK_MESSAGE) from None
